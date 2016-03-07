@@ -24,8 +24,6 @@ setup(
     # for a useful dicussion
     install_requires=[],
     packages=find_packages(),
-    scripts=[os.path.join(bin_folder, f) for f in os.listdir(bin_folder)
-             if not os.path.isdir(os.path.join(bin_folder, f))],
     long_description=open(os.path.join(root_folder, 'README.md')).read(),
 )
 
