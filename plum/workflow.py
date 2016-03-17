@@ -2,122 +2,123 @@
 
 from abc import ABCMeta
 import plum.event as event
-from plum.port import Port, BindingPort
-from plum.process import Process
+from plum.process import Process, ProcessSpec
 import plum.util as util
 
 
-class WorkflowOutputPort(BindingPort):
-    def __init__(self, process, name, type=None):
-        super(WorkflowOutputPort, self).__init__(process, name, type)
-
-
 class ProcessLink(object):
-    def __init__(self, source_output, sink_input):
-        assert(isinstance(source_output, Port))
-        assert(isinstance(sink_input, BindingPort))
-
-        self._source = source_output
-        self._sink = sink_input
+    def __init__(self, source, sink):
+        self._source_process, self._source_port = source.split(':')
+        self._sink_process, self._sink_port = sink.split(':')
 
     @property
-    def source(self):
-        return self._source
+    def source_process(self):
+        return self._source_process
 
     @property
-    def sink(self):
-        return self._sink
+    def source_port(self):
+        return self._source_port
+
+    @property
+    def sink_process(self):
+        return self._sink_process
+
+    @property
+    def sink_port(self):
+        return self._sink_port
+
+    def __str__(self):
+        return "{}:{} => {}:{}".format(self.source_process, self.source_port,
+                                       self.sink_process, self.sink_port)
 
 
-class Workflow(Process):
+class WorkflowSpec(ProcessSpec):
     __metaclass__ = ABCMeta
 
-    def __init__(self, name):
-        super(Workflow, self).__init__(name)
-        self._workflow_events = util.EventHelper(event.WorkflowListener)
+    def __init__(self):
+        super(WorkflowSpec, self).__init__()
         self._processes = {}
         self._links = {}
 
-    def add_workflow_listener(self, listener):
-        self._workflow_events.add_listener(listener)
-
-    def remove_listener(self, listener):
-        self._workflow_events.remove_listener(listener)
-
     def add_process(self, process, local_name=None):
-        name = local_name if local_name else process.name
+        name = local_name if local_name else process.get_name()
         self._processes[name] = process
-        for l in self._workflow_events.listeners:
-            l.process_added(self, process, local_name)
 
     def remove_process(self, local_name):
+        # TODO: Check for links and remove as appropriate
         self._processes.pop(local_name)
-        for l in self._workflow_events.listeners:
-            l.process_removed(self, local_name)
 
-    def get_processes(self):
+    @property
+    def processes(self):
         return self._processes
 
-    def add_output(self, name, **kwargs):
-        """
-        Add an output port to the workflow.
-
-        :param name: The name of the output port.
-        :param kwargs: Keyword arguments supported by output ports
-        """
-        if name in self._outputs:
-            raise ValueError("Output {} already exists.".format(name))
-
-        self._outputs[name] = WorkflowOutputPort(self, name, *kwargs)
-
-    def link(self, source, sink):
-        if source in self.get_links():
-            raise ValueError("Link from {} already exists, remove first")
-
-        source_name, source_output = source.split(':')
-        sink_name, sink_input = sink.split(':')
-
-        if not source_name:
-            source_port = self.get_input(source_output)
-        else:
-            try:
-                source_port =\
-                    self.get_processes()[source_name].get_output(source_output)
-            except KeyError:
-                raise ValueError("Invalid link {} -> {}".format(source, sink))
-
-        if not sink_name:
-            sink_port = self.get_output(sink_input)
-        else:
-            try:
-                sink_port =\
-                    self.get_processes()[sink_name].get_input(sink_input)
-            except KeyError:
-                raise ValueError("Invalid link {} -> {}".format(source, sink))
-
-        link = ProcessLink(source_port, sink_port)
-        self._links[source] = link
-
-        # Tell our listeners a link has been created
-        for l in self._workflow_events.listeners:
-            l.link_created(self, source, sink)
-
-        return link
-
-    def get_links(self):
+    @property
+    def links(self):
         return self._links
 
     def get_link(self, output):
         return self._links[output]
 
     def remove_link(self, output):
-        link = self._links.pop(output)
-        source = output
-        sink = self.get_local_name(link.sink.process) + ":" + link.sink.name
+        self._links.pop(output)
 
-        # Tell our listeners a link has been removed
+    def link(self, source, sink):
+        if source in self.links:
+            raise ValueError("Link from {} already exists, remove first")
+
+        link = ProcessLink(source, sink)
+
+        if not link.source_process:
+            # Use workflow input port
+            source_port = self.get_input(link.source_port)
+        else:
+            try:
+                source_port =\
+                    self._processes[link.source_process].spec().get_output(link.source_port)
+            except KeyError:
+                raise ValueError("Invalid link {} -> {}".format(source, sink))
+
+        if not link.sink_process:
+            sink_port = self.get_output(link.sink_port)
+        else:
+            try:
+                sink_port =\
+                    self._processes[link.sink_process].spec().get_input(link.sink_port)
+            except KeyError:
+                raise ValueError("Invalid link {} -> {}".format(source, sink))
+
+        # TODO: Check type compatibility of source and sink
+
+        self._links[source] = link
+        return link
+
+
+class Workflow(Process):
+    __metaclass__ = ABCMeta
+
+    # Static class stuff ######################
+    _spec_type = WorkflowSpec
+    ###########################################
+
+    def __init__(self):
+        super(Workflow, self).__init__()
+        self._workflow_events = util.EventHelper(event.WorkflowListener)
+
+        self._process_instances =\
+            {name: proc.create()
+             for name, proc in self.spec().processes.iteritems()}
+
+    # From ProcessListener ##########################
+    def process_starting(self, process, inputs):
+        # Tell our listeners that a subprocess is starting
         for l in self._workflow_events.listeners:
-            l.link_removed(self, source, sink)
+            l.subprocess_starting(self, process, inputs)
+
+    def process_finished(self, process, outputs):
+        # Tell our listeners that a subprocess has finished
+        for l in self._workflow_events.listeners:
+            l.subprocess_finished(self, process, outputs)
+    ##################################################
 
     def _run(self, **kwargs):
         for listener in self._workflow_events.listeners:
@@ -131,35 +132,39 @@ class Workflow(Process):
         return out
 
     def _run_workflow(self, **kwargs):
-        for key, value in kwargs.iteritems():
-            try:
-                # Push the input value to the sink process input port
-                self.get_link(":{}".format(key)).sink.push(value)
-            except KeyError:
-                # The input isn't connected, nae dramas
-                pass
+        self._initialise_inputs(**kwargs)
+
+        outputs = {}
 
         to_run = self._get_ready_processes()
         while to_run:
-            self._run_processes(to_run)
+            outputs.update(self._run_processes(to_run))
             to_run = self._get_ready_processes()
-
-        # Now gather all my output values
-        outputs = {}
-        for name, port in self.get_outputs().iteritems():
-            if port.is_filled():
-                outputs[name] = port.pop()
 
         return outputs
 
+    def _save_record(self, node):
+        pass
+
     def get_local_name(self, process):
-        for name, proc in self.get_processes().iteritems():
+        for name, proc in self._process_instances.iteritems():
             if process == proc:
                 return name
         raise ValueError("Process not in workflow")
 
     def _get_ready_processes(self):
-        return filter(lambda proc: proc.ready_to_run(), self.get_processes().itervalues())
+        return filter(lambda proc: proc.ready_to_run(), self._process_instances.itervalues())
+
+    def _initialise_inputs(self, **kwargs):
+        for key, value in kwargs.iteritems():
+            try:
+                # Push the input value to the sink process input port
+                link = self.spec().get_link(":{}".format(key))
+                proc = self._process_instances[link.sink_process]
+                proc.bind(link.sink_port, value)
+            except KeyError:
+                # The input isn't connected, nae dramas
+                pass
 
     def _run_processes(self, processes):
         """
@@ -168,6 +173,7 @@ class Workflow(Process):
 
         :param processes: A list of processes to run (from last to first)
         """
+        workflow_outputs = {}
         while processes:
             process = processes.pop()
             outputs = process.run()
@@ -175,14 +181,21 @@ class Workflow(Process):
             for output_name, value in outputs.iteritems():
                 source = local_name + ":" + output_name
                 try:
-                    sink_port = self.get_link(source).sink
-                    sink_port.push(value)
-                    sink_process = self.get_local_name(sink_port.process)\
-                        if sink_port.process != self else ""
-                    sink = "{}:{}".format(sink_process, sink_port.name)
+                    link = self.spec().get_link(source)
+                    if not link.sink_process:
+                        workflow_outputs[link.sink_port] = value
+                    else:
+                        proc = self._process_instances[link.sink_process]
+                        proc.bind(link.sink_port, value)
+
+                    sink = "{}:{}".format(link.sink_process, link.sink_port)
                 except KeyError:
                     # The output isn't connected, nae dramas
                     sink = None
                 # Tell our listeners about the value being emitted
                 for l in self._workflow_events.listeners:
                     l.value_outputted(self, value, source, sink)
+
+        return workflow_outputs
+
+

@@ -24,35 +24,37 @@ class Port(object):
     def type(self):
         return self._type
 
+#
+# class BindingPort(Port):
+#     def __init__(self, process, name, type=None):
+#         super(BindingPort, self).__init__(process, name, type)
+#         self._sink = util.Sink(type)
+#
+#     def __str__(self):
+#         return "{}: {}".format(self.name, str(self._sink))
+#
+#     def push(self, value):
+#         self._sink.push(value)
+#
+#     def pop(self):
+#         return self._sink.pop()
+#
+#     def is_filled(self):
+#         return self._sink.is_filled()
 
-class BindingPort(Port):
-    def __init__(self, process, name, type=None):
-        super(BindingPort, self).__init__(process, name, type)
-        self._sink = util.Sink(type)
 
-    def __str__(self):
-        return "{}: {}".format(self.name, str(self._sink))
-
-    def push(self, value):
-        self._sink.push(value)
-
-    def pop(self):
-        return self._sink.pop()
-
-    def is_filled(self):
-        return self._sink.is_filled()
-
-
-class InputPort(BindingPort):
+class InputPort(Port):
     def __init__(self, process, name, type=None, default=None):
         super(InputPort, self).__init__(process, name, type)
         self._default = default
 
     def __str__(self):
-        my_desc = "=> {}".format(BindingPort.__str__(self))
+        my_desc = ["=>", "name: {}".format(self.name)]
+        if self._type:
+            my_desc.append("type: {}".format(self._type))
         if self._default:
-            my_desc += "(default: {})".format(self._default)
-        return my_desc
+            my_desc.append("default: {}".format(self._default))
+        return ", ".join(my_desc)
 
     @property
     def default(self):
