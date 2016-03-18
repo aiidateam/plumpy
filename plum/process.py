@@ -264,4 +264,5 @@ class FunctionProcess(Process):
         args = []
         for arg in self._func_args:
             args.append(kwargs.pop(arg))
-        return {self._output_name: self._func(*args)}
+
+        self.out(self._output_name, self._func(*args))
