@@ -8,7 +8,7 @@ class EventHelper(object):
         self._listeners = []
 
     def add_listener(self, listener):
-        assert(isinstance(listener, self._listeners))
+        assert(isinstance(listener, self._listener_type))
         self._listeners.append(listener)
 
     def remove_listener(self, listener):
@@ -17,6 +17,11 @@ class EventHelper(object):
     @property
     def listeners(self):
         return self._listeners
+
+    def fire_event(self, event_function, *args, **kwargs):
+        # TODO: Check if the function is in the listener type
+        for l in self.listeners:
+            getattr(l, event_function)(*args, **kwargs)
 
 
 class Sink(object):

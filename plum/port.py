@@ -7,10 +7,12 @@ import plum.util as util
 class Port(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, process, name, type=None):
+    def __init__(self, process, name, type=None, help=None, required=True):
         self._name = name
         self._process = process
         self._type = type
+        self._help = help
+        self._required = required
 
     @property
     def name(self):
@@ -24,23 +26,13 @@ class Port(object):
     def type(self):
         return self._type
 
-#
-# class BindingPort(Port):
-#     def __init__(self, process, name, type=None):
-#         super(BindingPort, self).__init__(process, name, type)
-#         self._sink = util.Sink(type)
-#
-#     def __str__(self):
-#         return "{}: {}".format(self.name, str(self._sink))
-#
-#     def push(self, value):
-#         self._sink.push(value)
-#
-#     def pop(self):
-#         return self._sink.pop()
-#
-#     def is_filled(self):
-#         return self._sink.is_filled()
+    @property
+    def help(self):
+        return self._help
+
+    @property
+    def required(self):
+        return self._required
 
 
 class InputPort(Port):
@@ -62,5 +54,10 @@ class InputPort(Port):
 
 
 class OutputPort(Port):
-    def __init__(self, process, name, type=None):
+    def __init__(self, process, name, type=None, required=True):
         super(OutputPort, self).__init__(process, name, type)
+        self._required = required
+
+    @property
+    def required(self):
+        return self._required

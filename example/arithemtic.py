@@ -20,7 +20,7 @@ class Add(Process):
         spec.add_output('value')
 
     def _run(self, a, b):
-        return {'value': a + b}
+        self._out('value', a + b)
 
 
 class Mul(Process):
@@ -31,49 +31,50 @@ class Mul(Process):
         spec.add_output('value')
 
     def _run(self, a, b):
-        return {'value': a * b}
+        self._out('value', a * b)
 
-
-#AddFun = FunctionProcess.build(add)
 
 class MulAdd(Workflow):
     @staticmethod
     def _init(spec):
-        spec.add_input('e', default=0)
-        spec.add_input('f', default=0)
-        spec.add_input('g', default=0)
-        spec.add_output('value')
-
         spec.add_process(Mul)
         spec.add_process(Add)
-        spec.link(':e', 'Add:a')
-        spec.link(':f', 'Add:b')
-        spec.link(':g', 'Mul:a')
+        spec.expose_inputs("Add")
+        spec.add_input('c', default=0)
+        spec.expose_outputs("Mul")
+
+        spec.link(':c', 'Mul:a')
         spec.link('Add:value', 'Mul:b')
-        spec.link('Mul:value', ':value')
 
 
-# class MulAddWithFun(Workflow):
-#     @staticmethod
-#     def _init(spec):
-#         spec.add_input('e', default='0')
-#         spec.add_input('f', default='0')
-#         spec.add_input('g', default='0')
-#         spec.add_output('value')
-#
-#         spec.add_process(Mul)
-#         spec.add_process(AddFun)
-#         spec.link(':e', 'add:a')
-#         spec.link(':f', 'add:b')
-#         spec.link(':g', 'Mul:a')
-#         spec.link('add:value', 'Mul:b')
-#         spec.link('Mul:value', ':value')
+# Create a process from a function
+AddFun = FunctionProcess.build(add)
+
+
+class MulAddWithFun(Workflow):
+    @staticmethod
+    def _init(spec):
+        spec.add_process(Mul)
+        spec.add_process(AddFun)
+        spec.expose_inputs("add")
+        spec.add_input('c', default=0)
+        spec.add_output('value')
+        spec.expose_outputs("Mul")
+
+        spec.link(':c', 'Mul:a')
+        spec.link('add:value', 'Mul:b')
 
 
 if __name__ == '__main__':
     mul_add = MulAdd.create()
-    mul_add.bind('e', 2)
-    mul_add.bind('f', 3)
-    mul_add.bind('g', 4)
+    mul_add.bind('a', 2)
+    mul_add.bind('b', 3)
+    mul_add.bind('c', 4)
+    print(mul_add.run())
+
+    mul_add = MulAdd.create()
+    mul_add.bind('a', 2)
+    mul_add.bind('b', 3)
+    mul_add.bind('c', 4)
     print(mul_add.run())
 
