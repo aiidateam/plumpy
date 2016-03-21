@@ -121,6 +121,11 @@ class Process(object):
         self._output_values = {}
         self._proc_evt_helper = util.EventHelper(ProcessListener)
 
+    def __call__(self, **kwargs):
+        for k, v in kwargs.iteritems():
+            self.bind(k, v)
+        return self.run()
+
     @classmethod
     def get_name(cls):
         return cls.__name__

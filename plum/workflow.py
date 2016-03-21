@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 
+
+"""
+TODO:
+* Make sure if there is an input port linked to multiple Processes then the
+value is passed to all of them when the workflow starts.
+"""
+
 from abc import ABCMeta
-import plum.event as event
 from plum.process import Process, ProcessSpec, ProcessListener
 import plum.util as util
 
@@ -162,6 +168,10 @@ class Workflow(Process, ProcessListener):
                 proc = self._process_instances[link.sink_process]
                 proc.bind(link.sink_port, value)
 
+                # If the process receiving this input is ready then run it
+                if self._is_ready_to_run(proc):
+                    proc.run()
+
             sink = "{}:{}".format(link.sink_process, link.sink_port)
         except KeyError:
             # The output isn't connected, nae dramas
@@ -181,10 +191,8 @@ class Workflow(Process, ProcessListener):
     def _run_workflow(self, **kwargs):
         self._initialise_inputs(**kwargs)
 
-        to_run = self._get_ready_processes()
-        while to_run:
-            self._run_processes(to_run)
-            to_run = self._get_ready_processes()
+        for proc in self._get_ready_processes():
+            proc.run()
 
     def _save_record(self, node):
         pass
@@ -218,15 +226,3 @@ class Workflow(Process, ProcessListener):
             except KeyError:
                 # The input isn't connected, nae dramas
                 pass
-
-    def _run_processes(self, processes):
-        """
-        Consume all the processes, running them in turn and propagating their
-        outputs to any connected processes.
-
-        :param processes: A list of processes to run (from last to first)
-        """
-        # This may become more complex when a workflow engine is introduced
-        while processes:
-            process = processes.pop()
-            process.run()
