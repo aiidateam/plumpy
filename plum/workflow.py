@@ -8,6 +8,7 @@ value is passed to all of them when the workflow starts.
 """
 
 from abc import ABCMeta
+from plum.port import DynamicOutputPort
 from plum.process import Process, ProcessSpec, ProcessListener
 import plum.util as util
 
@@ -157,9 +158,12 @@ class Workflow(Process, ProcessListener):
             self._process_instances[name] = proc
 
     # From ProcessListener ##########################
-    def on_output_emitted(self, process, output_port, value):
+    def on_output_emitted(self, process, output_port, value, dynamic):
         local_name = self.get_local_name(process)
-        source = local_name + ":" + output_port
+        if dynamic:
+            source = local_name + ":" + DynamicOutputPort.NAME
+        else:
+            source = local_name + ":" + output_port
         try:
             link = self.spec().get_link(source)
             if not link.sink_process:

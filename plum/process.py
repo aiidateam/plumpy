@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta, abstractmethod
-from plum.port import InputPort, OutputPort
+from plum.port import InputPort, OutputPort, DynamicOutputPort
 import plum.util as util
 
 
@@ -36,6 +36,12 @@ class ProcessSpec(object):
     def get_output(self, name):
         return self._outputs[name]
 
+    def has_output(self, name):
+        return name in self._outputs
+
+    def has_dynamic_output(self):
+        return self.has_output(DynamicOutputPort.NAME)
+
     def add_input(self, name, **kwargs):
         self.add_input_port(name, InputPort(self, name, **kwargs))
 
@@ -67,6 +73,12 @@ class ProcessSpec(object):
 
         self._outputs[name] = port
 
+    def add_dynamic_output(self):
+        self.add_output_port(DynamicOutputPort.NAME, DynamicOutputPort(self))
+
+    def remove_dynamic_output(self):
+        self.remove_output(DynamicOutputPort.NAME)
+
     def remove_output(self, name):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
@@ -85,7 +97,7 @@ class ProcessListener(object):
     def on_input_bound(self, process, input_port, value):
         pass
 
-    def on_output_emitted(self, process, output_port, value):
+    def on_output_emitted(self, process, output_port, value, dynamic):
         pass
 
 
@@ -157,6 +169,7 @@ class Process(object):
         return True
 
     def _out(self, output_port, value):
+        dynamic = False
         # Do checks on the outputs
         try:
             # Check types (if known)
@@ -167,12 +180,17 @@ class Process(object):
                     "Expected {}, got {}".
                         format(output_port, port.type, type(value)))
         except KeyError:
-            raise TypeError(
-                "Process trying to output on unknown output port {}".
+            # The port is unknown, do we support dynamic outputs?
+            if self.spec().has_dynamic_output():
+                dynamic = True
+            else:
+                raise TypeError(
+                    "Process trying to output on unknown output port {}, "
+                    "and does not have a dynamic output port in spec.".
                     format(output_port))
 
         self._output_values[output_port] = value
-        self._on_output_emitted(output_port, value)
+        self._on_output_emitted(output_port, value, dynamic)
 
     def run(self):
         self._check_inputs()
@@ -235,9 +253,9 @@ class Process(object):
         self._proc_evt_helper.fire_event('on_input_bound',
                                          self, input_port, value)
 
-    def _on_output_emitted(self, output_port, value):
+    def _on_output_emitted(self, output_port, value, dynamic):
         self._proc_evt_helper.fire_event('on_output_emitted',
-                                         self, output_port, value)
+                                         self, output_port, value, dynamic)
 
 
 class FunctionProcess(Process):

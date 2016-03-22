@@ -61,3 +61,15 @@ class OutputPort(Port):
     @property
     def required(self):
         return self._required
+
+
+class DynamicOutputPort(OutputPort):
+    """
+    A dynamic output port represents the fact that a Process can emit outputs
+    that weren't defined beforehand
+    """
+    NAME = "dynamic"
+
+    def __init__(self, process):
+        super(DynamicOutputPort, self).__init__(
+            process, self.NAME, dict, False)
