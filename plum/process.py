@@ -210,6 +210,9 @@ class Process(object):
 
         return retval
 
+    def get_last_outputs(self):
+        return self._output_values
+
     def _create_input_args(self):
         kwargs = {}
         for name, port in self.spec().inputs.iteritems():
@@ -234,7 +237,7 @@ class Process(object):
         # Check that the necessary outputs have been emitted
         for name, port in self.spec().outputs.iteritems():
             if port.required and name not in self._output_values:
-                raise RuntimeError("A required output port ({}) was not"
+                raise RuntimeError("A required output port ({}) was not "
                                    "produced by the process".format(name))
 
     @abstractmethod
