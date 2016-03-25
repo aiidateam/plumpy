@@ -48,6 +48,31 @@ class WorkflowListener(object):
     def on_workflow_finished(self, workflow, outputs):
         pass
 
+    def _on_subprocess_starting(self, workflow, process, inputs):
+        """
+        Called when the inputs of a subprocess passed checks and the process
+        is about to begin.
+        :param inputs: The inputs the process is starting with
+        """
+        pass
+
+    def _on_subprocess_finishing(self, workflow, process):
+        """
+        Called when the subprocess has completed execution, however this may be
+        the result of returning or an exception being raised.  Either way this
+        message is guaranteed to be sent.  Only upon successful return and
+        outputs passing checks would _on_process_finished be called.
+        """
+        pass
+
+    def _on_subprocess_finished(self, workflow, process, retval):
+        """
+        Called when the process has finished and the outputs have passed
+        checks
+        :param retval: The return value from the process
+        """
+        pass
+
 
 class WorkflowSpec(ProcessSpec):
     __metaclass__ = ABCMeta
@@ -158,6 +183,9 @@ class Workflow(Process, ProcessListener):
             self._process_instances[name] = proc
 
     # From ProcessListener ##########################
+    def on_process_starting(self, process, inputs):
+        self._on_subprocess_starting(process, inputs)
+
     def on_output_emitted(self, process, output_port, value, dynamic):
         local_name = self.get_local_name(process)
         if dynamic:
@@ -181,6 +209,11 @@ class Workflow(Process, ProcessListener):
             # The output isn't connected, nae dramas
             sink = None
 
+    def on_process_finishing(self, process):
+        self._on_subprocess_finishing(process)
+
+    def on_process_finished(self, process, retval):
+        self._on_subprocess_finished(process, retval)
     ##################################################
 
     def _run(self, **kwargs):
@@ -230,3 +263,34 @@ class Workflow(Process, ProcessListener):
             except KeyError:
                 # The input isn't connected, nae dramas
                 pass
+
+    # Workflow messages #################################################
+    # Make sure to call the superclass if your override any of these ####
+    def _on_subprocess_starting(self, process, inputs):
+        """
+        Called when the inputs of a subprocess passed checks and the process
+        is about to begin.
+        :param inputs: The inputs the process is starting with
+        """
+        self._workflow_evt_helper.fire_event('on_subprocess_starting',
+                                             self, process, inputs)
+
+    def _on_subprocess_finishing(self, process):
+        """
+        Called when the subprocess has completed execution, however this may be
+        the result of returning or an exception being raised.  Either way this
+        message is guaranteed to be sent.  Only upon successful return and
+        outputs passing checks would _on_process_finished be called.
+        """
+        self._workflow_evt_helper.fire_event('on_subprocess_finishing',
+                                             self, process)
+
+    def _on_subprocess_finished(self, process, retval):
+        """
+        Called when the process has finished and the outputs have passed
+        checks
+        :param retval: The return value from the process
+        """
+        self._workflow_evt_helper.fire_event('on_subprocess_finished',
+                                             self, process, retval)
+    #####################################################################

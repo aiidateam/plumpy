@@ -115,13 +115,14 @@ class RunScope(object):
     _on_process_starting and _on_process_finished messages at the
     beginning and end of the scope respectively.
     """
-    def __init__(self, process):
+    def __init__(self, process, inputs):
         self._process = process
+        self._inputs = inputs
 
     def __enter__(self):
-        self._process._on_process_starting()
+        self._process._on_process_starting(self._inputs)
 
-    def __exit__(self):
+    def __exit__(self, type, value, traceback):
         self._process._on_process_finishing()
 
 
@@ -147,7 +148,6 @@ class Process(object):
     @staticmethod
     def _init(spec):
         pass
-
     ############################################
 
     def __init__(self):
@@ -229,7 +229,7 @@ class Process(object):
         # Now reset the input arguments
         self._input_values = {}
 
-        with RunScope(self):
+        with RunScope(self, ins):
             retval = self._run(**ins)
 
         self._check_outputs()
@@ -271,6 +271,8 @@ class Process(object):
     def _run(self, **kwargs):
         pass
 
+    # Process messages ##################################################
+    # Make sure to call the superclass if your override any of these ####
     def _on_process_starting(self, inputs):
         """
         Called when the inputs of a process passed checks and the process
@@ -305,6 +307,7 @@ class Process(object):
     def _on_output_emitted(self, output_port, value, dynamic):
         self._proc_evt_helper.fire_event('on_output_emitted',
                                          self, output_port, value, dynamic)
+    #####################################################################
 
 
 class FunctionProcess(Process):
