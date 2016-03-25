@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 
-__license__ = "GPLv3, see LICENSE.txt file"
+__license__ = "GPLv3 and MIT, see LICENSE file"
 __version__ = "0.1.0"
 __contributors__ = "Martin Uhrin"
 
