@@ -91,6 +91,9 @@ class ProcessListener(object):
     def on_process_starting(self, process, inputs):
         pass
 
+    def on_process_finishing(self, process):
+        pass
+
     def on_process_finished(self, process, retval):
         pass
 
@@ -99,6 +102,27 @@ class ProcessListener(object):
 
     def on_output_emitted(self, process, output_port, value, dynamic):
         pass
+
+
+class RunScope(object):
+    """
+    This object is exclusively to be used as:
+
+    with RunScope(some_process):
+      self.run()
+
+    It defines the scope of a process execution and produces the
+    _on_process_starting and _on_process_finished messages at the
+    beginning and end of the scope respectively.
+    """
+    def __init__(self, process):
+        self._process = process
+
+    def __enter__(self):
+        self._process._on_process_starting()
+
+    def __exit__(self):
+        self._process._on_process_finishing()
 
 
 class Process(object):
@@ -161,6 +185,10 @@ class Process(object):
     def is_input_bound(self, input_port):
         return input_port in self._input_values
 
+    @property
+    def bound_inputs(self):
+        return self._input_values
+
     def can_run(self):
         for name, port in self.spec().inputs.iteritems():
             if port.required and name not in self._input_values:
@@ -201,11 +229,10 @@ class Process(object):
         # Now reset the input arguments
         self._input_values = {}
 
-        self._on_process_starting(ins)
+        with RunScope(self):
+            retval = self._run(**ins)
 
-        retval = self._run(**ins)
         self._check_outputs()
-
         self._on_process_finished(retval)
 
         return retval
@@ -245,10 +272,29 @@ class Process(object):
         pass
 
     def _on_process_starting(self, inputs):
+        """
+        Called when the inputs of a process passed checks and the process
+        is about to begin.
+        :param inputs: The inputs the process is starting with
+        """
         self._proc_evt_helper.fire_event('on_process_starting',
                                          self, inputs)
 
+    def _on_process_finishing(self):
+        """
+        Called when the process has completed execution, however this may be
+        the result of returning or an exception being raised.  Either way this
+        message is guaranteed to be sent.  Only upon successful return and
+        outputs passing checks would _on_process_finished be called.
+        """
+        self._proc_evt_helper.fire_event('on_process_finishing', self)
+
     def _on_process_finished(self, retval):
+        """
+        Called when the process has finished and the outputs have passed
+        checks
+        :param retval: The return value from the process
+        """
         self._proc_evt_helper.fire_event('on_process_finished',
                                          self, retval)
 
