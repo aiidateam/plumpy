@@ -270,10 +270,10 @@ class FunctionProcess(Process):
 
         def init(spec):
             for i in range(len(args)):
+                default = None
                 if defaults and len(defaults) - len(args) + i >= 0:
-                    spec.add_input(args[i], default=defaults[i])
-                else:
-                    spec.add_input(args[i])
+                    default = defaults[i]
+                spec.add_input(args[i], default=default)
 
             spec.add_output(output_name)
 
@@ -292,3 +292,5 @@ class FunctionProcess(Process):
             args.append(kwargs.pop(arg))
 
         self.out(self._output_name, self._func(*args))
+
+
