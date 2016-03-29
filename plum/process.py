@@ -123,13 +123,10 @@ class Process(object):
         internal process management.
         """
         def __init__(self, process, inputs, exec_engine):
-            if exec_engine:
-                self._exec_engine = exec_engine
-            else:
-                self._exec_engine = Process._DEFAULT_EXEC_ENGINE()
-
             self._process = process
             self._inputs = inputs
+            self._exec_engine = exec_engine
+
 
         def __enter__(self):
             self._process._on_process_starting(self._inputs)
@@ -231,6 +228,8 @@ class Process(object):
         # Now reset the input arguments
         self._input_values = {}
 
+        if not exec_engine:
+            exec_engine = self._create_default_exec_engine()
         with Process.RunScope(self, ins, exec_engine):
             retval = self._run(**ins)
 
