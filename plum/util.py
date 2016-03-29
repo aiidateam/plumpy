@@ -12,7 +12,7 @@ class EventHelper(object):
         self._listeners.append(listener)
 
     def remove_listener(self, listener):
-        self._listeners.append(listener)
+        self._listeners.remove(listener)
 
     @property
     def listeners(self):
@@ -20,7 +20,9 @@ class EventHelper(object):
 
     def fire_event(self, event_function, *args, **kwargs):
         # TODO: Check if the function is in the listener type
-        for l in self.listeners:
+        # We have to use a copy here because the listener may
+        # remove themselves during the message
+        for l in list(self.listeners):
             getattr(l, event_function)(*args, **kwargs)
 
 

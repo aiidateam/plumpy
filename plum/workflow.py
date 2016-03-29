@@ -43,20 +43,36 @@ class WorkflowListener(object):
     __metaclass__ = ABCMeta
 
     def on_workflow_starting(self, workflow):
+        """
+        Called when a workflow is about to start, the next thing that happens
+        will be that the workflow run method gets called.
+
+        :param workflow: The workflow that is starting
+        """
         pass
 
     def on_workflow_finished(self, workflow, outputs):
+        """
+        Called when a workflow is has finished.  All outputs have been checked
+        and the workflow returned.
+
+        :param workflow: The finished workflow
+        :param outputs: The outputs from the workflow
+        :return:
+        """
         pass
 
-    def _on_subprocess_starting(self, workflow, process, inputs):
+    def on_subprocess_starting(self, workflow, subproc, inputs):
         """
         Called when the inputs of a subprocess passed checks and the process
         is about to begin.
-        :param inputs: The inputs the process is starting with
+        :param workflow: The workflow whose subprocess is starting
+        :param subproc: The starting subprocess
+        :param inputs: The inputs the subprocess is starting with
         """
         pass
 
-    def _on_subprocess_finishing(self, workflow, process):
+    def on_subprocess_finishing(self, workflow, subproc):
         """
         Called when the subprocess has completed execution, however this may be
         the result of returning or an exception being raised.  Either way this
@@ -65,7 +81,7 @@ class WorkflowListener(object):
         """
         pass
 
-    def _on_subprocess_finished(self, workflow, process, retval):
+    def on_subprocess_finished(self, workflow, subproc, retval):
         """
         Called when the process has finished and the outputs have passed
         checks
@@ -175,7 +191,6 @@ class Workflow(Process, ProcessListener):
     def __init__(self):
         super(Workflow, self).__init__()
         self._workflow_evt_helper = util.EventHelper(WorkflowListener)
-
         self._process_instances = {}
         for name, proc_class in self.spec().processes.iteritems():
             proc = proc_class.create()
@@ -202,7 +217,7 @@ class Workflow(Process, ProcessListener):
 
                 # If the process receiving this input is ready then run it
                 if self._is_ready_to_run(proc):
-                    proc.run()
+                    self._get_exec_engine().run(proc)
 
             sink = "{}:{}".format(link.sink_process, link.sink_port)
         except KeyError:
@@ -229,7 +244,7 @@ class Workflow(Process, ProcessListener):
         self._initialise_inputs(**kwargs)
 
         for proc in self._get_ready_processes():
-            proc.run()
+            self._get_exec_engine().run(proc)
 
     def _save_record(self, node):
         pass
@@ -266,31 +281,36 @@ class Workflow(Process, ProcessListener):
 
     # Workflow messages #################################################
     # Make sure to call the superclass if your override any of these ####
-    def _on_subprocess_starting(self, process, inputs):
+    def _on_subprocess_starting(self, subproc, inputs):
         """
         Called when the inputs of a subprocess passed checks and the process
         is about to begin.
+
+        :param subproc: The subprocess that is starting
         :param inputs: The inputs the process is starting with
         """
         self._workflow_evt_helper.fire_event('on_subprocess_starting',
-                                             self, process, inputs)
+                                             self, subproc, inputs)
 
-    def _on_subprocess_finishing(self, process):
+    def _on_subprocess_finishing(self, subproc):
         """
         Called when the subprocess has completed execution, however this may be
         the result of returning or an exception being raised.  Either way this
         message is guaranteed to be sent.  Only upon successful return and
         outputs passing checks would _on_process_finished be called.
+
+        :param subproc: The subprocess that is finishing
         """
         self._workflow_evt_helper.fire_event('on_subprocess_finishing',
-                                             self, process)
+                                             self, subproc)
 
-    def _on_subprocess_finished(self, process, retval):
+    def _on_subprocess_finished(self, subproc, retval):
         """
         Called when the process has finished and the outputs have passed
         checks
+        :param subproc: The subprocess that has finished
         :param retval: The return value from the process
         """
         self._workflow_evt_helper.fire_event('on_subprocess_finished',
-                                             self, process, retval)
+                                             self, subproc, retval)
     #####################################################################

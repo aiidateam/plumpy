@@ -2,6 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 from plum.port import InputPort, OutputPort, DynamicOutputPort
+import plum.execution_engine as execution_engine
 import plum.util as util
 
 
@@ -104,33 +105,46 @@ class ProcessListener(object):
         pass
 
 
-class RunScope(object):
-    """
-    This object is exclusively to be used as:
-
-    with RunScope(some_process):
-      self.run()
-
-    It defines the scope of a process execution and produces the
-    _on_process_starting and _on_process_finished messages at the
-    beginning and end of the scope respectively.
-    """
-    def __init__(self, process, inputs):
-        self._process = process
-        self._inputs = inputs
-
-    def __enter__(self):
-        self._process._on_process_starting(self._inputs)
-
-    def __exit__(self, type, value, traceback):
-        self._process._on_process_finishing()
-
-
 class Process(object):
     __metaclass__ = ABCMeta
 
+    _DEFAULT_EXEC_ENGINE = execution_engine.SerialEngine
+
+    class RunScope(object):
+        """
+        This object is exclusively to be used as:
+
+        with RunScope(...):
+          self.run()
+
+        It defines the scope of a process execution and produces the
+        _on_process_starting and _on_process_finished messages at the
+        beginning and end of the scope respectively as well as other
+        internal process management.
+        """
+        def __init__(self, process, inputs, exec_engine):
+            if exec_engine:
+                self._exec_engine = exec_engine
+            else:
+                self._exec_engine = Process._DEFAULT_EXEC_ENGINE()
+
+            self._process = process
+            self._inputs = inputs
+
+        def __enter__(self):
+            self._process._on_process_starting(self._inputs)
+            self._process._exec_engine = self._exec_engine
+
+        def __exit__(self, type, value, traceback):
+            self._process._exec_engine = None
+            self._process._on_process_finishing()
+
     # Static class stuff ######################
     _spec_type = ProcessSpec
+
+    @staticmethod
+    def _init(spec):
+        pass
 
     @classmethod
     def spec(cls):
@@ -145,14 +159,25 @@ class Process(object):
     def create(cls):
         return cls()
 
-    @staticmethod
-    def _init(spec):
-        pass
+    @classmethod
+    def get_name(cls):
+        return cls.__name__
+
+    @classmethod
+    def _create_default_exec_engine(cls):
+        """
+        Crate the default execution engine.  Used if the one isn't supplied
+        to the run method.
+        :return: An instance of an ExceutionEngine.
+        """
+        return execution_engine.SerialEngine()
     ############################################
 
     def __init__(self):
         # Don't allow the spec to be changed anymore
         self.spec().seal()
+
+        self._exec_engine = None
         self._input_values = {}
         self._output_values = {}
         self._proc_evt_helper = util.EventHelper(ProcessListener)
@@ -161,10 +186,6 @@ class Process(object):
         for k, v in kwargs.iteritems():
             self.bind(k, v)
         return self.run()
-
-    @classmethod
-    def get_name(cls):
-        return cls.__name__
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -183,6 +204,11 @@ class Process(object):
         self._input_values[input_port] = value
 
     def is_input_bound(self, input_port):
+        """
+        Does the process have a value bound to the particular input port
+        :param input_port: The input port name
+        :return: True if bound, False otherwise
+        """
         return input_port in self._input_values
 
     @property
@@ -195,6 +221,29 @@ class Process(object):
                 return False
 
         return True
+
+    def run(self, exec_engine=None):
+        self._check_inputs()
+        self._output_values = {}
+
+        # Fill out the arguments
+        ins = self._create_input_args()
+        # Now reset the input arguments
+        self._input_values = {}
+
+        with Process.RunScope(self, ins, exec_engine):
+            retval = self._run(**ins)
+
+        self._check_outputs()
+        self._on_process_finished(retval)
+
+        return retval
+
+    def get_last_outputs(self):
+        return self._output_values
+
+    def _get_exec_engine(self):
+        return self._exec_engine
 
     def _out(self, output_port, value):
         dynamic = False
@@ -219,26 +268,6 @@ class Process(object):
 
         self._output_values[output_port] = value
         self._on_output_emitted(output_port, value, dynamic)
-
-    def run(self):
-        self._check_inputs()
-        self._output_values = {}
-
-        # Fill out the arguments
-        ins = self._create_input_args()
-        # Now reset the input arguments
-        self._input_values = {}
-
-        with RunScope(self, ins):
-            retval = self._run(**ins)
-
-        self._check_outputs()
-        self._on_process_finished(retval)
-
-        return retval
-
-    def get_last_outputs(self):
-        return self._output_values
 
     def _create_input_args(self):
         kwargs = {}
@@ -277,6 +306,10 @@ class Process(object):
         """
         Called when the inputs of a process passed checks and the process
         is about to begin.
+
+        Any class overriding this method should make sure to call the super
+        method, usually at the end of the function.
+
         :param inputs: The inputs the process is starting with
         """
         self._proc_evt_helper.fire_event('on_process_starting',
@@ -311,6 +344,11 @@ class Process(object):
 
 
 class FunctionProcess(Process):
+    # These will be replaced by build
+    _output_name = None
+    _func_args = None
+    _func = None
+
     @staticmethod
     def build(func, output_name="value"):
         import inspect
@@ -340,6 +378,6 @@ class FunctionProcess(Process):
         for arg in self._func_args:
             args.append(kwargs.pop(arg))
 
-        self.out(self._output_name, self._func(*args))
+        self._out(self._output_name, self._func(*args))
 
 
