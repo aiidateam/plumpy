@@ -99,7 +99,7 @@ class WorkflowSpec(ProcessSpec):
         self._outgoing_links = {}
         self._incoming_links = {}
 
-    def add_process(self, process, local_name=None):
+    def process(self, process, local_name=None):
         name = local_name if local_name else process.get_name()
         self._processes[name] = process
 
@@ -114,17 +114,17 @@ class WorkflowSpec(ProcessSpec):
     def get_process(self, name):
         return self._processes[name]
 
-    def expose_inputs(self, process_name):
+    def exposed_inputs(self, process_name):
         proc = self.get_process(process_name)
         for name, port in proc.spec().inputs.iteritems():
-            self.add_input_port(name, port)
+            self.input_port(name, port)
             self.link(":{}".format(name),
                       "{}:{}".format(process_name, name))
 
-    def expose_outputs(self, process_name):
+    def exposed_outputs(self, process_name):
         proc = self.get_process(process_name)
         for name, port in proc.spec().outputs.iteritems():
-            self.add_output_port(name, port)
+            self.output_port(name, port)
             self.link("{}:{}".format(process_name, name),
                       ":{}".format(name))
 

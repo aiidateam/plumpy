@@ -43,10 +43,10 @@ class ProcessSpec(object):
     def has_dynamic_output(self):
         return self.has_output(DynamicOutputPort.NAME)
 
-    def add_input(self, name, **kwargs):
-        self.add_input_port(name, InputPort(self, name, **kwargs))
+    def input(self, name, **kwargs):
+        self.input_port(name, InputPort(self, name, **kwargs))
 
-    def add_input_port(self, name, port):
+    def input_port(self, name, port):
         if self.sealed:
             raise RuntimeError("Cannot add an input after spec is sealed")
         if not isinstance(port, InputPort):
@@ -61,10 +61,10 @@ class ProcessSpec(object):
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._inputs.pop(name)
 
-    def add_output(self, name, **kwargs):
-        self.add_output_port(name, OutputPort(self, name, **kwargs))
+    def output(self, name, **kwargs):
+        self.output_port(name, OutputPort(self, name, **kwargs))
 
-    def add_output_port(self, name, port):
+    def output_port(self, name, port):
         if self.sealed:
             raise RuntimeError("Cannot add an output after spec is sealed")
         if not isinstance(port, OutputPort):
@@ -74,8 +74,8 @@ class ProcessSpec(object):
 
         self._outputs[name] = port
 
-    def add_dynamic_output(self):
-        self.add_output_port(DynamicOutputPort.NAME, DynamicOutputPort(self))
+    def dynamic_output(self):
+        self.output_port(DynamicOutputPort.NAME, DynamicOutputPort(self))
 
     def remove_dynamic_output(self):
         self.remove_output(DynamicOutputPort.NAME)
@@ -127,7 +127,6 @@ class Process(object):
             self._inputs = inputs
             self._exec_engine = exec_engine
 
-
         def __enter__(self):
             self._process._on_process_starting(self._inputs)
             self._process._exec_engine = self._exec_engine
@@ -140,7 +139,7 @@ class Process(object):
     _spec_type = ProcessSpec
 
     @staticmethod
-    def _init(spec):
+    def _define(spec):
         pass
 
     @classmethod
@@ -149,7 +148,7 @@ class Process(object):
             return cls._spec
         except AttributeError:
             cls._spec = cls._spec_type()
-            cls._init(cls._spec)
+            cls._define(cls._spec)
             return cls._spec
 
     @classmethod
@@ -354,18 +353,18 @@ class FunctionProcess(Process):
 
         args, varargs, keywords, defaults = inspect.getargspec(func)
 
-        def init(spec):
+        def _define(spec):
             for i in range(len(args)):
                 default = None
                 if defaults and len(defaults) - len(args) + i >= 0:
                     default = defaults[i]
-                spec.add_input(args[i], default=default)
+                spec.input(args[i], default=default)
 
-            spec.add_output(output_name)
+            spec.output(output_name)
 
         return type(func.__name__, (FunctionProcess,),
                     {'_func': func,
-                     '_init': staticmethod(init),
+                     '_define': staticmethod(_define),
                      '_func_args': args,
                      '_output_name': output_name})
 

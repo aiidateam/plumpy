@@ -14,8 +14,8 @@ def multiply(a, b):
 
 class DynamicOutputProcess(Process):
     @staticmethod
-    def _init(spec):
-        spec.add_dynamic_output()
+    def _define(spec):
+        spec.dynamic_output()
 
     def _run(self):
         import string
@@ -26,8 +26,8 @@ class DynamicOutputProcess(Process):
 
 class PrintProcess(Process):
     @staticmethod
-    def _init(spec):
-        spec.add_input('value')
+    def _define(spec):
+        spec.input('value')
 
     def _run(self, value):
         print(value)
@@ -35,9 +35,9 @@ class PrintProcess(Process):
 
 class TestDynamicOutput(Workflow):
     @staticmethod
-    def _init(spec):
-        spec.add_process(DynamicOutputProcess)
-        spec.add_process(PrintProcess)
+    def _define(spec):
+        spec.process(DynamicOutputProcess)
+        spec.process(PrintProcess)
 
         spec.link('DynamicOutputProcess:dynamic',
                   'PrintProcess:value')
@@ -45,10 +45,10 @@ class TestDynamicOutput(Workflow):
 
 class Add(Process):
     @staticmethod
-    def _init(spec):
-        spec.add_input('a', default=0)
-        spec.add_input('b', default=0)
-        spec.add_output('value')
+    def _define(spec):
+        spec.input('a', default=0)
+        spec.input('b', default=0)
+        spec.output('value')
 
     def _run(self, a, b):
         self._out('value', a + b)
@@ -56,10 +56,10 @@ class Add(Process):
 
 class Mul(Process):
     @staticmethod
-    def _init(spec):
-        spec.add_input('a', default=1)
-        spec.add_input('b', default=1)
-        spec.add_output('value')
+    def _define(spec):
+        spec.input('a', default=1)
+        spec.input('b', default=1)
+        spec.output('value')
 
     def _run(self, a, b):
         self._out('value', a * b)
@@ -67,12 +67,12 @@ class Mul(Process):
 
 class MulAdd(Workflow):
     @staticmethod
-    def _init(spec):
-        spec.add_process(Mul)
-        spec.add_process(Add)
-        spec.expose_inputs("Add")
-        spec.add_input('c', default=0)
-        spec.expose_outputs("Mul")
+    def _define(spec):
+        spec.process(Mul)
+        spec.process(Add)
+        spec.exposed_inputs("Add")
+        spec.input('c', default=0)
+        spec.exposed_outputs("Mul")
 
         spec.link(':c', 'Mul:a')
         spec.link('Add:value', 'Mul:b')
@@ -84,13 +84,13 @@ AddFun = FunctionProcess.build(add)
 
 class MulAddWithFun(Workflow):
     @staticmethod
-    def _init(spec):
-        spec.add_process(Mul)
-        spec.add_process(AddFun)
-        spec.expose_inputs("add")
-        spec.add_input('c', default=0)
-        spec.add_output('value')
-        spec.expose_outputs("Mul")
+    def _define(spec):
+        spec.process(Mul)
+        spec.process(AddFun)
+        spec.exposed_inputs("add")
+        spec.input('c', default=0)
+        spec.output('value')
+        spec.exposed_outputs("Mul")
 
         spec.link(':c', 'Mul:a')
         spec.link('add:value', 'Mul:b')
