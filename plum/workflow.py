@@ -17,6 +17,7 @@ class ProcessLink(object):
     def __init__(self, source, sink):
         self._source_process, self._source_port = source.split(':')
         self._sink_process, self._sink_port = sink.split(':')
+        self._value = None
 
     @property
     def source_process(self):
@@ -35,8 +36,9 @@ class ProcessLink(object):
         return self._sink_port
 
     def __str__(self):
-        return "{}:{} => {}:{}".format(self.source_process, self.source_port,
-                                       self.sink_process, self.sink_port)
+        return "{}:{} => {}:{}".format(
+            self.source_process, self.source_port,
+            self.sink_process, self.sink_port)
 
 
 class WorkflowListener(object):
@@ -192,6 +194,7 @@ class Workflow(Process, ProcessListener):
         super(Workflow, self).__init__()
         self._workflow_evt_helper = util.EventHelper(WorkflowListener)
         self._process_instances = {}
+        self._input_buffer = {}
         for name, proc_class in self.spec().processes.iteritems():
             proc = proc_class.create()
             proc.add_process_listener(self)
@@ -213,11 +216,15 @@ class Workflow(Process, ProcessListener):
                 self._out(link.sink_port, value)
             else:
                 proc = self._process_instances[link.sink_process]
-                proc.bind(link.sink_port, value)
+                self._push_value(link, value)
 
                 # If the process receiving this input is ready then run it
-                if self._is_ready_to_run(proc):
-                    self._get_exec_engine().run(proc)
+                try:
+                    inputs = self._generate_inputs_for(proc)
+                    self._get_exec_engine().run(proc, inputs)
+                except ValueError:
+                    # Not ready to run
+                    pass
 
             sink = "{}:{}".format(link.sink_process, link.sink_port)
         except KeyError:
@@ -243,11 +250,12 @@ class Workflow(Process, ProcessListener):
     def _run_workflow(self, **kwargs):
         self._initialise_inputs(**kwargs)
 
-        for proc in self._get_ready_processes():
-            self._get_exec_engine().run(proc)
-
-    def _save_record(self, node):
-        pass
+        for proc in self._process_instances.itervalues():
+            try:
+                inputs = self._generate_inputs_for(proc)
+                self._get_exec_engine().run(proc, inputs)
+            except ValueError as e:
+                pass
 
     def get_local_name(self, process):
         for name, proc in self._process_instances.iteritems():
@@ -255,29 +263,35 @@ class Workflow(Process, ProcessListener):
                 return name
         raise ValueError("Process not in workflow")
 
-    def _get_ready_processes(self):
-        return filter(lambda proc: self._is_ready_to_run(proc),
-                      self._process_instances.itervalues())
-
-    def _is_ready_to_run(self, proc):
-        # Check that any connected ports are filled, otherwise it's not ready
-        for input_name in proc.spec().inputs:
-            sink = "{}:{}".format(self.get_local_name(proc), input_name)
-            if (self.spec().get_incoming_links(sink) and
-                    not proc.is_input_bound(input_name)):
-                return False
-        return True
-
     def _initialise_inputs(self, **kwargs):
         for key, value in kwargs.iteritems():
             try:
-                # Push the input value to the sink process input port
+                # Push the input value to the links
                 link = self.spec().get_link(":{}".format(key))
-                proc = self._process_instances[link.sink_process]
-                proc.bind(link.sink_port, value)
+                self._push_value(link, value)
             except KeyError:
                 # The input isn't connected, nae dramas
                 pass
+
+    def _generate_inputs_for(self, proc):
+        ready_links = []
+        for input_name in proc.spec().inputs:
+            sink = "{}:{}".format(self.get_local_name(proc), input_name)
+            for link in self.spec().get_incoming_links(sink):
+                if str(link) in self._input_buffer:
+                    ready_links.append(link)
+                else:
+                    raise ValueError(
+                        "Cannot generate inputs for process as not all links "
+                        "have a value ready.")
+        # All the links have ready values so get them
+        return {link.sink_port: self._pop_value(link) for link in ready_links}
+
+    def _push_value(self, link, value):
+        self._input_buffer[str(link)] = value
+
+    def _pop_value(self, link):
+        return self._input_buffer.pop(str(link))
 
     # Workflow messages #################################################
     # Make sure to call the superclass if your override any of these ####

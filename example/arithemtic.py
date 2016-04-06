@@ -98,10 +98,7 @@ class MulAddWithFun(Workflow):
 
 if __name__ == '__main__':
     mul_add = MulAdd.create()
-    mul_add.bind('a', 2)
-    mul_add.bind('b', 3)
-    mul_add.bind('c', 4)
-    print(mul_add.run())
+    print(mul_add.run({'a': 2, 'b': 3, 'c': 4}))
 
     mul_add(a=2, b=3, c=4)
 

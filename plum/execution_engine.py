@@ -12,7 +12,7 @@ class ExecutionEngine(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def run(self, process):
+    def run(self, process, inputs):
         pass
 
 
@@ -21,5 +21,5 @@ class SerialEngine(ExecutionEngine):
     The simplest possible workflow engine.  Just calls through to the run
     method of the process.
     """
-    def run(self, process):
-        return process.run(self)
+    def run(self, process, inputs):
+        return process.run(inputs, self)

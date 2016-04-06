@@ -98,9 +98,6 @@ class ProcessListener(object):
     def on_process_finished(self, process, retval):
         pass
 
-    def on_input_bound(self, process, input_port, value):
-        pass
-
     def on_output_emitted(self, process, output_port, value, dynamic):
         pass
 
@@ -174,14 +171,11 @@ class Process(object):
         self.spec().seal()
 
         self._exec_engine = None
-        self._input_values = {}
         self._output_values = {}
         self._proc_evt_helper = util.EventHelper(ProcessListener)
 
     def __call__(self, **kwargs):
-        for k, v in kwargs.iteritems():
-            self.bind(k, v)
-        return self.run()
+        return self.run(kwargs)
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -190,42 +184,12 @@ class Process(object):
     def remove_process_listener(self, listener):
         self._proc_evt_helper.remove_listener(listener)
 
-    def bind(self, input_port, value):
-        """
-        Convenience method to push a value to a particular input port.
-
-        :param input_port: The input port to bind the value to.
-        :param value: The input value.
-        """
-        self._input_values[input_port] = value
-
-    def is_input_bound(self, input_port):
-        """
-        Does the process have a value bound to the particular input port
-        :param input_port: The input port name
-        :return: True if bound, False otherwise
-        """
-        return input_port in self._input_values
-
-    @property
-    def bound_inputs(self):
-        return self._input_values
-
-    def can_run(self):
-        for name, port in self.spec().inputs.iteritems():
-            if port.required and name not in self._input_values:
-                return False
-
-        return True
-
-    def run(self, exec_engine=None):
-        self._check_inputs()
+    def run(self, inputs={}, exec_engine=None):
+        self._check_inputs(inputs)
         self._output_values = {}
 
         # Fill out the arguments
-        ins = self._create_input_args()
-        # Now reset the input arguments
-        self._input_values = {}
+        ins = self._create_input_args(inputs)
 
         if not exec_engine:
             exec_engine = self._create_default_exec_engine()
@@ -267,11 +231,11 @@ class Process(object):
         self._output_values[output_port] = value
         self._on_output_emitted(output_port, value, dynamic)
 
-    def _create_input_args(self):
+    def _create_input_args(self, inputs):
         kwargs = {}
         for name, port in self.spec().inputs.iteritems():
-            if name in self._input_values:
-                kwargs[name] = self._input_values[name]
+            if name in inputs:
+                kwargs[name] = inputs[name]
             elif port.default:
                 kwargs[name] = port.default
             else:
@@ -279,10 +243,10 @@ class Process(object):
 
         return kwargs
 
-    def _check_inputs(self):
-        # Check all the input ports are filled
+    def _check_inputs(self, inputs):
+        # Check all the required inputs are specified
         for name, port in self.spec().inputs.iteritems():
-            if name not in self._input_values and port.default is None:
+            if name not in inputs and port.default is None:
                 raise RuntimeError(
                     "Cannot run process {} because port {}"
                     " is not filled".format(self.get_name(), name))
@@ -330,10 +294,6 @@ class Process(object):
         """
         self._proc_evt_helper.fire_event('on_process_finished',
                                          self, retval)
-
-    def _on_input_bound(self, input_port, value):
-        self._proc_evt_helper.fire_event('on_input_bound',
-                                         self, input_port, value)
 
     def _on_output_emitted(self, output_port, value, dynamic):
         self._proc_evt_helper.fire_event('on_output_emitted',
