@@ -184,7 +184,10 @@ class Process(object):
     def remove_process_listener(self, listener):
         self._proc_evt_helper.remove_listener(listener)
 
-    def run(self, inputs={}, exec_engine=None):
+    def run(self, inputs=None, exec_engine=None):
+        if inputs is None:
+            inputs = {}
+
         self._check_inputs(inputs)
         self._output_values = {}
 

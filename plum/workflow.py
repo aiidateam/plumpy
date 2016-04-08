@@ -91,6 +91,15 @@ class WorkflowListener(object):
         """
         pass
 
+    def on_value_buffered(self, workflow, link, value):
+        """
+        Called when an output value was emitted by a subprocess but the
+        connected process is not ready to start yet because it is waiting
+        for other values.
+        :param link: The link connecting the source port to the sink.
+        :param value: The value that was emitted
+        """
+
 
 class WorkflowSpec(ProcessSpec):
     __metaclass__ = ABCMeta
@@ -224,7 +233,7 @@ class Workflow(Process, ProcessListener):
                     self._get_exec_engine().run(proc, inputs)
                 except ValueError:
                     # Not ready to run
-                    pass
+                    self._on_value_buffered(link, value)
 
             sink = "{}:{}".format(link.sink_process, link.sink_port)
         except KeyError:
@@ -327,4 +336,16 @@ class Workflow(Process, ProcessListener):
         """
         self._workflow_evt_helper.fire_event('on_subprocess_finished',
                                              self, subproc, retval)
+
+    def _on_value_buffered(self, link, value):
+        """
+        Called when an output value was emitted by a subprocess but the
+        connected process is not ready to start yet because it is waiting
+        for other values.
+        :param link: The link connecting the source port to the sink.
+        :param value: The value that was emitted
+        """
+        self._workflow_evt_helper.fire_event('on_value_buffered',
+                                             self, link, value)
+
     #####################################################################
