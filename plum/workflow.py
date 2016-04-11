@@ -74,7 +74,7 @@ class WorkflowListener(object):
         """
         pass
 
-    def on_subprocess_finishing(self, workflow, subproc):
+    def on_subprocess_finalising(self, workflow, subproc):
         """
         Called when the subprocess has completed execution, however this may be
         the result of returning or an exception being raised.  Either way this
@@ -240,8 +240,8 @@ class Workflow(Process, ProcessListener):
             # The output isn't connected, nae dramas
             sink = None
 
-    def on_process_finishing(self, process):
-        self._on_subprocess_finishing(process)
+    def on_process_finalising(self, process):
+        self._on_subprocess_finalising(process)
 
     def on_process_finished(self, process, retval):
         self._on_subprocess_finished(process, retval)
@@ -315,16 +315,16 @@ class Workflow(Process, ProcessListener):
         self._workflow_evt_helper.fire_event('on_subprocess_starting',
                                              self, subproc, inputs)
 
-    def _on_subprocess_finishing(self, subproc):
+    def _on_subprocess_finalising(self, subproc):
         """
         Called when the subprocess has completed execution, however this may be
         the result of returning or an exception being raised.  Either way this
         message is guaranteed to be sent.  Only upon successful return and
         outputs passing checks would _on_process_finished be called.
 
-        :param subproc: The subprocess that is finishing
+        :param subproc: The subprocess that is finalising
         """
-        self._workflow_evt_helper.fire_event('on_subprocess_finishing',
+        self._workflow_evt_helper.fire_event('on_subprocess_finalising',
                                              self, subproc)
 
     def _on_subprocess_finished(self, subproc, retval):

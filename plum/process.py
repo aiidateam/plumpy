@@ -92,7 +92,7 @@ class ProcessListener(object):
     def on_process_starting(self, process, inputs):
         pass
 
-    def on_process_finishing(self, process):
+    def on_process_finalising(self, process):
         pass
 
     def on_process_finished(self, process, retval):
@@ -130,7 +130,7 @@ class Process(object):
 
         def __exit__(self, type, value, traceback):
             self._process._exec_engine = None
-            self._process._on_process_finishing()
+            self._process._on_process_finalising()
 
     # Static class stuff ######################
     _spec_type = ProcessSpec
@@ -235,6 +235,15 @@ class Process(object):
         self._on_output_emitted(output_port, value, dynamic)
 
     def _create_input_args(self, inputs):
+        """
+        Take the passed input arguments and fill in any default values for
+        inputs that have no been supplied.
+
+        Preconditions:
+        * All required inputs have been supplied
+        :param inputs: The supplied input values.
+        :return: A dictionary of inputs including any with default values
+        """
         kwargs = {}
         for name, port in self.spec().inputs.iteritems():
             if name in inputs:
@@ -280,14 +289,14 @@ class Process(object):
         self._proc_evt_helper.fire_event('on_process_starting',
                                          self, inputs)
 
-    def _on_process_finishing(self):
+    def _on_process_finalising(self):
         """
         Called when the process has completed execution, however this may be
         the result of returning or an exception being raised.  Either way this
         message is guaranteed to be sent.  Only upon successful return and
         outputs passing checks would _on_process_finished be called.
         """
-        self._proc_evt_helper.fire_event('on_process_finishing', self)
+        self._proc_evt_helper.fire_event('on_process_finalising', self)
 
     def _on_process_finished(self, retval):
         """
