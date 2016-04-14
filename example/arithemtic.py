@@ -2,6 +2,7 @@
 
 from plum.process import Process, FunctionProcess
 from plum.workflow import Workflow
+from plum.parallel import MultithreadedExecutionEngine
 
 
 def add(a, b):
@@ -102,9 +103,8 @@ if __name__ == '__main__':
 
     mul_add(a=2, b=3, c=4)
 
-    mul_add = MulAdd.create()
-    # Use the callable method
-    print(mul_add(a=2, b=3, c=4))
+    exec_engine = MultithreadedExecutionEngine()
+    exec_engine.run(mul_add, {'a': 2, 'b': 3, 'c': 4})
 
     TestDynamicOutput.create().run()
 

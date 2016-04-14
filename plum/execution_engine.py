@@ -213,4 +213,5 @@ class SerialEngine(ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        return process.run(inputs, self)
+        process.run(inputs, self)
+        return process.get_last_outputs()
