@@ -22,7 +22,7 @@ setup(
     # of the difference and
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
-    install_requires=[],
+    install_requires=['futures'],
     packages=find_packages(),
     long_description=open(os.path.join(root_folder, 'README.md')).read(),
 )

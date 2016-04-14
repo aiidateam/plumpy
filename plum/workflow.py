@@ -8,6 +8,7 @@ value is passed to all of them when the workflow starts.
 """
 
 from abc import ABCMeta
+import threading
 from plum.port import DynamicOutputPort
 from plum.process import Process, ProcessSpec, ProcessListener
 import plum.util as util
@@ -204,6 +205,9 @@ class Workflow(Process, ProcessListener):
         self._workflow_evt_helper = util.EventHelper(WorkflowListener)
         self._process_instances = {}
         self._input_buffer = {}
+        self._subproc_counter = util.ThreadSafeCounter()
+        self._wait_event = None
+
         for name, proc_class in self.spec().processes.iteritems():
             proc = proc_class.create()
             proc.add_process_listener(self)
@@ -230,7 +234,7 @@ class Workflow(Process, ProcessListener):
                 # If the process receiving this input is ready then run it
                 try:
                     inputs = self._generate_inputs_for(proc)
-                    self._get_exec_engine().run(proc, inputs)
+                    self._launch_subprocess(proc, inputs)
                 except ValueError:
                     # Not ready to run
                     self._on_value_buffered(link, value)
@@ -259,12 +263,18 @@ class Workflow(Process, ProcessListener):
     def _run_workflow(self, **kwargs):
         self._initialise_inputs(**kwargs)
 
+        self._wait_event = threading.Event()
+
         for proc in self._process_instances.itervalues():
             try:
                 inputs = self._generate_inputs_for(proc)
-                self._get_exec_engine().run(proc, inputs)
-            except ValueError as e:
+                self._launch_subprocess(proc, inputs)
+            except ValueError:
                 pass
+
+        # Wait for all subprocess to finish
+        self._wait_event.wait()
+        self._wait_event = None
 
     def get_local_name(self, process):
         for name, proc in self._process_instances.iteritems():
@@ -301,6 +311,15 @@ class Workflow(Process, ProcessListener):
 
     def _pop_value(self, link):
         return self._input_buffer.pop(str(link))
+
+    def _launch_subprocess(self, proc, inputs):
+        self._subproc_counter.increment()
+        self._get_exec_engine().submit(proc, inputs).add_done_callback(self._subproc_done)
+
+    def _subproc_done(self, fut):
+        self._subproc_counter.decrement()
+        if self._subproc_counter.value == 0:
+            self._wait_event.set()
 
     # Workflow messages #################################################
     # Make sure to call the superclass if your override any of these ####
