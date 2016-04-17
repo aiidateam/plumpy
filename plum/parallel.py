@@ -9,8 +9,10 @@ class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
     class Future(concurrent.futures.Future, execution_engine.Future):
         pass
 
-    def __init__(self):
-        self._executor = ThreadPoolExecutor(max_workers=multiprocessing.cpu_count())
+    def __init__(self, max_workers=None):
+        if max_workers is None:
+            max_workers = multiprocessing.cpu_count()
+        self._executor = ThreadPoolExecutor(max_workers=max_workers)
 
     def submit(self, process, inputs):
         """

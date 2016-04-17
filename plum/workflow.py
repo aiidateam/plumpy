@@ -205,9 +205,10 @@ class Workflow(Process, ProcessListener):
         self._workflow_evt_helper = util.EventHelper(WorkflowListener)
         self._process_instances = {}
         self._input_buffer = {}
-        self._subproc_counter = util.ThreadSafeCounter()
+        self._num_running_subprocs = util.ThreadSafeCounter()
         self._wait_event = None
 
+        # Create all our subprocess classes
         for name, proc_class in self.spec().processes.iteritems():
             proc = proc_class.create()
             proc.add_process_listener(self)
@@ -313,12 +314,12 @@ class Workflow(Process, ProcessListener):
         return self._input_buffer.pop(str(link))
 
     def _launch_subprocess(self, proc, inputs):
-        self._subproc_counter.increment()
+        self._num_running_subprocs.increment()
         self._get_exec_engine().submit(proc, inputs).add_done_callback(self._subproc_done)
 
     def _subproc_done(self, fut):
-        self._subproc_counter.decrement()
-        if self._subproc_counter.value == 0:
+        self._num_running_subprocs.decrement()
+        if self._num_running_subprocs.value == 0:
             self._wait_event.set()
 
     # Workflow messages #################################################
