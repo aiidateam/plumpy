@@ -88,6 +88,8 @@ class WorkflowListener(object):
         """
         Called when the process has finished and the outputs have passed
         checks
+        :param workflow: The workflow whose subprocess finished.
+        :param subproc: The subprocess that finished.
         :param retval: The return value from the process
         """
         pass
@@ -97,9 +99,21 @@ class WorkflowListener(object):
         Called when an output value was emitted by a subprocess but the
         connected process is not ready to start yet because it is waiting
         for other values.
+        :param workflow: The workflow where the value was buffered.
         :param link: The link connecting the source port to the sink.
         :param value: The value that was emitted
         """
+        pass
+
+    def on_value_consumed(self, workflow, link, value):
+        """
+        Called when a buffered input value is used because the receiving
+        Process is ready to run.
+        :param workflow: The workflow where the value was consumed.
+        :param link: The link connecting the source port to the sink.
+        :param value: The value that was consumed
+        """
+        pass
 
 
 class WorkflowSpec(ProcessSpec):
@@ -311,7 +325,8 @@ class Workflow(Process, ProcessListener):
         self._input_buffer[str(link)] = value
 
     def _pop_value(self, link):
-        return self._input_buffer.pop(str(link))
+        value = self._input_buffer.pop(str(link))
+        return value
 
     def _launch_subprocess(self, proc, inputs):
         self._num_running_subprocs.increment()
@@ -366,6 +381,16 @@ class Workflow(Process, ProcessListener):
         :param value: The value that was emitted
         """
         self._workflow_evt_helper.fire_event('on_value_buffered',
+                                             self, link, value)
+
+    def _on_value_consumed(self, link, value):
+        """
+        Called when a buffered input value is used because the receiving
+        Process is ready to run.
+        :param link: The link connecting the source port to the sink.
+        :param value: The value that was consumed
+        """
+        self._workflow_evt_helper.fire_event('on_value_consumed',
                                              self, link, value)
 
     #####################################################################

@@ -138,6 +138,8 @@ class SerialEngine(ExecutionEngine):
 
     class Future(Future):
         def __init__(self, process, inputs, engine):
+            import sys
+
             self._exception = None
             self._outputs = None
 
@@ -146,6 +148,7 @@ class SerialEngine(ExecutionEngine):
                 process.run(inputs, engine)
                 self._outputs = process.get_last_outputs()
             except Exception as e:
+                exc_type, exc_obj, exc_tb = sys.exc_info()
                 self._exception = e
 
         def cancel(self):

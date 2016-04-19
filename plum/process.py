@@ -7,6 +7,15 @@ import plum.util as util
 
 
 class ProcessSpec(object):
+    """
+    A class that defines the specifications of a Process, this includes what
+    its inputs, outputs, etc are.
+
+    All methods to modify the spec should be statements that describe the spec
+    e.g.: input, output
+
+    Every Process class has one of these.
+    """
     def __init__(self):
         self._inputs = {}
         self._outputs = {}
@@ -105,18 +114,15 @@ class ProcessListener(object):
 class Process(object):
     __metaclass__ = ABCMeta
 
-    _DEFAULT_EXEC_ENGINE = execution_engine.SerialEngine
-
     class RunScope(object):
         """
-        This object is exclusively to be used as:
+        A context manager to be used as:
 
         with RunScope(...):
-          self.run()
+          self._run()
 
-        It defines the scope of a process execution and produces the
-        _on_process_starting and _on_process_finished messages at the
-        beginning and end of the scope respectively as well as other
+        It defines the scope of a process execution and produces the internal
+        event messages at the beginning and end of the scope as well as other
         internal process management.
         """
         def __init__(self, process, inputs, exec_engine):
@@ -132,7 +138,30 @@ class Process(object):
             self._process._exec_engine = None
             self._process._on_process_finalising()
 
+    class ContinueScope(object):
+        """
+        A context manager to be used as:
+
+        with ContinueScope(...):
+          self._continue_from()
+
+        It defines the scope of a process execution and produces the internal
+        event messages at the end of the scope as well as other
+        internal process management.
+        """
+        def __init__(self, process, exec_engine):
+            self._process = process
+            self._exec_engine = exec_engine
+
+        def __enter__(self):
+            self._process._exec_engine = self._exec_engine
+
+        def __exit__(self, type, value, traceback):
+            self._process._exec_engine = None
+            self._process._on_process_finalising()
+
     # Static class stuff ######################
+    _DEFAULT_EXEC_ENGINE = execution_engine.SerialEngine
     _spec_type = ProcessSpec
 
     @staticmethod
@@ -196,7 +225,7 @@ class Process(object):
 
         if not exec_engine:
             exec_engine = self._create_default_exec_engine()
-        with Process.RunScope(self, ins, exec_engine):
+        with self.RunScope(self, ins, exec_engine):
             retval = self._run(**ins)
 
         self._check_outputs()
