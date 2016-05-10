@@ -43,7 +43,6 @@ class PersistenceMixin(object):
         assert isinstance(self, Process),\
             "This mixin has to be used with Process classes"
         super(PersistenceMixin, self).__init__()
-        self._process_record = None
 
     def continue_from(self, record, exec_engine=None):
         if not exec_engine:

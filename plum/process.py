@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta, abstractmethod
-from plum.port import InputPort, OutputPort, DynamicOutputPort
+from plum.port import InputPort, InputGroupPort, OutputPort, DynamicOutputPort
 import plum.execution_engine as execution_engine
 import plum.util as util
 
@@ -53,13 +53,22 @@ class ProcessSpec(object):
         return self.has_output(DynamicOutputPort.NAME)
 
     def input(self, name, **kwargs):
+        """
+        Define an Process input.
+
+        :param name: The name of the input.
+        :param kwargs: The input port options.
+        """
         self.input_port(name, InputPort(self, name, **kwargs))
+
+    def input_group(self, name, **kwargs):
+        self.input_port(name, InputGroupPort(self, name, **kwargs))
 
     def input_port(self, name, port):
         if self.sealed:
             raise RuntimeError("Cannot add an input after spec is sealed")
         if not isinstance(port, InputPort):
-            raise TypeError("Output port must be an instance of InputPort")
+            raise TypeError("Input port must be an instance of InputPort")
         if name in self._inputs:
             raise ValueError("Input {} already exists.".format(name))
 
@@ -245,11 +254,11 @@ class Process(object):
         try:
             # Check types (if known)
             port = self.spec().get_output(output_port)
-            if port.type is not None and not isinstance(value, port.type):
+            if port.valid_type is not None and not isinstance(value, port.valid_type):
                 raise TypeError(
                     "Process returned output {} of wrong type."
                     "Expected {}, got {}".
-                        format(output_port, port.type, type(value)))
+                        format(output_port, port.valid_type, type(value)))
         except KeyError:
             # The port is unknown, do we support dynamic outputs?
             if self.spec().has_dynamic_output():
@@ -285,19 +294,18 @@ class Process(object):
         return kwargs
 
     def _check_inputs(self, inputs):
-        # Check all the required inputs are specified
+        # Check the inputs meet the requirements
         for name, port in self.spec().inputs.iteritems():
-            if name not in inputs and port.default is None:
-                raise RuntimeError(
-                    "Cannot run process {} because port {}"
-                    " is not filled".format(self.get_name(), name))
+            valid, msg = port.validate(inputs.get(name, None))
+            if not valid:
+                raise RuntimeError("Cannot run process {} because {}".format(self.get_name(), msg))
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
         for name, port in self.spec().outputs.iteritems():
-            if port.required and name not in self._output_values:
-                raise RuntimeError("A required output port ({}) was not "
-                                   "produced by the process".format(name))
+            valid, msg = port.validate(self._output_values.get(name, None))
+            if not valid:
+                raise RuntimeError("Process {} failed because {}".format(self.get_name(), msg))
 
     @abstractmethod
     def _run(self, **kwargs):
