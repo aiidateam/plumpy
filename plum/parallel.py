@@ -3,7 +3,7 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
 import plum.execution_engine as execution_engine
-from plum.wait import WaitOn
+from plum.serial_engine import SerialEngine
 
 
 class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
@@ -14,6 +14,8 @@ class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
         if max_workers is None:
             max_workers = multiprocessing.cpu_count()
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
+        # For now just exploit the serial engine to do the work for us
+        self._serial_engine = SerialEngine()
 
     def submit(self, process, inputs):
         """
@@ -23,7 +25,7 @@ class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        return self._executor.submit(self.run, process, inputs)
+        return self._executor.submit(self._serial_engine.run, process, inputs)
 
     def run(self, process, inputs):
         """
@@ -33,19 +35,10 @@ class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return:
         """
-        self._run_till_finished(process, inputs)
-        return process.get_last_outputs()
+        return self._serial_engine.run(process, inputs)
 
-    def _run_till_finished(self, process, inputs):
-        ins = process._create_input_args(inputs)
+    def get_pid(self, process):
+        return self._serial_engine.get_pid(process)
 
-        process._on_process_starting(ins, self)
-
-        retval = process._run(**inputs)
-        while isinstance(retval, WaitOn):
-            retval.wait(timeout=WaitOn.UNTIL_READY)
-            retval = retval.callback()
-
-        process._on_process_finalising()
-
-        return retval
+    def get_process(self, pid):
+        return self._serial_engine.get_process(pid)

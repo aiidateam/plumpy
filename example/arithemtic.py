@@ -106,5 +106,8 @@ if __name__ == '__main__':
     exec_engine = MultithreadedExecutionEngine()
     exec_engine.run(mul_add, {'a': 2, 'b': 3, 'c': 4})
 
+    future = exec_engine.submit(mul_add, {'a': 2, 'b': 3, 'c': 4})
+    print(future.result())
+
     TestDynamicOutput.create().run()
 
