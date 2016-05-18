@@ -10,12 +10,12 @@ class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
     class Future(concurrent.futures.Future, execution_engine.Future):
         pass
 
-    def __init__(self, max_workers=None):
+    def __init__(self, max_workers=None, persistence=None):
         if max_workers is None:
             max_workers = multiprocessing.cpu_count()
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         # For now just exploit the serial engine to do the work for us
-        self._serial_engine = SerialEngine()
+        self._serial_engine = SerialEngine(persistence=persistence)
 
     def submit(self, process, inputs):
         """
@@ -36,6 +36,9 @@ class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
         :return:
         """
         return self._serial_engine.run(process, inputs)
+
+    def tick(self):
+        self._serial_engine.tick()
 
     def get_pid(self, process):
         return self._serial_engine.get_pid(process)

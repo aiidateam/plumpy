@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 
+from abc import ABCMeta
 from plum.process import ProcessListener
 from plum.persistence.bundle import Bundle
 from plum.wait import WaitOn
 
 
-class WaitOnAll(WaitOn):
+class _CompoundWaitOn(WaitOn):
+    __metaclass__ = ABCMeta
+
     WAIT_LIST = 'wait_list'
 
     @classmethod
@@ -15,14 +18,11 @@ class WaitOnAll(WaitOn):
             [WaitOn.create_from(b, exec_engine) for b in bundle[cls.WAIT_LIST]])
 
     def __init__(self, callback_name, wait_list):
-        super(WaitOnAll, self).__init__(callback_name)
+        super(self.__class__, self).__init__(callback_name)
         self._wait_list = wait_list
 
-    def is_ready(self):
-        return all(w.is_ready() for w in self._wait_list)
-
     def save_instance_state(self, bundle, exec_engine):
-        super(WaitOnAll, self).save_instance_state(bundle, exec_engine)
+        super(self.__class__, self).save_instance_state(bundle, exec_engine)
         # Save all the waits lists
         waits = []
         for w in self._wait_list:
@@ -30,6 +30,16 @@ class WaitOnAll(WaitOn):
             w.save_instance_state(b)
             waits.append(b)
         bundle[self.WAIT_LIST] = waits
+
+
+class WaitOnAll(_CompoundWaitOn):
+    def is_ready(self):
+        return all(w.is_ready() for w in self._wait_list)
+
+
+class WaitOnAny(_CompoundWaitOn):
+    def is_ready(self):
+        return any(w.is_ready() for w in self._wait_list)
 
 
 class WaitOnProcess(WaitOn, ProcessListener):

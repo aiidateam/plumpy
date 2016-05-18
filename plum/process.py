@@ -108,6 +108,9 @@ class ProcessListener(object):
     def on_process_starting(self, process, inputs):
         pass
 
+    def on_process_waiting(self, process):
+        pass
+
     def on_process_finalising(self, process):
         pass
 
@@ -249,16 +252,16 @@ class Process(object):
     def _run(self, **kwargs):
         pass
 
-    def save_instance_state(self, bundle, exec_engine):
+    def save_instance_state(self, bundle):
         pass
 
-    def load_instance_state(self, bundle, exec_engine):
+    def load_instance_state(self, bundle):
         pass
 
     # Process messages ##################################################
     # These should only be called by an execution engine (or tests) #####
     # Make sure to call the superclass if your override any of these ####
-    def _on_process_starting(self, inputs, exec_engine):
+    def on_start(self, inputs, exec_engine):
         """
         Called when the inputs of a process passed checks and the process
         is about to begin.
@@ -273,7 +276,10 @@ class Process(object):
         self._proc_evt_helper.fire_event('on_process_starting',
                                          self, inputs)
 
-    def _on_process_finalising(self):
+    def on_wait(self):
+        self._proc_evt_helper.fire_event('on_process_waiting', self)
+
+    def on_finialise(self):
         """
         Called when the process has completed execution, however this may be
         the result of returning or an exception being raised.  Either way this
@@ -284,7 +290,7 @@ class Process(object):
         self._check_outputs()
         self._proc_evt_helper.fire_event('on_process_finalising', self)
 
-    def _on_process_finished(self, retval):
+    def on_finish(self, retval):
         """
         Called when the process has finished and the outputs have passed
         checks

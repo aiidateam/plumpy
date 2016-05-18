@@ -37,7 +37,7 @@ class PersistenceMixin(object):
 
         def __exit__(self, type, value, traceback):
             self._process._exec_engine = None
-            self._process._on_process_finalising()
+            self._process.on_finialise()
 
     def __init__(self):
         assert isinstance(self, Process),\

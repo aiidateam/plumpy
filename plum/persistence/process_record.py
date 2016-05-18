@@ -39,7 +39,7 @@ class ProcessRecord(object):
         pass
 
     @abstractmethod
-    def create_checkpoint(self, process, wait_on=None):
+    def create_checkpoint(self, exec_engine, process, wait_on=None):
         pass
 
     @abstractmethod

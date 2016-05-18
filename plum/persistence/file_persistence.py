@@ -11,11 +11,11 @@ import os
 import glob
 
 
+Checkpoint = namedtuple('Checkpoint', ['process_state', 'wait_on_state'])
 _STORE_DIRECTORY = os.path.join(tempfile.gettempdir(), "process_records")
 
 
 class FileProcessRecord(ProcessRecord):
-    Checkpoint = namedtuple('Checkpoint', ['process_state', 'wait_on_state'])
 
     PROC_INSTANCE_STATE = 'proc_instance_state'
     WAIT_ON_INSTANCE_STATE = 'wait_on_instance_state'
@@ -68,13 +68,16 @@ class FileProcessRecord(ProcessRecord):
     def set_checkpoint(self, checkpoint):
         self._checkpoint = checkpoint
 
-    def create_checkpoint(self, process, wait_on=None):
+    def create_checkpoint(self, exec_engine, process, wait_on=None):
         proc_state = {}
         process.save_instance_state(proc_state)
         wait_on_state = {}
         if wait_on:
-            wait_on.save_instance_state(wait_on_state)
-        self._checkpoint = self.Checkpoint(proc_state, wait_on_state)
+            wait_on.save_instance_state(wait_on_state, exec_engine)
+        self._checkpoint = Checkpoint(proc_state, wait_on_state)
+
+    def has_checkpoint(self):
+        return self._checkpoint is not None
 
     def save(self):
         if self._parent:
@@ -86,7 +89,11 @@ class FileProcessRecord(ProcessRecord):
             with open(os.path.join(_STORE_DIRECTORY, self._filename), 'wb') as f:
                 # Gather all the things we want to store in order
                 self._last_saved = datetime.now()
-                pickle.dump(self, f)
+                try:
+                    pickle.dump(self, f)
+                except Exception as e:
+                    print(e.msg)
+
 
     def delete(self):
         if self._parent:
