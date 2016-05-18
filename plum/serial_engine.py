@@ -152,7 +152,7 @@ class SerialEngine(ExecutionEngine, ProcessListener):
     ######################################################################
 
     def _get_proc_info(self, process):
-        for pid, info in self._current_processes.iteritems():
+        for info in self._current_processes.itervalues():
             if process is info.process:
                 return info
         return None
@@ -177,30 +177,34 @@ class SerialEngine(ExecutionEngine, ProcessListener):
         process.on_start(ins, self)
         retval = process._run(**inputs)
 
+        proc_info = self._get_proc_info(process)
         if isinstance(retval, WaitOn):
-            self._wait_process(process, retval)
+            self._wait_process(proc_info, retval)
         else:
-            self._finish_process(process, retval)
-
-    def _wait_process(self, process, wait_on):
-        self._get_proc_info(process).waiting_on = wait_on
-        process.on_wait()
+            self._finish_process(proc_info, retval)
 
     def _continue_process(self, proc_info):
         assert proc_info.waiting_on, "Cannot continue a process that was not waiting"
 
-        proc = proc_info.process
+        # Get the WaitOn callback function name and call it
+        # making sure to reset the waiting_on
         wait_on = proc_info.waiting_on
         proc_info.waiting_on = None
-        retval = getattr(proc, wait_on.callback)(wait_on)
+        retval = getattr(proc_info.process, wait_on.callback)(wait_on)
+
+        # Check what to do next
         if isinstance(retval, WaitOn):
-            proc_info.waiting_on = retval
-            proc.on_waiting()
+            self._wait_process(proc_info, retval)
         else:
             self._finish_process(proc_info, retval)
 
-    def _finish_process(self, process, retval):
-        proc_info = self._get_proc_info(process)
+    def _wait_process(self, proc_info, wait_on):
+        assert not proc_info.waiting_on, "Cannot wait on a process that is already waiting"
+
+        proc_info.waiting_on = wait_on
+        proc_info.process.on_wait()
+
+    def _finish_process(self, proc_info, retval):
         assert not proc_info.waiting_on, "Cannot finish a process that is waiting"
 
         proc_info.process.on_finialise()

@@ -42,41 +42,16 @@ class Add(Process):
     def _run(self, a, b):
         self._a = a
         self._b = b
-        return WaitFor(10, self._finish.__name__)
+        return WaitFor(2, self._finish.__name__)
 
     def _finish(self, wait_on):
         self._out('value', self._a + self._b)
 
 
-class Mul(Process):
-    @staticmethod
-    def _define(spec):
-        spec.input('a', default=1)
-        spec.input('b', default=1)
-        spec.output('value')
-
-    def _run(self, a, b):
-        self._out('value', a * b)
-
-
-class MulAdd(Workflow):
-    @staticmethod
-    def _define(spec):
-        spec.process(Mul)
-        spec.process(Add)
-        spec.exposed_inputs("Add")
-        spec.input('c', default=0)
-        spec.exposed_outputs("Mul")
-
-        spec.link(':c', 'Mul:a')
-        spec.link('Add:value', 'Mul:b')
-
-
-
 if __name__ == '__main__':
-    mul_add = MulAdd.create()
+    add = Add.create()
 
     exec_engine = SerialEngine(persistence=FilePersistenceManager())
-    exec_engine.run(mul_add, {'a': 2, 'b': 3, 'c': 4})
+    exec_engine.run(add, {'a': 2, 'b': 3})
 
 
