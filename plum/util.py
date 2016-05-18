@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import threading
+import importlib
+from enum import Enum
+
+
+class ProcessState(Enum):
+    RUNNING = 0
+    WAITING = 1
 
 
 class EventHelper(object):
@@ -45,3 +52,26 @@ class ThreadSafeCounter(object):
     def value(self):
         with self.lock:
             return self.counter
+
+
+def fullname(object):
+    """
+    Get the fully qualified name of an object.
+
+    :param object: The object to get the name from.
+    :return: The fully qualified name.
+    """
+    return object.__module__ + "." + object.__class__.__name__
+
+
+def load_class(classstring):
+    """
+    Load a class from a string
+    """
+    class_data = classstring.split(".")
+    module_path = ".".join(class_data[:-1])
+    class_name = class_data[-1]
+
+    module = importlib.import_module(module_path)
+    # Finally, retrieve the Class
+    return getattr(module, class_name)

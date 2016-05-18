@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from plum.process import Process
-from plum.persistence.file_process_record import FileProcessRecord
+from plum.persistence.file_persistence import FileProcessRecord
 from abc import ABCMeta, abstractmethod
 
 

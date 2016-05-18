@@ -1,4 +1,8 @@
+
+from collections import namedtuple
 from abc import ABCMeta, abstractmethod
+
+ProcessEntry = namedtuple('ProcessEntry', ['process', 'record'])
 
 
 class Future(object):
@@ -121,100 +125,46 @@ class ExecutionEngine(object):
     @abstractmethod
     def run(self, process, inputs):
         """
-        Run a process with some inputs immediately.
+        Run a process with some inputs immediately and block.
 
         :param process: The process to execute
         :param inputs: The inputs to execute the process with
-        :return:
         """
         pass
 
-
-class SerialEngine(ExecutionEngine):
-    """
-    The simplest possible workflow engine.  Just calls through to the run
-    method of the process.
-    """
-
-    class Future(Future):
-        def __init__(self, process, inputs, engine):
-            import sys
-
-            self._exception = None
-            self._outputs = None
-
-            # Run the damn thing
-            try:
-                process.run(inputs, engine)
-                self._outputs = process.get_last_outputs()
-            except Exception as e:
-                exc_type, exc_obj, exc_tb = sys.exc_info()
-                self._exception = e
-
-        def cancel(self):
-            """
-            Always returns False, can't cancel a serial process.
-
-            :return:False
-            """
-            return False
-
-        def cancelled(self):
-            """
-            Always False, can't cancel a serial process.
-
-            :return: False
-            """
-            return False
-
-        def running(self):
-            """
-            Always False, process is always finished by creation time.
-
-            :return:
-            """
-            return False
-
-        def done(self):
-            """
-            Always True, process is always done by creation time.
-
-            :return: True
-            """
-            return True
-
-        def result(self, timeout=None):
-            return self._outputs
-
-        def exception(self, timeout=None):
-            return self._exception
-
-        def add_done_callback(self, fn):
-            """
-            Immediately calls fn because a serial execution is always finished
-            by the time this object is created.
-            :param func: The function to call
-            """
-            fn(self)
-
-    def submit(self, process, inputs):
+    @abstractmethod
+    def get_pid(self, process):
         """
-        Submit a process, this gets executed immediately and in fact the Future
-        will always be done when returned.
+        Get the process id for a currently executing Process.
 
-        :param process: The process to execute
-        :param inputs: The inputs to execute the process with
-        :return: A Future object that represents the execution of the Process.
+        :param process: The process to get the id for.
+        :return: The Process ID.
         """
-        return SerialEngine.Future(process, inputs, self)
+        pass
 
-    def run(self, process, inputs):
+    @abstractmethod
+    def get_process(self, pid):
         """
-        Run a process with some inputs immediately.
+        Get a current process from its pid.
 
-        :param process: The process to execute
-        :param inputs: The inputs to execute the process with
-        :return: A Future object that represents the execution of the Process.
+        :param pid: The process id.
+        :return: The process instance.
         """
-        process.run(inputs, self)
-        return process.get_last_outputs()
+        pass
+
+    # @abstractmethod
+    # def load(self, record):
+    #     pass
+    #
+    # def load_all(self, records):
+    #     for record in records:
+    #         self.load(record)
+    #
+    # @abstractmethod
+    # def run_all(self):
+    #     pass
+    #
+    # @abstractmethod
+    # def pause_all(self):
+    #     pass
+

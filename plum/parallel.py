@@ -3,6 +3,7 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
 import plum.execution_engine as execution_engine
+from plum.wait import WaitOn
 
 
 class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
@@ -32,7 +33,19 @@ class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return:
         """
-        process.run(inputs, self)
+        self._run_till_finished(process, inputs)
         return process.get_last_outputs()
 
+    def _run_till_finished(self, process, inputs):
+        ins = process._create_input_args(inputs)
 
+        process._on_process_starting(ins, self)
+
+        retval = process._run(**inputs)
+        while isinstance(retval, WaitOn):
+            retval.wait(timeout=WaitOn.UNTIL_READY)
+            retval = retval.callback()
+
+        process._on_process_finalising()
+
+        return retval

@@ -2,7 +2,6 @@
 
 from abc import ABCMeta, abstractmethod
 from plum.port import InputPort, InputGroupPort, OutputPort, DynamicOutputPort
-import plum.execution_engine as execution_engine
 import plum.util as util
 
 
@@ -24,7 +23,6 @@ class ProcessSpec(object):
     def seal(self):
         """
         Seal this specification disallowing any further changes.
-        :return:
         """
         self._sealed = True
 
@@ -123,54 +121,7 @@ class ProcessListener(object):
 class Process(object):
     __metaclass__ = ABCMeta
 
-    class RunScope(object):
-        """
-        A context manager to be used as:
-
-        with RunScope(...):
-          self._run()
-
-        It defines the scope of a process execution and produces the internal
-        event messages at the beginning and end of the scope as well as other
-        internal process management.
-        """
-        def __init__(self, process, inputs, exec_engine):
-            self._process = process
-            self._inputs = inputs
-            self._exec_engine = exec_engine
-
-        def __enter__(self):
-            self._process._on_process_starting(self._inputs)
-            self._process._exec_engine = self._exec_engine
-
-        def __exit__(self, type, value, traceback):
-            self._process._exec_engine = None
-            self._process._on_process_finalising()
-
-    class ContinueScope(object):
-        """
-        A context manager to be used as:
-
-        with ContinueScope(...):
-          self._continue_from()
-
-        It defines the scope of a process execution and produces the internal
-        event messages at the end of the scope as well as other
-        internal process management.
-        """
-        def __init__(self, process, exec_engine):
-            self._process = process
-            self._exec_engine = exec_engine
-
-        def __enter__(self):
-            self._process._exec_engine = self._exec_engine
-
-        def __exit__(self, type, value, traceback):
-            self._process._exec_engine = None
-            self._process._on_process_finalising()
-
     # Static class stuff ######################
-    _DEFAULT_EXEC_ENGINE = execution_engine.SerialEngine
     _spec_type = ProcessSpec
 
     @staticmethod
@@ -197,11 +148,13 @@ class Process(object):
     @classmethod
     def _create_default_exec_engine(cls):
         """
-        Crate the default execution engine.  Used if the one isn't supplied
-        to the run method.
-        :return: An instance of an ExceutionEngine.
+        Crate the default execution engine.  Used if the run() method is
+        called instead of asking an execution engine to run this process.
+
+        :return: An instance of ExceutionEngine.
         """
-        return execution_engine.SerialEngine()
+        from plum.serial_engine import SerialEngine
+        return SerialEngine()
     ############################################
 
     def __init__(self):
@@ -222,25 +175,10 @@ class Process(object):
     def remove_process_listener(self, listener):
         self._proc_evt_helper.remove_listener(listener)
 
-    def run(self, inputs=None, exec_engine=None):
+    def run(self, inputs=None):
         if inputs is None:
             inputs = {}
-
-        self._check_inputs(inputs)
-        self._output_values = {}
-
-        # Fill out the arguments
-        ins = self._create_input_args(inputs)
-
-        if not exec_engine:
-            exec_engine = self._create_default_exec_engine()
-        with self.RunScope(self, ins, exec_engine):
-            retval = self._run(**ins)
-
-        self._check_outputs()
-        self._on_process_finished(retval)
-
-        return retval
+        return self._create_default_exec_engine().run(self, inputs)
 
     def get_last_outputs(self):
         return self._output_values
@@ -311,9 +249,16 @@ class Process(object):
     def _run(self, **kwargs):
         pass
 
+    def save_instance_state(self, bundle, exec_engine):
+        pass
+
+    def load_instance_state(self, bundle, exec_engine):
+        pass
+
     # Process messages ##################################################
+    # These should only be called by an execution engine (or tests) #####
     # Make sure to call the superclass if your override any of these ####
-    def _on_process_starting(self, inputs):
+    def _on_process_starting(self, inputs, exec_engine):
         """
         Called when the inputs of a process passed checks and the process
         is about to begin.
@@ -323,6 +268,8 @@ class Process(object):
 
         :param inputs: The inputs the process is starting with
         """
+        self._exec_engine = exec_engine
+        self._check_inputs(inputs)
         self._proc_evt_helper.fire_event('on_process_starting',
                                          self, inputs)
 
@@ -333,6 +280,8 @@ class Process(object):
         message is guaranteed to be sent.  Only upon successful return and
         outputs passing checks would _on_process_finished be called.
         """
+        self._exec_engine = None
+        self._check_outputs()
         self._proc_evt_helper.fire_event('on_process_finalising', self)
 
     def _on_process_finished(self, retval):
