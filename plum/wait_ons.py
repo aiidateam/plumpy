@@ -6,6 +6,19 @@ from plum.persistence.bundle import Bundle
 from plum.wait import WaitOn
 
 
+class Checkpoint(WaitOn):
+    """
+    This WaitOn doesn't actually wait, it's just a way to ask the engine to
+    create a checkpoint at this point in the execution of a Process.
+    """
+    @classmethod
+    def create_from(cls, bundle, exec_engine):
+        return cls(bundle[cls.CALLBACK_NAME])
+
+    def is_ready(self):
+        return True
+
+
 class _CompoundWaitOn(WaitOn):
     __metaclass__ = ABCMeta
 
@@ -48,7 +61,7 @@ class WaitOnProcess(WaitOn, ProcessListener):
     @classmethod
     def create_from(cls, bundle, exec_engine):
         return cls(bundle[cls.CALLBACK_NAME],
-                   exec_engine.get_process(bundle[cls.WAIT_ON_PID]))
+                   exec_engine.cox4431get_process(bundle[cls.WAIT_ON_PID]))
 
     def __init__(self, callback_name, process):
         super(WaitOnProcess, self).__init__(callback_name)

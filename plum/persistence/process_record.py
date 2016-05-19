@@ -39,6 +39,10 @@ class ProcessRecord(object):
         pass
 
     @abstractmethod
+    def delete(self):
+        pass
+
+    @abstractmethod
     def create_checkpoint(self, exec_engine, process, wait_on=None):
         pass
 
@@ -47,10 +51,25 @@ class ProcessRecord(object):
         pass
 
     @abstractmethod
-    def create_process(self):
+    def create_process_from_checkpoint(self):
+        """
+        Create the process from the last checkpoint.
+
+        :precondition: has_checkpoint() is True
+        :return: An instance of a Process class with its state set to that
+        when the checkpoint was created.
+        """
         pass
 
     @abstractmethod
-    def create_wait_on(self, exec_engine):
+    def create_wait_on_from_checkpoint(self, exec_engine):
+        """
+        Create the wait_on from the last checkpoint.
+
+        :precondition: has_checkpoint() is True
+        :param exec_engine:
+        :return: An instance of a WaitOn class with its state set to that
+        when the checkpoint was created.
+        """
         pass
 

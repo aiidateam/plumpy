@@ -178,10 +178,12 @@ class Process(object):
     def remove_process_listener(self, listener):
         self._proc_evt_helper.remove_listener(listener)
 
-    def run(self, inputs=None):
+    def run(self, inputs=None, exec_engine=None):
         if inputs is None:
             inputs = {}
-        return self._create_default_exec_engine().run(self, inputs)
+        if not exec_engine:
+            exec_engine = self._create_default_exec_engine()
+        return exec_engine.run(self, inputs)
 
     def get_last_outputs(self):
         return self._output_values
@@ -279,7 +281,7 @@ class Process(object):
     def on_wait(self):
         self._proc_evt_helper.fire_event('on_process_waiting', self)
 
-    def on_finialise(self):
+    def on_finalise(self):
         """
         Called when the process has completed execution, however this may be
         the result of returning or an exception being raised.  Either way this
@@ -311,8 +313,8 @@ class FunctionProcess(Process):
     _func_args = None
     _func = None
 
-    @staticmethod
-    def build(func, output_name="value"):
+    @classmethod
+    def build(cls, func, output_name="value"):
         import inspect
 
         args, varargs, keywords, defaults = inspect.getargspec(func)
@@ -327,8 +329,8 @@ class FunctionProcess(Process):
             spec.output(output_name)
 
         return type(func.__name__, (FunctionProcess,),
-                    {'_func': func,
-                     '_define': staticmethod(_define),
+                    {'_define': staticmethod(_define),
+                     '_func': func,
                      '_func_args': args,
                      '_output_name': output_name})
 

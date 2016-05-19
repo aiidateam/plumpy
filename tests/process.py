@@ -41,7 +41,7 @@ class ProcessTest(unittest.TestCase):
         proc._run()
         self.assertTrue(events_tester.emitted)
 
-        proc.on_finialise()
+        proc.on_finalise()
         self.assertTrue(events_tester.finalising)
 
         proc.on_finish(None)

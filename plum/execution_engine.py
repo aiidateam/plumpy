@@ -133,22 +133,12 @@ class ExecutionEngine(object):
         pass
 
     @abstractmethod
-    def get_pid(self, process):
-        """
-        Get the process id for a currently executing Process.
-
-        :param process: The process to get the id for.
-        :return: The Process ID.
-        """
-        pass
-
-    @abstractmethod
     def get_process(self, pid):
         """
-        Get a current process from its pid.
+        Get a running process from its pid.
 
-        :param pid: The process id.
-        :return: The process instance.
+        :param pid: The pid of the process to get.
+        :return: A running Process instance correponding to the pid.
         """
         pass
 

@@ -10,13 +10,11 @@ import tempfile
 import os
 import glob
 
-
 Checkpoint = namedtuple('Checkpoint', ['process_state', 'wait_on_state'])
 _STORE_DIRECTORY = os.path.join(tempfile.gettempdir(), "process_records")
 
 
 class FileProcessRecord(ProcessRecord):
-
     PROC_INSTANCE_STATE = 'proc_instance_state'
     WAIT_ON_INSTANCE_STATE = 'wait_on_instance_state'
 
@@ -94,7 +92,6 @@ class FileProcessRecord(ProcessRecord):
                 except Exception as e:
                     print(e.msg)
 
-
     def delete(self):
         if self._parent:
             self._parent.remove_child(self._pid)
@@ -108,7 +105,7 @@ class FileProcessRecord(ProcessRecord):
             except OSError:
                 pass
 
-    def create_process(self):
+    def create_process_from_checkpoint(self):
         proc = load_class(self._process_class).create()
         try:
             if self._checkpoint:
@@ -117,7 +114,7 @@ class FileProcessRecord(ProcessRecord):
             pass
         return proc
 
-    def create_wait_on(self, exec_engine):
+    def create_wait_on_from_checkpoint(self, exec_engine):
         WaitOn = load_class(self._checkpoint._wait_on_class)
         return WaitOn.create_from(self._checkpoint._wait_on_state, exec_engine)
 
@@ -138,4 +135,3 @@ class FilePersistenceManager(PersistenceManager):
     def delete_record(self, pid):
         self._records[pid].delete()
         del self._records[pid]
-

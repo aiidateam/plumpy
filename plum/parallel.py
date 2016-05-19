@@ -37,11 +37,5 @@ class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
         """
         return self._serial_engine.run(process, inputs)
 
-    def tick(self):
-        self._serial_engine.tick()
-
-    def get_pid(self, process):
-        return self._serial_engine.get_pid(process)
-
     def get_process(self, pid):
         return self._serial_engine.get_process(pid)

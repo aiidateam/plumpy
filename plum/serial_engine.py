@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 
 from plum.execution_engine import ExecutionEngine, Future
-from plum.process import ProcessListener
 from plum.wait import WaitOn
 import time
 import uuid
 
 
-class SerialEngine(ExecutionEngine, ProcessListener):
+class SerialEngine(ExecutionEngine):
     """
     The simplest possible workflow engine.  Just calls through to the run
     method of the process.
@@ -73,18 +72,38 @@ class SerialEngine(ExecutionEngine, ProcessListener):
             """
             fn(self)
 
-    _pids = 0
-
     class ProcessInfo(object):
-        def __init__(self, process, pid):
-            self.process = process
+        @classmethod
+        def from_process(cls, pid, process, inputs):
+            return cls(pid, process=process, inputs=inputs)
+
+        @classmethod
+        def from_record(cls, record):
+            return cls(record.pid, record=record)
+
+        def __init__(self, pid, process=None, inputs=None, wait_on=None, record=None):
+            self._process = process
+            self.inputs = inputs
             self.pid = pid
-            self.waiting_on = None
+            self.waiting_on = wait_on
+            self.record = record
+
+        @property
+        def process(self):
+            if self._process is None:
+                self._load_process()
+            return self._process
+
+        def _load_process(self):
+            assert not self.process
+            assert (self.record and self.record.has_checkpoint())
+
+            self._process = self.record.create_process_from_checkpoint()
+            self.inputs = self.record.inputs
 
     def __init__(self, poll_interval=10, persistence=None):
         self._poll_interval = poll_interval
         self._current_processes = {}
-        self._wait_on_queue = []
         self._persistence = persistence
 
     def submit(self, process, inputs):
@@ -109,79 +128,63 @@ class SerialEngine(ExecutionEngine, ProcessListener):
         self._do_run(process, inputs)
         return process.get_last_outputs()
 
-    def get_pid(self, process):
-        for pid, info in self._current_processes.iteritems():
-            if info.process is process:
-                return pid
-        return None
+    def run_from(self, process_record):
+        assert process_record.has_checkpoint()
+
+        proc_info = self.ProcessInfo.from_record(process_record)
+        self._current_processes[proc_info.pid] = proc_info
+        proc_info.waiting_on = proc_info.record.create_wait_on_from_checkpoint()
+        self._do_continue(proc_info)
 
     def get_process(self, pid):
         return self._current_processes[pid].process
 
-    def tick(self):
-        for proc_info in [proc_info for pid, proc_info in
-                       self._current_processes.iteritems() if
-                       proc_info.waiting_on]:
-            if proc_info.waiting_on.is_ready():
-                self._continue_process(proc_info)
-
-    ## Process messages #################################################
-    def on_process_starting(self, process, inputs):
-        super(SerialEngine, self).on_process_starting(process, inputs)
-        if self._persistence:
-            record = self._persistence.create_running_process_record(
-                process, inputs, self.get_pid(process))
-            record.save()
-
-    def on_process_waiting(self, process):
-        super(SerialEngine, self).on_process_waiting(process)
-        if self._persistence:
-            proc_info = self._get_proc_info(process)
-            record = self._persistence.get_record(proc_info.pid)
-            record.create_checkpoint(self, process, proc_info.waiting_on)
-            record.save()
-
-    def on_process_finalising(self, process):
-        super(SerialEngine, self).on_process_finalising(process)
-        if self._persistence:
-            self._persistence.delete_record(self.get_pid(process))
-
-    def on_process_finished(self, process, retval):
-        super(SerialEngine, self).on_process_finished(process, retval)
-        self._remove_process(self.get_pid(process))
-    ######################################################################
-
-    def _get_proc_info(self, process):
-        for info in self._current_processes.itervalues():
-            if process is info.process:
-                return info
-        return None
-
     def _do_run(self, process, inputs):
-        self._start_process(process, inputs)
+        proc_info = self._register_new_process(process, inputs)
 
-        proc_info = self._get_proc_info(process)
-        while proc_info.waiting_on:
-            # Keep polling until the thing it's waiting for is ready
-            while not proc_info.waiting_on.is_ready():
-                time.sleep(self._poll_interval)
+        # Run the process
+        retval = self._start_process(proc_info)
+        self._do_continue(proc_info, retval)
 
-            self._continue_process(proc_info)
+    def _do_continue(self, proc_info, retval=None):
+        # Continue the process
+        if proc_info.waiting_on:
+            retval = self._continue_till_finished(proc_info)
+        self._finish_process(proc_info, retval)
 
-        self._finish_process(proc_info, None)
+        del self._current_processes[proc_info.pid]
 
-    def _start_process(self, process, inputs):
-        self._add_process(process, self._create_pid())
+    def _register_new_process(self, process, inputs):
+        # Set up the process information we need
+        pid = self._create_pid()
+        proc_info = self.ProcessInfo.from_process(pid, process, inputs)
+        self._current_processes[pid] = proc_info
+        return proc_info
+
+    def _start_process(self, proc_info):
+        """
+        Send the appropriate messages and start the Process.
+        :param proc_info: The process information
+        :return: None if the Process is waiting on something, the return value otherwise,
+        :note: Do not use a return value of None from this function to indicate that process
+        is not waiting on something as the process may simply have returned None.  Instead
+        use proc_info.waiting_on is None.
+        """
+        process = proc_info.process
+        inputs = proc_info.inputs
 
         ins = process._create_input_args(inputs)
         process.on_start(ins, self)
-        retval = process._run(**inputs)
+        if self._persistence:
+            record = self._persistence.create_running_process_record(process, inputs, proc_info.pid)
+            record.save()
+            proc_info.record = record
 
-        proc_info = self._get_proc_info(process)
+        retval = process._run(**inputs)
         if isinstance(retval, WaitOn):
             self._wait_process(proc_info, retval)
         else:
-            self._finish_process(proc_info, retval)
+            return retval
 
     def _continue_process(self, proc_info):
         assert proc_info.waiting_on, "Cannot continue a process that was not waiting"
@@ -196,30 +199,36 @@ class SerialEngine(ExecutionEngine, ProcessListener):
         if isinstance(retval, WaitOn):
             self._wait_process(proc_info, retval)
         else:
-            self._finish_process(proc_info, retval)
+            return retval
+
+    def _continue_till_finished(self, proc_info):
+        # Keep lookuping until there is nothing to wait for
+        retval = None
+        while proc_info.waiting_on:
+            # Keep polling until the thing it's waiting for is ready
+            while not proc_info.waiting_on.is_ready():
+                time.sleep(self._poll_interval)
+            retval = self._continue_process(proc_info)
+        return retval
 
     def _wait_process(self, proc_info, wait_on):
         assert not proc_info.waiting_on, "Cannot wait on a process that is already waiting"
 
         proc_info.waiting_on = wait_on
         proc_info.process.on_wait()
+        if proc_info.record:
+            proc_info.record.create_checkpoint(self, proc_info.process, proc_info.waiting_on)
+            proc_info.record.save()
 
     def _finish_process(self, proc_info, retval):
         assert not proc_info.waiting_on, "Cannot finish a process that is waiting"
 
-        proc_info.process.on_finialise()
+        proc_info.process.on_finalise()
+        if proc_info.record:
+            proc_info.record.delete(proc_info.pid)
+            proc_info.record = None
         proc_info.process.on_finish(retval)
 
     def _create_pid(self):
         return uuid.uuid1()
-
-    def _add_process(self, proc, pid):
-        info = self.ProcessInfo(proc, pid)
-        self._current_processes[pid] = info
-        proc.add_process_listener(self)
-        return info
-
-    def _remove_process(self, pid):
-        entry = self._current_processes.pop(pid)
-        entry.process.remove_process_listener(self)
 
