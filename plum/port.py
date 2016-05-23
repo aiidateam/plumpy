@@ -4,7 +4,7 @@ from abc import ABCMeta
 import plum.util as util
 
 
-class Port(object):
+class ValueSpec(object):
     __metaclass__ = ABCMeta
 
     def __init__(self, process, name, valid_type=None, help=None, required=True):
@@ -37,12 +37,37 @@ class Port(object):
     def validate(self, value):
         if value is None:
             if self._required:
-                return False, "Required port value was not provided"
+                return False, "Required value was not provided"
         else:
             if self._valid_type is not None and not isinstance(value, self._valid_type):
-                return False, "Port value is not of the right kind"
+                return False, "Value is not of the right kind"
 
         return True, None
+
+
+class Attribute(ValueSpec):
+    def __init__(self, process, name, valid_type=None, help=None, default=None,
+                 required=True):
+        super(Attribute, self).__init__(process, name, valid_type=valid_type,
+                                        help=help, required=required)
+        self._default = default
+
+    def __str__(self):
+        my_desc = ["=>", "name: {}".format(self.name)]
+        if self._valid_type:
+            my_desc.append("type: {}".format(self._valid_type))
+        if self._default:
+            my_desc.append("default: {}".format(self._default))
+        return ", ".join(my_desc)
+
+    @property
+    def default(self):
+        return self._default
+
+
+class Port(ValueSpec):
+    __metaclass__ = ABCMeta
+    pass
 
 
 class InputPort(Port):

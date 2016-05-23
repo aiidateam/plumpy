@@ -2,7 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 from plum.port import InputPort, InputGroupPort, OutputPort,\
-    DynamicOutputPort, DynamicInputPort
+    Attribute, DynamicOutputPort, DynamicInputPort
 import plum.util as util
 
 
@@ -19,6 +19,7 @@ class ProcessSpec(object):
     def __init__(self):
         self._inputs = {}
         self._outputs = {}
+        self._attributes = {}
         self._sealed = False
 
     def seal(self):
@@ -31,28 +32,16 @@ class ProcessSpec(object):
     def sealed(self):
         return self._sealed
 
+    # Inputs ##################################################################
     @property
     def inputs(self):
         return self._inputs
-
-    @property
-    def outputs(self):
-        return self._outputs
 
     def get_input(self, name):
         return self._inputs[name]
 
     def has_input(self, name):
         return name in self._inputs
-
-    def get_output(self, name):
-        return self._outputs[name]
-
-    def has_output(self, name):
-        return name in self._outputs
-
-    def has_dynamic_output(self):
-        return self.has_output(DynamicOutputPort.NAME)
 
     def input(self, name, **kwargs):
         """
@@ -89,6 +78,21 @@ class ProcessSpec(object):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._inputs.pop(name)
+    ###########################################################################
+
+    # Outputs #################################################################
+    @property
+    def outputs(self):
+        return self._outputs
+
+    def get_output(self, name):
+        return self._outputs[name]
+
+    def has_output(self, name):
+        return name in self._outputs
+
+    def has_dynamic_output(self):
+        return self.has_output(DynamicOutputPort.NAME)
 
     def output(self, name, **kwargs):
         self.output_port(name, OutputPort(self, name, **kwargs))
@@ -113,6 +117,43 @@ class ProcessSpec(object):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._outputs.pop(name)
+    ###########################################################################
+
+    # Attributes ##############################################################
+    @property
+    def attributes(self):
+        return self._attributes
+
+    def get_attribute(self, name):
+        return self._attributes[name]
+
+    def has_attribute(self, name):
+        return name in self._attributes
+
+    def attribute(self, name, **kwargs):
+        """
+        Define an Process input.
+
+        :param name: The name of the input.
+        :param kwargs: The input port options.
+        """
+        self.attribute_value(name, Attribute(self, name, **kwargs))
+
+    def attribute_value(self, name, attribute_spec):
+        if self.sealed:
+            raise RuntimeError("Cannot add an attribute after spec is sealed")
+        if not isinstance(attribute_spec, Attribute):
+            raise TypeError("Attribute specifications must be of type Attribute")
+        if name in self._attributes:
+            raise ValueError("Input {} already exists.".format(name))
+
+        self._attributes[name] = attribute_spec
+
+    def remove_attribute(self, name):
+        if self.sealed:
+            raise RuntimeError("Cannot remove an attribute after spec is sealed")
+        self._attributes.pop(name)
+    ###########################################################################
 
 
 class ProcessListener(object):
@@ -154,8 +195,8 @@ class Process(object):
             return cls._spec
 
     @classmethod
-    def create(cls):
-        return cls()
+    def create(cls, attributes=None):
+        return cls(attributes)
 
     @classmethod
     def get_name(cls):
@@ -173,10 +214,11 @@ class Process(object):
         return SerialEngine()
     ############################################
 
-    def __init__(self):
+    def __init__(self, attributes=None):
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
+        self._attributes = self._check_and_generate_attributes(attributes)
         self._exec_engine = None
         self._output_values = {}
         self._proc_evt_helper = util.EventHelper(ProcessListener)
@@ -228,6 +270,7 @@ class Process(object):
         self._output_values[output_port] = value
         self._on_output_emitted(output_port, value, dynamic)
 
+    # Inputs ##################################################################
     def _create_input_args(self, inputs):
         """
         Take the passed input arguments and fill in any default values for
@@ -265,14 +308,54 @@ class Process(object):
             valid, msg = port.validate(inputs.get(name, None))
             if not valid:
                 raise RuntimeError("Cannot run process {} because {}".format(self.get_name(), msg))
+    ###########################################################################
 
-
+    # Outputs #################################################################
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
         for name, port in self.spec().outputs.iteritems():
             valid, msg = port.validate(self._output_values.get(name, None))
             if not valid:
                 raise RuntimeError("Process {} failed because {}".format(self.get_name(), msg))
+    ###########################################################################
+
+    # Attributes ##############################################################
+    def _check_and_generate_attributes(self, attributes):
+        """
+        Take the passed attributes and fill in any default values for those
+        that have no been supplied.
+
+        Preconditions:
+        * All required inputs have been supplied
+        :param inputs: The supplied input values.
+        :return: A dictionary of inputs including any with default values
+        """
+        attrs = {} if attributes is None else attributes.copy()
+
+        # Check for any unknown attributes
+        unexpected = set(attrs.iterkeys()) - set(self.spec().attributes.iterkeys())
+        if unexpected:
+            raise RuntimeError(
+                "Unexpected inputs found: {}.  If you want to allow dynamic "
+                "inputs add dynamic_input() to the spec definition.".
+                format(unexpected))
+
+        # Go through the spec filling in any default and checking for required
+        # inputs
+        for name, value_spec in self.spec().attributes.iteritems():
+            if name in attrs:
+                valid, msg = value_spec.validate(attrs[name])
+                if not valid:
+                    raise ValueError("Cannot run process {} because {}".format(self.get_name(), msg))
+            if name not in attrs:
+                if value_spec.default:
+                    attrs[name] = value_spec.default
+                elif value_spec.required:
+                    raise ValueError(
+                        "Value not supplied for required attribute {}".format(name))
+
+        return attrs
+    ###########################################################################
 
     @abstractmethod
     def _run(self, **kwargs):
