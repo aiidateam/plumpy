@@ -101,6 +101,19 @@ class InputGroupPort(InputPort):
         return True, None
 
 
+class DynamicInputPort(InputPort):
+    """
+    A dynamic output port represents the fact that a Process can emit outputs
+    that weren't defined beforehand
+    """
+    NAME = "dynamic"
+
+    def __init__(self, process, help_=None):
+        super(DynamicInputPort, self).__init__(
+            process, self.NAME, valid_type=dict, help=help_, default=None,
+            required=False)
+
+
 class OutputPort(Port):
     def __init__(self, process, name, valid_type=None, required=True):
         super(OutputPort, self).__init__(process, name, valid_type)

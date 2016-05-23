@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta, abstractmethod
-from plum.port import InputPort, InputGroupPort, OutputPort, DynamicOutputPort
+from plum.port import InputPort, InputGroupPort, OutputPort,\
+    DynamicOutputPort, DynamicInputPort
 import plum.util as util
 
 
@@ -41,6 +42,9 @@ class ProcessSpec(object):
     def get_input(self, name):
         return self._inputs[name]
 
+    def has_input(self, name):
+        return name in self._inputs
+
     def get_output(self, name):
         return self._outputs[name]
 
@@ -58,6 +62,15 @@ class ProcessSpec(object):
         :param kwargs: The input port options.
         """
         self.input_port(name, InputPort(self, name, **kwargs))
+
+    def dynamic_input(self):
+        self.input_port(DynamicInputPort.NAME, DynamicInputPort(self))
+
+    def remove_dynamic_input(self):
+        self.remove_input(DynamicInputPort.NAME)
+
+    def has_dynamic_input(self):
+        return self.has_input(DynamicInputPort.NAME)
 
     def input_group(self, name, **kwargs):
         self.input_port(name, InputGroupPort(self, name, **kwargs))
@@ -225,23 +238,34 @@ class Process(object):
         :param inputs: The supplied input values.
         :return: A dictionary of inputs including any with default values
         """
-        kwargs = {}
+        ins = inputs.copy()
+        # Go through the spec filling in any default and checking for required
+        # inputs
         for name, port in self.spec().inputs.iteritems():
-            if name in inputs:
-                kwargs[name] = inputs[name]
-            elif port.default:
-                kwargs[name] = port.default
-            else:
-                assert (not port.required)
+            if name not in ins:
+                if port.default:
+                    ins[name] = port.default
+                elif port.required:
+                    raise ValueError(
+                        "Value not supplied for required inputs port {}".format(name))
 
-        return kwargs
+        return ins
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
+        if not self.spec().has_dynamic_input():
+            unexpected = set(inputs.iterkeys()) - set(self.spec().inputs.iterkeys())
+            if unexpected:
+                raise RuntimeError(
+                    "Unexpected inputs found: {}.  If you want to allow dynamic "
+                    "inputs add dynamic_input() to the spec definition.".
+                    format(unexpected))
+
         for name, port in self.spec().inputs.iteritems():
             valid, msg = port.validate(inputs.get(name, None))
             if not valid:
                 raise RuntimeError("Cannot run process {} because {}".format(self.get_name(), msg))
+
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
