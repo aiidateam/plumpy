@@ -47,7 +47,7 @@ class ValueSpec(object):
 
 class Attribute(ValueSpec):
     def __init__(self, process, name, valid_type=None, help=None, default=None,
-                 required=True):
+                 required=False):
         super(Attribute, self).__init__(process, name, valid_type=valid_type,
                                         help=help, required=required)
         self._default = default
@@ -119,7 +119,7 @@ class InputGroupPort(InputPort):
 
         if value is not None and self._valid_inner_type is not None:
             # Check that all the members of the dictionary are of the right type
-            for k, v in value:
+            for k, v in value.iteritems():
                 if not isinstance(v, self._valid_inner_type):
                     return False, "Group port value {} is not of the right type".format(k)
 
