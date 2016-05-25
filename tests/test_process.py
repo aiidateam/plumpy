@@ -95,5 +95,37 @@ class TestProcess(TestCase):
         with self.assertRaises(ValueError):
             p = Proc(attributes={'a': 'hello'})
 
+    def test_inputs(self):
+        class Proc(Process):
+            @staticmethod
+            def _define(spec):
+                spec.input('a')
+
+            def _run(self, a):
+                pass
+
+        p = Proc()
+
+        # Check that we can't access inputs before starting
+        with self.assertRaises(AttributeError):
+            p._inputs.a
+
+        # Check that we can access the inputs while running
+        p.on_start({'a': 5}, None)
+        self.assertEqual(p._inputs.a, 5)
+        with self.assertRaises(AttributeError):
+            p._inputs.b
+
+        # Check that we can't access inputs after finishing
+        p = Proc()
+        p.run(inputs={'a': 5})
+        with self.assertRaises(AttributeError):
+            p._inputs.a
+
+
+
+
+
+
 
 

@@ -2,6 +2,7 @@
 
 import threading
 import importlib
+import frozendict
 from enum import Enum
 
 
@@ -75,3 +76,17 @@ def load_class(classstring):
     module = importlib.import_module(module_path)
     # Finally, retrieve the Class
     return getattr(module, class_name)
+
+
+class AttributesFrozendict(frozendict.frozendict):
+    def __getattr__(self, attr):
+        """
+        Read a key as an attribute. Raise AttributeError on missing key.
+        Called only for attributes that do not exist.
+        """
+        try:
+            return self[attr]
+        except KeyError:
+            errmsg = "'{}' object has no attribute '{}'".format(
+                self.__class__.__name__, attr)
+            raise AttributeError(errmsg)

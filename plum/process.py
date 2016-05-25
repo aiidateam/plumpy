@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from collections import namedtuple
 from abc import ABCMeta, abstractmethod
 from plum.port import InputPort, InputGroupPort, OutputPort,\
     Attribute, DynamicOutputPort, DynamicInputPort
@@ -179,6 +180,9 @@ class Process(object):
     __metaclass__ = ABCMeta
 
     # Static class stuff ######################
+    RunningData = namedtuple('RunningData',
+                             ['exec_engine', 'inputs'])
+
     _spec_type = ProcessSpec
 
     @staticmethod
@@ -219,7 +223,7 @@ class Process(object):
         self.spec().seal()
 
         self._attributes = self._check_and_generate_attributes(attributes)
-        self._exec_engine = None
+        self.__running_data = None
         self._output_values = {}
         self._proc_evt_helper = util.EventHelper(ProcessListener)
 
@@ -244,7 +248,11 @@ class Process(object):
         return self._output_values
 
     def _get_exec_engine(self):
-        return self._exec_engine
+        return self.__running_data.exec_engine
+
+    @property
+    def _inputs(self):
+        return self.__running_data.inputs
 
     def _out(self, output_port, value):
         dynamic = False
@@ -380,8 +388,10 @@ class Process(object):
 
         :param inputs: The inputs the process is starting with
         """
-        self._exec_engine = exec_engine
         self._check_inputs(inputs)
+        self.__running_data = self.RunningData(
+            inputs=util.AttributesFrozendict(inputs),
+            exec_engine=exec_engine)
         self._proc_evt_helper.fire_event('on_process_starting',
                                          self, inputs)
 
@@ -395,7 +405,7 @@ class Process(object):
         message is guaranteed to be sent.  Only upon successful return and
         outputs passing checks would _on_process_finished be called.
         """
-        self._exec_engine = None
+        self.__running_data = None
         self._check_outputs()
         self._proc_evt_helper.fire_event('on_process_finalising', self)
 
