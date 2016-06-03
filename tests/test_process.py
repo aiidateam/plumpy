@@ -5,6 +5,7 @@ from plum.process import Process, ProcessListener
 class DummyProcess(Process):
     @staticmethod
     def _define(spec):
+        spec.dynamic_input()
         spec.dynamic_output()
 
     def _run(self, **kwargs):
@@ -38,7 +39,7 @@ class TestProcess(TestCase):
         proc = DummyProcess()
         proc.add_process_listener(events_tester)
 
-        proc.on_start({}, None)
+        proc.on_start({'a': 5}, None)
         self.assertTrue(events_tester.starting)
 
         proc._run()

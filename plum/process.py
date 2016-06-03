@@ -344,8 +344,8 @@ class Process(object):
         unexpected = set(attrs.iterkeys()) - set(self.spec().attributes.iterkeys())
         if unexpected:
             raise RuntimeError(
-                "Unexpected inputs found: {}.  If you want to allow dynamic "
-                "inputs add dynamic_input() to the spec definition.".
+                "Unexpected attribute found: {}.  If you want to allow dynamic "
+                "inputs add dynamic_attributes() to the spec definition.".
                 format(unexpected))
 
         # Go through the spec filling in any default and checking for required
@@ -389,9 +389,8 @@ class Process(object):
         :param inputs: The inputs the process is starting with
         """
         self._check_inputs(inputs)
-        self.__running_data = self.RunningData(
-            inputs=util.AttributesFrozendict(inputs),
-            exec_engine=exec_engine)
+        self.__running_data = self.RunningData(exec_engine,
+            util.AttributesFrozendict(inputs))
         self._proc_evt_helper.fire_event('on_process_starting',
                                          self, inputs)
 

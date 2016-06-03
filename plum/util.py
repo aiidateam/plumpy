@@ -3,12 +3,6 @@
 import threading
 import importlib
 import frozendict
-from enum import Enum
-
-
-class ProcessState(Enum):
-    RUNNING = 0
-    WAITING = 1
 
 
 class EventHelper(object):
@@ -90,3 +84,10 @@ class AttributesFrozendict(frozendict.frozendict):
             errmsg = "'{}' object has no attribute '{}'".format(
                 self.__class__.__name__, attr)
             raise AttributeError(errmsg)
+
+    def __dir__(self):
+        """
+        So we get tab completion.
+        :return: The keys of the dict
+        """
+        return self.keys()
