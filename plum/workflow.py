@@ -241,7 +241,7 @@ class Workflow(Process, ProcessListener):
         try:
             link = self.spec().get_link(source)
             if not link.sink_process:
-                self._out(link.sink_port, value)
+                self.out(link.sink_port, value)
             else:
                 proc = self._process_instances[link.sink_process]
                 self._push_value(link, value)
@@ -330,7 +330,7 @@ class Workflow(Process, ProcessListener):
 
     def _launch_subprocess(self, proc, inputs):
         self._num_running_subprocs.increment()
-        self._get_exec_engine().submit(proc, inputs).add_done_callback(self._subproc_done)
+        self.get_exec_engine().submit(proc, inputs).add_done_callback(self._subproc_done)
 
     def _subproc_done(self, fut):
         self._num_running_subprocs.decrement()

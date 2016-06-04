@@ -2,6 +2,7 @@
 
 from collections import namedtuple
 from abc import ABCMeta, abstractmethod
+from plum.util import protected
 from plum.port import InputPort, InputGroupPort, OutputPort,\
     Attribute, DynamicOutputPort, DynamicInputPort
 import plum.util as util
@@ -247,14 +248,17 @@ class Process(object):
     def get_last_outputs(self):
         return self._output_values
 
-    def _get_exec_engine(self):
+    @protected
+    def get_exec_engine(self):
         return self.__running_data.exec_engine
 
     @property
-    def _inputs(self):
+    @protected
+    def inputs(self):
         return self.__running_data.inputs
 
-    def _out(self, output_port, value):
+    @protected
+    def out(self, output_port, value):
         dynamic = False
         # Do checks on the outputs
         try:
@@ -458,6 +462,6 @@ class FunctionProcess(Process):
         for arg in self._func_args:
             args.append(kwargs.pop(arg))
 
-        self._out(self._output_name, self._func(*args))
+        self.out(self._output_name, self._func(*args))
 
 

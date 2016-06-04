@@ -9,7 +9,7 @@ class DummyProcess(Process):
         spec.dynamic_output()
 
     def _run(self, **kwargs):
-        self._out("default", 5)
+        self.out("default", 5)
 
 
 class EventsTester(ProcessListener):
@@ -109,19 +109,19 @@ class TestProcess(TestCase):
 
         # Check that we can't access inputs before starting
         with self.assertRaises(AttributeError):
-            p._inputs.a
+            p.inputs.a
 
         # Check that we can access the inputs while running
         p.on_start({'a': 5}, None)
-        self.assertEqual(p._inputs.a, 5)
+        self.assertEqual(p.inputs.a, 5)
         with self.assertRaises(AttributeError):
-            p._inputs.b
+            p.inputs.b
 
         # Check that we can't access inputs after finishing
         p = Proc()
         p.run(inputs={'a': 5})
         with self.assertRaises(AttributeError):
-            p._inputs.a
+            p.inputs.a
 
 
 

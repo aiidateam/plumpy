@@ -45,7 +45,7 @@ class Add(Process):
         return WaitFor(2, self._finish.__name__)
 
     def _finish(self, wait_on):
-        self._out('value', self._a + self._b)
+        self.out('value', self._a + self._b)
 
 
 if __name__ == '__main__':

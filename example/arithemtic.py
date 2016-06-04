@@ -22,7 +22,7 @@ class DynamicOutputProcess(Process):
         import string
         import random
         for i in range(0, 10):
-            self._out(random.choice(string.letters), i)
+            self.out(random.choice(string.letters), i)
 
 
 class PrintProcess(Process):
@@ -52,7 +52,7 @@ class Add(Process):
         spec.output('value')
 
     def _run(self, a, b):
-        self._out('value', a + b)
+        self.out('value', a + b)
 
 
 class Mul(Process):
@@ -63,7 +63,7 @@ class Mul(Process):
         spec.output('value')
 
     def _run(self, a, b):
-        self._out('value', a * b)
+        self.out('value', a * b)
 
 
 class MulAdd(Workflow):

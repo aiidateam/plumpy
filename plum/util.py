@@ -3,6 +3,10 @@
 import threading
 import importlib
 import frozendict
+from plum.settings import check_protected
+import plum.lang
+
+protected = plum.lang.protected(check=check_protected)
 
 
 class EventHelper(object):
