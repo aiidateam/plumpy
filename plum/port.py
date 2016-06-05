@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
-import plum.util as util
+import collections
 
 
 class ValueSpec(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, process, name, valid_type=None, help=None, required=True):
+    def __init__(self, process, name, valid_type=None, help=None,
+                 required=True, validator=None):
         self._name = name
         self._process = process
         self._valid_type = valid_type
         self._help = help
         self._required = required
+        self._validator = validator
 
     @property
     def name(self):
@@ -41,6 +43,14 @@ class ValueSpec(object):
         else:
             if self._valid_type is not None and not isinstance(value, self._valid_type):
                 return False, "Value is not of the right kind"
+
+        if self._validator is not None:
+            result = self._validator(value)
+            if isinstance(result, collections.Sequence):
+                assert(len(result) == 1)
+                return result
+            elif result is False:
+                return False, "Value failed validation"
 
         return True, None
 

@@ -74,28 +74,6 @@ class TestProcess(TestCase):
             NoDynamic.create().run(inputs={'a': 5})
         WithDynamic.create().run(inputs={'a': 5})
 
-    def test_attributes(self):
-        class Proc(Process):
-            @staticmethod
-            def _define(spec):
-                spec.attribute("a", required=True, valid_type=int)
-                spec.attribute("b", required=False, default='hello')
-
-            def _run(self, **kwargs):
-                pass
-
-        with self.assertRaises(ValueError):
-            p = Proc()
-
-        p = Proc(attributes={'a': 5})
-        self.assertEqual(p._attributes['b'], 'hello')
-
-        with self.assertRaises(ValueError):
-            p = Proc(attributes={'b': 2})
-
-        with self.assertRaises(ValueError):
-            p = Proc(attributes={'a': 'hello'})
-
     def test_inputs(self):
         class Proc(Process):
             @staticmethod

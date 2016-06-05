@@ -112,23 +112,25 @@ class ExecutionEngine(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def submit(self, process, inputs):
+    def submit(self, process_class, inputs, checkpoint=None):
         """
         Submit a process to be executed with some inputs at some point.
 
-        :param process: The process to execute
+        :param process_class: The process class to execute
         :param inputs: The inputs to execute the process with
+        :param checkpoint: The checkpoint to continue from (or None)
         :return: A Future object that represents the execution of the Process.
         """
         pass
 
     @abstractmethod
-    def run(self, process, inputs):
+    def run(self, process_class, inputs, checkpoint=None):
         """
         Run a process with some inputs immediately and block.
 
-        :param process: The process to execute
+        :param process_class: The process class to execute
         :param inputs: The inputs to execute the process with
+        :param checkpoint: The checkpoint to continue from (or None)
         """
         pass
 

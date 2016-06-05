@@ -14,3 +14,10 @@ class TestValueSpec(TestCase):
 
         self.assertTrue(s.validate(5)[0])
         self.assertFalse(s.validate('a')[0])
+
+    def test_validator(self):
+        s = ValueSpec(None, "valid_with_validator",
+                      validator=lambda x: isinstance(x, int))
+
+        self.assertTrue(s.validate(5)[0])
+        self.assertFalse(s.validate('s')[0])

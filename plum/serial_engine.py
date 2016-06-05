@@ -106,27 +106,27 @@ class SerialEngine(ExecutionEngine):
         self._current_processes = {}
         self._persistence = persistence
 
-    def submit(self, process, inputs):
+    def submit(self, process_class, inputs, checkpoint=None):
         """
         Submit a process, this gets executed immediately and in fact the Future
         will always be done when returned.
 
-        :param process: The process to execute
+        :param process_class: The process to execute
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        return SerialEngine.Future(process, inputs, self)
+        return SerialEngine.Future(process_class, inputs, self)
 
-    def run(self, process, inputs):
+    def run(self, process_class, inputs, checkpoint=None):
         """
         Run a process with some inputs immediately.
 
-        :param process: The process to execute
+        :param process_class: The process to execute
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        self._do_run(process, inputs)
-        return process.get_last_outputs()
+        self._do_run(process_class, inputs)
+        return process_class.get_last_outputs()
 
     def run_from(self, process_record):
         assert process_record.has_checkpoint()
@@ -138,6 +138,11 @@ class SerialEngine(ExecutionEngine):
 
     def get_process(self, pid):
         return self._current_processes[pid].process
+
+    def _create_process(self, process_class, checkpoint=None):
+        proc = process_class()
+        proc.on_create(checkpoint)
+        return proc
 
     def _do_run(self, process, inputs):
         proc_info = self._register_new_process(process, inputs)

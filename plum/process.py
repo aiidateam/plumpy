@@ -3,159 +3,11 @@
 from collections import namedtuple
 from abc import ABCMeta, abstractmethod
 from plum.util import protected
-from plum.port import InputPort, InputGroupPort, OutputPort,\
-    Attribute, DynamicOutputPort, DynamicInputPort
+from plum.process_spec import ProcessSpec
 import plum.util as util
 
 
-class ProcessSpec(object):
-    """
-    A class that defines the specifications of a Process, this includes what
-    its inputs, outputs, etc are.
-
-    All methods to modify the spec should be statements that describe the spec
-    e.g.: input, output
-
-    Every Process class has one of these.
-    """
-    def __init__(self):
-        self._inputs = {}
-        self._outputs = {}
-        self._attributes = {}
-        self._sealed = False
-
-    def seal(self):
-        """
-        Seal this specification disallowing any further changes.
-        """
-        self._sealed = True
-
-    @property
-    def sealed(self):
-        return self._sealed
-
-    # Inputs ##################################################################
-    @property
-    def inputs(self):
-        return self._inputs
-
-    def get_input(self, name):
-        return self._inputs[name]
-
-    def has_input(self, name):
-        return name in self._inputs
-
-    def input(self, name, **kwargs):
-        """
-        Define an Process input.
-
-        :param name: The name of the input.
-        :param kwargs: The input port options.
-        """
-        self.input_port(name, InputPort(self, name, **kwargs))
-
-    def dynamic_input(self):
-        self.input_port(DynamicInputPort.NAME, DynamicInputPort(self))
-
-    def remove_dynamic_input(self):
-        self.remove_input(DynamicInputPort.NAME)
-
-    def has_dynamic_input(self):
-        return self.has_input(DynamicInputPort.NAME)
-
-    def input_group(self, name, **kwargs):
-        self.input_port(name, InputGroupPort(self, name, **kwargs))
-
-    def input_port(self, name, port):
-        if self.sealed:
-            raise RuntimeError("Cannot add an input after spec is sealed")
-        if not isinstance(port, InputPort):
-            raise TypeError("Input port must be an instance of InputPort")
-        if name in self._inputs:
-            raise ValueError("Input {} already exists.".format(name))
-
-        self._inputs[name] = port
-
-    def remove_input(self, name):
-        if self.sealed:
-            raise RuntimeError("Cannot remove an input after spec is sealed")
-        self._inputs.pop(name)
-    ###########################################################################
-
-    # Outputs #################################################################
-    @property
-    def outputs(self):
-        return self._outputs
-
-    def get_output(self, name):
-        return self._outputs[name]
-
-    def has_output(self, name):
-        return name in self._outputs
-
-    def has_dynamic_output(self):
-        return self.has_output(DynamicOutputPort.NAME)
-
-    def output(self, name, **kwargs):
-        self.output_port(name, OutputPort(self, name, **kwargs))
-
-    def output_port(self, name, port):
-        if self.sealed:
-            raise RuntimeError("Cannot add an output after spec is sealed")
-        if not isinstance(port, OutputPort):
-            raise TypeError("Output port must be an instance of OutputPort")
-        if name in self._outputs:
-            raise ValueError("Output {} already exists.".format(name))
-
-        self._outputs[name] = port
-
-    def dynamic_output(self):
-        self.output_port(DynamicOutputPort.NAME, DynamicOutputPort(self))
-
-    def remove_dynamic_output(self):
-        self.remove_output(DynamicOutputPort.NAME)
-
-    def remove_output(self, name):
-        if self.sealed:
-            raise RuntimeError("Cannot remove an input after spec is sealed")
-        self._outputs.pop(name)
-    ###########################################################################
-
-    # Attributes ##############################################################
-    @property
-    def attributes(self):
-        return self._attributes
-
-    def get_attribute(self, name):
-        return self._attributes[name]
-
-    def has_attribute(self, name):
-        return name in self._attributes
-
-    def attribute(self, name, **kwargs):
-        """
-        Define an Process input.
-
-        :param name: The name of the input.
-        :param kwargs: The input port options.
-        """
-        self.attribute_value(name, Attribute(self, name, **kwargs))
-
-    def attribute_value(self, name, attribute_spec):
-        if self.sealed:
-            raise RuntimeError("Cannot add an attribute after spec is sealed")
-        if not isinstance(attribute_spec, Attribute):
-            raise TypeError("Attribute specifications must be of type Attribute")
-        if name in self._attributes:
-            raise ValueError("Input {} already exists.".format(name))
-
-        self._attributes[name] = attribute_spec
-
-    def remove_attribute(self, name):
-        if self.sealed:
-            raise RuntimeError("Cannot remove an attribute after spec is sealed")
-        self._attributes.pop(name)
-    ###########################################################################
+Checkpoint = namedtuple("Checkpoint", ['state', 'wait_on'])
 
 
 class ProcessListener(object):
@@ -200,8 +52,8 @@ class Process(object):
             return cls._spec
 
     @classmethod
-    def create(cls, attributes=None):
-        return cls(attributes)
+    def create(cls):
+        return cls()
 
     @classmethod
     def get_name(cls):
@@ -219,11 +71,10 @@ class Process(object):
         return SerialEngine()
     ############################################
 
-    def __init__(self, attributes=None):
+    def __init__(self):
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        self._attributes = self._check_and_generate_attributes(attributes)
         self.__running_data = None
         self._output_values = {}
         self._proc_evt_helper = util.EventHelper(ProcessListener)
@@ -331,44 +182,6 @@ class Process(object):
                 raise RuntimeError("Process {} failed because {}".format(self.get_name(), msg))
     ###########################################################################
 
-    # Attributes ##############################################################
-    def _check_and_generate_attributes(self, attributes):
-        """
-        Take the passed attributes and fill in any default values for those
-        that have no been supplied.
-
-        Preconditions:
-        * All required inputs have been supplied
-        :param inputs: The supplied input values.
-        :return: A dictionary of inputs including any with default values
-        """
-        attrs = {} if attributes is None else attributes.copy()
-
-        # Check for any unknown attributes
-        unexpected = set(attrs.iterkeys()) - set(self.spec().attributes.iterkeys())
-        if unexpected:
-            raise RuntimeError(
-                "Unexpected attribute found: {}.  If you want to allow dynamic "
-                "inputs add dynamic_attributes() to the spec definition.".
-                format(unexpected))
-
-        # Go through the spec filling in any default and checking for required
-        # inputs
-        for name, value_spec in self.spec().attributes.iteritems():
-            if name in attrs:
-                valid, msg = value_spec.validate(attrs[name])
-                if not valid:
-                    raise ValueError("Cannot run process {} because {}".format(self.get_name(), msg))
-            if name not in attrs:
-                if value_spec.default:
-                    attrs[name] = value_spec.default
-                elif value_spec.required:
-                    raise ValueError(
-                        "Value not supplied for required attribute {}".format(name))
-
-        return attrs
-    ###########################################################################
-
     @abstractmethod
     def _run(self, **kwargs):
         pass
@@ -382,6 +195,19 @@ class Process(object):
     # Process messages ##################################################
     # These should only be called by an execution engine (or tests) #####
     # Make sure to call the superclass if your override any of these ####
+    def on_create(self, checkpoint=None):
+        """
+        Called when the process is created.  If a checkpoint is supplied the
+        process should reinstate its state at the time the checkpoint was taken
+        and if the checkpoint has a wait_on the process will continue from the
+        corresponding callback function.
+
+        :param checkpoint: The checkpoint to continue from or None.
+        """
+        # In this case there is no message fired because no one could have
+        # registered themselves as a listener by this point in the lifecycle.
+        pass
+
     def on_start(self, inputs, exec_engine):
         """
         Called when the inputs of a process passed checks and the process

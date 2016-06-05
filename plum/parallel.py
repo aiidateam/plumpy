@@ -17,15 +17,15 @@ class MultithreadedExecutionEngine(execution_engine.ExecutionEngine):
         # For now just exploit the serial engine to do the work for us
         self._serial_engine = SerialEngine(persistence=persistence)
 
-    def submit(self, process, inputs):
+    def submit(self, process_class, inputs):
         """
         Submit a process to be executed by a separate thread at some point
 
-        :param process: The process to execute
+        :param process_class: The process to execute
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        return self._executor.submit(self._serial_engine.run, process, inputs)
+        return self._executor.submit(self._serial_engine.run, process_class, inputs)
 
     def run(self, process, inputs):
         """
