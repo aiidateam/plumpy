@@ -36,6 +36,10 @@ class ValueSpec(object):
     def required(self):
         return self._required
 
+    @property
+    def validator(self):
+        return self._validator
+
     def validate(self, value):
         if value is None:
             if self._required:
@@ -47,7 +51,7 @@ class ValueSpec(object):
         if self._validator is not None:
             result = self._validator(value)
             if isinstance(result, collections.Sequence):
-                assert(len(result) == 1)
+                assert(len(result) == 2)
                 return result
             elif result is False:
                 return False, "Value failed validation"
@@ -82,9 +86,10 @@ class Port(ValueSpec):
 
 class InputPort(Port):
     def __init__(self, process, name, valid_type=None, help=None, default=None,
-                 required=True):
-        super(InputPort, self).__init__(process, name, valid_type=valid_type,
-                                        help=help, required=required)
+                 required=True, validator=None):
+        super(InputPort, self).__init__(
+            process, name, valid_type=valid_type, help=help, required=required,
+            validator=validator)
         self._default = default
 
     def __str__(self):

@@ -125,8 +125,9 @@ class SerialEngine(ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        self._do_run(process_class, inputs)
-        return process_class.get_last_outputs()
+        proc = self._create_process(process_class, checkpoint)
+        self._do_run(proc, inputs)
+        return proc.get_last_outputs()
 
     def run_from(self, process_record):
         assert process_record.has_checkpoint()
@@ -139,7 +140,7 @@ class SerialEngine(ExecutionEngine):
     def get_process(self, pid):
         return self._current_processes[pid].process
 
-    def _create_process(self, process_class, checkpoint=None):
+    def _create_process(self, process_class, checkpoint):
         proc = process_class()
         proc.on_create(checkpoint)
         return proc
