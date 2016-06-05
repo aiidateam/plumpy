@@ -13,7 +13,7 @@ class SerialEngine(ExecutionEngine):
     """
 
     class Future(Future):
-        def __init__(self, process, inputs, engine):
+        def __init__(self, engine, process, inputs, checkpoint):
             import sys
 
             self._exception = None
@@ -21,7 +21,7 @@ class SerialEngine(ExecutionEngine):
 
             # Run the damn thing
             try:
-                self._outputs = engine.run(process, inputs)
+                self._outputs = engine.run(process, inputs, checkpoint)
             except Exception as e:
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 self._exception = e
@@ -115,7 +115,7 @@ class SerialEngine(ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        return SerialEngine.Future(process_class, inputs, self)
+        return SerialEngine.Future(self, process_class, inputs, checkpoint)
 
     def run(self, process_class, inputs, checkpoint=None):
         """
