@@ -3,11 +3,11 @@
 import threading
 import importlib
 import frozendict
-from plum.settings import check_protected
+from plum.settings import check_protected, check_override
 import plum.lang
 
 protected = plum.lang.protected(check=check_protected)
-
+override = plum.lang.protected(check=check_override)
 
 class EventHelper(object):
     def __init__(self, listener_type):

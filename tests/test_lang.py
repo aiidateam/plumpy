@@ -1,17 +1,17 @@
 from unittest import TestCase
-from plum.lang import protected
+from plum.lang import protected, override
 
 
 class A(object):
     def __init__(self):
         self._a = None
 
-    @protected()
+    @protected(check=True)
     def protected_fn(self):
         return self._a
 
     @property
-    @protected()
+    @protected(check=True)
     def protected_property(self):
         return self._a
 
@@ -71,9 +71,56 @@ class TestProtected(TestCase):
 
         with self.assertRaises(RuntimeError):
             class TestWrongDecoratorOrder(object):
-                @protected()
+                @protected(check=True)
                 @property
                 def a(self):
+                    return None
+
+
+class Superclass(object):
+    def test(self):
+        pass
+
+
+class TestOverride(TestCase):
+    def test_free_function(self):
+        with self.assertRaises(RuntimeError):
+            @override(check=False)
+            def some_func():
+                pass
+
+    def test_correct_usage(self):
+        class Derived(Superclass):
+            @override(check=True)
+            def test(self):
+                return True
+
+        self.assertTrue(Derived().test())
+
+        class Middle(Superclass):
+            pass
+
+        class Next(Middle):
+            @override(check=True)
+            def test(self):
+                return True
+
+        self.assertTrue(Next().test())
+
+    def test_incorrect_usage(self):
+        class Derived(object):
+            @override(check=True)
+            def test(self):
+                pass
+
+        with self.assertRaises(RuntimeError):
+            Derived().test()
+
+        with self.assertRaises(RuntimeError):
+            class TestWrongDecoratorOrder(Superclass):
+                @override(check=True)
+                @property
+                def test(self):
                     return None
 
 

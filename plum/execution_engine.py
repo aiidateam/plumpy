@@ -102,6 +102,25 @@ class Future(object):
         pass
 
 
+class EngineListener(object):
+    __metaclass__ = ABCMeta
+
+    def on_submitted_process(self, engine, process_class, inputs, checkpoint):
+        pass
+
+    def on_starting_process(self, engine, process, inputs):
+        pass
+
+    def on_waiting_process(self, engine, process, wait_on):
+        pass
+
+    def on_continuing_process(self, engine, process, callback_name):
+        pass
+
+    def on_finishing_process(self, engine, process):
+        pass
+
+
 class ExecutionEngine(object):
     """
     An execution engine is used to launch Processes.  This interface defines
@@ -124,17 +143,6 @@ class ExecutionEngine(object):
         pass
 
     @abstractmethod
-    def run(self, process_class, inputs, checkpoint=None):
-        """
-        Run a process with some inputs immediately and block.
-
-        :param process_class: The process class to execute
-        :param inputs: The inputs to execute the process with
-        :param checkpoint: The checkpoint to continue from (or None)
-        """
-        pass
-
-    @abstractmethod
     def get_process(self, pid):
         """
         Get a running process from its pid.
@@ -143,20 +151,3 @@ class ExecutionEngine(object):
         :return: A running Process instance correponding to the pid.
         """
         pass
-
-    # @abstractmethod
-    # def load(self, record):
-    #     pass
-    #
-    # def load_all(self, records):
-    #     for record in records:
-    #         self.load(record)
-    #
-    # @abstractmethod
-    # def run_all(self):
-    #     pass
-    #
-    # @abstractmethod
-    # def pause_all(self):
-    #     pass
-

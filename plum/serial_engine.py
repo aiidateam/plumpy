@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from plum.execution_engine import ExecutionEngine, Future
+from plum.execution_engine import ExecutionEngine, Future, EngineListener
 from plum.wait import WaitOn
+import plum.util as util
 import time
 import uuid
 
@@ -105,6 +106,15 @@ class SerialEngine(ExecutionEngine):
         self._poll_interval = poll_interval
         self._current_processes = {}
         self._persistence = persistence
+        self.__event_helper = util.EventHelper(EngineListener)
+
+    # Events ##################################################################
+    def add_engine_listener(self, listener):
+        self.__event_helper.add_listener(listener)
+
+    def remove_process_listener(self, listener):
+        self.__event_helper.remove_listener(listener)
+    ###########################################################################
 
     def submit(self, process_class, inputs, checkpoint=None):
         """
@@ -113,6 +123,8 @@ class SerialEngine(ExecutionEngine):
 
         :param process_class: The process to execute
         :param inputs: The inputs to execute the process with
+        :param checkpoint: If supplied will continue the process from this
+        checkpoint instead of starting from the beginning.
         :return: A Future object that represents the execution of the Process.
         """
         return SerialEngine.Future(self, process_class, inputs, checkpoint)
@@ -123,10 +135,15 @@ class SerialEngine(ExecutionEngine):
 
         :param process_class: The process to execute
         :param inputs: The inputs to execute the process with
+        :param checkpoint: If supplied will continue the process from this
+        checkpoint instead of starting from the beginning.
         :return: A Future object that represents the execution of the Process.
         """
+        self.__event_helper.fire_event(
+            'on_submitted_process', self, process_class, inputs, checkpoint)
+
         proc = self._create_process(process_class, checkpoint)
-        self._do_run(proc, inputs)
+        self._do_run(proc, inputs, checkpoint)
         return proc.get_last_outputs()
 
     def run_from(self, process_record):
@@ -145,11 +162,13 @@ class SerialEngine(ExecutionEngine):
         proc.on_create(checkpoint)
         return proc
 
-    def _do_run(self, process, inputs):
+    def _do_run(self, process, inputs, checkpoint):
         proc_info = self._register_new_process(process, inputs)
 
         # Run the process
-        retval = self._start_process(proc_info)
+        retval = None
+        if checkpoint is None:
+            retval = self._start_process(proc_info)
         self._do_continue(proc_info, retval)
 
     def _do_continue(self, proc_info, retval=None):
@@ -167,9 +186,22 @@ class SerialEngine(ExecutionEngine):
         self._current_processes[pid] = proc_info
         return proc_info
 
+    def _continue_till_finished(self, proc_info):
+        # Keep lookuping until there is nothing to wait for
+        retval = None
+        while proc_info.waiting_on:
+            # Keep polling until the thing it's waiting for is ready
+            while not proc_info.waiting_on.is_ready():
+                time.sleep(self._poll_interval)
+
+            retval = self._continue_process(proc_info)
+
+        return retval
+
     def _start_process(self, proc_info):
         """
         Send the appropriate messages and start the Process.
+
         :param proc_info: The process information
         :return: None if the Process is waiting on something, the return value otherwise,
         :note: Do not use a return value of None from this function to indicate that process
@@ -179,10 +211,14 @@ class SerialEngine(ExecutionEngine):
         process = proc_info.process
         inputs = proc_info.inputs
 
+        self.__event_helper.fire_event(
+            'on_starting_process', self, process, inputs)
+
         ins = process._create_input_args(inputs)
         process.on_start(ins, self)
         if self._persistence:
-            record = self._persistence.create_running_process_record(process, inputs, proc_info.pid)
+            record = self._persistence.create_running_process_record(
+                process, inputs, proc_info.pid)
             record.save()
             proc_info.record = record
 
@@ -193,13 +229,20 @@ class SerialEngine(ExecutionEngine):
             return retval
 
     def _continue_process(self, proc_info):
-        assert proc_info.waiting_on, "Cannot continue a process that was not waiting"
+        assert proc_info.waiting_on,\
+            "Cannot continue a process that was not waiting"
+
+        proc = proc_info.process
+
+        self.__event_helper.fire_event(
+            'on_continuing_process', self, proc, proc_info.waiting_on.callback)
+        proc.on_continue(proc_info.waiting_on)
 
         # Get the WaitOn callback function name and call it
         # making sure to reset the waiting_on
         wait_on = proc_info.waiting_on
         proc_info.waiting_on = None
-        retval = getattr(proc_info.process, wait_on.callback)(wait_on)
+        retval = getattr(proc, wait_on.callback)(wait_on)
 
         # Check what to do next
         if isinstance(retval, WaitOn):
@@ -207,27 +250,26 @@ class SerialEngine(ExecutionEngine):
         else:
             return retval
 
-    def _continue_till_finished(self, proc_info):
-        # Keep lookuping until there is nothing to wait for
-        retval = None
-        while proc_info.waiting_on:
-            # Keep polling until the thing it's waiting for is ready
-            while not proc_info.waiting_on.is_ready():
-                time.sleep(self._poll_interval)
-            retval = self._continue_process(proc_info)
-        return retval
-
     def _wait_process(self, proc_info, wait_on):
-        assert not proc_info.waiting_on, "Cannot wait on a process that is already waiting"
+        assert not proc_info.waiting_on,\
+            "Cannot wait on a process that is already waiting"
+
+        self.__event_helper.fire_event(
+            'on_waiting_process', self, proc_info.process, wait_on)
 
         proc_info.waiting_on = wait_on
         proc_info.process.on_wait()
         if proc_info.record:
-            proc_info.record.create_checkpoint(self, proc_info.process, proc_info.waiting_on)
+            proc_info.record.create_checkpoint(self, proc_info.process,
+                                               proc_info.waiting_on)
             proc_info.record.save()
 
     def _finish_process(self, proc_info, retval):
-        assert not proc_info.waiting_on, "Cannot finish a process that is waiting"
+        assert not proc_info.waiting_on,\
+            "Cannot finish a process that is waiting"
+
+        self.__event_helper.fire_event(
+            'on_finishing_process', self, proc_info.process)
 
         proc_info.process.on_finalise()
         if proc_info.record:

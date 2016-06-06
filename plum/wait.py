@@ -12,12 +12,14 @@ class WaitOn(object):
 
     @classmethod
     def create_from(cls, bundle, exec_engine):
-        return load_class(bundle[cls.CLASS_NAME]).create_from(bundle, exec_engine)
+        return load_class(bundle[cls.CLASS_NAME]).\
+            create_from(bundle, exec_engine)
 
     def __init__(self, callback_name):
         if not isinstance(callback_name, basestring):
             raise ValueError(
-                "callback must be a string corresponding to a method of the Process")
+                "callback must be a string corresponding to a method of the"
+                " Process")
         self._callback = callback_name
 
     @property

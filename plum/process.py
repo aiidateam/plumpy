@@ -19,6 +19,9 @@ class ProcessListener(object):
     def on_process_waiting(self, process):
         pass
 
+    def on_process_continuing(self, process, wait_on):
+        pass
+
     def on_process_finalising(self, process):
         pass
 
@@ -69,6 +72,14 @@ class Process(object):
         """
         from plum.serial_engine import SerialEngine
         return SerialEngine()
+
+    @classmethod
+    def run(cls, inputs=None, exec_engine=None):
+        if inputs is None:
+            inputs = {}
+        if not exec_engine:
+            exec_engine = cls._create_default_exec_engine()
+        return exec_engine.run(cls, inputs)
     ############################################
 
     def __init__(self):
@@ -77,24 +88,17 @@ class Process(object):
 
         self.__running_data = None
         self._output_values = {}
-        self._proc_evt_helper = util.EventHelper(ProcessListener)
+        self.__event_helper = util.EventHelper(ProcessListener)
 
     def __call__(self, **kwargs):
         return self.run(kwargs)
 
     def add_process_listener(self, listener):
         assert (listener != self)
-        self._proc_evt_helper.add_listener(listener)
+        self.__event_helper.add_listener(listener)
 
     def remove_process_listener(self, listener):
-        self._proc_evt_helper.remove_listener(listener)
-
-    def run(self, inputs=None, exec_engine=None):
-        if inputs is None:
-            inputs = {}
-        if not exec_engine:
-            exec_engine = self._create_default_exec_engine()
-        return exec_engine.run(self, inputs)
+        self.__event_helper.remove_listener(listener)
 
     def get_last_outputs(self):
         return self._output_values
@@ -221,11 +225,14 @@ class Process(object):
         self._check_inputs(inputs)
         self.__running_data = self.RunningData(exec_engine,
             util.AttributesFrozendict(inputs))
-        self._proc_evt_helper.fire_event('on_process_starting',
-                                         self, inputs)
+        self.__event_helper.fire_event('on_process_starting',
+                                       self, inputs)
 
     def on_wait(self):
-        self._proc_evt_helper.fire_event('on_process_waiting', self)
+        self.__event_helper.fire_event('on_process_waiting', self)
+
+    def on_continue(self, wait_on):
+        self.__event_helper.fire_event('on_process_continuing', self, wait_on)
 
     def on_finalise(self):
         """
@@ -236,7 +243,7 @@ class Process(object):
         """
         self.__running_data = None
         self._check_outputs()
-        self._proc_evt_helper.fire_event('on_process_finalising', self)
+        self.__event_helper.fire_event('on_process_finalising', self)
 
     def on_finish(self, retval):
         """
@@ -244,12 +251,12 @@ class Process(object):
         checks
         :param retval: The return value from the process
         """
-        self._proc_evt_helper.fire_event('on_process_finished',
-                                         self, retval)
+        self.__event_helper.fire_event('on_process_finished',
+                                       self, retval)
 
     def _on_output_emitted(self, output_port, value, dynamic):
-        self._proc_evt_helper.fire_event('on_output_emitted',
-                                         self, output_port, value, dynamic)
+        self.__event_helper.fire_event('on_output_emitted',
+                                       self, output_port, value, dynamic)
     #####################################################################
 
 

@@ -71,8 +71,8 @@ class TestProcess(TestCase):
                 pass
 
         with self.assertRaises(RuntimeError):
-            NoDynamic.create().run(inputs={'a': 5})
-        WithDynamic.create().run(inputs={'a': 5})
+            NoDynamic.run(inputs={'a': 5})
+        WithDynamic.run(inputs={'a': 5})
 
     def test_inputs(self):
         class Proc(Process):
