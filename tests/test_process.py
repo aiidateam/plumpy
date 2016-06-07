@@ -33,25 +33,29 @@ class EventsTester(ProcessListener):
 
 
 class TestProcess(TestCase):
-    def test_events(self):
-        events_tester = EventsTester()
+    def setUp(self):
+        self.events_tester = EventsTester()
+        self.proc = DummyProcess()
+        self.proc.add_process_listener(self.events_tester)
 
-        proc = DummyProcess()
-        proc.add_process_listener(events_tester)
+    def tearDown(self):
+        self.proc.remove_process_listener(self.events_tester)
 
-        proc.on_start({'a': 5}, None)
-        self.assertTrue(events_tester.starting)
+    def test_on_start(self):
+        self.proc.on_start({'a': 5}, None)
+        self.assertTrue(self.events_tester.starting)
 
-        proc._run()
-        self.assertTrue(events_tester.emitted)
+    def test_on_output_emitted(self):
+        self.proc._run()
+        self.assertTrue(self.events_tester.emitted)
 
-        proc.on_finalise()
-        self.assertTrue(events_tester.finalising)
+    def test_on_finalise(self):
+        self.proc.on_finalise()
+        self.assertTrue(self.events_tester.finalising)
 
-        proc.on_finish(None)
-        self.assertTrue(events_tester.finished)
-
-        proc.remove_process_listener(events_tester)
+    def test_on_finished(self):
+        self.proc.on_finish(None)
+        self.assertTrue(self.events_tester.finished)
 
     def test_dynamic_inputs(self):
         class NoDynamic(Process):
