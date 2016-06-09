@@ -1,5 +1,7 @@
 from unittest import TestCase
-from plum.process import Process, ProcessListener
+from plum.process import Process
+from tests.common import ProcessListenerTester
+from plum.parallel import MultithreadedEngine
 
 
 class DummyProcess(Process):
@@ -12,29 +14,9 @@ class DummyProcess(Process):
         self.out("default", 5)
 
 
-class EventsTester(ProcessListener):
-    def __init__(self):
-        self.starting = False
-        self.finalising = False
-        self.finished = False
-        self.emitted = False
-
-    def on_process_starting(self, process, inputs):
-        self.starting = True
-
-    def on_process_finalising(self, process):
-        self.finalising = True
-
-    def on_process_finished(self, process, retval):
-        self.finished = True
-
-    def on_output_emitted(self, process, output_port, value, dynamic):
-        self.emitted = True
-
-
 class TestProcess(TestCase):
     def setUp(self):
-        self.events_tester = EventsTester()
+        self.events_tester = ProcessListenerTester()
         self.proc = DummyProcess()
         self.proc.add_process_listener(self.events_tester)
 
@@ -43,19 +25,19 @@ class TestProcess(TestCase):
 
     def test_on_start(self):
         self.proc.on_start({'a': 5}, None)
-        self.assertTrue(self.events_tester.starting)
+        self.assertTrue(self.events_tester.start)
 
     def test_on_output_emitted(self):
         self.proc._run()
         self.assertTrue(self.events_tester.emitted)
 
     def test_on_finalise(self):
-        self.proc.on_finalise()
-        self.assertTrue(self.events_tester.finalising)
+        self.proc.on_destroy()
+        self.assertTrue(self.events_tester.destroy)
 
     def test_on_finished(self):
         self.proc.on_finish(None)
-        self.assertTrue(self.events_tester.finished)
+        self.assertTrue(self.events_tester.finish)
 
     def test_dynamic_inputs(self):
         class NoDynamic(Process):
@@ -74,7 +56,7 @@ class TestProcess(TestCase):
             def _run(self, **kwargs):
                 pass
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             NoDynamic.run(inputs={'a': 5})
         WithDynamic.run(inputs={'a': 5})
 
@@ -105,8 +87,10 @@ class TestProcess(TestCase):
         with self.assertRaises(AttributeError):
             p.inputs.a
 
-
-
+    def test_run(self):
+        engine = MultithreadedEngine()
+        results = DummyProcess.run(None, engine)
+        self.assertEqual(results['default'], 5)
 
 
 

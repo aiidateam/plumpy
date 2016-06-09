@@ -11,9 +11,9 @@ class WaitOn(object):
     CALLBACK_NAME = "callback_name"
 
     @classmethod
-    def create_from(cls, bundle, exec_engine):
+    def create_from(cls, bundle, process_manager):
         return load_class(bundle[cls.CLASS_NAME]).\
-            create_from(bundle, exec_engine)
+            create_from(bundle, process_manager)
 
     def __init__(self, callback_name):
         if not isinstance(callback_name, basestring):
@@ -30,6 +30,6 @@ class WaitOn(object):
     def is_ready(self):
         pass
 
-    def save_instance_state(self, bundle, exec_engine):
-        bundle[self.CLASS_NAME] = fullname(self)
-        bundle[self.CALLBACK_NAME] = self.callback
+    def save_instance_state(self, out_state):
+        out_state[self.CLASS_NAME] = fullname(self)
+        out_state[self.CALLBACK_NAME] = self.callback

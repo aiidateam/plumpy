@@ -26,7 +26,8 @@ def protected(check=False):
                     assert self is calling_class
                 except (KeyError, AssertionError):
                     raise RuntimeError(
-                        "Cannot access protected function from outside class hierarchy")
+                        "Cannot access protected function {} from outside"
+                        " class hierarchy".format(func.__name__))
 
                 return func(self, *args, **kwargs)
         else:

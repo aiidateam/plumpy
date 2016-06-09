@@ -94,6 +94,9 @@ class ProcessSpec(object):
     def output(self, name, **kwargs):
         self.output_port(name, OutputPort(self, name, **kwargs))
 
+    def optional_output(self, name, **kwargs):
+        self.output_port(name, OutputPort(self, name, required=False, **kwargs))
+
     def output_port(self, name, port):
         if self.sealed:
             raise RuntimeError("Cannot add an output after spec is sealed")

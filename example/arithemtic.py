@@ -2,7 +2,7 @@
 
 from plum.process import Process, FunctionProcess
 from plum.workflow import Workflow
-from plum.parallel import MultithreadedExecutionEngine
+from plum.parallel import MultithreadedEngine
 
 
 def add(a, b):
@@ -103,7 +103,7 @@ if __name__ == '__main__':
 
     mul_add(a=2, b=3, c=4)
 
-    exec_engine = MultithreadedExecutionEngine()
+    exec_engine = MultithreadedEngine()
     exec_engine.run(mul_add, {'a': 2, 'b': 3, 'c': 4})
 
     future = exec_engine.submit(mul_add, {'a': 2, 'b': 3, 'c': 4})

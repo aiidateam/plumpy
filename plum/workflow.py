@@ -229,7 +229,7 @@ class Workflow(Process, ProcessListener):
             self._process_instances[name] = proc
 
     # From ProcessListener ##########################
-    def on_process_starting(self, process, inputs):
+    def on_process_start(self, process, inputs):
         self._on_subprocess_starting(process, inputs)
 
     def on_output_emitted(self, process, output_port, value, dynamic):
@@ -259,10 +259,10 @@ class Workflow(Process, ProcessListener):
             # The output isn't connected, nae dramas
             sink = None
 
-    def on_process_finalising(self, process):
+    def on_process_destroy(self, process):
         self._on_subprocess_finalising(process)
 
-    def on_process_finished(self, process, retval):
+    def on_process_finish(self, process, retval):
         self._on_subprocess_finished(process, retval)
     ##################################################
 
@@ -330,7 +330,8 @@ class Workflow(Process, ProcessListener):
 
     def _launch_subprocess(self, proc, inputs):
         self._num_running_subprocs.increment()
-        self.get_exec_engine().submit(proc, inputs).add_done_callback(self._subproc_done)
+        self.get_exec_engine().submit(proc, inputs).add_done_callback(
+            self._subproc_done)
 
     def _subproc_done(self, fut):
         self._num_running_subprocs.decrement()

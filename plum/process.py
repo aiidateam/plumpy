@@ -1,34 +1,34 @@
 # -*- coding: utf-8 -*-
 
-from collections import namedtuple
 from abc import ABCMeta, abstractmethod
 from plum.util import protected
 from plum.process_spec import ProcessSpec
+from plum.persistence.bundle import Bundle
 import plum.util as util
-
-
-Checkpoint = namedtuple("Checkpoint", ['state', 'wait_on'])
 
 
 class ProcessListener(object):
     __metaclass__ = ABCMeta
 
-    def on_process_starting(self, process, inputs):
-        pass
-
-    def on_process_waiting(self, process):
-        pass
-
-    def on_process_continuing(self, process, wait_on):
-        pass
-
-    def on_process_finalising(self, process):
-        pass
-
-    def on_process_finished(self, process, retval):
+    def on_process_start(self, process, inputs):
         pass
 
     def on_output_emitted(self, process, output_port, value, dynamic):
+        pass
+
+    def on_process_wait(self, process, wait_on):
+        pass
+
+    def on_process_continue(self, process, wait_on):
+        pass
+
+    def on_process_finish(self, process, retval):
+        pass
+
+    def on_process_stop(self, process):
+        pass
+
+    def on_process_destroy(self, process):
         pass
 
 
@@ -36,10 +36,8 @@ class Process(object):
     __metaclass__ = ABCMeta
 
     # Static class stuff ######################
-    RunningData = namedtuple('RunningData',
-                             ['exec_engine', 'inputs'])
-
     _spec_type = ProcessSpec
+    _INPUTS = 'INPUTS'
 
     @staticmethod
     def _define(spec):
@@ -53,10 +51,6 @@ class Process(object):
             cls._spec = cls._spec_type()
             cls._define(cls._spec)
             return cls._spec
-
-    @classmethod
-    def create(cls):
-        return cls()
 
     @classmethod
     def get_name(cls):
@@ -79,19 +73,35 @@ class Process(object):
             inputs = {}
         if not exec_engine:
             exec_engine = cls._create_default_exec_engine()
-        return exec_engine.run(cls, inputs)
+        return exec_engine.submit(cls, inputs).result()
     ############################################
 
     def __init__(self):
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        self.__running_data = None
+        self._pid = None
+        self._inputs = None
+        self._exec_engine = None
         self._output_values = {}
         self.__event_helper = util.EventHelper(ProcessListener)
 
-    def __call__(self, **kwargs):
-        return self.run(kwargs)
+    @property
+    def pid(self):
+        return self._pid
+
+    @property
+    def inputs(self):
+        return self._inputs
+
+    def get_last_outputs(self):
+        return self._output_values
+
+    def save_instance_state(self, bundle):
+        if self._inputs is not None:
+            bundle[self._INPUTS] = Bundle(self._inputs)
+        else:
+            bundle[self._INPUTS] = None
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -100,17 +110,76 @@ class Process(object):
     def remove_process_listener(self, listener):
         self.__event_helper.remove_listener(listener)
 
-    def get_last_outputs(self):
-        return self._output_values
+    # Process messages ##################################################
+    # These should only be called by an execution engine (or tests) #####
+    # Make sure to call the superclass if your override any of these ####
+    def on_create(self, pid, saved_instance_state=None):
+        """
+        Called when the process is created.  If a checkpoint is supplied the
+        process should reinstate its state at the time the checkpoint was taken
+        and if the checkpoint has a wait_on the process will continue from the
+        corresponding callback function.
+
+        :param saved_instance_state: The checkpoint to continue from or None.
+        """
+        # In this case there is no message fired because no one could have
+        # registered themselves as a listener by this point in the lifecycle.
+        self._pid = pid
+        if saved_instance_state is not None:
+            self._inputs = util.AttributesFrozendict(
+                saved_instance_state[self._INPUTS])
+
+    def on_start(self, inputs, exec_engine):
+        """
+        Called when the inputs of a process passed checks and the process
+        is about to begin.
+
+        Any class overriding this method should make sure to call the super
+        method, usually at the end of the function.
+
+        :param inputs: The inputs the process is starting with
+        """
+        self._check_inputs(inputs)
+        self._inputs = util.AttributesFrozendict(inputs)
+        self._exec_engine = exec_engine
+        self.__event_helper.fire_event('on_process_start', self, self.inputs)
+
+    def on_wait(self, wait_on):
+        self.__event_helper.fire_event('on_process_wait', self, wait_on)
+
+    def on_continue(self, wait_on):
+        self.__event_helper.fire_event('on_process_continue', self, wait_on)
+
+    def on_finish(self, retval):
+        """
+        Called when the process has finished and the outputs have passed
+        checks
+        :param retval: The return value from the process
+        """
+        self._check_outputs()
+        self.__event_helper.fire_event('on_process_finish', self, retval)
+
+    def on_stop(self):
+        self.__event_helper.fire_event('on_process_stop', self)
+
+    def on_destroy(self):
+        """
+        Called when the process has completed execution, however this may be
+        the result of returning or an exception being raised.  Either way this
+        message is guaranteed to be sent.  Only upon successful return and
+        outputs passing checks would _on_process_finished be called.
+        """
+        self.__running_data = None
+        self.__event_helper.fire_event('on_process_destroy', self)
+
+    def _on_output_emitted(self, output_port, value, dynamic):
+        self.__event_helper.fire_event('on_output_emitted',
+                                       self, output_port, value, dynamic)
+    #####################################################################
 
     @protected
     def get_exec_engine(self):
-        return self.__running_data.exec_engine
-
-    @property
-    @protected
-    def inputs(self):
-        return self.__running_data.inputs
+        return self._exec_engine
 
     @protected
     def out(self, output_port, value):
@@ -148,7 +217,10 @@ class Process(object):
         :param inputs: The supplied input values.
         :return: A dictionary of inputs including any with default values
         """
-        ins = inputs.copy()
+        if inputs is None:
+            ins = {}
+        else:
+            ins = inputs.copy()
         # Go through the spec filling in any default and checking for required
         # inputs
         for name, port in self.spec().inputs.iteritems():
@@ -166,9 +238,9 @@ class Process(object):
         if not self.spec().has_dynamic_input():
             unexpected = set(inputs.iterkeys()) - set(self.spec().inputs.iterkeys())
             if unexpected:
-                raise RuntimeError(
-                    "Unexpected inputs found: {}.  If you want to allow dynamic "
-                    "inputs add dynamic_input() to the spec definition.".
+                raise ValueError(
+                    "Unexpected inputs found: {}.  If you want to allow dynamic"
+                    " inputs add dynamic_input() to the spec definition.".
                     format(unexpected))
 
         for name, port in self.spec().inputs.iteritems():
@@ -191,75 +263,6 @@ class Process(object):
     @abstractmethod
     def _run(self, **kwargs):
         pass
-
-    def save_instance_state(self, bundle):
-        pass
-
-    def load_instance_state(self, bundle):
-        pass
-
-    # Process messages ##################################################
-    # These should only be called by an execution engine (or tests) #####
-    # Make sure to call the superclass if your override any of these ####
-    def on_create(self, checkpoint=None):
-        """
-        Called when the process is created.  If a checkpoint is supplied the
-        process should reinstate its state at the time the checkpoint was taken
-        and if the checkpoint has a wait_on the process will continue from the
-        corresponding callback function.
-
-        :param checkpoint: The checkpoint to continue from or None.
-        """
-        # In this case there is no message fired because no one could have
-        # registered themselves as a listener by this point in the lifecycle.
-        pass
-
-    def on_start(self, inputs, exec_engine):
-        """
-        Called when the inputs of a process passed checks and the process
-        is about to begin.
-
-        Any class overriding this method should make sure to call the super
-        method, usually at the end of the function.
-
-        :param inputs: The inputs the process is starting with
-        """
-        self._check_inputs(inputs)
-        self.__running_data = self.RunningData(exec_engine,
-            util.AttributesFrozendict(inputs))
-        self.__event_helper.fire_event('on_process_starting',
-                                       self, inputs)
-
-    def on_wait(self):
-        self.__event_helper.fire_event('on_process_waiting', self)
-
-    def on_continue(self, wait_on):
-        self.__event_helper.fire_event('on_process_continuing', self, wait_on)
-
-    def on_finalise(self):
-        """
-        Called when the process has completed execution, however this may be
-        the result of returning or an exception being raised.  Either way this
-        message is guaranteed to be sent.  Only upon successful return and
-        outputs passing checks would _on_process_finished be called.
-        """
-        self.__running_data = None
-        self._check_outputs()
-        self.__event_helper.fire_event('on_process_finalising', self)
-
-    def on_finish(self, retval):
-        """
-        Called when the process has finished and the outputs have passed
-        checks
-        :param retval: The return value from the process
-        """
-        self.__event_helper.fire_event('on_process_finished',
-                                       self, retval)
-
-    def _on_output_emitted(self, output_port, value, dynamic):
-        self.__event_helper.fire_event('on_output_emitted',
-                                       self, output_port, value, dynamic)
-    #####################################################################
 
 
 class FunctionProcess(Process):
