@@ -17,7 +17,7 @@ class Checkpoint(WaitOn):
         return cls(saved_instance_state[cls.CALLBACK_NAME])
 
     @override
-    def is_ready(self):
+    def is_ready(self, process_registry=None):
         return True
 
 
@@ -51,17 +51,17 @@ class _CompoundWaitOn(WaitOn):
 
 class WaitOnAll(_CompoundWaitOn):
     @override
-    def is_ready(self):
+    def is_ready(self, process_registry=None):
         return all(w.is_ready() for w in self._wait_list)
 
 
 class WaitOnAny(_CompoundWaitOn):
     @override
-    def is_ready(self):
+    def is_ready(self, process_registry=None):
         return any(w.is_ready() for w in self._wait_list)
 
 
-class WaitOnProcess(WaitOn, ProcessListener):
+class WaitOnProcess(WaitOn):
     WAIT_ON_PID = 'pid'
 
     @classmethod
@@ -72,53 +72,51 @@ class WaitOnProcess(WaitOn, ProcessListener):
     def __init__(self, callback_name, process):
         super(WaitOnProcess, self).__init__(callback_name)
         self._finished = False
-        self._process = process
-        process.add_process_listener(self)
+        self._pid = process.pid
 
     @override
-    def on_process_finish(self, process, retval):
-        assert self._process is process
-        self._finished = True
-
-    @override
-    def is_ready(self):
-        return self._finished
+    def is_ready(self, process_registry=None):
+        if process_registry:
+            raise RuntimeError(
+                "Unable to check if process has finished because a registry"
+                "was not supplied.")
+        return process_registry.is_finished(self._pid)
 
     @override
     def save_instance_state(self, out_state):
         super(WaitOnProcess, self).save_instance_state(out_state)
-        out_state[self.WAIT_ON_PID] = self._process.pid
+        out_state[self.WAIT_ON_PID] = self._pid
 
 
-class WaitOnProcessOutput(WaitOn, ProcessListener):
+class WaitOnProcessOutput(WaitOn):
     WAIT_ON_PID = 'pid'
     OUTPUT_PORT = 'output_port'
 
     @classmethod
     def create_from(cls, bundle, process_manager):
         return cls(bundle[cls.CALLBACK_NAME],
-                   process_manager.get_process(bundle[cls.WAIT_ON_PID]),
+                   bundle[cls.WAIT_ON_PID],
                    bundle[cls.OUTPUT_PORT])
 
-    def __init__(self, callback_name, process, output_port):
+    def __init__(self, callback_name, output_port, process, pid=None):
         super(WaitOnProcessOutput, self).__init__(callback_name)
-        self._process = process
+        if process is not None:
+            self._pid = process.pid
+        else:
+            assert pid is not None
+            self._pid = pid
         self._output_port = output_port
-        self._finished = False
-        process.add_process_listener(self)
 
     @override
-    def on_output_emitted(self, process, output_port, value, dynamic):
-        assert process is self._process
-        if output_port == self._output_port:
-            self._finished = True
-
-    @override
-    def is_ready(self):
-        return self._finished
+    def is_ready(self, process_registry=None):
+        if process_registry:
+            raise RuntimeError(
+                "Unable to check if process has finished because a registry"
+                "was not supplied.")
+        return self._output_port in process_registry.get_outputs(self._pid)
 
     @override
     def save_instance_state(self, out_state):
         super(WaitOnProcessOutput, self).save_instance_state(out_state)
-        out_state[self.WAIT_ON_PID] = self._process.pid
+        out_state[self.WAIT_ON_PID] = self._pid
         out_state[self.OUTPUT_PORT] = self._output_port

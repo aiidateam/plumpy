@@ -1,8 +1,10 @@
+
 from unittest import TestCase
 from plum.process import Process
 from plum.persistence.pickle_persistence import PicklePersistence,\
     _STORE_DIRECTORY
 from plum.wait_ons import Checkpoint
+from plum.simple_factory import SimpleFactory
 import os.path
 
 
@@ -16,7 +18,7 @@ class DummyProcess(Process):
 
 class TestPicklePersistence(TestCase):
     def setUp(self):
-        self.pickle_persistence = PicklePersistence()
+        self.pickle_persistence = PicklePersistence(SimpleFactory())
         # Have to call on_create to make sure the Process has a PID
         self.dummy_proc = DummyProcess()
         self.dummy_proc.on_create(0)
@@ -27,7 +29,7 @@ class TestPicklePersistence(TestCase):
         if os.path.isfile(SAVE_PATH):
             os.remove(SAVE_PATH)
 
-        self.pickle_persistence.on_process_start(self.dummy_proc, None)
+        self.pickle_persistence.on_process_start(self.dummy_proc)
 
         # Check the file exists
         self.assertTrue(os.path.isfile(SAVE_PATH))
@@ -59,5 +61,5 @@ class TestPicklePersistence(TestCase):
         for i in range(0, 3):
             proc = DummyProcess()
             proc.on_create(i)
-            self.pickle_persistence.on_process_start(proc, None)
+            self.pickle_persistence.on_process_start(proc)
         self.assertEqual(len(self.pickle_persistence.load_all_checkpoints()), 3)

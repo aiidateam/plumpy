@@ -27,7 +27,7 @@ class WaitOn(object):
         return self._callback
 
     @abstractmethod
-    def is_ready(self):
+    def is_ready(self, registry=None):
         pass
 
     def save_instance_state(self, out_state):

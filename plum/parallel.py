@@ -11,12 +11,12 @@ class MultithreadedEngine(execution_engine.ExecutionEngine):
     class Future(concurrent.futures.Future, execution_engine.Future):
         pass
 
-    def __init__(self, max_workers=None, process_manager=None):
+    def __init__(self, max_workers=None, process_factory=None):
         if max_workers is None:
             max_workers = multiprocessing.cpu_count()
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         # For now just exploit the serial engine to do the work for us
-        self._serial_engine = SerialEngine(process_manager=process_manager)
+        self._serial_engine = SerialEngine(process_factory=process_factory)
 
     @override
     def submit(self, process_class, inputs, checkpoint=None):

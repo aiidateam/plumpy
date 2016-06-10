@@ -10,7 +10,7 @@ import plum.util as util
 class ProcessListener(object):
     __metaclass__ = ABCMeta
 
-    def on_process_start(self, process, inputs):
+    def on_process_start(self, process):
         pass
 
     def on_output_emitted(self, process, output_port, value, dynamic):
@@ -113,23 +113,37 @@ class Process(object):
     # Process messages ##################################################
     # These should only be called by an execution engine (or tests) #####
     # Make sure to call the superclass if your override any of these ####
-    def on_create(self, pid, saved_instance_state=None):
+    def on_create(self, pid, inputs=None):
         """
         Called when the process is created.  If a checkpoint is supplied the
         process should reinstate its state at the time the checkpoint was taken
         and if the checkpoint has a wait_on the process will continue from the
         corresponding callback function.
 
-        :param saved_instance_state: The checkpoint to continue from or None.
+        :param inputs: The inputs the process should run using.
         """
         # In this case there is no message fired because no one could have
         # registered themselves as a listener by this point in the lifecycle.
         self._pid = pid
-        if saved_instance_state is not None:
-            self._inputs = util.AttributesFrozendict(
-                saved_instance_state[self._INPUTS])
+        if inputs is None:
+            inputs = {}
+        self._check_inputs(inputs)
+        self._inputs = util.AttributesFrozendict(inputs)
 
-    def on_start(self, inputs, exec_engine):
+    def on_recreate(self, pid, saved_instance_state):
+        """
+        Called when the process is recreated from a previous state.  It should
+        recreate its state from the passed bundle.
+
+        :param saved_instance_state: The checkpoint to recreate from.
+        """
+        # In this case there is no message fired because no one could have
+        # registered themselves as a listener by this point in the lifecycle.
+        self._pid = pid
+        self._inputs = util.AttributesFrozendict(
+            saved_instance_state[self._INPUTS])
+
+    def on_start(self, exec_engine):
         """
         Called when the inputs of a process passed checks and the process
         is about to begin.
@@ -137,12 +151,10 @@ class Process(object):
         Any class overriding this method should make sure to call the super
         method, usually at the end of the function.
 
-        :param inputs: The inputs the process is starting with
+        :param exec_engine: The execution engine running the process.
         """
-        self._check_inputs(inputs)
-        self._inputs = util.AttributesFrozendict(inputs)
         self._exec_engine = exec_engine
-        self.__event_helper.fire_event('on_process_start', self, self.inputs)
+        self.__event_helper.fire_event('on_process_start', self.inputs)
 
     def on_wait(self, wait_on):
         self.__event_helper.fire_event('on_process_wait', self, wait_on)

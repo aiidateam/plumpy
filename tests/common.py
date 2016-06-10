@@ -18,6 +18,7 @@ class ProcessEventsTester(Process):
     @staticmethod
     def _define(spec):
         spec.optional_output("create")
+        spec.optional_output("recreate")
         spec.optional_output("start")
         spec.optional_output("continue_")
         spec.optional_output("finish")
@@ -30,13 +31,18 @@ class ProcessEventsTester(Process):
         self._emitted = False
 
     @override
-    def on_create(self, pid, saved_instance_state=None):
-        super(ProcessEventsTester, self).on_create(pid, saved_instance_state)
+    def on_create(self, pid, inputs=None):
+        super(ProcessEventsTester, self).on_create(pid, inputs)
         self.out("create", True)
 
     @override
-    def on_start(self, inputs, exec_engine):
-        super(ProcessEventsTester, self).on_start(inputs, exec_engine)
+    def on_recreate(self, pid, saved_instance_state):
+        super(ProcessEventsTester, self).on_recreate(pid, saved_instance_state)
+        self.out("recreate", True)
+
+    @override
+    def on_start(self, exec_engine):
+        super(ProcessEventsTester, self).on_start(exec_engine)
         self.out("start", True)
 
     @override
@@ -82,6 +88,7 @@ class ProcessEventsTester(Process):
 
 class ProcessListenerTester(ProcessListener):
     def __init__(self):
+        self.create = False
         self.start = False
         self.continue_ = False
         self.finish = False
@@ -90,7 +97,11 @@ class ProcessListenerTester(ProcessListener):
         self.destroy = False
 
     @override
-    def on_process_start(self, process, inputs):
+    def on_create(self, pid, inputs=None):
+        self.create = True
+
+    @override
+    def on_process_start(self, process):
         self.start = True
 
     @override

@@ -75,12 +75,17 @@ class SerialEngine(ExecutionEngine):
             """
             fn(self)
 
-    def __init__(self, poll_interval=10, process_manager=None):
-        if process_manager is None:
-            from plum.simple_manager import SimpleManager
-            process_manager = SimpleManager()
+    def __init__(self, poll_interval=10, process_factory=None,
+                 process_registry=None):
+        if process_factory is None:
+            from plum.simple_factory import SimpleFactory
+            process_factory = SimpleFactory()
+        if process_registry is None:
+            from plum.simple_registry import SimpleRegistry
+            process_registry = SimpleRegistry()
 
-        self._process_manager = process_manager
+        self._process_manager = process_factory
+        self._process_registry = process_registry
         self._poll_interval = poll_interval
 
     def submit(self, process_class, inputs, checkpoint=None):
@@ -109,13 +114,18 @@ class SerialEngine(ExecutionEngine):
         if inputs is None:
             inputs = {}
 
-        proc, wait_on =\
-            self._process_manager.create_process(process_class, checkpoint)
-
-        if wait_on is None:
-            self._do_run(proc, inputs)
+        if checkpoint is not None:
+            proc, wait_on = \
+                self._process_manager.recreate_process(process_class,
+                                                       checkpoint)
+            if wait_on is None:
+                self._do_run(proc, inputs)
+            else:
+                self._do_continue(proc, wait_on)
         else:
-            self._do_continue(proc, wait_on)
+            proc = self._process_manager.create_process(process_class, inputs)
+            self._do_run(proc, inputs)
+
 
         return proc.get_last_outputs()
 
@@ -135,7 +145,7 @@ class SerialEngine(ExecutionEngine):
         retval = wait_on
         while isinstance(retval, WaitOn):
             # Keep polling until the thing it's waiting for is ready
-            while not wait_on.is_ready():
+            while not wait_on.is_ready(self._process_registry):
                 time.sleep(self._poll_interval)
 
             retval = self._continue_process(process, wait_on)
@@ -153,9 +163,8 @@ class SerialEngine(ExecutionEngine):
         use proc_info.waiting_on is None.
         """
         ins = process._create_input_args(inputs)
-        process.on_start(ins, self)
-
-        return process._run(**inputs)
+        process.on_start(self)
+        return process._run(**ins)
 
     def _continue_process(self, process, wait_on):
         assert wait_on is not None,\

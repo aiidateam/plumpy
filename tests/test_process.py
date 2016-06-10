@@ -24,7 +24,7 @@ class TestProcess(TestCase):
         self.proc.remove_process_listener(self.events_tester)
 
     def test_on_start(self):
-        self.proc.on_start({'a': 5}, None)
+        self.proc.on_start(None)
         self.assertTrue(self.events_tester.start)
 
     def test_on_output_emitted(self):
@@ -71,12 +71,12 @@ class TestProcess(TestCase):
 
         p = Proc()
 
-        # Check that we can't access inputs before starting
+        # Check that we can't access inputs before creating
         with self.assertRaises(AttributeError):
             p.inputs.a
 
-        # Check that we can access the inputs while running
-        p.on_start({'a': 5}, None)
+        # Check that we can access the inputs after creating
+        p.on_create(0, {'a': 5})
         self.assertEqual(p.inputs.a, 5)
         with self.assertRaises(AttributeError):
             p.inputs.b
