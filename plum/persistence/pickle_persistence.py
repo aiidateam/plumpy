@@ -16,12 +16,15 @@ class PicklePersistence(ProcessListener):
         self._process_factory = process_factory
         self._directory = directory
 
-    @staticmethod
-    def load_all_checkpoints(directory=_STORE_DIRECTORY):
+    def load_all_checkpoints(self):
         checkpoints = []
-        for f in glob.glob(os.path.join(directory, "*.pickle")):
+        for f in glob.glob(os.path.join(self._directory, "*.pickle")):
             checkpoints.append(pickle.load(open(f, 'rb')))
         return checkpoints
+
+    @property
+    def store_directory(self):
+        return self._directory
 
     def persist_process(self, process):
         process.add_process_listener(self)
@@ -42,12 +45,14 @@ class PicklePersistence(ProcessListener):
         process.remove_process_listener(self)
 
     def _pickle_filename(self, process):
-        return os.path.join(self._directory, "{}.pickle".format(process.pid))
+        return os.path.join( self._directory, "{}.pickle".format(process.pid))
 
-    def _ensure_directory(self):
-        if not os.path.isdir(self._directory):
-            os.makedirs(self._directory)
+    def _ensure_directory(self, path=None):
+        if not os.path.isdir( self._directory):
+            os.makedirs( self._directory)
 
     def save(self, process, wait_on=None):
         checkpoint = self._process_factory.create_checkpoint(process, wait_on)
-        pickle.dump(checkpoint, open(self._pickle_filename(process), 'wb'))
+        self._ensure_directory()
+        with open(self._pickle_filename(process), 'wb') as f:
+            pickle.dump(checkpoint, f)

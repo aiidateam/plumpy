@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta, abstractmethod
-from plum.util import protected
-from plum.process_spec import ProcessSpec
-from plum.persistence.bundle import Bundle
 import plum.util as util
+from abc import ABCMeta, abstractmethod
+from plum.persistence.bundle import Bundle
+from plum.process_spec import ProcessSpec
+from plum.util import protected
 
 
 class ProcessListener(object):
@@ -20,6 +20,9 @@ class ProcessListener(object):
         pass
 
     def on_process_continue(self, process, wait_on):
+        pass
+
+    def on_process_fail(self, process, exception):
         pass
 
     def on_process_finish(self, process, retval):
@@ -64,7 +67,7 @@ class Process(object):
 
         :return: An instance of ExceutionEngine.
         """
-        from plum.serial_engine import SerialEngine
+        from plum.engine.serial import SerialEngine
         return SerialEngine()
 
     @classmethod
@@ -154,13 +157,16 @@ class Process(object):
         :param exec_engine: The execution engine running the process.
         """
         self._exec_engine = exec_engine
-        self.__event_helper.fire_event('on_process_start', self.inputs)
+        self.__event_helper.fire_event('on_process_start', self)
 
     def on_wait(self, wait_on):
         self.__event_helper.fire_event('on_process_wait', self, wait_on)
 
     def on_continue(self, wait_on):
         self.__event_helper.fire_event('on_process_continue', self, wait_on)
+
+    def on_fail(self, exception):
+        self.__event_helper.fire_event('on_process_fail', self, exception)
 
     def on_finish(self, retval):
         """
@@ -270,7 +276,10 @@ class Process(object):
             if not valid:
                 raise RuntimeError("Process {} failed because {}".
                                    format(self.get_name(), msg))
-    ###########################################################################
+    ############################################################################
+
+    def do_run(self):
+        return self._run(**self._create_input_args(self.inputs))
 
     @abstractmethod
     def _run(self, **kwargs):

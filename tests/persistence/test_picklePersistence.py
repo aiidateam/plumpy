@@ -1,8 +1,7 @@
 
 from unittest import TestCase
 from plum.process import Process
-from plum.persistence.pickle_persistence import PicklePersistence,\
-    _STORE_DIRECTORY
+from plum.persistence.pickle_persistence import PicklePersistence
 from plum.wait_ons import Checkpoint
 from plum.simple_factory import SimpleFactory
 import os.path
@@ -18,14 +17,25 @@ class DummyProcess(Process):
 
 class TestPicklePersistence(TestCase):
     def setUp(self):
-        self.pickle_persistence = PicklePersistence(SimpleFactory())
+        import tempfile
+
+        self.store_dir = tempfile.mkdtemp()
+        self.pickle_persistence =\
+            PicklePersistence(SimpleFactory(), self.store_dir)
         # Have to call on_create to make sure the Process has a PID
         self.dummy_proc = DummyProcess()
         self.dummy_proc.on_create(0)
 
+    def tearDown(self):
+        self._empty_directory()
+
+    def test_store_directory(self):
+        self.assertEqual(self.store_dir,
+                         self.pickle_persistence.store_directory)
+
     def test_on_starting_process(self):
         # Make sure we delete the file if it's there
-        SAVE_PATH = os.path.join(_STORE_DIRECTORY, "0.pickle")
+        SAVE_PATH = os.path.join(self.store_dir, "0.pickle")
         if os.path.isfile(SAVE_PATH):
             os.remove(SAVE_PATH)
 
@@ -36,7 +46,7 @@ class TestPicklePersistence(TestCase):
 
     def test_on_waiting_process(self):
         # Make sure we delete the file if it's there
-        SAVE_PATH = os.path.join(_STORE_DIRECTORY, "0.pickle")
+        SAVE_PATH = os.path.join(self.store_dir, "0.pickle")
         if os.path.isfile(SAVE_PATH):
             os.remove(SAVE_PATH)
 
@@ -46,7 +56,7 @@ class TestPicklePersistence(TestCase):
         self.assertTrue(os.path.isfile(SAVE_PATH))
 
     def test_on_finishing_process(self):
-        SAVE_PATH = os.path.join(_STORE_DIRECTORY, "0.pickle")
+        SAVE_PATH = os.path.join(self.store_dir, "0.pickle")
         open(SAVE_PATH, 'wb')
 
         # Have to call this because it adds the process as a listener
@@ -58,8 +68,25 @@ class TestPicklePersistence(TestCase):
         self.assertFalse(os.path.isfile(SAVE_PATH))
 
     def test_load_all_checkpoints(self):
+        self._empty_directory()
         for i in range(0, 3):
             proc = DummyProcess()
             proc.on_create(i)
             self.pickle_persistence.on_process_start(proc)
-        self.assertEqual(len(self.pickle_persistence.load_all_checkpoints()), 3)
+        num_cps = len(self.pickle_persistence.load_all_checkpoints())
+        self.assertEqual(num_cps, 3)
+
+    def test_save(self):
+        p = DummyProcess()
+        p.on_create(1234)
+        self.pickle_persistence.save(p)
+        save_path = os.path.join(
+            self.pickle_persistence.store_directory, "1234.pickle")
+
+        self.assertTrue(os.path.isfile(save_path))
+
+    def _empty_directory(self):
+        import shutil
+        if os.path.isdir(self.store_dir):
+            shutil.rmtree(self.store_dir)
+

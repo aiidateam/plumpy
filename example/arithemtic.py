@@ -1,8 +1,6 @@
-
-
+from plum.engine.parallel import MultithreadedEngine
 from plum.process import Process, FunctionProcess
 from plum.workflow import Workflow
-from plum.parallel import MultithreadedEngine
 
 
 def add(a, b):
@@ -99,7 +97,7 @@ class MulAddWithFun(Workflow):
 
 if __name__ == '__main__':
     mul_add = MulAdd.create()
-    print(mul_add.run({'a': 2, 'b': 3, 'c': 4}))
+    print(mul_add.run_and_block({'a': 2, 'b': 3, 'c': 4}))
 
     mul_add(a=2, b=3, c=4)
 
@@ -109,5 +107,5 @@ if __name__ == '__main__':
     future = exec_engine.submit(mul_add, {'a': 2, 'b': 3, 'c': 4})
     print(future.result())
 
-    TestDynamicOutput.create().run()
+    TestDynamicOutput.create().run_and_block()
 

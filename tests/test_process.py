@@ -1,7 +1,8 @@
 from unittest import TestCase
+
+from plum.engine.serial import SerialEngine
 from plum.process import Process
 from tests.common import ProcessListenerTester
-from plum.parallel import MultithreadedEngine
 
 
 class DummyProcess(Process):
@@ -31,7 +32,7 @@ class TestProcess(TestCase):
         self.proc._run()
         self.assertTrue(self.events_tester.emitted)
 
-    def test_on_finalise(self):
+    def test_on_destroy(self):
         self.proc.on_destroy()
         self.assertTrue(self.events_tester.destroy)
 
@@ -88,7 +89,7 @@ class TestProcess(TestCase):
             p.inputs.a
 
     def test_run(self):
-        engine = MultithreadedEngine()
+        engine = SerialEngine()
         results = DummyProcess.run(None, engine)
         self.assertEqual(results['default'], 5)
 

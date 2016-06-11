@@ -13,12 +13,7 @@ class TestSimpleManager(TestCase):
         proc = self.simple_manager.create_process(ProcessEventsTester)
         self.assertTrue(isinstance(proc, ProcessEventsTester))
 
-        self.assertTrue(proc.get_last_outputs().get('create', False))
-
-    def test_destroy_process(self):
-        proc = self.simple_manager.create_process(ProcessEventsTester)
-        self.simple_manager.destroy_process(proc)
-        self.assertTrue(proc.get_last_outputs().get('destroy', False))
+        self.assertIn("create", ProcessEventsTester.called_events)
 
     def test_create_checpoint(self):
         # TODO

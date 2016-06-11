@@ -10,11 +10,7 @@ class ProcessFactory(object):
         pass
 
     @abstractmethod
-    def recreate_process(self, process_class, checkpoint):
-        pass
-
-    @abstractmethod
-    def destroy_process(self, process):
+    def recreate_process(self, checkpoint):
         pass
 
     def create_checkpoint(self, process, wait_on):

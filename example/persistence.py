@@ -1,10 +1,9 @@
-
-
-from plum.process import Process
-from plum.serial_engine import SerialEngine
-from plum.wait import WaitOn
-from plum.util import override
 import time
+
+from plum.engine.serial import SerialEngine
+from plum.process import Process
+from plum.util import override
+from plum.wait import WaitOn
 
 
 class WaitUntil(WaitOn):
@@ -54,6 +53,6 @@ if __name__ == '__main__':
     add = Add(0)
 
     exec_engine = SerialEngine(persistence=FilePersistenceManager())
-    exec_engine.run(add, {'a': 2, 'b': 3})
+    exec_engine.run_and_block(add, {'a': 2, 'b': 3})
 
 

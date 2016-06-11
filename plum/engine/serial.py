@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from plum.execution_engine import ExecutionEngine, Future
-from plum.wait import WaitOn
 import time
+
+from plum.engine.execution_engine import ExecutionEngine, Future
+from plum.util import override
+from plum.wait import WaitOn
 
 
 class SerialEngine(ExecutionEngine):
@@ -12,7 +14,7 @@ class SerialEngine(ExecutionEngine):
     """
 
     class Future(Future):
-        def __init__(self, engine, process, inputs, checkpoint):
+        def __init__(self, func, *args, **kwargs):
             import sys
 
             self._exception = None
@@ -20,12 +22,13 @@ class SerialEngine(ExecutionEngine):
 
             # Run the damn thing
             try:
-                self._outputs = engine.run(process, inputs, checkpoint)
+                self._outputs = func(*args, **kwargs)
             except Exception as e:
                 import traceback
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 self._exception = e
 
+        @override
         def cancel(self):
             """
             Always returns False, can't cancel a serial process.
@@ -34,6 +37,7 @@ class SerialEngine(ExecutionEngine):
             """
             return False
 
+        @override
         def cancelled(self):
             """
             Always False, can't cancel a serial process.
@@ -42,6 +46,7 @@ class SerialEngine(ExecutionEngine):
             """
             return False
 
+        @override
         def running(self):
             """
             Always False, process is always finished by creation time.
@@ -50,6 +55,7 @@ class SerialEngine(ExecutionEngine):
             """
             return False
 
+        @override
         def done(self):
             """
             Always True, process is always done by creation time.
@@ -58,22 +64,25 @@ class SerialEngine(ExecutionEngine):
             """
             return True
 
+        @override
         def result(self, timeout=None):
             if self._exception:
                 raise self._exception
 
             return self._outputs
 
+        @override
         def exception(self, timeout=None):
             return self._exception
 
-        def add_done_callback(self, fn):
+        @override
+        def add_done_callback(self, func):
             """
             Immediately calls fn because a serial execution is always finished
             by the time this object is created.
             :param func: The function to call
             """
-            fn(self)
+            func(self)
 
     def __init__(self, poll_interval=10, process_factory=None,
                  process_registry=None):
@@ -84,54 +93,89 @@ class SerialEngine(ExecutionEngine):
             from plum.simple_registry import SimpleRegistry
             process_registry = SimpleRegistry()
 
-        self._process_manager = process_factory
+        self._process_factory = process_factory
         self._process_registry = process_registry
         self._poll_interval = poll_interval
 
-    def submit(self, process_class, inputs, checkpoint=None):
+    @override
+    def submit(self, process_class, inputs):
         """
         Submit a process, this gets executed immediately and in fact the Future
         will always be done when returned.
 
         :param process_class: The process to execute
         :param inputs: The inputs to execute the process with
-        :param checkpoint: If supplied will continue the process from this
-        checkpoint instead of starting from the beginning.
         :return: A Future object that represents the execution of the Process.
         """
-        return SerialEngine.Future(self, process_class, inputs, checkpoint)
+        return SerialEngine.Future(self.run_and_block, process_class, inputs)
 
-    def run(self, process_class, inputs, checkpoint=None):
+    def run_and_block(self, process_class, inputs):
         """
         Run a process with some inputs immediately.
 
         :param process_class: The process to execute
         :param inputs: The inputs to execute the process with
-        :param checkpoint: If supplied will continue the process from this
-        checkpoint instead of starting from the beginning.
-        :return: A Future object that represents the execution of the Process.
+        :return: The outputs dictionary from the Process.
         """
         if inputs is None:
             inputs = {}
 
-        if checkpoint is not None:
-            proc, wait_on = \
-                self._process_manager.recreate_process(process_class,
-                                                       checkpoint)
+        proc = self._process_factory.create_process(process_class, inputs)
+        if self._process_registry:
+            self._process_registry.register_running_process(proc)
+        return self._run_lifecycle(proc)
+
+    @override
+    def run_from(self, checkpoint):
+        """
+        Run a process with some inputs immediately.
+
+        :param checkpoint: Continue the process from this checkpoint.
+        :return: A Future object that represents the execution of the Process.
+        """
+        return SerialEngine.Future(self.run_from_and_block, checkpoint)
+
+    def run_from_and_block(self, checkpoint):
+        """
+        Run a process with some inputs immediately.
+
+        :param checkpoint: Continue the process from this checkpoint.
+        :return: The outputs dictionary from the Process.
+        """
+        proc, wait_on = self._process_factory.recreate_process(checkpoint)
+        if self._process_registry:
+            self._process_registry.register_running_process(proc)
+        return self._run_lifecycle(proc, wait_on)
+
+    def _run_lifecycle(self, proc, wait_on=None):
+        """
+        Run the process through its events lifecycle.
+
+        :param proc: The process.
+        :param wait_on: An optional wait on for the process.
+        :return: The outputs dictionary from the process.
+        """
+        try:
             if wait_on is None:
-                self._do_run(proc, inputs)
+                self._do_run(proc)
             else:
                 self._do_continue(proc, wait_on)
-        else:
-            proc = self._process_manager.create_process(process_class, inputs)
-            self._do_run(proc, inputs)
+        except Exception as e:
+            # Ok, something has gone wrong with the process (or we've caused
+            # an exception).  So, wrap up the process and propagate the
+            # exception
+            proc.on_fail(e)
+            self._finish_process(proc, None)
+            proc.on_destroy()
+            raise e
 
+        outs = proc.get_last_outputs()
+        proc.on_destroy()
+        return outs
 
-        return proc.get_last_outputs()
-
-    def _do_run(self, process, inputs):
+    def _do_run(self, process):
         # Run the process
-        retval = self._start_process(process, inputs)
+        retval = self._start_process(process)
         if isinstance(retval, WaitOn):
             retval = self._continue_till_finished(process, retval)
         self._finish_process(process, retval)
@@ -144,6 +188,8 @@ class SerialEngine(ExecutionEngine):
         # Keep looping until there is nothing to wait for
         retval = wait_on
         while isinstance(retval, WaitOn):
+            self._wait_process(process, wait_on)
+
             # Keep polling until the thing it's waiting for is ready
             while not wait_on.is_ready(self._process_registry):
                 time.sleep(self._poll_interval)
@@ -152,19 +198,14 @@ class SerialEngine(ExecutionEngine):
 
         return retval
 
-    def _start_process(self, process, inputs):
+    def _start_process(self, process):
         """
         Send the appropriate messages and start the Process.
 
-        :param proc_info: The process information
-        :return: None if the Process is waiting on something, the return value otherwise,
-        :note: Do not use a return value of None from this function to indicate that process
-        is not waiting on something as the process may simply have returned None.  Instead
-        use proc_info.waiting_on is None.
+        :param process: The process to start
         """
-        ins = process._create_input_args(inputs)
         process.on_start(self)
-        return process._run(**ins)
+        return process.do_run()
 
     def _continue_process(self, process, wait_on):
         assert wait_on is not None,\
@@ -179,9 +220,11 @@ class SerialEngine(ExecutionEngine):
         assert wait_on is not None,\
             "Cannot wait on a process that is already waiting"
 
-        process.on_wait()
+        process.on_wait(wait_on)
 
     def _finish_process(self, process, retval):
         process.on_finish(retval)
+        process.on_stop()
+
 
 

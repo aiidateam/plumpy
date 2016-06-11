@@ -12,6 +12,8 @@ class WaitOn(object):
 
     @classmethod
     def create_from(cls, bundle, process_manager):
+        assert cls.CLASS_NAME in bundle
+
         return load_class(bundle[cls.CLASS_NAME]).\
             create_from(bundle, process_manager)
 

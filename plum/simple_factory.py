@@ -18,19 +18,15 @@ class SimpleFactory(ProcessFactory):
         return proc
 
     @override
-    def recreate_process(self, process_class, checkpoint):
+    def recreate_process(self, checkpoint):
         pid = checkpoint.pid
 
-        proc = process_class()
+        proc = checkpoint.process_class()
 
         wait_on = WaitOn.create_from(checkpoint.wait_on_state, self)
 
         proc.on_recreate(pid, checkpoint.process_instance_state)
         return proc, wait_on
-
-    @override
-    def destroy_process(self, process):
-        process.on_destroy()
 
     @override
     def create_checkpoint(self, process, wait_on=None):
