@@ -6,8 +6,8 @@ from tests.common import ProcessListenerTester
 
 
 class DummyProcess(Process):
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.dynamic_input()
         spec.dynamic_output()
 
@@ -23,6 +23,8 @@ class TestProcess(TestCase):
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
+        if not self.proc._called_on_destroy:
+            self.proc.on_destroy()
 
     def test_on_start(self):
         self.proc.on_start(None)
@@ -42,16 +44,12 @@ class TestProcess(TestCase):
 
     def test_dynamic_inputs(self):
         class NoDynamic(Process):
-            @staticmethod
-            def _define(spec):
-                pass
-
             def _run(self, **kwargs):
                 pass
 
         class WithDynamic(Process):
-            @staticmethod
-            def _define(spec):
+            @classmethod
+            def _define(cls, spec):
                 spec.dynamic_input()
 
             def _run(self, **kwargs):
@@ -63,8 +61,8 @@ class TestProcess(TestCase):
 
     def test_inputs(self):
         class Proc(Process):
-            @staticmethod
-            def _define(spec):
+            @classmethod
+            def _define(cls, spec):
                 spec.input('a')
 
             def _run(self, a):
@@ -81,12 +79,15 @@ class TestProcess(TestCase):
         self.assertEqual(p.inputs.a, 5)
         with self.assertRaises(AttributeError):
             p.inputs.b
+        p.on_destroy()
 
         # Check that we can't access inputs after finishing
         p = Proc()
         p.run(inputs={'a': 5})
         with self.assertRaises(AttributeError):
             p.inputs.a
+        p.on_destroy()
+
 
     def test_run(self):
         engine = SerialEngine()

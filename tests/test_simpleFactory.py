@@ -4,7 +4,7 @@ from plum.util import override
 from tests.common import ProcessEventsTester
 
 
-class TestSimpleManager(TestCase):
+class TestSimpleFactory(TestCase):
     @override
     def setUp(self):
         self.simple_manager = SimpleFactory()

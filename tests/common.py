@@ -2,7 +2,7 @@
 
 from plum.process import Process, ProcessListener
 from plum.util import override
-from plum.wait_ons import Checkpoint
+from plum.wait_ons import checkpoint
 
 
 class DummyProcess(Process):
@@ -17,8 +17,8 @@ class ProcessEventsTester(Process):
 
     called_events = []
 
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.dynamic_output()
 
     @classmethod
@@ -90,8 +90,8 @@ class ProcessEventsTester(Process):
 class CheckpointProcess(ProcessEventsTester):
     @override
     def _run(self):
-        super(CheckpointProcess, self)._run()
-        return Checkpoint(self.finish.__name__)
+        self.out("test", 5)
+        return checkpoint(self.finish)
 
     def finish(self, wait_on):
         pass
@@ -100,7 +100,7 @@ class CheckpointProcess(ProcessEventsTester):
 class ExceptionProcess(ProcessEventsTester):
     @override
     def _run(self):
-        super(ExceptionProcess, self)._run()
+        self.out("test", 5)
         raise RuntimeError("Great scott!")
 
 

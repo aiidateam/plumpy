@@ -2,7 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 from plum.util import fullname, load_class
-
+from plum.process import Process
 
 class WaitOn(object):
     __metaclass__ = ABCMeta
@@ -18,18 +18,14 @@ class WaitOn(object):
             create_from(bundle, process_manager)
 
     def __init__(self, callback_name):
-        if not isinstance(callback_name, basestring):
-            raise ValueError(
-                "callback must be a string corresponding to a method of the"
-                " Process")
-        self._callback = callback_name
+        self._callback_name = callback_name
 
     @property
     def callback(self):
-        return self._callback
+        return self._callback_name
 
     @abstractmethod
-    def is_ready(self, registry=None):
+    def is_ready(self, registry):
         pass
 
     def save_instance_state(self, out_state):

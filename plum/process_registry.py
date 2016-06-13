@@ -18,6 +18,10 @@ class ProcessRegistry(object):
         pass
 
     @abstractmethod
+    def get_output(self, pid, port_name):
+        pass
+
+    @abstractmethod
     def get_outputs(self, pid):
         """
         Get the outputs from a finished process.  Precondition:

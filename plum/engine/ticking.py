@@ -163,7 +163,7 @@ class TickingEngine(ExecutionEngine):
                 self._start_process(proc_info)
 
             elif proc_info.status is ProcessStatus.WAITING:
-                if proc_info.waiting_on.is_ready():
+                if proc_info.waiting_on.is_ready(self._process_registry):
                     try:
                         self._continue_process(proc_info)
                     except Exception as e:

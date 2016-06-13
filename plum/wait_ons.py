@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
-from plum.process import ProcessListener
+from plum.process import Process
 from plum.persistence.bundle import Bundle
 from plum.wait import WaitOn
 from plum.util import override
@@ -17,8 +17,13 @@ class Checkpoint(WaitOn):
         return cls(saved_instance_state[cls.CALLBACK_NAME])
 
     @override
-    def is_ready(self, process_registry=None):
+    def is_ready(self, registry=None):
         return True
+
+
+def checkpoint(callback):
+    assert isinstance(callback.im_self, Process)
+    return Checkpoint(callback.__name__)
 
 
 class _CompoundWaitOn(WaitOn):
@@ -51,14 +56,24 @@ class _CompoundWaitOn(WaitOn):
 
 class WaitOnAll(_CompoundWaitOn):
     @override
-    def is_ready(self, process_registry=None):
-        return all(w.is_ready() for w in self._wait_list)
+    def is_ready(self, registry):
+        return all(w.is_ready(registry) for w in self._wait_list)
+
+
+def wait_on_all(callback, wait_list):
+    assert isinstance(callback.im_self, Process)
+    return WaitOnAll(callback.__name__, wait_list)
 
 
 class WaitOnAny(_CompoundWaitOn):
     @override
-    def is_ready(self, process_registry=None):
-        return any(w.is_ready() for w in self._wait_list)
+    def is_ready(self, registry):
+        return any(w.is_ready(registry) for w in self._wait_list)
+
+
+def wait_on_any(callback, wait_list):
+    assert isinstance(callback.im_self, Process)
+    return WaitOnAny(callback.__name__, wait_list)
 
 
 class WaitOnProcess(WaitOn):
@@ -67,25 +82,30 @@ class WaitOnProcess(WaitOn):
     @classmethod
     def create_from(cls, bundle, process_manager):
         return cls(bundle[cls.CALLBACK_NAME],
-                   process_manager.get_process(bundle[cls.WAIT_ON_PID]))
+                   bundle[cls.WAIT_ON_PID])
 
-    def __init__(self, callback_name, process):
+    def __init__(self, callback_name, process_id):
         super(WaitOnProcess, self).__init__(callback_name)
         self._finished = False
-        self._pid = process.pid
+        self._pid = process_id
 
     @override
-    def is_ready(self, process_registry=None):
-        if process_registry:
+    def is_ready(self, registry):
+        if not registry:
             raise RuntimeError(
-                "Unable to check if process has finished because a registry"
+                "Unable to check if process has finished because a registry "
                 "was not supplied.")
-        return process_registry.is_finished(self._pid)
+        return registry.is_finished(self._pid)
 
     @override
     def save_instance_state(self, out_state):
         super(WaitOnProcess, self).save_instance_state(out_state)
         out_state[self.WAIT_ON_PID] = self._pid
+
+
+def wait_on_process(callback, process):
+    assert isinstance(callback.im_self, Process)
+    return WaitOnProcess(callback.__name__, process.pid)
 
 
 class WaitOnProcessOutput(WaitOn):
@@ -98,25 +118,30 @@ class WaitOnProcessOutput(WaitOn):
                    bundle[cls.WAIT_ON_PID],
                    bundle[cls.OUTPUT_PORT])
 
-    def __init__(self, callback_name, output_port, process, pid=None):
+    def __init__(self, callback_name, process_id, output_port):
         super(WaitOnProcessOutput, self).__init__(callback_name)
-        if process is not None:
-            self._pid = process.pid
-        else:
-            assert pid is not None
-            self._pid = pid
+        self._pid = process_id
         self._output_port = output_port
 
     @override
-    def is_ready(self, process_registry=None):
-        if process_registry:
+    def is_ready(self, registry):
+        if not registry:
             raise RuntimeError(
                 "Unable to check if process has finished because a registry"
                 "was not supplied.")
-        return self._output_port in process_registry.get_outputs(self._pid)
+        try:
+            registry.get_output(self._pid, self._output_port)
+            return True
+        except ValueError:
+            return False
 
     @override
     def save_instance_state(self, out_state):
         super(WaitOnProcessOutput, self).save_instance_state(out_state)
         out_state[self.WAIT_ON_PID] = self._pid
         out_state[self.OUTPUT_PORT] = self._output_port
+
+
+def wait_on_process_output(callback, process, output_port):
+    assert isinstance(callback.im_self, Process)
+    return WaitOnProcessOutput(callback.__name__, process.pid, output_port)

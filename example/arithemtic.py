@@ -12,8 +12,8 @@ def multiply(a, b):
 
 
 class DynamicOutputProcess(Process):
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.dynamic_output()
 
     def _run(self):
@@ -24,8 +24,8 @@ class DynamicOutputProcess(Process):
 
 
 class PrintProcess(Process):
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.input('value')
 
     def _run(self, value):
@@ -33,8 +33,8 @@ class PrintProcess(Process):
 
 
 class TestDynamicOutput(Workflow):
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.process(DynamicOutputProcess)
         spec.process(PrintProcess)
 
@@ -43,8 +43,8 @@ class TestDynamicOutput(Workflow):
 
 
 class Add(Process):
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.input('a', default=0)
         spec.input('b', default=0)
         spec.output('value')
@@ -54,8 +54,8 @@ class Add(Process):
 
 
 class Mul(Process):
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.input('a', default=1)
         spec.input('b', default=1)
         spec.output('value')
@@ -65,8 +65,8 @@ class Mul(Process):
 
 
 class MulAdd(Workflow):
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.process(Mul)
         spec.process(Add)
         spec.exposed_inputs("Add")
@@ -82,8 +82,8 @@ AddFun = FunctionProcess.build(add)
 
 
 class MulAddWithFun(Workflow):
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.process(Mul)
         spec.process(AddFun)
         spec.exposed_inputs("add")

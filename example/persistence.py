@@ -28,8 +28,8 @@ class WaitUntil(WaitOn):
 
 
 class Add(Process):
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         spec.input('a', default=0)
         spec.input('b', default=0)
         spec.output('value')

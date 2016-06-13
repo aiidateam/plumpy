@@ -42,8 +42,8 @@ class Process(object):
     _spec_type = ProcessSpec
     _INPUTS = 'INPUTS'
 
-    @staticmethod
-    def _define(spec):
+    @classmethod
+    def _define(cls, spec):
         pass
 
     @classmethod
@@ -88,6 +88,9 @@ class Process(object):
         self._exec_engine = None
         self._output_values = {}
         self.__event_helper = util.EventHelper(ProcessListener)
+
+        # Flags to make sure all the necessary event methods were called
+        self._called_on_destroy = False
 
     @property
     def pid(self):
@@ -187,7 +190,10 @@ class Process(object):
         message is guaranteed to be sent.  Only upon successful return and
         outputs passing checks would _on_process_finished be called.
         """
+        assert not self._called_on_destroy, "Can't call on_destroy twice."
+
         self.__running_data = None
+        self._called_on_destroy = True
         self.__event_helper.fire_event('on_process_destroy', self)
 
     def _on_output_emitted(self, output_port, value, dynamic):
@@ -285,6 +291,11 @@ class Process(object):
     def _run(self, **kwargs):
         pass
 
+    def __del__(self):
+        assert self._called_on_destroy,\
+            "The Process is being deleted without on_destory having been " \
+            "called."
+
 
 class FunctionProcess(Process):
     # These will be replaced by build
@@ -298,7 +309,7 @@ class FunctionProcess(Process):
 
         args, varargs, keywords, defaults = inspect.getargspec(func)
 
-        def _define(spec):
+        def _define(cls, spec):
             for i in range(len(args)):
                 default = None
                 if defaults and len(defaults) - len(args) + i >= 0:
@@ -308,7 +319,7 @@ class FunctionProcess(Process):
             spec.output(output_name)
 
         return type(func.__name__, (FunctionProcess,),
-                    {'_define': staticmethod(_define),
+                    {'_define': classmethod(_define),
                      '_func': func,
                      '_func_args': args,
                      '_output_name': output_name})

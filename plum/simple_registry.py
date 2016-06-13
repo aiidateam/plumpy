@@ -26,6 +26,13 @@ class SimpleRegistry(ProcessRegistry, ProcessListener):
         return pid in self._finished
 
     @override
+    def get_output(self, pid, port):
+        try:
+            return self._finished[pid][port]
+        except KeyError:
+            raise ValueError("Process not finished.")
+
+    @override
     def get_outputs(self, pid):
         return self._finished[pid]
 

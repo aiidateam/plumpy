@@ -9,7 +9,7 @@ import os.path
 
 class DummyProcess(Process):
     def _run(self):
-        return Checkpoint(self.finish.__name__)
+        return Checkpoint(self.finish)
 
     def finish(self, wait_on):
         pass
@@ -28,6 +28,7 @@ class TestPicklePersistence(TestCase):
 
     def tearDown(self):
         self._empty_directory()
+        self.dummy_proc.on_destroy()
 
     def test_store_directory(self):
         self.assertEqual(self.store_dir,
@@ -73,6 +74,8 @@ class TestPicklePersistence(TestCase):
             proc = DummyProcess()
             proc.on_create(i)
             self.pickle_persistence.on_process_start(proc)
+            proc.on_destroy()
+
         num_cps = len(self.pickle_persistence.load_all_checkpoints())
         self.assertEqual(num_cps, 3)
 
@@ -83,6 +86,7 @@ class TestPicklePersistence(TestCase):
         save_path = os.path.join(
             self.pickle_persistence.store_directory, "1234.pickle")
 
+        p.on_destroy()
         self.assertTrue(os.path.isfile(save_path))
 
     def _empty_directory(self):
