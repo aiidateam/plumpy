@@ -2,7 +2,6 @@
 
 from abc import ABCMeta, abstractmethod
 from plum.util import fullname, load_class
-from plum.process import Process
 
 class WaitOn(object):
     __metaclass__ = ABCMeta

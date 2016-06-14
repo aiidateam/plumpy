@@ -168,7 +168,7 @@ class TickingEngine(ExecutionEngine):
                         self._continue_process(proc_info)
                     except Exception as e:
                         process.on_fail(e)
-                        self._finish_process(process, None)
+                        self._finish_process(proc_info, None)
                         process.on_destroy()
                         for fut in proc_info.futures:
                             fut.process_failed(e)

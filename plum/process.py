@@ -192,7 +192,6 @@ class Process(object):
         """
         assert not self._called_on_destroy, "Can't call on_destroy twice."
 
-        self.__running_data = None
         self._called_on_destroy = True
         self.__event_helper.fire_event('on_process_destroy', self)
 
