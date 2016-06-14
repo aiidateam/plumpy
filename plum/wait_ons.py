@@ -3,7 +3,7 @@
 from abc import ABCMeta
 from plum.process import Process
 from plum.persistence.bundle import Bundle
-from plum.wait import WaitOn
+from plum.wait import WaitOn, validate_callback_func
 from plum.util import override
 
 
@@ -13,7 +13,7 @@ class Checkpoint(WaitOn):
     create a checkpoint at this point in the execution of a Process.
     """
     @classmethod
-    def create_from(cls, saved_instance_state, process_manager):
+    def create_from(cls, saved_instance_state, process_factory):
         return cls(saved_instance_state[cls.CALLBACK_NAME])
 
     @override
@@ -22,7 +22,7 @@ class Checkpoint(WaitOn):
 
 
 def checkpoint(callback):
-    assert isinstance(callback.im_self, Process)
+    validate_callback_func(callback)
     return Checkpoint(callback.__name__)
 
 
@@ -32,10 +32,10 @@ class _CompoundWaitOn(WaitOn):
     WAIT_LIST = 'wait_list'
 
     @classmethod
-    def create_from(cls, saved_instance_state, process_manager):
+    def create_from(cls, saved_instance_state, process_factory):
         return cls(
             saved_instance_state[cls.CALLBACK_NAME],
-            [WaitOn.create_from(b, process_manager) for b in
+            [WaitOn.create_from(b, process_factory) for b in
              saved_instance_state[cls.WAIT_LIST]])
 
     def __init__(self, callback_name, wait_list):
@@ -61,7 +61,7 @@ class WaitOnAll(_CompoundWaitOn):
 
 
 def wait_on_all(callback, wait_list):
-    assert isinstance(callback.im_self, Process)
+    validate_callback_func(callback)
     return WaitOnAll(callback.__name__, wait_list)
 
 
@@ -72,7 +72,7 @@ class WaitOnAny(_CompoundWaitOn):
 
 
 def wait_on_any(callback, wait_list):
-    assert isinstance(callback.im_self, Process)
+    validate_callback_func(callback)
     return WaitOnAny(callback.__name__, wait_list)
 
 
@@ -80,7 +80,7 @@ class WaitOnProcess(WaitOn):
     WAIT_ON_PID = 'pid'
 
     @classmethod
-    def create_from(cls, bundle, process_manager):
+    def create_from(cls, bundle, process_factory):
         return cls(bundle[cls.CALLBACK_NAME],
                    bundle[cls.WAIT_ON_PID])
 
@@ -104,7 +104,7 @@ class WaitOnProcess(WaitOn):
 
 
 def wait_on_process(callback, process):
-    assert isinstance(callback.im_self, Process)
+    validate_callback_func(callback)
     return WaitOnProcess(callback.__name__, process.pid)
 
 
@@ -113,7 +113,7 @@ class WaitOnProcessOutput(WaitOn):
     OUTPUT_PORT = 'output_port'
 
     @classmethod
-    def create_from(cls, bundle, process_manager):
+    def create_from(cls, bundle, process_factory):
         return cls(bundle[cls.CALLBACK_NAME],
                    bundle[cls.WAIT_ON_PID],
                    bundle[cls.OUTPUT_PORT])
@@ -143,5 +143,5 @@ class WaitOnProcessOutput(WaitOn):
 
 
 def wait_on_process_output(callback, process, output_port):
-    assert isinstance(callback.im_self, Process)
+    validate_callback_func(callback)
     return WaitOnProcessOutput(callback.__name__, process.pid, output_port)

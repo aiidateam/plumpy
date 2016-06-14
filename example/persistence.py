@@ -10,7 +10,7 @@ class WaitUntil(WaitOn):
     END_TIME = 'end_time'
 
     @classmethod
-    def create_from(cls, bundle, process_manager):
+    def create_from(cls, bundle, process_factory):
         return WaitUntil(bundle[cls.END_TIME], bundle[cls.CALLBACK_NAME])
 
     def __init__(self, seconds, callback_name):
