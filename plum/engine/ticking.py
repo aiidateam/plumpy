@@ -97,9 +97,7 @@ class TickingEngine(ExecutionEngine):
         def __init__(self, process, future, status, wait_on=None):
             self._process = process
             self.waiting_on = wait_on
-            self.futures = []
-            if future:
-                self.futures.append(future)
+            self.future = future
             self.status = status
 
         @property
@@ -170,12 +168,10 @@ class TickingEngine(ExecutionEngine):
                         process.on_fail(e)
                         self._finish_process(proc_info, None)
                         process.on_destroy()
-                        for fut in proc_info.futures:
-                            fut.process_failed(e)
+                        proc_info.future.process_failed(e)
 
             elif proc_info.status is ProcessStatus.FINISHED:
-                for fut in proc_info.futures:
-                    fut.process_finished(process.get_last_outputs())
+                proc_info.future.process_finished(process.get_last_outputs())
                 process.on_destroy()
                 del self._current_processes[process.pid]
 

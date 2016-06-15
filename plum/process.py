@@ -229,6 +229,14 @@ class Process(object):
         self._output_values[output_port] = value
         self._on_output_emitted(output_port, value, dynamic)
 
+    @protected
+    def submit(self, process_class, inputs):
+        return self.get_exec_engine().submit(process_class, inputs)
+
+    @protected
+    def run_from(self, checkpoint):
+        return self.get_exec_engine().run_from(checkpoint)
+
     # Inputs ##################################################################
     def _create_input_args(self, inputs):
         """

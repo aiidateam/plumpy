@@ -3,17 +3,22 @@ from unittest import TestCase
 from plum.engine.parallel import MultithreadedEngine
 from plum.engine.serial import SerialEngine
 from plum.engine.ticking import TickingEngine
+from plum.util import override
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import tests.common as common
 
+import time
+
+
 
 class TestExecutionEngine(TestCase):
+    @override
     def setUp(self):
-        self.ticking_engine = TickingEngine()
-        self.event = threading.Event()
-        self.pool = ThreadPoolExecutor(1)
-        self.fut = self.pool.submit(self.tick_ticking)
+        # self.ticking_engine = TickingEngine()
+        # self.event = threading.Event()
+        # self.pool = ThreadPoolExecutor(4)
+        # self.fut = self.pool.submit(self.tick_ticking)
 
         self.engines_to_test = [
             SerialEngine(),
@@ -21,9 +26,11 @@ class TestExecutionEngine(TestCase):
             #MultithreadedEngine()
         ]
 
+    @override
     def tearDown(self):
-        self.event.set()
-        #self.fut.result()
+        # self.event.set()
+        # self.fut.result()
+        # self.pool.shutdown()
         pass
 
     def test_submit_simple(self):
@@ -68,6 +75,12 @@ class TestExecutionEngine(TestCase):
         while not self.event.is_set():
             self.ticking_engine.tick()
             time.sleep(2)
+
+    def test_future_ready(self):
+        for engine in self.engines_to_test:
+            f = engine.submit(common.DummyProcess, None)
+            f.result()
+            self.assertTrue(f.done())
 
     def _test_engine_events(self, outs, exclude_events):
         """

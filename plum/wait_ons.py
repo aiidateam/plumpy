@@ -84,10 +84,9 @@ class WaitOnProcess(WaitOn):
         return cls(bundle[cls.CALLBACK_NAME],
                    bundle[cls.WAIT_ON_PID])
 
-    def __init__(self, callback_name, process_id):
+    def __init__(self, callback_name, pid):
         super(WaitOnProcess, self).__init__(callback_name)
-        self._finished = False
-        self._pid = process_id
+        self._pid = pid
 
     @override
     def is_ready(self, registry):
@@ -103,9 +102,13 @@ class WaitOnProcess(WaitOn):
         out_state[self.WAIT_ON_PID] = self._pid
 
 
-def wait_on_process(callback, process):
+def wait_on_process(callback, pid=None, future=None):
+    assert pid is not None or future is not None, \
+        "Must supply a pid or a future"
     validate_callback_func(callback)
-    return WaitOnProcess(callback.__name__, process.pid)
+    if pid is None:
+        pid = future.pid
+    return WaitOnProcess(callback.__name__, pid)
 
 
 class WaitOnProcessOutput(WaitOn):
@@ -118,16 +121,16 @@ class WaitOnProcessOutput(WaitOn):
                    bundle[cls.WAIT_ON_PID],
                    bundle[cls.OUTPUT_PORT])
 
-    def __init__(self, callback_name, process_id, output_port):
+    def __init__(self, callback_name, pid, output_port):
         super(WaitOnProcessOutput, self).__init__(callback_name)
-        self._pid = process_id
+        self._pid = pid
         self._output_port = output_port
 
     @override
     def is_ready(self, registry):
         if not registry:
             raise RuntimeError(
-                "Unable to check if process has finished because a registry"
+                "Unable to check if process has finished because a registry "
                 "was not supplied.")
         try:
             registry.get_output(self._pid, self._output_port)
@@ -142,6 +145,10 @@ class WaitOnProcessOutput(WaitOn):
         out_state[self.OUTPUT_PORT] = self._output_port
 
 
-def wait_on_process_output(callback, process, output_port):
+def wait_on_process_output(callback, output_port, pid=None, future=None):
+    assert pid is not None or future is not None, \
+        "Must supply a pid or a future"
     validate_callback_func(callback)
-    return WaitOnProcessOutput(callback.__name__, process.pid, output_port)
+    if pid is None:
+        pid = future.pid
+    return WaitOnProcessOutput(callback.__name__, pid, output_port)
