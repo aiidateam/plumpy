@@ -14,19 +14,25 @@ class SerialEngine(ExecutionEngine):
     """
 
     class Future(Future):
-        def __init__(self, func, *args, **kwargs):
+        def __init__(self, func, process, *args, **kwargs):
             import sys
 
             self._exception = None
             self._outputs = None
+            self._pid = process.pid
 
             # Run the damn thing
             try:
-                self._outputs = func(*args, **kwargs)
+                self._outputs = func(process, *args, **kwargs)
             except Exception as e:
                 import traceback
                 exc_type, exc_obj, exc_tb = sys.exc_info()
+                #traceback.print_exc()
                 self._exception = e
+
+        @property
+        def pid(self):
+            return self._pid
 
         @override
         def cancel(self):
@@ -107,7 +113,8 @@ class SerialEngine(ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        return SerialEngine.Future(self.run_and_block, process_class, inputs)
+        proc = self._process_factory.create_process(process_class, inputs)
+        return SerialEngine.Future(self._do_run_and_block, proc)
 
     def run_and_block(self, process_class, inputs):
         """
@@ -121,6 +128,9 @@ class SerialEngine(ExecutionEngine):
             inputs = {}
 
         proc = self._process_factory.create_process(process_class, inputs)
+        return self._do_run_and_block(proc)
+
+    def _do_run_and_block(self, proc):
         if self._process_registry:
             self._process_registry.register_running_process(proc)
         return self._run_lifecycle(proc)
@@ -133,7 +143,9 @@ class SerialEngine(ExecutionEngine):
         :param checkpoint: Continue the process from this checkpoint.
         :return: A Future object that represents the execution of the Process.
         """
-        return SerialEngine.Future(self.run_from_and_block, checkpoint)
+        proc, wait_on = self._process_factory.recreate_process(checkpoint)
+        return SerialEngine.Future(
+            self.run_from_and_block, proc, checkpoint, wait_on)
 
     def run_from_and_block(self, checkpoint):
         """
@@ -143,6 +155,9 @@ class SerialEngine(ExecutionEngine):
         :return: The outputs dictionary from the Process.
         """
         proc, wait_on = self._process_factory.recreate_process(checkpoint)
+        return self._do_run_from_and_block(proc, wait_on)
+
+    def _do_run_from_and_block(self, proc, wait_on):
         if self._process_registry:
             self._process_registry.register_running_process(proc)
         return self._run_lifecycle(proc, wait_on)
@@ -167,7 +182,7 @@ class SerialEngine(ExecutionEngine):
             proc.on_fail(e)
             self._finish_process(proc, None)
             proc.on_destroy()
-            raise e
+            raise
 
         outs = proc.get_last_outputs()
         proc.on_destroy()

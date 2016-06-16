@@ -9,7 +9,44 @@ from plum.util import override
 
 class MultithreadedEngine(execution_engine.ExecutionEngine):
     class Future(concurrent.futures.Future, execution_engine.Future):
-        pass
+        def __init__(self, pid, future):
+            self._pid = pid
+            self._future = future
+
+
+        @property
+        def pid(self):
+            return self._pid
+
+        @override
+        def cancel(self):
+            return self._future.cancel()
+
+        @override
+        def cancelled(self):
+            return self._future.cancelled()
+
+        @override
+        def running(self):
+            return self._future.running()
+
+        @override
+        def done(self):
+            return self._future.done()
+
+        @override
+        def result(self, timeout=None):
+            return self._future.result(timeout)
+
+        @override
+        def exception(self, timeout=None):
+            return self._future.exception(timeout)
+
+        @override
+        def add_done_callback(self, fn):
+            self._future.add_done_callback(fn)
+
+
 
     def __init__(self, max_workers=None, process_factory=None):
         if max_workers is None:
@@ -27,8 +64,10 @@ class MultithreadedEngine(execution_engine.ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        return self._executor.submit(self._serial_engine.run_and_block,
-                                     process_class, inputs)
+        p = self._serial_engine._process_factory.create_process(
+            process_class, inputs)
+        f = self._executor.submit(self._serial_engine._do_run_and_block, p)
+        return self.Future(p.pid, f)
 
     @override
     def run_from(self, checkpoint):

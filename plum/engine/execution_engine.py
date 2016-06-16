@@ -1,9 +1,13 @@
 
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod, abstractproperty
 
 
 class Future(object):
     __metaclass__ = ABCMeta
+
+    @abstractproperty
+    def pid(self):
+        pass
 
     @abstractmethod
     def cancel(self):

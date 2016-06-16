@@ -32,12 +32,20 @@ class PicklePersistence(ProcessListener):
     @override
     def on_process_start(self, process):
         self._ensure_directory()
-        self.save(process)
+        try:
+            self.save(process)
+        except pickle.PicklingError:
+            # TODO: We should emit an error here
+            pass
 
     @override
     def on_process_wait(self, process, wait_on):
         self._ensure_directory()
-        self.save(process, wait_on)
+        try:
+            self.save(process, wait_on)
+        except pickle.PicklingError:
+            # TODO: We should emit an error here
+            pass
 
     @override
     def on_process_finish(self, process, retval):
