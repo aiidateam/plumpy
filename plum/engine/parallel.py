@@ -13,7 +13,6 @@ class MultithreadedEngine(execution_engine.ExecutionEngine):
             self._pid = pid
             self._future = future
 
-
         @property
         def pid(self):
             return self._pid
@@ -46,14 +45,14 @@ class MultithreadedEngine(execution_engine.ExecutionEngine):
         def add_done_callback(self, fn):
             self._future.add_done_callback(fn)
 
-
-
-    def __init__(self, max_workers=None, process_factory=None):
+    def __init__(self, max_workers=None, process_factory=None,
+                 process_registry=None):
         if max_workers is None:
             max_workers = multiprocessing.cpu_count()
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         # For now just exploit the serial engine to do the work for us
-        self._serial_engine = SerialEngine(process_factory=process_factory)
+        self._serial_engine = SerialEngine(
+            process_factory=process_factory, process_registry=process_registry)
 
     @override
     def submit(self, process_class, inputs):

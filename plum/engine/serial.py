@@ -24,7 +24,11 @@ class SerialEngine(ExecutionEngine):
             # Run the damn thing
             try:
                 self._outputs = func(process, *args, **kwargs)
-            except Exception as e:
+            except KeyboardInterrupt:
+                # If the user interuppted the process then we should just raise
+                # not, not wait around for the process to finish
+                raise
+            except BaseException as e:
                 import traceback
                 exc_type, exc_obj, exc_tb = sys.exc_info()
                 #traceback.print_exc()
@@ -175,17 +179,16 @@ class SerialEngine(ExecutionEngine):
                 self._do_run(proc)
             else:
                 self._do_continue(proc, wait_on)
-        except Exception as e:
+        except BaseException as e:
             # Ok, something has gone wrong with the process (or we've caused
             # an exception).  So, wrap up the process and propagate the
             # exception
-            proc.on_fail(e)
-            self._finish_process(proc, None)
-            proc.on_destroy()
+            self._fail_process(proc, e)
+            proc.signal_on_destroy()
             raise
 
         outs = proc.get_last_outputs()
-        proc.on_destroy()
+        proc.signal_on_destroy()
         return outs
 
     def _do_run(self, process):
@@ -219,14 +222,14 @@ class SerialEngine(ExecutionEngine):
 
         :param process: The process to start
         """
-        process.on_start(self)
+        process.signal_on_start(self, self._process_registry)
         return process.do_run()
 
     def _continue_process(self, process, wait_on):
         assert wait_on is not None,\
             "Cannot continue a process that was not waiting"
 
-        process.on_continue(wait_on)
+        process.signal_on_continue(wait_on)
 
         # Get the WaitOn callback function name and call it
         return getattr(process, wait_on.callback)(wait_on)
@@ -235,11 +238,15 @@ class SerialEngine(ExecutionEngine):
         assert wait_on is not None,\
             "Cannot wait on a process that is already waiting"
 
-        process.on_wait(wait_on)
+        process.signal_on_wait(wait_on)
 
     def _finish_process(self, process, retval):
-        process.on_finish(retval)
-        process.on_stop()
+        process.signal_on_finish(retval)
+        process.signal_on_stop()
+
+    def _fail_process(self, process, exception):
+        process.signal_on_fail(exception)
+        process.signal_on_stop()
 
 
 

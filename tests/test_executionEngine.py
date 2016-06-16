@@ -1,15 +1,13 @@
 from unittest import TestCase
 
 from plum.engine.parallel import MultithreadedEngine
+from plum.process import Process
 from plum.engine.serial import SerialEngine
 from plum.engine.ticking import TickingEngine
 from plum.util import override
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import tests.common as common
-
-import time
-
 
 
 class TestExecutionEngine(TestCase):
@@ -19,9 +17,9 @@ class TestExecutionEngine(TestCase):
         # self.event = threading.Event()
         # self.pool = ThreadPoolExecutor(4)
         # self.fut = self.pool.submit(self.tick_ticking)
-
+        self.serial = SerialEngine()
         self.engines_to_test = [
-            SerialEngine(),
+            self.serial,
             #self.ticking_engine
             #MultithreadedEngine()
         ]

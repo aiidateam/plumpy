@@ -42,8 +42,8 @@ class ProcessEventsTester(Process):
         self.called('recreate')
 
     @override
-    def on_start(self, exec_engine):
-        super(ProcessEventsTester, self).on_start(exec_engine)
+    def on_start(self):
+        super(ProcessEventsTester, self).on_start()
         self.called('start')
 
     @override

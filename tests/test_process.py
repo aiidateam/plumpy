@@ -2,7 +2,9 @@ from unittest import TestCase
 
 from plum.engine.serial import SerialEngine
 from plum.process import Process
+from plum.util import override
 from tests.common import ProcessListenerTester
+
 
 
 class DummyProcess(Process):
@@ -13,6 +15,48 @@ class DummyProcess(Process):
 
     def _run(self, **kwargs):
         self.out("default", 5)
+
+
+class ForgetToCallParent(Process):
+    @override
+    def _run(self):
+        pass
+
+    @override
+    def on_create(self, pid, inputs=None):
+        pass
+
+    @override
+    def on_recreate(self, pid, saved_instance_state):
+        pass
+
+    @override
+    def on_start(self):
+        pass
+
+    @override
+    def on_wait(self, wait_on):
+        pass
+
+    @override
+    def on_continue(self, wait_on):
+        pass
+
+    @override
+    def on_fail(self, exception):
+        pass
+
+    @override
+    def on_finish(self, retval):
+        pass
+
+    @override
+    def on_stop(self):
+        pass
+
+    @override
+    def on_destroy(self):
+        pass
 
 
 class TestProcess(TestCase):
@@ -27,7 +71,7 @@ class TestProcess(TestCase):
             self.proc.on_destroy()
 
     def test_on_start(self):
-        self.proc.on_start(None)
+        self.proc.on_start()
         self.assertTrue(self.events_tester.start)
 
     def test_on_output_emitted(self):
@@ -88,13 +132,38 @@ class TestProcess(TestCase):
             p.inputs.a
         p.on_destroy()
 
-
     def test_run(self):
         engine = SerialEngine()
         results = DummyProcess.run(None, engine)
         self.assertEqual(results['default'], 5)
 
 
+    def test_forget_to_call_parent(self):
+        p = ForgetToCallParent()
 
+        with self.assertRaises(AssertionError):
+            p.signal_on_create(None, None)
 
+        with self.assertRaises(AssertionError):
+            p.signal_on_recreate(None, None)
 
+        with self.assertRaises(AssertionError):
+            p.signal_on_start(None, None)
+
+        with self.assertRaises(AssertionError):
+            p.signal_on_wait(None)
+
+        with self.assertRaises(AssertionError):
+            p.signal_on_continue(None)
+
+        with self.assertRaises(AssertionError):
+            p.signal_on_fail(None)
+
+        with self.assertRaises(AssertionError):
+            p.signal_on_finish(None)
+
+        with self.assertRaises(AssertionError):
+            p.signal_on_stop()
+
+        with self.assertRaises(AssertionError):
+            p.signal_on_destroy()

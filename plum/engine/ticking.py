@@ -13,6 +13,7 @@ class ProcessStatus(Enum):
     RUNNING = 1,
     WAITING = 2,
     FINISHED = 3,
+    FAILED=4
 
 
 class _Future(Future):
@@ -164,15 +165,14 @@ class TickingEngine(ExecutionEngine):
                 if proc_info.waiting_on.is_ready(self._process_registry):
                     try:
                         self._continue_process(proc_info)
-                    except Exception as e:
-                        process.on_fail(e)
-                        self._finish_process(proc_info, None)
-                        process.on_destroy()
+                    except BaseException as e:
+                        self._fail_process(proc_info, e)
+                        process.signal_on_destroy()
                         proc_info.future.process_failed(e)
 
             elif proc_info.status is ProcessStatus.FINISHED:
                 proc_info.future.process_finished(process.get_last_outputs())
-                process.on_destroy()
+                process.signal_on_destroy()
                 del self._current_processes[process.pid]
 
             else:
@@ -203,7 +203,7 @@ class TickingEngine(ExecutionEngine):
 
         process = proc_info.process
 
-        process.on_start(self)
+        process.signal_on_start(self, self._process_registry)
         retval = process.do_run()
         if isinstance(retval, WaitOn):
             self._wait_process(proc_info, retval)
@@ -222,7 +222,7 @@ class TickingEngine(ExecutionEngine):
         wait_on = proc_info.waiting_on
         proc_info.waiting_on = None
 
-        process.on_continue(wait_on)
+        process.signal_on_continue(wait_on)
         retval = getattr(process, wait_on.callback)(wait_on)
 
         # Check what to do next
@@ -238,7 +238,7 @@ class TickingEngine(ExecutionEngine):
         process = proc_info.process
 
         proc_info.waiting_on = wait_on
-        process.on_wait(wait_on)
+        process.signal_on_wait(wait_on)
 
         proc_info.status = ProcessStatus.WAITING
 
@@ -246,7 +246,12 @@ class TickingEngine(ExecutionEngine):
         assert not proc_info.waiting_on,\
             "Cannot finish a process that is waiting"
 
-        proc_info.process.on_finish(retval)
+        proc_info.process.signal_on_finish(retval)
         proc_info.status = ProcessStatus.FINISHED
-        proc_info.process.on_stop()
+        proc_info.process.signal_on_stop()
+
+    def _fail_process(self, proc_info, exception):
+        proc_info.process.signal_on_fail(exception)
+        proc_info.status = ProcessStatus.FAILED
+        proc_info.process.signal_on_stop()
 
