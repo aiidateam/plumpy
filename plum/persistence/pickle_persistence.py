@@ -1,6 +1,7 @@
 
 import glob
 import os
+import os.path as path
 import tempfile
 import pickle
 from plum.process import ProcessListener
@@ -8,7 +9,7 @@ from plum.util import override
 from plum.persistence.checkpoint import Checkpoint
 
 
-_STORE_DIRECTORY = os.path.join(tempfile.gettempdir(), "process_records")
+_STORE_DIRECTORY = path.join(tempfile.gettempdir(), "process_records")
 
 
 class PicklePersistence(ProcessListener):
@@ -16,11 +17,22 @@ class PicklePersistence(ProcessListener):
         self._process_factory = process_factory
         self._directory = directory
 
+    def load_checkpoint(self, pid):
+        p = path.join(self._directory, str(pid), ".pickle")
+        if not path.isfile(p):
+            raise ValueError("No checkpoint found at '{}'".format(p))
+
+        return self.load_checkpoint_from_file(p)
+
     def load_all_checkpoints(self):
         checkpoints = []
-        for f in glob.glob(os.path.join(self._directory, "*.pickle")):
-            checkpoints.append(pickle.load(open(f, 'rb')))
+        for f in glob.glob(path.join(self._directory, "*.pickle")):
+            checkpoints.append(self.load_checkpoint_from_file(f))
         return checkpoints
+
+    def load_checkpoint_from_file(self, filepath):
+        with open(filepath, 'rb') as file:
+            return pickle.load(file)
 
     @property
     def store_directory(self):
@@ -53,11 +65,11 @@ class PicklePersistence(ProcessListener):
         process.remove_process_listener(self)
 
     def _pickle_filename(self, process):
-        return os.path.join( self._directory, "{}.pickle".format(process.pid))
+        return path.join( self._directory, "{}.pickle".format(process.pid))
 
-    def _ensure_directory(self, path=None):
-        if not os.path.isdir( self._directory):
-            os.makedirs( self._directory)
+    def _ensure_directory(self):
+        if not path.isdir(self._directory):
+            os.makedirs(self._directory)
 
     def save(self, process, wait_on=None):
         checkpoint = self._process_factory.create_checkpoint(process, wait_on)
