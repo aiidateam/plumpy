@@ -148,9 +148,9 @@ class DynamicInputPort(InputPort):
     """
     NAME = "dynamic"
 
-    def __init__(self, process, help_=None):
+    def __init__(self, process, valid_type=None, help_=None):
         super(DynamicInputPort, self).__init__(
-            process, self.NAME, valid_type=dict, help=help_, default=None,
+            process, self.NAME, valid_type=valid_type, help=help_, default=None,
             required=False)
 
 
@@ -171,6 +171,6 @@ class DynamicOutputPort(OutputPort):
     """
     NAME = "dynamic"
 
-    def __init__(self, process):
+    def __init__(self, process, valid_type=None):
         super(DynamicOutputPort, self).__init__(
-            process, self.NAME, dict, False)
+            process, self.NAME, valid_type=valid_type, required=False)

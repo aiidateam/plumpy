@@ -77,6 +77,7 @@ class Process(object):
         if not exec_engine:
             exec_engine = cls._create_default_exec_engine()
         return exec_engine.submit(cls, inputs).result()
+
     ############################################
 
     def __init__(self):
@@ -124,7 +125,7 @@ class Process(object):
     def signal_on_create(self, pid, inputs=None):
         self._base_class_message_received = False
         self.on_create(pid, inputs)
-        assert self._base_class_message_received,\
+        assert self._base_class_message_received, \
             "on_create was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
@@ -187,6 +188,7 @@ class Process(object):
         assert self._base_class_message_received, \
             "on_destroy was not called\n" \
             "Hint: Did you forget to call the superclass method?"
+
     ############################################################################
 
     # Process messages #####################################################
@@ -278,6 +280,7 @@ class Process(object):
     def _on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event('on_output_emitted',
                                        self, output_port, value, dynamic)
+
     #####################################################################
 
     @protected
@@ -296,20 +299,22 @@ class Process(object):
         try:
             # Check types (if known)
             port = self.spec().get_output(output_port)
-            if port.valid_type is not None and not isinstance(value, port.valid_type):
-                raise TypeError(
-                    "Process returned output {} of wrong type."
-                    "Expected {}, got {}".
-                        format(output_port, port.valid_type, type(value)))
         except KeyError:
-            # The port is unknown, do we support dynamic outputs?
             if self.spec().has_dynamic_output():
                 dynamic = True
+                port = self.spec().get_dynamic_output()
             else:
                 raise TypeError(
                     "Process trying to output on unknown output port {}, "
                     "and does not have a dynamic output port in spec.".
                     format(output_port))
+
+            if port.valid_type is not None and \
+                    not isinstance(value, port.valid_type):
+                raise TypeError(
+                    "Process returned output {} of wrong type."
+                    "Expected {}, got {}".
+                    format(output_port, port.valid_type, type(value)))
 
         self._output_values[output_port] = value
         self._on_output_emitted(output_port, value, dynamic)
@@ -345,25 +350,28 @@ class Process(object):
                     ins[name] = port.default
                 elif port.required:
                     raise ValueError(
-                        "Value not supplied for required inputs port {}".format(name))
+                        "Value not supplied for required inputs port {}".format(
+                            name))
 
         return ins
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
         if not self.spec().has_dynamic_input():
-            unexpected = set(inputs.iterkeys()) - set(self.spec().inputs.iterkeys())
+            unexpected = set(inputs.iterkeys()) - set(
+                self.spec().inputs.iterkeys())
             if unexpected:
                 raise ValueError(
                     "Unexpected inputs found: {}.  If you want to allow dynamic"
                     " inputs add dynamic_input() to the spec definition.".
-                    format(unexpected))
+                        format(unexpected))
 
         for name, port in self.spec().inputs.iteritems():
             valid, msg = port.validate(inputs.get(name, None))
             if not valid:
                 raise RuntimeError("Cannot run process {} because {}".
                                    format(self.get_name(), msg))
+
     ###########################################################################
 
     # Outputs #################################################################
@@ -374,6 +382,7 @@ class Process(object):
             if not valid:
                 raise RuntimeError("Process {} failed because {}".
                                    format(self.get_name(), msg))
+
     ############################################################################
 
     def do_run(self):
@@ -384,7 +393,7 @@ class Process(object):
         pass
 
     def __del__(self):
-        assert self._called_on_destroy,\
+        assert self._called_on_destroy, \
             "The Process is being deleted without on_destory having been " \
             "called."
 
@@ -425,5 +434,3 @@ class FunctionProcess(Process):
             args.append(kwargs.pop(arg))
 
         self.out(self._output_name, self._func(*args))
-
-

@@ -37,6 +37,9 @@ class ProcessSpec(object):
     def get_input(self, name):
         return self._inputs[name]
 
+    def get_dynamic_input(self):
+        return self._inputs.get(DynamicInputPort.NAME, None)
+
     def has_input(self, name):
         return name in self._inputs
 
@@ -49,8 +52,8 @@ class ProcessSpec(object):
         """
         self.input_port(name, InputPort(self, name, **kwargs))
 
-    def dynamic_input(self):
-        self.input_port(DynamicInputPort.NAME, DynamicInputPort(self))
+    def dynamic_input(self, **kwargs):
+        self.input_port(DynamicInputPort.NAME, DynamicInputPort(self, **kwargs))
 
     def remove_dynamic_input(self):
         self.remove_input(DynamicInputPort.NAME)
@@ -85,6 +88,9 @@ class ProcessSpec(object):
     def get_output(self, name):
         return self._outputs[name]
 
+    def get_dynamic_output(self):
+        return self._outputs.get(DynamicOutputPort.NAME, None)
+
     def has_output(self, name):
         return name in self._outputs
 
@@ -107,8 +113,9 @@ class ProcessSpec(object):
 
         self._outputs[name] = port
 
-    def dynamic_output(self):
-        self.output_port(DynamicOutputPort.NAME, DynamicOutputPort(self))
+    def dynamic_output(self, **kwargs):
+        self.output_port(
+            DynamicOutputPort.NAME, DynamicOutputPort(self, **kwargs))
 
     def remove_dynamic_output(self):
         self.remove_output(DynamicOutputPort.NAME)
