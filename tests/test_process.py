@@ -1,9 +1,9 @@
 from unittest import TestCase
 
+from plum.test_utils import ProcessListenerTester
 from plum.engine.serial import SerialEngine
 from plum.process import Process
 from plum.util import override
-from tests.common import ProcessListenerTester
 
 
 
@@ -136,7 +136,6 @@ class TestProcess(TestCase):
         engine = SerialEngine()
         results = DummyProcess.run(None, engine)
         self.assertEqual(results['default'], 5)
-
 
     def test_forget_to_call_parent(self):
         p = ForgetToCallParent()

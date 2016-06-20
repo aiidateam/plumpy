@@ -11,15 +11,11 @@ class DummyProcess(Process):
         pass
 
 
-class ProcessEventsTester(Process):
+class EventsTesterMixin(object):
     EVENTS = ["create", "recreate", "start", "continue", "exception","finish",
               "emitted", "wait", "stop", "destroy", ]
 
     called_events = []
-
-    @classmethod
-    def _define(cls, spec):
-        spec.dynamic_output()
 
     @classmethod
     def called(cls, event):
@@ -27,60 +23,70 @@ class ProcessEventsTester(Process):
         cls.called_events.append(event)
 
     def __init__(self):
-        super(ProcessEventsTester, self).__init__()
-        self._emitted = False
+        assert isinstance(self, Process),\
+            "Mixin has to be used with a type derived from a Process"
         self.__class__.called_events = []
 
     @override
     def on_create(self, pid, inputs=None):
-        super(ProcessEventsTester, self).on_create(pid, inputs)
+        super(EventsTesterMixin, self).on_create(pid, inputs)
         self.called('create')
 
     @override
     def on_recreate(self, pid, saved_instance_state):
-        super(ProcessEventsTester, self).on_recreate(pid, saved_instance_state)
+        super(EventsTesterMixin, self).on_recreate(pid, saved_instance_state)
         self.called('recreate')
 
     @override
     def on_start(self):
-        super(ProcessEventsTester, self).on_start()
+        super(EventsTesterMixin, self).on_start()
         self.called('start')
 
     @override
     def _on_output_emitted(self, output_port, value, dynamic):
-        super(ProcessEventsTester, self)._on_output_emitted(
+        super(EventsTesterMixin, self)._on_output_emitted(
             output_port, value, dynamic)
         self.called('emitted')
 
     @override
     def on_wait(self, wait_on):
-        super(ProcessEventsTester, self).on_wait(wait_on)
+        super(EventsTesterMixin, self).on_wait(wait_on)
         self.called('wait')
 
     @override
     def on_continue(self, wait_on):
-        super(ProcessEventsTester, self).on_continue(wait_on)
+        super(EventsTesterMixin, self).on_continue(wait_on)
         self.called('continue')
 
     @override
     def on_fail(self, exception):
-        super(ProcessEventsTester, self).on_fail(exception)
+        super(EventsTesterMixin, self).on_fail(exception)
         self.called('exception')
 
     @override
     def on_finish(self, retval):
-        super(ProcessEventsTester, self).on_finish(retval)
+        super(EventsTesterMixin, self).on_finish(retval)
         self.called('finish')
 
     @override
     def on_stop(self):
-        super(ProcessEventsTester, self).on_stop()
+        super(EventsTesterMixin, self).on_stop()
         self.called('stop')
 
     @override
     def on_destroy(self):
-        super(ProcessEventsTester, self).on_destroy()
+        super(EventsTesterMixin, self).on_destroy()
         self.called('destroy')
+
+
+
+class ProcessEventsTester(EventsTesterMixin, Process):
+    @classmethod
+    def _define(cls, spec):
+        spec.dynamic_output()
+
+    def __init__(self):
+        Process.__init__(self)
 
     @override
     def _run(self):
@@ -89,12 +95,25 @@ class ProcessEventsTester(Process):
 
 class CheckpointProcess(ProcessEventsTester):
     @override
+    def on_create(self, pid, inputs=None):
+        super(CheckpointProcess, self).on_create(pid, inputs)
+        self._last_checkpoint = None
+
+    @override
     def _run(self):
         self.out("test", 5)
-        return checkpoint(self.finish)
+        cp = checkpoint(self.middle_step)
+        self._last_checkpoint = cp
+        return cp
+
+    def middle_step(self, wait_on):
+        assert wait_on is self._last_checkpoint
+        cp = checkpoint(self.finish)
+        self._last_checkpoint = cp
+        return cp
 
     def finish(self, wait_on):
-        pass
+        assert wait_on is self._last_checkpoint
 
 
 class ExceptionProcess(ProcessEventsTester):

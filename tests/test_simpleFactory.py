@@ -1,7 +1,8 @@
 from unittest import TestCase
+
+from plum.test_utils import ProcessEventsTester
 from plum.simple_factory import SimpleFactory
 from plum.util import override
-from tests.common import ProcessEventsTester
 
 
 class TestSimpleFactory(TestCase):

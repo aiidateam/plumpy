@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import time
-
+import sys
 from plum.engine.execution_engine import ExecutionEngine, Future
 from plum.util import override
 from plum.wait import WaitOn
@@ -29,7 +29,6 @@ class SerialEngine(ExecutionEngine):
                 # not, not wait around for the process to finish
                 raise
             except BaseException:
-                import traceback
                 exc_obj, exc_tb = sys.exc_info()[1:]
                 self._set_exception_info(exc_obj, exc_tb)
 
@@ -220,13 +219,14 @@ class SerialEngine(ExecutionEngine):
         # Keep looping until there is nothing to wait for
         retval = wait_on
         while isinstance(retval, WaitOn):
-            self._wait_process(process, wait_on)
+            currently_waiting_on = retval
+            self._wait_process(process, currently_waiting_on)
 
             # Keep polling until the thing it's waiting for is ready
-            while not wait_on.is_ready(self._process_registry):
+            while not currently_waiting_on.is_ready(self._process_registry):
                 time.sleep(self._poll_interval)
 
-            retval = self._continue_process(process, wait_on)
+            retval = self._continue_process(process, currently_waiting_on)
 
         return retval
 

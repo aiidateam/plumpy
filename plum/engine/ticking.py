@@ -180,7 +180,7 @@ class TickingEngine(ExecutionEngine):
                     try:
                         self._continue_process(proc_info)
                     except BaseException:
-                        import traceback
+                        import sys
                         exc_obj, exc_tb = sys.exc_info()[1:]
                         self._fail_process(proc_info, exc_obj)
                         process.signal_on_destroy()

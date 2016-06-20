@@ -1,13 +1,8 @@
 from unittest import TestCase
 
-from plum.engine.parallel import MultithreadedEngine
-from plum.process import Process
+import plum.test_utils as common
 from plum.engine.serial import SerialEngine
-from plum.engine.ticking import TickingEngine
 from plum.util import override
-from concurrent.futures import ThreadPoolExecutor
-import threading
-import tests.common as common
 
 
 class TestExecutionEngine(TestCase):
@@ -90,4 +85,4 @@ class TestExecutionEngine(TestCase):
         for event in common.ProcessEventsTester.EVENTS:
             if event not in exclude_events:
                 self.assertIn(event, outs,
-                              "Event {} not called by engine.".format(event))
+                              "Event '{}' not called by engine.".format(event))
