@@ -13,9 +13,11 @@ _STORE_DIRECTORY = path.join(tempfile.gettempdir(), "process_records")
 
 
 class PicklePersistence(ProcessListener):
-    def __init__(self, process_factory, directory=_STORE_DIRECTORY):
+    def __init__(self, process_factory, delete_at_end=True,
+                 directory=_STORE_DIRECTORY):
         self._process_factory = process_factory
         self._directory = directory
+        self._delete_at_end = delete_at_end
 
     def load_checkpoint(self, pid):
         p = path.join(self._directory, str(pid) + ".pickle")
@@ -65,7 +67,7 @@ class PicklePersistence(ProcessListener):
     @override
     def on_process_finish(self, process, retval):
         filename = self._pickle_filename(process)
-        if path.isfile(filename):
+        if self._delete_at_end and path.isfile(filename):
             os.remove(filename)
         process.remove_process_listener(self)
 
