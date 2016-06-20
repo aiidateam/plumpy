@@ -64,3 +64,6 @@ target/
 
 # JetBrains IDE stuff
 .idea/
+
+# Virtual environment directories
+/venv*/
