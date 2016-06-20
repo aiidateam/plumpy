@@ -18,21 +18,20 @@ class SerialEngine(ExecutionEngine):
             import sys
 
             self._exception = None
-            self._outputs = None
+            self._result = None
             self._pid = process.pid
 
             # Run the damn thing
             try:
-                self._outputs = func(process, *args, **kwargs)
+                self._set_result(func(process, *args, **kwargs))
             except KeyboardInterrupt:
                 # If the user interuppted the process then we should just raise
                 # not, not wait around for the process to finish
                 raise
-            except BaseException as e:
+            except BaseException:
                 import traceback
-                exc_type, exc_obj, exc_tb = sys.exc_info()
-                #traceback.print_exc()
-                self._exception = e
+                exc_obj, exc_tb = sys.exc_info()[1:]
+                self._set_exception_info(exc_obj, exc_tb)
 
         @property
         def pid(self):
@@ -77,9 +76,9 @@ class SerialEngine(ExecutionEngine):
         @override
         def result(self, timeout=None):
             if self._exception:
-                raise self._exception
-
-            return self._outputs
+                raise type(self._exception), self._exception, self._traceback
+            else:
+                return self._result
 
         @override
         def exception(self, timeout=None):
@@ -93,6 +92,21 @@ class SerialEngine(ExecutionEngine):
             :param func: The function to call
             """
             func(self)
+
+        def _set_exception_info(self, exception, traceback):
+            """
+            Sets the result of the future as being the given exception
+            and traceback.
+            """
+            self._exception = exception
+            self._traceback = traceback
+
+        def _set_result(self, result):
+            """Sets the return value of work associated with the future.
+
+            Should only be used by Executor implementations and unit tests.
+            """
+            self._result = result
 
     def __init__(self, poll_interval=10, process_factory=None,
                  process_registry=None):

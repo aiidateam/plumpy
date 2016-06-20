@@ -369,8 +369,9 @@ class Process(object):
         for name, port in self.spec().inputs.iteritems():
             valid, msg = port.validate(inputs.get(name, None))
             if not valid:
-                raise RuntimeError("Cannot run process {} because {}".
-                                   format(self.get_name(), msg))
+                raise TypeError(
+                    "Cannot run process '{}' because {}".
+                    format(self.get_name(), msg))
 
     ###########################################################################
 

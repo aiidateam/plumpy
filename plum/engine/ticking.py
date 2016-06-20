@@ -31,6 +31,7 @@ class _Future(Future):
         self._result = None
         self._condition = None
         self._exception = None
+        self._traceback = None
 
     @property
     def pid(self):
@@ -45,17 +46,19 @@ class _Future(Future):
         except AttributeError:
             pass
 
-        for fn in self._done_callbacks:
-            fn(self)
+        self._invoke_callbacks()
 
-    def process_failed(self, exception):
+    def process_failed(self, exception, traceback):
         self._status = self.Status.FAILED
         self._exception = exception
+        self._traceback = traceback
 
         try:
             self._condition.set()
         except AttributeError:
             pass
+
+        self._invoke_callbacks()
 
     def cancel(self):
         self._engine.cancel(self._pid)
@@ -77,7 +80,10 @@ class _Future(Future):
                 raise concurrent.futures.TimeoutError()
             self._condition = None
 
-        return self._result
+        if self._exception:
+            raise type(self._exception), self._exception, self._traceback
+        else:
+            return self._result
 
     def exception(self, timeout=None):
         if self._status is self.Status.CURRENT:
@@ -88,6 +94,14 @@ class _Future(Future):
             self._condition = None
 
         return self._exception
+
+    def _invoke_callbacks(self):
+        for callback in self._done_callbacks:
+            try:
+                callback(self)
+            except Exception:
+                # TODO: Log this
+                pass
 
     def add_done_callback(self, fn):
         self._done_callbacks.append(fn)
@@ -165,10 +179,12 @@ class TickingEngine(ExecutionEngine):
                 if proc_info.waiting_on.is_ready(self._process_registry):
                     try:
                         self._continue_process(proc_info)
-                    except BaseException as e:
-                        self._fail_process(proc_info, e)
+                    except BaseException:
+                        import traceback
+                        exc_obj, exc_tb = sys.exc_info()[1:]
+                        self._fail_process(proc_info, exc_obj)
                         process.signal_on_destroy()
-                        proc_info.future.process_failed(e)
+                        proc_info.future.process_failed(exc_obj, exc_tb)
 
             elif proc_info.status is ProcessStatus.FINISHED:
                 proc_info.future.process_finished(process.get_last_outputs())

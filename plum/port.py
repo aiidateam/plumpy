@@ -45,13 +45,16 @@ class ValueSpec(object):
             if self._required:
                 return False, "Required value was not provided"
         else:
-            if self._valid_type is not None and not isinstance(value, self._valid_type):
-                return False, "Value is not of the right kind"
+            if self._valid_type is not None and \
+                    not isinstance(value, self._valid_type):
+                return False, "parameter '{}' is not of the right type. " \
+                              "Got '{}', expected '{}'".format(
+                    self.name, type(value), self._valid_type)
 
         if self._validator is not None:
             result = self._validator(value)
             if isinstance(result, collections.Sequence):
-                assert(len(result) == 2)
+                assert (len(result) == 2)
                 return result
             elif result is False:
                 return False, "Value failed validation"
@@ -108,7 +111,8 @@ class InputPort(Port):
 class InputGroupPort(InputPort):
     def __init__(self, process, name, valid_type=None, help=None, default=None,
                  required=False):
-        super(InputGroupPort, self).__init__(process, name, valid_type=dict, help=help,
+        super(InputGroupPort, self).__init__(process, name, valid_type=dict,
+                                             help=help,
                                              default=default, required=required)
 
         if default is not None and not isinstance(default, dict):
@@ -136,7 +140,8 @@ class InputGroupPort(InputPort):
             # Check that all the members of the dictionary are of the right type
             for k, v in value.iteritems():
                 if not isinstance(v, self._valid_inner_type):
-                    return False, "Group port value {} is not of the right type".format(k)
+                    return False, "Group port value {} is not of the right type".format(
+                        k)
 
         return True, None
 
