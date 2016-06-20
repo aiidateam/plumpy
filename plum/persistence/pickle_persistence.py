@@ -6,7 +6,7 @@ import tempfile
 import pickle
 from plum.process import ProcessListener
 from plum.util import override
-from plum.persistence.checkpoint import Checkpoint
+from plum.persistence._base import LOGGER
 
 
 _STORE_DIRECTORY = path.join(tempfile.gettempdir(), "process_records")
@@ -18,7 +18,7 @@ class PicklePersistence(ProcessListener):
         self._directory = directory
 
     def load_checkpoint(self, pid):
-        p = path.join(self._directory, str(pid), ".pickle")
+        p = path.join(self._directory, str(pid) + ".pickle")
         if not path.isfile(p):
             raise ValueError("No checkpoint found at '{}'".format(p))
 
@@ -27,7 +27,10 @@ class PicklePersistence(ProcessListener):
     def load_all_checkpoints(self):
         checkpoints = []
         for f in glob.glob(path.join(self._directory, "*.pickle")):
-            checkpoints.append(self.load_checkpoint_from_file(f))
+            try:
+                checkpoints.append(self.load_checkpoint_from_file(f))
+            except EOFError:
+                pass
         return checkpoints
 
     def load_checkpoint_from_file(self, filepath):
@@ -47,8 +50,8 @@ class PicklePersistence(ProcessListener):
         try:
             self.save(process)
         except pickle.PicklingError:
-            # TODO: We should emit an error here
-            pass
+            LOGGER.error("exception raised trying to pickle process (pid={}) "
+                         "during on_start message.".format(process.pid))
 
     @override
     def on_process_wait(self, process, wait_on):
@@ -56,12 +59,14 @@ class PicklePersistence(ProcessListener):
         try:
             self.save(process, wait_on)
         except pickle.PicklingError:
-            # TODO: We should emit an error here
-            pass
+            LOGGER.error("exception raised trying to pickle process (pid={}) "
+                         "during on_wait message.".format(process.pid))
 
     @override
     def on_process_finish(self, process, retval):
-        os.remove(self._pickle_filename(process))
+        filename = self._pickle_filename(process)
+        if path.isfile(filename):
+            os.remove(filename)
         process.remove_process_listener(self)
 
     def _pickle_filename(self, process):
@@ -74,5 +79,12 @@ class PicklePersistence(ProcessListener):
     def save(self, process, wait_on=None):
         checkpoint = self._process_factory.create_checkpoint(process, wait_on)
         self._ensure_directory()
-        with open(self._pickle_filename(process), 'wb') as f:
-            pickle.dump(checkpoint, f)
+        filename = self._pickle_filename(process)
+        try:
+            with open(filename, 'wb') as f:
+                pickle.dump(checkpoint, f)
+        except pickle.PickleError:
+            # Don't leave a half-baked pickle around
+            if path.isfile(filename):
+                os.remove(filename)
+            raise
