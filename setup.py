@@ -2,7 +2,7 @@
 import os
 
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 __contributors__ = "Martin Uhrin"
 
 try:
