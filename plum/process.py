@@ -13,6 +13,9 @@ class ProcessListener(object):
     def on_process_start(self, process):
         pass
 
+    def on_process_restart(self, process):
+        pass
+
     def on_output_emitted(self, process, output_port, value, dynamic):
         pass
 
@@ -147,6 +150,17 @@ class Process(object):
             "on_start was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
+    def signal_on_restart(self, exec_engine, registry):
+        self._exec_engine = exec_engine
+        self._process_registry = registry
+
+        self._base_class_message_received = False
+        self._on_restart_called = False
+        self.on_restart()
+        assert self._base_class_message_received, \
+            "on_restart was not called\n" \
+            "Hint: Did you forget to call the superclass method?"
+
     def signal_on_wait(self, wait_on):
         self._base_class_message_received = False
         self.on_wait(wait_on)
@@ -236,6 +250,13 @@ class Process(object):
 
         """
         self.__event_helper.fire_event('on_process_start', self)
+        self._base_class_message_received = True
+
+    def on_restart(self):
+        """
+        Temporary to be removed later
+        """
+        self.__event_helper.fire_event('on_process_restart', self)
         self._base_class_message_received = True
 
     def on_wait(self, wait_on):

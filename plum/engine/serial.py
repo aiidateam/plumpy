@@ -162,7 +162,7 @@ class SerialEngine(ExecutionEngine):
         """
         proc, wait_on = self._process_factory.recreate_process(checkpoint)
         return SerialEngine.Future(
-            self.run_from_and_block, proc, checkpoint, wait_on)
+            self._do_run_from_and_block, proc, checkpoint, wait_on)
 
     def run_from_and_block(self, checkpoint):
         """
@@ -177,6 +177,7 @@ class SerialEngine(ExecutionEngine):
     def _do_run_from_and_block(self, proc, wait_on):
         if self._process_registry:
             self._process_registry.register_running_process(proc)
+        proc.signal_on_restart(self, self._process_registry)
         return self._run_lifecycle(proc, wait_on)
 
     def _run_lifecycle(self, proc, wait_on=None):

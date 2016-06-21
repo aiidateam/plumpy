@@ -20,7 +20,7 @@ class TestPicklePersistence(TestCase):
         import tempfile
 
         self.store_dir = tempfile.mkdtemp()
-        self.pickle_persistence =\
+        self.pickle_persistence = \
             PicklePersistence(SimpleFactory(), self.store_dir)
         # Have to call on_create to make sure the Process has a PID
         self.dummy_proc = DummyProcess()

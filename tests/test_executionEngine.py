@@ -2,29 +2,33 @@ from unittest import TestCase
 
 import plum.test_utils as common
 from plum.engine.serial import SerialEngine
+from plum.engine.ticking import TickingEngine
 from plum.util import override
 
 
 class TestExecutionEngine(TestCase):
     @override
     def setUp(self):
-        # self.ticking_engine = TickingEngine()
-        # self.event = threading.Event()
-        # self.pool = ThreadPoolExecutor(4)
-        # self.fut = self.pool.submit(self.tick_ticking)
-        self.serial = SerialEngine()
+        import threading
+        from threading import Thread
+
+        ticking = TickingEngine()
+        self.stop_ticking = threading.Event()
+        self.thread = Thread(target=self.tick_ticking, args=(ticking,))
+        self.thread.start()
+
+        serial = SerialEngine()
         self.engines_to_test = [
-            self.serial,
-            #self.ticking_engine
+            serial,
+            ticking
             #MultithreadedEngine()
         ]
 
     @override
     def tearDown(self):
-        # self.event.set()
-        # self.fut.result()
-        # self.pool.shutdown()
-        pass
+        self.stop_ticking.set()
+        self.thread.join()
+
 
     def test_submit_simple(self):
         for engine in self.engines_to_test:
@@ -63,11 +67,13 @@ class TestExecutionEngine(TestCase):
                 common.CheckpointThenExceptionProcess.called_events,
                 ['recreate', 'finish'])
 
-    def tick_ticking(self):
-        import time
-        while not self.event.is_set():
-            self.ticking_engine.tick()
-            time.sleep(2)
+    def tick_ticking(self, engine):
+        """
+        Keep ticking the ticking engine until the event is set to stop
+        :param engine: the ticking engine
+        """
+        while not self.stop_ticking.is_set():
+            engine.tick()
 
     def test_future_ready(self):
         for engine in self.engines_to_test:

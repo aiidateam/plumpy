@@ -157,6 +157,7 @@ class TickingEngine(ExecutionEngine):
         # anther thread
         if self._process_registry:
             self._process_registry.register_running_process(process)
+        process.signal_on_restart(self, self._process_registry)
 
         # Put it in the queue
         if wait_on:
@@ -169,26 +170,36 @@ class TickingEngine(ExecutionEngine):
         return fut
 
     def tick(self):
+        import sys
+
         for proc_info in self._current_processes.values():
             process = proc_info.process
 
             if proc_info.status is ProcessStatus.QUEUEING:
-                self._start_process(proc_info)
+                try:
+                    self._start_process(proc_info)
+                except BaseException:
+                    exc_obj, exc_tb = sys.exc_info()[1:]
+                    self._fail_process(proc_info, exc_obj)
+                    proc_info.future.process_failed(exc_obj, exc_tb)
+                    del self._current_processes[process.pid]
 
             elif proc_info.status is ProcessStatus.WAITING:
                 if proc_info.waiting_on.is_ready(self._process_registry):
                     try:
                         self._continue_process(proc_info)
                     except BaseException:
-                        import sys
                         exc_obj, exc_tb = sys.exc_info()[1:]
                         self._fail_process(proc_info, exc_obj)
-                        process.signal_on_destroy()
                         proc_info.future.process_failed(exc_obj, exc_tb)
+                        del self._current_processes[process.pid]
 
             elif proc_info.status is ProcessStatus.FINISHED:
-                proc_info.future.process_finished(process.get_last_outputs())
-                process.signal_on_destroy()
+                try:
+                    proc_info.future.process_finished(process.get_last_outputs())
+                    process.signal_on_destroy()
+                except BaseException:
+                    pass
                 del self._current_processes[process.pid]
 
             else:
@@ -267,7 +278,22 @@ class TickingEngine(ExecutionEngine):
         proc_info.process.signal_on_stop()
 
     def _fail_process(self, proc_info, exception):
-        proc_info.process.signal_on_fail(exception)
-        proc_info.status = ProcessStatus.FAILED
-        proc_info.process.signal_on_stop()
+        try:
+            proc_info.process.signal_on_fail(exception)
+        except BaseException:
+            # MU: TODO Write a log message
+            pass
 
+        proc_info.status = ProcessStatus.FAILED
+
+        try:
+            proc_info.process.signal_on_stop()
+        except BaseException:
+            # MU: TODO Write a log message
+            pass
+
+        try:
+            proc_info.process.signal_on_destroy()
+        except BaseException:
+            # MU: TODO Write a log message
+            pass
