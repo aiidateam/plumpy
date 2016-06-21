@@ -29,19 +29,19 @@ class TestExecutionEngine(TestCase):
         self.stop_ticking.set()
         self.thread.join()
 
-
     def test_submit_simple(self):
         for engine in self.engines_to_test:
             engine.submit(common.ProcessEventsTester, None).result()
             self._test_engine_events(
                 common.ProcessEventsTester.called_events,
-                ['recreate', 'wait', 'continue', 'exception'])
+                ['recreate', 'restart', 'wait', 'continue', 'exception'])
 
     def test_submit_with_checkpoint(self):
         for engine in self.engines_to_test:
             engine.submit(common.CheckpointProcess, None).result()
-            self._test_engine_events(common.CheckpointProcess.called_events,
-                                     ['recreate', 'exception'])
+            self._test_engine_events(
+                common.CheckpointProcess.called_events,
+                ['recreate', 'restart', 'exception'])
 
     def test_submit_exception(self):
         """
@@ -51,8 +51,9 @@ class TestExecutionEngine(TestCase):
         for engine in self.engines_to_test:
             e = engine.submit(common.ExceptionProcess, None).exception()
             self.assertIsInstance(e, RuntimeError)
-            self._test_engine_events(common.ExceptionProcess.called_events,
-                                     ['recreate', 'finish', 'wait', 'continue'])
+            self._test_engine_events(
+                common.ExceptionProcess.called_events,
+                ['recreate', 'restart', 'finish', 'wait', 'continue'])
 
     def test_submit_checkpoint_then_exception(self):
         """
@@ -65,7 +66,7 @@ class TestExecutionEngine(TestCase):
             self.assertIsInstance(e, RuntimeError)
             self._test_engine_events(
                 common.CheckpointThenExceptionProcess.called_events,
-                ['recreate', 'finish'])
+                ['recreate', 'finish', 'restart'])
 
     def tick_ticking(self, engine):
         """

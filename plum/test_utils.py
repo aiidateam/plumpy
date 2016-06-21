@@ -12,8 +12,8 @@ class DummyProcess(Process):
 
 
 class EventsTesterMixin(object):
-    EVENTS = ["create", "recreate", "start", "continue", "exception","finish",
-              "emitted", "wait", "stop", "destroy", ]
+    EVENTS = ["create", "recreate", "start", "restart", "continue", "exception",
+              "finish", "emitted", "wait", "stop", "destroy", ]
 
     called_events = []
 
@@ -41,6 +41,11 @@ class EventsTesterMixin(object):
     def on_start(self):
         super(EventsTesterMixin, self).on_start()
         self.called('start')
+
+    @override
+    def on_restart(self):
+        super(EventsTesterMixin, self).on_restart()
+        self.called('restart')
 
     @override
     def _on_output_emitted(self, output_port, value, dynamic):
