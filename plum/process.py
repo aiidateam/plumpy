@@ -333,8 +333,8 @@ class Process(object):
             if port.valid_type is not None and \
                     not isinstance(value, port.valid_type):
                 raise TypeError(
-                    "Process returned output {} of wrong type."
-                    "Expected {}, got {}".
+                    "Process returned output '{}' of wrong type."
+                    "Expected '{}', got '{}'".
                     format(output_port, port.valid_type, type(value)))
 
         self._output_values[output_port] = value
@@ -385,7 +385,7 @@ class Process(object):
                 raise ValueError(
                     "Unexpected inputs found: {}.  If you want to allow dynamic"
                     " inputs add dynamic_input() to the spec definition.".
-                        format(unexpected))
+                    format(unexpected))
 
         for name, port in self.spec().inputs.iteritems():
             valid, msg = port.validate(inputs.get(name, None))

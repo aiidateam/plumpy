@@ -24,11 +24,14 @@ class PicklePersistence(ProcessListener):
         self._failed_directory = failed_directory
 
     def load_checkpoint(self, pid):
-        p = path.join(self._running_directory, str(pid) + ".pickle")
-        if not path.isfile(p):
-            raise ValueError("No checkpoint found at '{}'".format(p))
+        for check_dir in [self._running_directory, self._failed_directory,
+                          self._finished_directory]:
+            p = path.join(check_dir, str(pid) + ".pickle")
+            if path.isfile(p):
+                return self.load_checkpoint_from_file(p)
 
-        return self.load_checkpoint_from_file(p)
+        raise ValueError(
+            "Not checkpoint with pid '{}' could be found".format(pid))
 
     def load_all_checkpoints(self):
         checkpoints = []

@@ -65,13 +65,12 @@ class WorkflowListener(object):
         """
         pass
 
-    def on_subprocess_starting(self, workflow, subproc, inputs):
+    def on_subprocess_starting(self, workflow, subproc):
         """
         Called when the inputs of a subprocess passed checks and the process
         is about to begin.
         :param workflow: The workflow whose subprocess is starting
         :param subproc: The starting subprocess
-        :param inputs: The inputs the subprocess is starting with
         """
         pass
 
@@ -214,8 +213,9 @@ class Workflow(Process, ProcessListener):
 
     ###########################################
 
-    def __init__(self):
+    def __init__(self, process_factory):
         super(Workflow, self).__init__()
+        self._process_factory = process_factory
         self._workflow_evt_helper = util.EventHelper(WorkflowListener)
         self._process_instances = {}
         self._input_buffer = {}
@@ -224,13 +224,13 @@ class Workflow(Process, ProcessListener):
 
         # Create all our subprocess classes
         for name, proc_class in self.spec().processes.iteritems():
-            proc = proc_class.create()
+            proc = process_factory.create(proc_class)
             proc.add_process_listener(self)
             self._process_instances[name] = proc
 
     # From ProcessListener ##########################
-    def on_process_start(self, process, inputs):
-        self._on_subprocess_starting(process, inputs)
+    def on_process_start(self, process):
+        self._on_subprocess_starting(process)
 
     def on_output_emitted(self, process, output_port, value, dynamic):
         local_name = self.get_local_name(process)
@@ -340,7 +340,7 @@ class Workflow(Process, ProcessListener):
 
     # Workflow messages #################################################
     # Make sure to call the superclass if your override any of these ####
-    def _on_subprocess_starting(self, subproc, inputs):
+    def _on_subprocess_starting(self, subproc):
         """
         Called when the inputs of a subprocess passed checks and the process
         is about to begin.
@@ -349,7 +349,7 @@ class Workflow(Process, ProcessListener):
         :param inputs: The inputs the process is starting with
         """
         self._workflow_evt_helper.fire_event('on_subprocess_starting',
-                                             self, subproc, inputs)
+                                             self, subproc)
 
     def _on_subprocess_finalising(self, subproc):
         """

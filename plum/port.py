@@ -43,7 +43,8 @@ class ValueSpec(object):
     def validate(self, value):
         if value is None:
             if self._required:
-                return False, "Required value was not provided"
+                return False, "required value was not provided for '{}'".\
+                    format(self.name)
         else:
             if self._valid_type is not None and \
                     not isinstance(value, self._valid_type):

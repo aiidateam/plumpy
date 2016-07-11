@@ -196,7 +196,6 @@ class TickingEngine(ExecutionEngine):
 
             elif proc_info.status is ProcessStatus.FINISHED:
                 try:
-                    proc_info.future.process_finished(process.get_last_outputs())
                     process.signal_on_destroy()
                 except BaseException:
                     pass
@@ -214,8 +213,9 @@ class TickingEngine(ExecutionEngine):
         if proc_info.status is ProcessStatus.QUEUEING:
             del self._current_processes[pid]
         else:
-            # TODO: Queue up for cancelling next time
-            pass
+            proc_info.process.signal_on_stop()
+            proc_info.process.signal_on_destroy()
+            del self._current_processes[pid]
 
     def _start_process(self, proc_info):
         """
@@ -273,9 +273,12 @@ class TickingEngine(ExecutionEngine):
         assert not proc_info.waiting_on,\
             "Cannot finish a process that is waiting"
 
-        proc_info.process.signal_on_finish(retval)
+        proc = proc_info.process
+
+        proc.signal_on_finish(retval)
         proc_info.status = ProcessStatus.FINISHED
-        proc_info.process.signal_on_stop()
+        proc.signal_on_stop()
+        proc_info.future.process_finished(proc.get_last_outputs())
 
     def _fail_process(self, proc_info, exception):
         try:
