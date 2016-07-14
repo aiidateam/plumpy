@@ -10,7 +10,8 @@ value is passed to all of them when the workflow starts.
 from abc import ABCMeta
 import threading
 from plum.port import DynamicOutputPort
-from plum.process import Process, ProcessSpec, ProcessListener
+from plum.process import Process, ProcessSpec
+from plum.process_listener import ProcessListener
 import plum.util as util
 
 
@@ -229,7 +230,7 @@ class Workflow(Process, ProcessListener):
             self._process_instances[name] = proc
 
     # From ProcessListener ##########################
-    def on_process_start(self, process):
+    def on_process_run(self, process):
         self._on_subprocess_starting(process)
 
     def on_output_emitted(self, process, output_port, value, dynamic):
@@ -348,8 +349,8 @@ class Workflow(Process, ProcessListener):
         :param subproc: The subprocess that is starting
         :param inputs: The inputs the process is starting with
         """
-        self._workflow_evt_helper.fire_event('on_subprocess_starting',
-                                             self, subproc)
+        self._workflow_evt_helper.fire_event(
+            WorkflowListener.on_subprocess_starting, self, subproc)
 
     def _on_subprocess_finalising(self, subproc):
         """
@@ -360,8 +361,8 @@ class Workflow(Process, ProcessListener):
 
         :param subproc: The subprocess that is finalising
         """
-        self._workflow_evt_helper.fire_event('on_subprocess_finalising',
-                                             self, subproc)
+        self._workflow_evt_helper.fire_event(
+            WorkflowListener.on_subprocess_finalising, self, subproc)
 
     def _on_subprocess_finished(self, subproc, retval):
         """
@@ -370,8 +371,8 @@ class Workflow(Process, ProcessListener):
         :param subproc: The subprocess that has finished
         :param retval: The return value from the process
         """
-        self._workflow_evt_helper.fire_event('on_subprocess_finished',
-                                             self, subproc, retval)
+        self._workflow_evt_helper.fire_event(
+            WorkflowListener.on_subprocess_finished, self, subproc, retval)
 
     def _on_value_buffered(self, link, value):
         """
@@ -381,8 +382,8 @@ class Workflow(Process, ProcessListener):
         :param link: The link connecting the source port to the sink.
         :param value: The value that was emitted
         """
-        self._workflow_evt_helper.fire_event('on_value_buffered',
-                                             self, link, value)
+        self._workflow_evt_helper.fire_event(
+            WorkflowListener.on_value_buffered, self, link, value)
 
     def _on_value_consumed(self, link, value):
         """
@@ -391,7 +392,7 @@ class Workflow(Process, ProcessListener):
         :param link: The link connecting the source port to the sink.
         :param value: The value that was consumed
         """
-        self._workflow_evt_helper.fire_event('on_value_consumed',
-                                             self, link, value)
+        self._workflow_evt_helper.fire_event(
+            WorkflowListener.on_value_consumed, self, link, value)
 
     #####################################################################

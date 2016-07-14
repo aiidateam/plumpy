@@ -55,7 +55,7 @@ class MultithreadedEngine(execution_engine.ExecutionEngine):
             process_factory=process_factory, process_registry=process_registry)
 
     @override
-    def submit(self, process_class, inputs):
+    def submit(self, process_class, inputs=None):
         """
         Submit a process to be executed by a separate thread at some point.
 
@@ -78,3 +78,7 @@ class MultithreadedEngine(execution_engine.ExecutionEngine):
         """
         return self._executor.submit(self._serial_engine.run_from_and_block,
                                      checkpoint)
+
+    @override
+    def shutdown(self):
+        self._serial_engine.shutdown()

@@ -14,14 +14,16 @@ class EventHelper(object):
     def __init__(self, listener_type):
         assert(listener_type is not None)
         self._listener_type = listener_type
-        self._listeners = []
+        self._listeners = set()
 
     def add_listener(self, listener):
         assert(isinstance(listener, self._listener_type))
-        self._listeners.append(listener)
+        assert listener not in self._listeners, \
+               "Cannot add the same listener more than once"
+        self._listeners.add(listener)
 
     def remove_listener(self, listener):
-        self._listeners.remove(listener)
+        self._listeners.discard(listener)
 
     @property
     def listeners(self):
@@ -32,7 +34,7 @@ class EventHelper(object):
         # We have to use a copy here because the listener may
         # remove themselves during the message
         for l in list(self.listeners):
-            getattr(l, event_function)(*args, **kwargs)
+            getattr(l, event_function.__name__)(*args, **kwargs)
 
 
 class ThreadSafeCounter(object):

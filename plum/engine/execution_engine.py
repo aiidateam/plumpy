@@ -113,7 +113,7 @@ class ExecutionEngine(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def submit(self, process_class, inputs):
+    def submit(self, process_class, inputs=None):
         """
         Submit a process to be executed with some inputs at some point.
 
@@ -131,5 +131,14 @@ class ExecutionEngine(object):
 
         :param checkpoint: The checkpoint to continue the process from.
         :return: A Future object that represents the execution of the Process.
+        """
+        pass
+
+    @abstractmethod
+    def shutdown(self):
+        """
+        Shut down the engine cancelling and destroying all current processes.
+        This could take some time depending on what the processes are doing and
+        the exect details of the engine implementation.
         """
         pass

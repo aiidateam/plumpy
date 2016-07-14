@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import threading
+import traceback
 import concurrent.futures
 from plum.wait import WaitOn
 from plum.engine.execution_engine import ExecutionEngine, Future
+from plum.process_monitor import monitor
 from plum.util import override
 from enum import Enum
 
@@ -111,6 +113,7 @@ class TickingEngine(ExecutionEngine):
     class ProcessInfo(object):
         def __init__(self, process, future, status, wait_on=None):
             self._process = process
+            self._pid = process.pid
             self.waiting_on = wait_on
             self.future = future
             self.status = status
@@ -118,6 +121,10 @@ class TickingEngine(ExecutionEngine):
         @property
         def process(self):
             return self._process
+
+        @property
+        def pid(self):
+            return self._pid
 
     def __init__(self, process_factory=None, process_registry=None):
         if process_factory is None:
@@ -133,14 +140,9 @@ class TickingEngine(ExecutionEngine):
         self._process_queue = []
 
     @override
-    def submit(self, process_class, inputs):
+    def submit(self, process_class, inputs=None):
         process = self._process_factory.create_process(process_class, inputs)
         fut = _Future(self, process.pid)
-
-        # Register before putting in queue because we may be being ticked from
-        # anther thread
-        if self._process_registry:
-            self._process_registry.register_running_process(process)
 
         # Put it in the queue
         self._current_processes[process.pid] =\
@@ -153,11 +155,7 @@ class TickingEngine(ExecutionEngine):
         process, wait_on = self._process_factory.recreate_process(checkpoint)
         fut = _Future(self, process.pid)
 
-        # Register before putting in queue because we may be being ticked from
-        # anther thread
-        if self._process_registry:
-            self._process_registry.register_running_process(process)
-        process.signal_on_restart(self, self._process_registry)
+        process.perform_continue(wait_on)
 
         # Put it in the queue
         if wait_on:
@@ -177,11 +175,11 @@ class TickingEngine(ExecutionEngine):
 
             if proc_info.status is ProcessStatus.QUEUEING:
                 try:
-                    self._start_process(proc_info)
+                    self._run_process(proc_info)
                 except BaseException:
                     exc_obj, exc_tb = sys.exc_info()[1:]
-                    self._fail_process(proc_info, exc_obj)
-                    proc_info.future.process_failed(exc_obj, exc_tb)
+                    traceback.print_exc()
+                    self._fail_process(proc_info, exc_obj, exc_tb)
                     del self._current_processes[process.pid]
 
             elif proc_info.status is ProcessStatus.WAITING:
@@ -190,13 +188,14 @@ class TickingEngine(ExecutionEngine):
                         self._continue_process(proc_info)
                     except BaseException:
                         exc_obj, exc_tb = sys.exc_info()[1:]
-                        self._fail_process(proc_info, exc_obj)
-                        proc_info.future.process_failed(exc_obj, exc_tb)
+                        traceback.print_exc()
+                        self._fail_process(proc_info, exc_obj, exc_tb)
                         del self._current_processes[process.pid]
 
-            elif proc_info.status is ProcessStatus.FINISHED:
+            # Did the process manage to finish?
+            if proc_info.status is ProcessStatus.FINISHED:
                 try:
-                    process.signal_on_destroy()
+                    process.perform_destroy()
                 except BaseException:
                     pass
                 del self._current_processes[process.pid]
@@ -213,11 +212,20 @@ class TickingEngine(ExecutionEngine):
         if proc_info.status is ProcessStatus.QUEUEING:
             del self._current_processes[pid]
         else:
-            proc_info.process.signal_on_stop()
-            proc_info.process.signal_on_destroy()
+            proc_info.process.perform_stop()
+            proc_info.process.perform_destroy()
             del self._current_processes[pid]
 
-    def _start_process(self, proc_info):
+    def shutdown(self):
+        """
+        Shutdown the ticking engine.  This will cancel all processes.  This call
+        will block until all processes are cancelled which could take some time
+        if there are currently running processes.
+        """
+        for pid in list(self._current_processes):
+            self.cancel(pid)
+
+    def _run_process(self, proc_info):
         """
         Send the appropriate messages and start the Process.
         :param proc_info: The process information
@@ -230,7 +238,7 @@ class TickingEngine(ExecutionEngine):
 
         process = proc_info.process
 
-        process.signal_on_start(self, self._process_registry)
+        process.perform_run(self, self._process_registry)
         retval = process.do_run()
         if isinstance(retval, WaitOn):
             self._wait_process(proc_info, retval)
@@ -249,7 +257,7 @@ class TickingEngine(ExecutionEngine):
         wait_on = proc_info.waiting_on
         proc_info.waiting_on = None
 
-        process.signal_on_continue(wait_on)
+        process.perform_continue(wait_on)
         retval = getattr(process, wait_on.callback)(wait_on)
 
         # Check what to do next
@@ -265,7 +273,7 @@ class TickingEngine(ExecutionEngine):
         process = proc_info.process
 
         proc_info.waiting_on = wait_on
-        process.signal_on_wait(wait_on)
+        process.perform_wait(wait_on)
 
         proc_info.status = ProcessStatus.WAITING
 
@@ -275,28 +283,16 @@ class TickingEngine(ExecutionEngine):
 
         proc = proc_info.process
 
-        proc.signal_on_finish(retval)
+        proc.perform_finish(retval)
         proc_info.status = ProcessStatus.FINISHED
-        proc.signal_on_stop()
+        proc.perform_stop()
         proc_info.future.process_finished(proc.get_last_outputs())
 
-    def _fail_process(self, proc_info, exception):
-        try:
-            proc_info.process.signal_on_fail(exception)
-        except BaseException:
-            # MU: TODO Write a log message
-            pass
-
+    def _fail_process(self, proc_info, exc, tb):
+        # The order here is important because calling the future.process_failed
+        # will release anyone blocked waiting on the process to finish in which
+        # case the monitor should already have been informed.
         proc_info.status = ProcessStatus.FAILED
+        monitor.process_failed(proc_info.pid)
+        proc_info.future.process_failed(exc, tb)
 
-        try:
-            proc_info.process.signal_on_stop()
-        except BaseException:
-            # MU: TODO Write a log message
-            pass
-
-        try:
-            proc_info.process.signal_on_destroy()
-        except BaseException:
-            # MU: TODO Write a log message
-            pass

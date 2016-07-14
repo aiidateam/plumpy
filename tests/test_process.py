@@ -23,15 +23,11 @@ class ForgetToCallParent(Process):
         pass
 
     @override
-    def on_create(self, pid, inputs=None):
+    def on_create(self, pid, inputs, saved_instance_state):
         pass
 
     @override
-    def on_recreate(self, pid, saved_instance_state):
-        pass
-
-    @override
-    def on_start(self):
+    def on_run(self):
         pass
 
     @override
@@ -67,12 +63,10 @@ class TestProcess(TestCase):
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
-        if not self.proc._called_on_destroy:
-            self.proc.on_destroy()
 
-    def test_on_start(self):
-        self.proc.on_start()
-        self.assertTrue(self.events_tester.start)
+    def test_on_run(self):
+        self.proc.on_run()
+        self.assertTrue(self.events_tester.run)
 
     def test_on_output_emitted(self):
         self.proc._run()
@@ -119,7 +113,7 @@ class TestProcess(TestCase):
             p.inputs.a
 
         # Check that we can access the inputs after creating
-        p.on_create(0, {'a': 5})
+        p.on_create(0, {'a': 5}, None)
         self.assertEqual(p.inputs.a, 5)
         with self.assertRaises(AttributeError):
             p.inputs.b
@@ -141,28 +135,22 @@ class TestProcess(TestCase):
         p = ForgetToCallParent()
 
         with self.assertRaises(AssertionError):
-            p.signal_on_create(None, None)
+            p.perform_create(None, None)
 
         with self.assertRaises(AssertionError):
-            p.signal_on_recreate(None, None)
+            p.perform_run(None, None)
 
         with self.assertRaises(AssertionError):
-            p.signal_on_start(None, None)
+            p.perform_wait(None)
 
         with self.assertRaises(AssertionError):
-            p.signal_on_wait(None)
+            p.perform_continue(None)
 
         with self.assertRaises(AssertionError):
-            p.signal_on_continue(None)
+            p.perform_finish(None)
 
         with self.assertRaises(AssertionError):
-            p.signal_on_fail(None)
+            p.perform_stop()
 
         with self.assertRaises(AssertionError):
-            p.signal_on_finish(None)
-
-        with self.assertRaises(AssertionError):
-            p.signal_on_stop()
-
-        with self.assertRaises(AssertionError):
-            p.signal_on_destroy()
+            p.perform_destroy()

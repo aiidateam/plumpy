@@ -4,6 +4,7 @@ import plum.test_utils as common
 from plum.engine.serial import SerialEngine
 from plum.engine.ticking import TickingEngine
 from plum.util import override
+from plum.process_monitor import monitor, ProcessMonitorListener
 
 
 class TestExecutionEngine(TestCase):
@@ -34,39 +35,56 @@ class TestExecutionEngine(TestCase):
             engine.submit(common.ProcessEventsTester, None).result()
             self._test_engine_events(
                 common.ProcessEventsTester.called_events,
-                ['recreate', 'restart', 'wait', 'continue', 'exception'])
+                ['create', 'wait', 'continue', 'exception'])
 
     def test_submit_with_checkpoint(self):
         for engine in self.engines_to_test:
             engine.submit(common.CheckpointProcess, None).result()
             self._test_engine_events(
                 common.CheckpointProcess.called_events,
-                ['recreate', 'restart', 'exception'])
+                ['create', 'exception'])
 
     def test_submit_exception(self):
-        """
-        The raising of an exception by the process should still lead to an
-        on_stop and on_destroy message
-        """
         for engine in self.engines_to_test:
             e = engine.submit(common.ExceptionProcess, None).exception()
             self.assertIsInstance(e, RuntimeError)
             self._test_engine_events(
                 common.ExceptionProcess.called_events,
-                ['recreate', 'restart', 'finish', 'wait', 'continue'])
+                ['finish', 'wait', 'continue', 'stop', 'finish', 'destroy'])
 
     def test_submit_checkpoint_then_exception(self):
-        """
-        The raising of an exception by the process should still lead to an
-        on_stop and on_destroy message
-        """
         for engine in self.engines_to_test:
             e = engine.submit(common.CheckpointThenExceptionProcess, None).\
                 exception()
             self.assertIsInstance(e, RuntimeError)
             self._test_engine_events(
                 common.CheckpointThenExceptionProcess.called_events,
-                ['recreate', 'finish', 'restart'])
+                ['stop', 'finish', 'destroy'])
+
+    def test_exception_monitor_notification(self):
+        """
+        This test checks that when a process fails the engine notifies the
+        process monitor of the failure.
+        """
+        class MonitorListener(ProcessMonitorListener):
+            def __init__(self):
+                monitor.add_monitor_listener(self)
+                self.registered_called = False
+                self.failed_called = False
+
+            @override
+            def on_monitored_process_created(self, process):
+                self.registered_called = True
+
+            @override
+            def on_monitored_process_failed(self, pid):
+                self.failed_called = True
+
+        for engine in self.engines_to_test:
+            l = MonitorListener()
+            engine.submit(common.CheckpointThenExceptionProcess).exception()
+            self.assertTrue(l.registered_called)
+            self.assertTrue(l.failed_called)
 
     def tick_ticking(self, engine):
         """

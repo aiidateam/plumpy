@@ -10,10 +10,6 @@ class ProcessRegistry(object):
         pass
 
     @abstractmethod
-    def register_running_process(self, process):
-        pass
-
-    @abstractmethod
     def is_finished(self, pid):
         pass
 

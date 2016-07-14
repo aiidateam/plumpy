@@ -1,6 +1,7 @@
 
 
-from plum.process import Process, ProcessListener
+from plum.process import Process
+from plum.process_listener import ProcessListener
 from plum.util import override
 from plum.wait_ons import checkpoint
 
@@ -12,8 +13,8 @@ class DummyProcess(Process):
 
 
 class EventsTesterMixin(object):
-    EVENTS = ["create", "recreate", "start", "restart", "continue", "exception",
-              "finish", "emitted", "wait", "stop", "destroy", ]
+    EVENTS = ["create", "run", "continue", "finish", "emitted", "wait",
+              "stop", "destroy", ]
 
     called_events = []
 
@@ -28,24 +29,15 @@ class EventsTesterMixin(object):
         self.__class__.called_events = []
 
     @override
-    def on_create(self, pid, inputs=None):
-        super(EventsTesterMixin, self).on_create(pid, inputs)
+    def on_create(self, pid, inputs, saved_instance_state):
+        super(EventsTesterMixin, self).on_create(
+            pid, inputs, saved_instance_state)
         self.called('create')
 
     @override
-    def on_recreate(self, pid, saved_instance_state):
-        super(EventsTesterMixin, self).on_recreate(pid, saved_instance_state)
-        self.called('recreate')
-
-    @override
-    def on_start(self):
-        super(EventsTesterMixin, self).on_start()
-        self.called('start')
-
-    @override
-    def on_restart(self):
-        super(EventsTesterMixin, self).on_restart()
-        self.called('restart')
+    def on_run(self):
+        super(EventsTesterMixin, self).on_run()
+        self.called('run')
 
     @override
     def _on_output_emitted(self, output_port, value, dynamic):
@@ -64,11 +56,6 @@ class EventsTesterMixin(object):
         self.called('continue')
 
     @override
-    def on_fail(self, exception):
-        super(EventsTesterMixin, self).on_fail(exception)
-        self.called('exception')
-
-    @override
     def on_finish(self, retval):
         super(EventsTesterMixin, self).on_finish(retval)
         self.called('finish')
@@ -82,7 +69,6 @@ class EventsTesterMixin(object):
     def on_destroy(self):
         super(EventsTesterMixin, self).on_destroy()
         self.called('destroy')
-
 
 
 class ProcessEventsTester(EventsTesterMixin, Process):
@@ -100,8 +86,9 @@ class ProcessEventsTester(EventsTesterMixin, Process):
 
 class CheckpointProcess(ProcessEventsTester):
     @override
-    def on_create(self, pid, inputs=None):
-        super(CheckpointProcess, self).on_create(pid, inputs)
+    def on_create(self, pid, inputs, saved_instance_state):
+        super(CheckpointProcess, self).on_create(
+            pid, inputs, saved_instance_state)
         self._last_checkpoint = None
 
     @override
@@ -137,7 +124,7 @@ class CheckpointThenExceptionProcess(CheckpointProcess):
 class ProcessListenerTester(ProcessListener):
     def __init__(self):
         self.create = False
-        self.start = False
+        self.run = False
         self.continue_ = False
         self.finish = False
         self.emitted = False
@@ -145,13 +132,9 @@ class ProcessListenerTester(ProcessListener):
         self.destroy = False
 
     @override
-    def on_create(self, pid, inputs=None):
-        self.create = True
-
-    @override
-    def on_process_start(self, process):
+    def on_process_run(self, process):
         assert isinstance(process, Process)
-        self.start = True
+        self.run = True
 
     @override
     def on_output_emitted(self, process, output_port, value, dynamic):

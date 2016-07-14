@@ -1,41 +1,13 @@
 # -*- coding: utf-8 -*-
 
+import uuid
 import plum.util as util
 from abc import ABCMeta, abstractmethod
 from plum.persistence.bundle import Bundle
+from plum.process_listener import ProcessListener
+from plum.process_monitor import monitor
 from plum.process_spec import ProcessSpec
 from plum.util import protected
-
-
-class ProcessListener(object):
-    __metaclass__ = ABCMeta
-
-    def on_process_start(self, process):
-        pass
-
-    def on_process_restart(self, process):
-        pass
-
-    def on_output_emitted(self, process, output_port, value, dynamic):
-        pass
-
-    def on_process_wait(self, process, wait_on):
-        pass
-
-    def on_process_continue(self, process, wait_on):
-        pass
-
-    def on_process_fail(self, process, exception):
-        pass
-
-    def on_process_finish(self, process, retval):
-        pass
-
-    def on_process_stop(self, process):
-        pass
-
-    def on_process_destroy(self, process):
-        pass
 
 
 class Process(object):
@@ -95,8 +67,7 @@ class Process(object):
         self.__event_helper = util.EventHelper(ProcessListener)
 
         # Flags to make sure all the necessary event methods were called
-        self._base_class_message_received = False
-        self._called_on_destroy = False
+        self._called = False
 
     @property
     def pid(self):
@@ -125,81 +96,61 @@ class Process(object):
     # Signalling messages ######################################################
     # Methods that signal events have happened, these should be called by the
     # external processes driving the Process (usually the engine)
-    def signal_on_create(self, pid, inputs=None):
-        self._base_class_message_received = False
-        self.on_create(pid, inputs)
-        assert self._base_class_message_received, \
+    def perform_create(self, pid=None, inputs=None, saved_instance_state=None):
+        if pid is None:
+            pid = uuid.uuid1()
+
+        self._called = False
+        self.on_create(pid, inputs, saved_instance_state)
+        assert self._called, \
             "on_create was not called\n" \
             "Hint: Did you forget to call the superclass method?"
+        monitor.process_created(self)
 
-    def signal_on_recreate(self, pid, saved_instance_state):
-        self._base_class_message_received = False
-        self.on_recreate(pid, saved_instance_state)
-        assert self._base_class_message_received, \
-            "on_recreate was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
-
-    def signal_on_start(self, exec_engine, registry):
+    def perform_run(self, exec_engine, registry):
         self._exec_engine = exec_engine
         self._process_registry = registry
 
-        self._base_class_message_received = False
-        self._on_start_called = False
-        self.on_start()
-        assert self._base_class_message_received, \
-            "on_start was not called\n" \
+        self._called = False
+        self.on_run()
+        assert self._called, \
+            "on_run was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-    def signal_on_restart(self, exec_engine, registry):
-        self._exec_engine = exec_engine
-        self._process_registry = registry
-
-        self._base_class_message_received = False
-        self._on_restart_called = False
-        self.on_restart()
-        assert self._base_class_message_received, \
-            "on_restart was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
-
-    def signal_on_wait(self, wait_on):
-        self._base_class_message_received = False
+    def perform_wait(self, wait_on):
+        self._called = False
         self.on_wait(wait_on)
-        assert self._base_class_message_received, \
+        assert self._called, \
             "on_wait was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-    def signal_on_continue(self, wait_on):
-        self._base_class_message_received = False
+    def perform_continue(self, wait_on):
+        self._called = False
         self.on_continue(wait_on)
-        assert self._base_class_message_received, \
+        assert self._called, \
             "on_continue was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-    def signal_on_fail(self, exception):
-        self._base_class_message_received = False
-        self.on_fail(exception)
-        assert self._base_class_message_received, \
-            "on_fail was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
+        self.perform_run(self.get_exec_engine(), self._process_registry)
 
-    def signal_on_finish(self, retval):
-        self._base_class_message_received = False
+    def perform_finish(self, retval):
+        self._called = False
         self.on_finish(retval)
-        assert self._base_class_message_received, \
+        assert self._called, \
             "on_finish was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-    def signal_on_stop(self):
-        self._base_class_message_received = False
+    def perform_stop(self):
+        self._called = False
         self.on_stop()
-        assert self._base_class_message_received, \
+        assert self._called, \
             "on_stop was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-    def signal_on_destroy(self):
-        self._base_class_message_received = False
+    def perform_destroy(self):
+        self._called = False
         self.on_destroy()
-        assert self._base_class_message_received, \
+        assert self._called, \
             "on_destroy was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
@@ -208,7 +159,8 @@ class Process(object):
     # Process messages #####################################################
     # These should only be called by an execution engine (or tests)
     # Make sure to call the superclass method if your override any of these
-    def on_create(self, pid, inputs=None):
+    @protected
+    def on_create(self, pid, inputs, saved_instance_state):
         """
         Called when the process is created.  If a checkpoint is supplied the
         process should reinstate its state at the time the checkpoint was taken
@@ -224,23 +176,10 @@ class Process(object):
             inputs = {}
         self._check_inputs(inputs)
         self._inputs = util.AttributesFrozendict(inputs)
-        self._base_class_message_received = True
+        self._called = True
 
-    def on_recreate(self, pid, saved_instance_state):
-        """
-        Called when the process is recreated from a previous state.  It should
-        recreate its state from the passed bundle.
-
-        :param saved_instance_state: The checkpoint to recreate from.
-        """
-        # In this case there is no message fired because no one could have
-        # registered themselves as a listener by this point in the lifecycle.
-        self._pid = pid
-        self._inputs = util.AttributesFrozendict(
-            saved_instance_state[self._INPUTS])
-        self._base_class_message_received = True
-
-    def on_start(self):
+    @protected
+    def on_run(self):
         """
         Called when the inputs of a process passed checks and the process
         is about to begin.
@@ -249,28 +188,22 @@ class Process(object):
         method, usually at the end of the function.
 
         """
-        self.__event_helper.fire_event('on_process_start', self)
-        self._base_class_message_received = True
+        self.__event_helper.fire_event(ProcessListener.on_process_run, self)
+        self._called = True
 
-    def on_restart(self):
-        """
-        Temporary to be removed later
-        """
-        self.__event_helper.fire_event('on_process_restart', self)
-        self._base_class_message_received = True
-
+    @protected
     def on_wait(self, wait_on):
-        self.__event_helper.fire_event('on_process_wait', self, wait_on)
-        self._base_class_message_received = True
+        self.__event_helper.fire_event(
+            ProcessListener.on_process_wait, self, wait_on)
+        self._called = True
 
+    @protected
     def on_continue(self, wait_on):
-        self.__event_helper.fire_event('on_process_continue', self, wait_on)
-        self._base_class_message_received = True
+        self.__event_helper.fire_event(
+            ProcessListener.on_process_continue, self, wait_on)
+        self._called = True
 
-    def on_fail(self, exception):
-        self.__event_helper.fire_event('on_process_fail', self, exception)
-        self._base_class_message_received = True
-
+    @protected
     def on_finish(self, retval):
         """
         Called when the process has finished and the outputs have passed
@@ -278,28 +211,25 @@ class Process(object):
         :param retval: The return value from the process
         """
         self._check_outputs()
-        self.__event_helper.fire_event('on_process_finish', self, retval)
-        self._base_class_message_received = True
+        self.__event_helper.fire_event(
+            ProcessListener.on_process_finish, self, retval)
+        self._called = True
 
+    @protected
     def on_stop(self):
-        self.__event_helper.fire_event('on_process_stop', self)
-        self._base_class_message_received = True
+        self.__event_helper.fire_event(ProcessListener.on_process_stop, self)
+        self._called = True
 
+    @protected
     def on_destroy(self):
         """
-        Called when the process has completed execution, however this may be
-        the result of returning or an exception being raised.  Either way this
-        message is guaranteed to be sent.  Only upon successful return and
-        outputs passing checks would _on_process_finished be called.
+        Called when the process has completed execution, and is being destroyed.
         """
-        assert not self._called_on_destroy, "Can't call on_destroy twice."
-
-        self._called_on_destroy = True
-        self.__event_helper.fire_event('on_process_destroy', self)
-        self._base_class_message_received = True
+        self.__event_helper.fire_event(ProcessListener.on_process_destroy, self)
+        self._called = True
 
     def _on_output_emitted(self, output_port, value, dynamic):
-        self.__event_helper.fire_event('on_output_emitted',
+        self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
 
     #####################################################################
@@ -413,11 +343,6 @@ class Process(object):
     @abstractmethod
     def _run(self, **kwargs):
         pass
-
-    def __del__(self):
-        assert self._called_on_destroy, \
-            "The Process is being deleted without on_destory having been " \
-            "called."
 
 
 class FunctionProcess(Process):

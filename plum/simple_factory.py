@@ -4,6 +4,7 @@ from plum.process_factory import ProcessFactory
 from plum.util import override
 from plum.wait import WaitOn
 from plum.persistence.checkpoint import Checkpoint
+from plum.process import Process
 import uuid
 
 
@@ -14,7 +15,7 @@ class SimpleFactory(ProcessFactory):
     @override
     def create_process(self, process_class, inputs=None):
         proc = process_class()
-        proc.on_create(self._create_pid(), inputs)
+        proc.perform_create(self._create_pid(), inputs)
         return proc
 
     @override
@@ -24,8 +25,9 @@ class SimpleFactory(ProcessFactory):
         proc = checkpoint.process_class()
 
         wait_on = WaitOn.create_from(checkpoint.wait_on_state, self)
+        inputs = checkpoint.process_instance_state[Process._INPUTS]
 
-        proc.on_recreate(pid, checkpoint.process_instance_state)
+        proc.perform_create(pid, inputs, checkpoint.process_instance_state)
         return proc, wait_on
 
     @override

@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
-import time
 import sys
+import time
+import traceback
 from plum.engine.execution_engine import ExecutionEngine, Future
+from plum.process_monitor import monitor
 from plum.util import override
 from plum.wait import WaitOn
 
@@ -15,8 +17,6 @@ class SerialEngine(ExecutionEngine):
 
     class Future(Future):
         def __init__(self, func, process, *args, **kwargs):
-            import sys
-
             self._exception = None
             self._result = None
             self._pid = process.pid
@@ -29,8 +29,10 @@ class SerialEngine(ExecutionEngine):
                 # not, not wait around for the process to finish
                 raise
             except BaseException:
+                traceback.print_exc()
                 exc_obj, exc_tb = sys.exc_info()[1:]
                 self._set_exception_info(exc_obj, exc_tb)
+                monitor.process_failed(self._pid)
 
         @property
         def pid(self):
@@ -121,7 +123,7 @@ class SerialEngine(ExecutionEngine):
         self._poll_interval = poll_interval
 
     @override
-    def submit(self, process_class, inputs):
+    def submit(self, process_class, inputs=None):
         """
         Submit a process, this gets executed immediately and in fact the Future
         will always be done when returned.
@@ -148,8 +150,6 @@ class SerialEngine(ExecutionEngine):
         return self._do_run_and_block(proc)
 
     def _do_run_and_block(self, proc):
-        if self._process_registry:
-            self._process_registry.register_running_process(proc)
         return self._run_lifecycle(proc)
 
     @override
@@ -174,10 +174,11 @@ class SerialEngine(ExecutionEngine):
         proc, wait_on = self._process_factory.recreate_process(checkpoint)
         return self._do_run_from_and_block(proc, wait_on)
 
+    def shutdown(self):
+        pass
+
     def _do_run_from_and_block(self, proc, wait_on):
-        if self._process_registry:
-            self._process_registry.register_running_process(proc)
-        proc.signal_on_restart(self, self._process_registry)
+        proc.perform_continue(wait_on)
         return self._run_lifecycle(proc, wait_on)
 
     def _run_lifecycle(self, proc, wait_on=None):
@@ -197,17 +198,15 @@ class SerialEngine(ExecutionEngine):
             # Ok, something has gone wrong with the process (or we've caused
             # an exception).  So, wrap up the process and propagate the
             # exception
-            self._fail_process(proc, e)
-            proc.signal_on_destroy()
             raise
 
         outs = proc.get_last_outputs()
-        proc.signal_on_destroy()
+        proc.perform_destroy()
         return outs
 
     def _do_run(self, process):
         # Run the process
-        retval = self._start_process(process)
+        retval = self._run_process(process)
         if isinstance(retval, WaitOn):
             retval = self._continue_till_finished(process, retval)
         self._finish_process(process, retval)
@@ -231,20 +230,20 @@ class SerialEngine(ExecutionEngine):
 
         return retval
 
-    def _start_process(self, process):
+    def _run_process(self, process):
         """
         Send the appropriate messages and start the Process.
 
         :param process: The process to start
         """
-        process.signal_on_start(self, self._process_registry)
+        process.perform_run(self, self._process_registry)
         return process.do_run()
 
     def _continue_process(self, process, wait_on):
         assert wait_on is not None,\
             "Cannot continue a process that was not waiting"
 
-        process.signal_on_continue(wait_on)
+        process.perform_continue(wait_on)
 
         # Get the WaitOn callback function name and call it
         return getattr(process, wait_on.callback)(wait_on)
@@ -253,15 +252,12 @@ class SerialEngine(ExecutionEngine):
         assert wait_on is not None,\
             "Cannot wait on a process that is already waiting"
 
-        process.signal_on_wait(wait_on)
+        process.perform_wait(wait_on)
 
     def _finish_process(self, process, retval):
-        process.signal_on_finish(retval)
-        process.signal_on_stop()
+        process.perform_finish(retval)
+        process.perform_stop()
 
-    def _fail_process(self, process, exception):
-        process.signal_on_fail(exception)
-        process.signal_on_stop()
 
 
 
