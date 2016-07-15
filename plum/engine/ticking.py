@@ -191,6 +191,10 @@ class TickingEngine(ExecutionEngine):
                         traceback.print_exc()
                         self._fail_process(proc_info, exc_obj, exc_tb)
                         del self._current_processes[process.pid]
+            else:
+                raise RuntimeError(
+                    "Process should not be in state {}".format(
+                        proc_info.status))
 
             # Did the process manage to finish?
             if proc_info.status is ProcessStatus.FINISHED:
@@ -200,10 +204,6 @@ class TickingEngine(ExecutionEngine):
                     pass
                 del self._current_processes[process.pid]
 
-            else:
-                raise RuntimeError(
-                    "Process should not be in state {}".format(proc_info.status)
-                )
 
         return len(self._current_processes) > 0
 

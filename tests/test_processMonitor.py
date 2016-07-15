@@ -2,8 +2,8 @@
 from unittest import TestCase
 from plum.process_monitor import monitor, ProcessMonitor, ProcessMonitorListener
 from plum.util import override
-from plum.test_utils import DummyProcess
-
+from plum.test_utils import DummyProcess, ExceptionProcess
+from plum.engine.serial import SerialEngine
 
 class EventTracker(ProcessMonitorListener):
     def __init__(self):
@@ -29,13 +29,27 @@ class EventTracker(ProcessMonitorListener):
 
 
 class TestProcessMonitor(TestCase):
+    def setUp(self):
+        self.engine = SerialEngine()
+
     def test_create_destroy(self):
         l = EventTracker()
 
-        d = DummyProcess()
-        d.perform_create()
+        self.engine.submit(DummyProcess)
+
         self.assertTrue(l.created_called)
-        d.perform_destroy()
         self.assertTrue(l.destroyed_called)
-        del d
+        self.assertFalse(l.failed_called)
+
+        del l
+
+    def test_create_fail(self):
+        l = EventTracker()
+
+        self.engine.submit(ExceptionProcess)
+
+        self.assertTrue(l.created_called)
+        self.assertFalse(l.destroyed_called)
+        self.assertTrue(l.failed_called)
+
         del l
