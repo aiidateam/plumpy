@@ -2,6 +2,8 @@
 
 from plum.port import InputPort, InputGroupPort, OutputPort,\
     DynamicOutputPort, DynamicInputPort
+from plum._base import LOGGER
+
 
 
 class ProcessSpec(object):
@@ -70,7 +72,7 @@ class ProcessSpec(object):
         if not isinstance(port, InputPort):
             raise TypeError("Input port must be an instance of InputPort")
         if name in self._inputs:
-            raise ValueError("Input {} already exists.".format(name))
+            LOGGER.info("Overwriting existing input '{}'.".format(name))
 
         self._inputs[name] = port
 
@@ -109,7 +111,7 @@ class ProcessSpec(object):
         if not isinstance(port, OutputPort):
             raise TypeError("Output port must be an instance of OutputPort")
         if name in self._outputs:
-            raise ValueError("Output {} already exists.".format(name))
+            LOGGER.info("Overwriting existing output '{}'.".format(name))
 
         self._outputs[name] = port
 

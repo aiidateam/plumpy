@@ -1,5 +1,5 @@
 from unittest import TestCase
-from plum.lang import protected, override
+from plum.lang import call_super, protected, override
 
 
 class A(object):
@@ -122,5 +122,71 @@ class TestOverride(TestCase):
                 @property
                 def test(self):
                     return None
+#
+#
+# class A(object):
+#     def __init__(self):
+#         self.a_called = False
+#
+#     def test(self):
+#         self.a_called = True
+#
+#
+# class B(A):
+#     def __init__(self):
+#         super(B, self).__init__()
+#         self.b_called = False
+#
+#     @call_super
+#     def test(self):
+#         self.b_called = True
+#
+#
+# class C(B):
+#     def __init__(self):
+#         super(C, self).__init__()
+#         self.c_called = False
+#
+#     @call_super
+#     def test(self):
+#         self.c_called = True
+#
+# class BPrime(A):
+#     def __init__(self):
+#         super(A, super).__init__()
+#         self.b_prime_called = False
+#
+#     def test(self):
+#         self.b_prime_called = True
+#
+# class CPrime(BPrime):
+#     def __init__(self):
+#         super(CPrime, self).__init__()
+#         self.c_prime_called = False
+#
+#     @call_super
+#     def test(self):
+#         self._c_prime_called = True
 
+#  class TestCallSuper(TestCase):
+#     def test_one_up(self):
+#         b = B()
+#         b.test()
+#         self.assertTrue(b.a_called)
+#         self.assertTrue(b.b_called)
+#
+#     def test_two_up(self):
+#         c = C()
+#         c.test()
+#         self.assertTrue(c.a_called)
+#         self.assertTrue(c.b_called)
+#         self.assertTrue(c.c_called)
+#
+#     def test_two_up_skip_one(self):
+#         c_prime = CPrime()
+#         c_prime.test()
+#         self.assertTrue(c_prime.a_called)
+#         self.assertTrue(c_prime.b_prime_called)
+#         self.assertFalse(c_prime.a_called)
+#
 

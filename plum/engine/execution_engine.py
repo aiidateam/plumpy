@@ -135,6 +135,16 @@ class ExecutionEngine(object):
         pass
 
     @abstractmethod
+    def stop(self, pid):
+        """
+        Stop a running process.  If a process is in or enters a waiting state it
+        will be stopped at this point.  Otherwise the process will continue
+        until finished and stop after this.
+        :param pid: The pid of the process to stop.
+        """
+        pass
+
+    @abstractmethod
     def shutdown(self):
         """
         Shut down the engine cancelling and destroying all current processes.

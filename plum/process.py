@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import uuid
+from enum import Enum
 import plum.util as util
 from abc import ABCMeta, abstractmethod
 from plum.persistence.bundle import Bundle
@@ -10,7 +11,39 @@ from plum.process_spec import ProcessSpec
 from plum.util import protected
 
 
+class ProcessState(Enum):
+    CREATED = 0,
+    RUNNING = 1,
+    WAITING = 2,
+    FINISHED = 3,
+    STOPPED = 4,
+    DESTROYED = 5
+
+
 class Process(object):
+    """
+    The Process class is the base for any unit of work in the plum workflow
+    engine.
+    A process can be in one of the following states:
+    * CREATED
+    * WAITING
+    * RUNNING
+    * FINISHED
+    * STOPPED
+    * DESTROYED
+    as defined in the ProcessState enum.
+
+    The possible transition of states are:
+
+           /---WAITING---------------\
+          /       |                   \
+    CREATED -- RUNNING -- FINISHED -- STOPPED -- DESTROYED
+
+    When a Process enters a state is always gets a corresponding message, e.g.
+    on entering FINISHED it will recieve the on_finish message.  These are
+    always called just before that state is entered.
+
+    """
     __metaclass__ = ABCMeta
 
     # Static class stuff ######################
@@ -59,6 +92,7 @@ class Process(object):
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
+        self._state = None
         self._pid = None
         self._inputs = None
         self._exec_engine = None
@@ -76,6 +110,10 @@ class Process(object):
     @property
     def inputs(self):
         return self._inputs
+
+    @property
+    def state(self):
+        return self._state
 
     def get_last_outputs(self):
         return self._output_values
@@ -107,7 +145,12 @@ class Process(object):
             "Hint: Did you forget to call the superclass method?"
         monitor.process_created(self)
 
+        self._state = ProcessState.CREATED
+
     def perform_run(self, exec_engine, registry):
+        assert self.state is ProcessState.CREATED or \
+               self.state is ProcessState.WAITING
+
         self._exec_engine = exec_engine
         self._process_registry = registry
 
@@ -117,14 +160,23 @@ class Process(object):
             "on_run was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
+        self._state = ProcessState.RUNNING
+
     def perform_wait(self, wait_on):
+        assert self.state is ProcessState.RUNNING or \
+               self.state is ProcessState.CREATED
+
         self._called = False
         self.on_wait(wait_on)
         assert self._called, \
             "on_wait was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
+        self._state = ProcessState.WAITING
+
     def perform_continue(self, wait_on):
+        assert self.state is ProcessState.WAITING
+
         self._called = False
         self.on_continue(wait_on)
         assert self._called, \
@@ -134,25 +186,38 @@ class Process(object):
         self.perform_run(self.get_exec_engine(), self._process_registry)
 
     def perform_finish(self, retval):
+        assert self.state is ProcessState.RUNNING
+
         self._called = False
         self.on_finish(retval)
         assert self._called, \
             "on_finish was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
+        self._state = ProcessState.FINISHED
+
     def perform_stop(self):
+        assert self.state is ProcessState.FINISHED or\
+               self.state is ProcessState.WAITING
+
         self._called = False
         self.on_stop()
         assert self._called, \
             "on_stop was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
+        self._state = ProcessState.STOPPED
+
     def perform_destroy(self):
+        assert self.state is ProcessState.STOPPED
+
         self._called = False
         self.on_destroy()
         assert self._called, \
             "on_destroy was not called\n" \
             "Hint: Did you forget to call the superclass method?"
+
+        self._state = ProcessState.DESTROYED
 
     ############################################################################
 

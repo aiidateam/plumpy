@@ -67,3 +67,7 @@ def override(check=False):
         return wrapped_fn
 
     return wrap
+
+
+def call_super(func):
+    pass

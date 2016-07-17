@@ -155,7 +155,7 @@ class TickingEngine(ExecutionEngine):
         process, wait_on = self._process_factory.recreate_process(checkpoint)
         fut = _Future(self, process.pid)
 
-        process.perform_continue(wait_on)
+        process.perform_wait(wait_on)
 
         # Put it in the queue
         if wait_on:
@@ -166,6 +166,20 @@ class TickingEngine(ExecutionEngine):
                 self.ProcessInfo(process, fut, ProcessStatus.QUEUEING)
 
         return fut
+
+    @override
+    def stop(self, pid):
+        info = self._current_processes.pop(pid)
+        self._shutdown_process(info.process)
+
+    def shutdown(self):
+        """
+        Shutdown the ticking engine.  This will cancel all processes.  This call
+        will block until all processes are cancelled which could take some time
+        if there are currently running processes.
+        """
+        for info in self._current_processes.itervalues():
+            self.stop(info.pid)
 
     def tick(self):
         import sys
@@ -199,31 +213,19 @@ class TickingEngine(ExecutionEngine):
             # Did the process manage to finish?
             if proc_info.status is ProcessStatus.FINISHED:
                 try:
-                    process.perform_destroy()
+                    self._shutdown_process(proc_info.process)
                 except BaseException:
                     pass
                 del self._current_processes[process.pid]
-
 
         return len(self._current_processes) > 0
 
     def cancel(self, pid):
         proc_info = self._current_processes[pid]
-        if proc_info.status is ProcessStatus.QUEUEING:
-            del self._current_processes[pid]
-        else:
-            proc_info.process.perform_stop()
-            proc_info.process.perform_destroy()
-            del self._current_processes[pid]
+        if proc_info.status is not ProcessStatus.QUEUEING:
+            self._shutdown_process(proc_info.process)
 
-    def shutdown(self):
-        """
-        Shutdown the ticking engine.  This will cancel all processes.  This call
-        will block until all processes are cancelled which could take some time
-        if there are currently running processes.
-        """
-        for pid in list(self._current_processes):
-            self.cancel(pid)
+        del self._current_processes[pid]
 
     def _run_process(self, proc_info):
         """
@@ -285,7 +287,6 @@ class TickingEngine(ExecutionEngine):
 
         proc.perform_finish(retval)
         proc_info.status = ProcessStatus.FINISHED
-        proc.perform_stop()
         proc_info.future.process_finished(proc.get_last_outputs())
 
     def _fail_process(self, proc_info, exc, tb):
@@ -296,3 +297,6 @@ class TickingEngine(ExecutionEngine):
         monitor.process_failed(proc_info.pid)
         proc_info.future.process_failed(exc, tb)
 
+    def _shutdown_process(self, process):
+        process.perform_stop()
+        process.perform_destroy()

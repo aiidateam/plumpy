@@ -33,7 +33,6 @@ class TestPicklePersistence(TestCase):
 
     def tearDown(self):
         self._empty_directory()
-        self.dummy_proc.perform_destroy()
 
     def test_store_directory(self):
         self.assertEqual(self.store_dir,
@@ -73,7 +72,6 @@ class TestPicklePersistence(TestCase):
 
     def test_save(self):
         self.pickle_persistence.save(self.dummy_proc)
-        self.dummy_proc.on_destroy()
         self.assertTrue(os.path.isfile(self.save_path))
 
     def _empty_directory(self):

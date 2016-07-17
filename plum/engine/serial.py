@@ -174,7 +174,11 @@ class SerialEngine(ExecutionEngine):
         proc, wait_on = self._process_factory.recreate_process(checkpoint)
         return self._do_run_from_and_block(proc, wait_on)
 
+    @override
     def shutdown(self):
+        pass
+
+    def stop(self, pid):
         pass
 
     def _do_run_from_and_block(self, proc, wait_on):
@@ -191,15 +195,16 @@ class SerialEngine(ExecutionEngine):
         """
         try:
             if wait_on is None:
-                self._do_run(proc)
+                retval = self._do_run(proc)
             else:
-                self._do_continue(proc, wait_on)
+                retval = self._do_continue(proc, wait_on)
         except BaseException as e:
             # Ok, something has gone wrong with the process (or we've caused
             # an exception).  So, wrap up the process and propagate the
             # exception
             raise
 
+        self._finish_process(proc, retval)
         outs = proc.get_last_outputs()
         proc.perform_destroy()
         return outs
@@ -209,11 +214,10 @@ class SerialEngine(ExecutionEngine):
         retval = self._run_process(process)
         if isinstance(retval, WaitOn):
             retval = self._continue_till_finished(process, retval)
-        self._finish_process(process, retval)
+        return retval
 
     def _do_continue(self, process, wait_on):
-        retval = self._continue_till_finished(process, wait_on)
-        self._finish_process(process, retval)
+        return self._continue_till_finished(process, wait_on)
 
     def _continue_till_finished(self, process, wait_on):
         # Keep looping until there is nothing to wait for
