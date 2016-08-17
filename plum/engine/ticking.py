@@ -1,21 +1,13 @@
 # -*- coding: utf-8 -*-
 
+import sys
 import threading
-import traceback
 import concurrent.futures
-from plum.wait import WaitOn
+import uuid
+from plum.process import Process, ProcessState
 from plum.engine.execution_engine import ExecutionEngine, Future
-from plum.process_monitor import monitor
 from plum.util import override
 from enum import Enum
-
-
-class ProcessStatus(Enum):
-    QUEUEING = 0,
-    RUNNING = 1,
-    WAITING = 2,
-    FINISHED = 3,
-    FAILED=4
 
 
 class _Future(Future):
@@ -63,7 +55,7 @@ class _Future(Future):
         self._invoke_callbacks()
 
     def cancel(self):
-        self._engine.cancel(self._pid)
+        self._engine.stop(self._pid)
         self._status = self.Status.CANCELLED
 
     def cancelled(self):
@@ -111,12 +103,9 @@ class _Future(Future):
 
 class TickingEngine(ExecutionEngine):
     class ProcessInfo(object):
-        def __init__(self, process, future, status, wait_on=None):
+        def __init__(self, process, future):
             self._process = process
-            self._pid = process.pid
-            self.waiting_on = wait_on
             self.future = future
-            self.status = status
 
         @property
         def process(self):
@@ -124,179 +113,83 @@ class TickingEngine(ExecutionEngine):
 
         @property
         def pid(self):
-            return self._pid
+            return self._process.pid
 
-    def __init__(self, process_factory=None, process_registry=None):
-        if process_factory is None:
-            from plum.simple_factory import SimpleFactory
-            process_factory = SimpleFactory()
-        if process_registry is None:
-            from plum.simple_registry import SimpleRegistry
-            process_registry = SimpleRegistry()
-
-        self._process_factory = process_factory
-        self._process_registry = process_registry
+    def __init__(self):
         self._current_processes = {}
-        self._process_queue = []
+        self._shutting_down = False
 
     @override
     def submit(self, process_class, inputs=None):
-        process = self._process_factory.create_process(process_class, inputs)
-        fut = _Future(self, process.pid)
+        assert not self._shutting_down
+
+        proc = process_class.create(self._create_pid(), inputs)
+        fut = _Future(self, proc.pid)
 
         # Put it in the queue
-        self._current_processes[process.pid] =\
-            self.ProcessInfo(process, fut, ProcessStatus.QUEUEING)
+        self._current_processes[proc.pid] = self.ProcessInfo(proc, fut)
 
         return fut
 
     @override
     def run_from(self, checkpoint):
-        process, wait_on = self._process_factory.recreate_process(checkpoint)
-        fut = _Future(self, process.pid)
+        assert not self._shutting_down
 
-        process.perform_wait(wait_on)
-
-        # Put it in the queue
-        if wait_on:
-            self._current_processes[process.pid] =\
-                self.ProcessInfo(process, fut, ProcessStatus.WAITING, wait_on)
-        else:
-            self._current_processes[process.pid] =\
-                self.ProcessInfo(process, fut, ProcessStatus.QUEUEING)
+        proc = Process.create_from(checkpoint)
+        fut = _Future(self, proc.pid)
+        self._current_processes[proc.pid] = self.ProcessInfo(proc, fut)
 
         return fut
 
     @override
     def stop(self, pid):
-        info = self._current_processes.pop(pid)
-        self._shutdown_process(info.process)
+        self._current_processes[pid].process.stop()
 
     def shutdown(self):
         """
-        Shutdown the ticking engine.  This will cancel all processes.  This call
+        Shutdown the ticking engine.  This will stop all processes.  This call
         will block until all processes are cancelled which could take some time
         if there are currently running processes.
         """
+        assert not self._shutting_down
+
+        self._shutting_down = True
         for info in self._current_processes.itervalues():
             self.stop(info.pid)
 
+        # This will get the processes to stop and destroy themselves
+        for proc_info in self._current_processes:
+            proc_info.process.run_till_end()
+
     def tick(self):
-        import sys
+        to_delete = []
 
         for proc_info in self._current_processes.values():
-            process = proc_info.process
+            proc = proc_info.process
+            pid = proc.pid
 
-            if proc_info.status is ProcessStatus.QUEUEING:
-                try:
-                    self._run_process(proc_info)
-                except BaseException:
-                    exc_obj, exc_tb = sys.exc_info()[1:]
-                    traceback.print_exc()
-                    self._fail_process(proc_info, exc_obj, exc_tb)
-                    del self._current_processes[process.pid]
+            # Run the damn thing
+            try:
+                proc.tick()
+            except KeyboardInterrupt:
+                # If the user interuppted the process then we should just raise
+                # not, not wait around for the process to finish
+                raise
+            except BaseException:
+                exc_obj, exc_tb = sys.exc_info()[1:]
+                proc_info.future.process_failed(exc_obj, exc_tb)
+                # Process is dead
+                to_delete.append(pid)
 
-            elif proc_info.status is ProcessStatus.WAITING:
-                if proc_info.waiting_on.is_ready(self._process_registry):
-                    try:
-                        self._continue_process(proc_info)
-                    except BaseException:
-                        exc_obj, exc_tb = sys.exc_info()[1:]
-                        traceback.print_exc()
-                        self._fail_process(proc_info, exc_obj, exc_tb)
-                        del self._current_processes[process.pid]
-            else:
-                raise RuntimeError(
-                    "Process should not be in state {}".format(
-                        proc_info.status))
+            if proc.state is ProcessState.FINISHED:
+                proc_info.future.process_finished(proc.get_last_outputs())
+            elif proc.state is ProcessState.DESTROYED:
+                to_delete.append(pid)
 
-            # Did the process manage to finish?
-            if proc_info.status is ProcessStatus.FINISHED:
-                try:
-                    self._shutdown_process(proc_info.process)
-                except BaseException:
-                    pass
-                del self._current_processes[process.pid]
+        for pid in to_delete:
+            del self._current_processes[pid]
 
         return len(self._current_processes) > 0
 
-    def cancel(self, pid):
-        proc_info = self._current_processes[pid]
-        if proc_info.status is not ProcessStatus.QUEUEING:
-            self._shutdown_process(proc_info.process)
-
-        del self._current_processes[pid]
-
-    def _run_process(self, proc_info):
-        """
-        Send the appropriate messages and start the Process.
-        :param proc_info: The process information
-        :return: None if the Process is waiting on something, the return value otherwise,
-        :note: Do not use a return value of None from this function to indicate that process
-        is not waiting on something as the process may simply have returned None.  Instead
-        use proc_info.waiting_on is None.
-        """
-        assert proc_info.status is ProcessStatus.QUEUEING
-
-        process = proc_info.process
-
-        process.perform_run(self, self._process_registry)
-        retval = process.do_run()
-        if isinstance(retval, WaitOn):
-            self._wait_process(proc_info, retval)
-        else:
-            self._finish_process(proc_info, retval)
-
-    def _continue_process(self, proc_info):
-        assert proc_info.status is ProcessStatus.WAITING
-        assert proc_info.waiting_on,\
-            "Cannot continue a process that was not waiting"
-
-        process = proc_info.process
-
-        # Get the WaitOn callback function name and call it
-        # making sure to reset the waiting_on
-        wait_on = proc_info.waiting_on
-        proc_info.waiting_on = None
-
-        process.perform_continue(wait_on)
-        retval = getattr(process, wait_on.callback)(wait_on)
-
-        # Check what to do next
-        if isinstance(retval, WaitOn):
-            self._wait_process(proc_info, retval)
-        else:
-            self._finish_process(proc_info, retval)
-
-    def _wait_process(self, proc_info, wait_on):
-        assert not proc_info.waiting_on,\
-            "Cannot wait on a process that is already waiting"
-
-        process = proc_info.process
-
-        proc_info.waiting_on = wait_on
-        process.perform_wait(wait_on)
-
-        proc_info.status = ProcessStatus.WAITING
-
-    def _finish_process(self, proc_info, retval):
-        assert not proc_info.waiting_on,\
-            "Cannot finish a process that is waiting"
-
-        proc = proc_info.process
-
-        proc.perform_finish(retval)
-        proc_info.status = ProcessStatus.FINISHED
-        proc_info.future.process_finished(proc.get_last_outputs())
-
-    def _fail_process(self, proc_info, exc, tb):
-        # The order here is important because calling the future.process_failed
-        # will release anyone blocked waiting on the process to finish in which
-        # case the monitor should already have been informed.
-        proc_info.status = ProcessStatus.FAILED
-        monitor.process_failed(proc_info.pid)
-        proc_info.future.process_failed(exc, tb)
-
-    def _shutdown_process(self, process):
-        process.perform_stop()
-        process.perform_destroy()
+    def _create_pid(self):
+        return uuid.uuid1()

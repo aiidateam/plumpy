@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import time
-import traceback
+import uuid
 from plum.engine.execution_engine import ExecutionEngine, Future
-from plum.process_monitor import monitor
+from plum.process import Process
 from plum.util import override
-from plum.wait import WaitOn
 
 
 class SerialEngine(ExecutionEngine):
@@ -23,16 +21,15 @@ class SerialEngine(ExecutionEngine):
 
             # Run the damn thing
             try:
-                self._set_result(func(process, *args, **kwargs))
+                func(process, *args, **kwargs)
+                self._set_result(process.get_last_outputs())
             except KeyboardInterrupt:
                 # If the user interuppted the process then we should just raise
                 # not, not wait around for the process to finish
                 raise
             except BaseException:
-                traceback.print_exc()
                 exc_obj, exc_tb = sys.exc_info()[1:]
                 self._set_exception_info(exc_obj, exc_tb)
-                monitor.process_failed(self._pid)
 
         @property
         def pid(self):
@@ -109,17 +106,7 @@ class SerialEngine(ExecutionEngine):
             """
             self._result = result
 
-    def __init__(self, poll_interval=10, process_factory=None,
-                 process_registry=None):
-        if process_factory is None:
-            from plum.simple_factory import SimpleFactory
-            process_factory = SimpleFactory()
-        if process_registry is None:
-            from plum.simple_registry import SimpleRegistry
-            process_registry = SimpleRegistry()
-
-        self._process_factory = process_factory
-        self._process_registry = process_registry
+    def __init__(self, poll_interval=10):
         self._poll_interval = poll_interval
 
     @override
@@ -132,8 +119,8 @@ class SerialEngine(ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return: A Future object that represents the execution of the Process.
         """
-        proc = self._process_factory.create_process(process_class, inputs)
-        return SerialEngine.Future(self._do_run_and_block, proc)
+        proc = process_class.create(self._create_pid(), inputs)
+        return SerialEngine.Future(Process.run_till_end, proc)
 
     def run_and_block(self, process_class, inputs):
         """
@@ -143,14 +130,10 @@ class SerialEngine(ExecutionEngine):
         :param inputs: The inputs to execute the process with
         :return: The outputs dictionary from the Process.
         """
-        if inputs is None:
-            inputs = {}
+        return self.submit(process_class, inputs).result()
 
-        proc = self._process_factory.create_process(process_class, inputs)
-        return self._do_run_and_block(proc)
-
-    def _do_run_and_block(self, proc):
-        return self._run_lifecycle(proc)
+    # def _do_run_and_block(self, proc):
+    #     return self._run_lifecycle(proc)
 
     @override
     def run_from(self, checkpoint):
@@ -160,9 +143,8 @@ class SerialEngine(ExecutionEngine):
         :param checkpoint: Continue the process from this checkpoint.
         :return: A Future object that represents the execution of the Process.
         """
-        proc, wait_on = self._process_factory.recreate_process(checkpoint)
-        return SerialEngine.Future(
-            self._do_run_from_and_block, proc, checkpoint, wait_on)
+        proc = Process.create_from(checkpoint)
+        return SerialEngine.Future(Process.run_till_end, proc)
 
     def run_from_and_block(self, checkpoint):
         """
@@ -171,8 +153,7 @@ class SerialEngine(ExecutionEngine):
         :param checkpoint: Continue the process from this checkpoint.
         :return: The outputs dictionary from the Process.
         """
-        proc, wait_on = self._process_factory.recreate_process(checkpoint)
-        return self._do_run_from_and_block(proc, wait_on)
+        return self.run_from(checkpoint).result()
 
     @override
     def shutdown(self):
@@ -181,86 +162,8 @@ class SerialEngine(ExecutionEngine):
     def stop(self, pid):
         pass
 
-    def _do_run_from_and_block(self, proc, wait_on):
-        proc.perform_continue(wait_on)
-        return self._run_lifecycle(proc, wait_on)
-
-    def _run_lifecycle(self, proc, wait_on=None):
-        """
-        Run the process through its events lifecycle.
-
-        :param proc: The process.
-        :param wait_on: An optional wait on for the process.
-        :return: The outputs dictionary from the process.
-        """
-        try:
-            if wait_on is None:
-                retval = self._do_run(proc)
-            else:
-                retval = self._do_continue(proc, wait_on)
-        except BaseException as e:
-            # Ok, something has gone wrong with the process (or we've caused
-            # an exception).  So, wrap up the process and propagate the
-            # exception
-            raise
-
-        self._finish_process(proc, retval)
-        outs = proc.get_last_outputs()
-        proc.perform_destroy()
-        return outs
-
-    def _do_run(self, process):
-        # Run the process
-        retval = self._run_process(process)
-        if isinstance(retval, WaitOn):
-            retval = self._continue_till_finished(process, retval)
-        return retval
-
-    def _do_continue(self, process, wait_on):
-        return self._continue_till_finished(process, wait_on)
-
-    def _continue_till_finished(self, process, wait_on):
-        # Keep looping until there is nothing to wait for
-        retval = wait_on
-        while isinstance(retval, WaitOn):
-            currently_waiting_on = retval
-            self._wait_process(process, currently_waiting_on)
-
-            # Keep polling until the thing it's waiting for is ready
-            while not currently_waiting_on.is_ready(self._process_registry):
-                time.sleep(self._poll_interval)
-
-            retval = self._continue_process(process, currently_waiting_on)
-
-        return retval
-
-    def _run_process(self, process):
-        """
-        Send the appropriate messages and start the Process.
-
-        :param process: The process to start
-        """
-        process.perform_run(self, self._process_registry)
-        return process.do_run()
-
-    def _continue_process(self, process, wait_on):
-        assert wait_on is not None,\
-            "Cannot continue a process that was not waiting"
-
-        process.perform_continue(wait_on)
-
-        # Get the WaitOn callback function name and call it
-        return getattr(process, wait_on.callback)(wait_on)
-
-    def _wait_process(self, process, wait_on):
-        assert wait_on is not None,\
-            "Cannot wait on a process that is already waiting"
-
-        process.perform_wait(wait_on)
-
-    def _finish_process(self, process, retval):
-        process.perform_finish(retval)
-        process.perform_stop()
+    def _create_pid(self):
+        return uuid.uuid1()
 
 
 

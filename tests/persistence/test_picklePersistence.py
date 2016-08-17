@@ -3,7 +3,6 @@ from unittest import TestCase
 from plum.process import Process
 from plum.persistence.pickle_persistence import PicklePersistence
 from plum.wait_ons import Checkpoint
-from plum.simple_factory import SimpleFactory
 import os.path
 
 
@@ -20,8 +19,7 @@ class TestPicklePersistence(TestCase):
         import tempfile
 
         self.store_dir = tempfile.mkdtemp()
-        self.pickle_persistence = \
-            PicklePersistence(SimpleFactory(), directory=self.store_dir)
+        self.pickle_persistence = PicklePersistence(directory=self.store_dir)
         # Have to call on_create to make sure the Process has a PID
         self.dummy_proc = DummyProcess()
         self.dummy_proc.perform_create()

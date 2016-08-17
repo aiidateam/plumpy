@@ -1,23 +1,24 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta, abstractmethod
+from enum import Enum
 from plum.util import fullname, load_class
-from plum.process import Process
 import inspect
 
 
 class WaitOn(object):
     __metaclass__ = ABCMeta
 
-    CLASS_NAME = "class_name"
-    CALLBACK_NAME = "callback_name"
+    class BundleKeys(Enum):
+        CLASS_NAME = "class_name"
+        CALLBACK_NAME = "callback_name"
 
     @classmethod
-    def create_from(cls, bundle, process_factory):
-        assert cls.CLASS_NAME in bundle
+    def create_from(cls, bundle):
+        assert cls.BundleKeys.CLASS_NAME.value in bundle
 
-        return load_class(bundle[cls.CLASS_NAME]).\
-            create_from(bundle, process_factory)
+        return load_class(bundle[cls.BundleKeys.CLASS_NAME.value]).\
+            create_from(bundle)
 
     def __init__(self, callback_name):
         self._callback_name = callback_name
@@ -27,15 +28,17 @@ class WaitOn(object):
         return self._callback_name
 
     @abstractmethod
-    def is_ready(self, registry):
+    def is_ready(self):
         pass
 
     def save_instance_state(self, out_state):
-        out_state[self.CLASS_NAME] = fullname(self)
-        out_state[self.CALLBACK_NAME] = self.callback
+        out_state[self.BundleKeys.CLASS_NAME.value] = fullname(self)
+        out_state[self.BundleKeys.CALLBACK_NAME.value] = self.callback
 
 
 def validate_callback_func(callback):
+    from plum.process import Process
+
     assert inspect.ismethod(callback), "Callback is not a member function"
     assert isinstance(callback.im_self, Process),\
         "Callback must be a method of a Process instance"

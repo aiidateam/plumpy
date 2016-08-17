@@ -2,9 +2,8 @@ from unittest import TestCase
 
 from plum.test_utils import ProcessListenerTester
 from plum.engine.serial import SerialEngine
-from plum.process import Process
+from plum.process import Process, ProcessState
 from plum.util import override
-
 
 
 class DummyProcess(Process):
@@ -77,7 +76,7 @@ class TestProcess(TestCase):
         self.assertTrue(self.events_tester.destroy)
 
     def test_on_finished(self):
-        self.proc.on_finish(None)
+        self.proc.on_finish()
         self.assertTrue(self.events_tester.finish)
 
     def test_dynamic_inputs(self):
@@ -147,10 +146,25 @@ class TestProcess(TestCase):
             p.perform_continue(None)
 
         with self.assertRaises(AssertionError):
-            p.perform_finish(None)
+            p.perform_finish()
 
         with self.assertRaises(AssertionError):
             p.perform_stop()
 
         with self.assertRaises(AssertionError):
             p.perform_destroy()
+
+    def test_tick(self):
+        proc = DummyProcess.create(None, None)
+        self.assertEqual(proc.state, ProcessState.CREATED)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.RUNNING)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.FINISHED)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.STOPPED)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.DESTROYED)
+
+    def test_instance_state(self):
+        pass

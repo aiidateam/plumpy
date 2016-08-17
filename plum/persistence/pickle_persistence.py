@@ -4,8 +4,9 @@ import os
 import os.path as path
 import tempfile
 import pickle
+from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
-from plum.process_monitor import monitor, ProcessMonitorListener
+from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.util import override
 from plum.persistence._base import LOGGER
 
@@ -16,17 +17,16 @@ _FAILED_DIRECTORY = path.join(_STORE_DIRECTORY, "failed")
 
 
 class PicklePersistence(ProcessListener, ProcessMonitorListener):
-    def __init__(self, process_factory, auto_persist=False,
+    def __init__(self, auto_persist=False,
                  directory=_STORE_DIRECTORY,
                  finished_directory=_FINISHED_DIRECTORY,
                  failed_directory=_FAILED_DIRECTORY):
-        self._process_factory = process_factory
         self._running_directory = directory
         self._finished_directory = finished_directory
         self._failed_directory = failed_directory
         self._auto_persist = auto_persist
 
-        monitor.add_monitor_listener(self)
+        MONITOR.add_monitor_listener(self)
 
     def load_checkpoint(self, pid):
         for check_dir in [self._running_directory, self._failed_directory,
@@ -84,8 +84,9 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         """
         return path.join(self._running_directory, self._pickle_filename(pid))
 
-    def save(self, process, wait_on=None):
-        checkpoint = self._process_factory.create_checkpoint(process, wait_on)
+    def save(self, process):
+        checkpoint = Bundle()
+        process.save_instance_state(checkpoint)
         self._ensure_directory(self._running_directory)
         filename = self.get_running_path(process.pid)
         try:
@@ -109,13 +110,13 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
     @override
     def on_process_wait(self, process, wait_on):
         try:
-            self.save(process, wait_on)
+            self.save(process)
         except pickle.PicklingError:
             LOGGER.error("exception raised trying to pickle process (pid={}) "
                          "during on_wait message.".format(process.pid))
 
     @override
-    def on_process_finish(self, process, retval):
+    def on_process_finish(self, process):
         try:
             self.save(process)
         except pickle.PicklingError:

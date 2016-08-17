@@ -1,7 +1,7 @@
 
 from abc import ABCMeta
 from plum.process_listener import ProcessListener
-from plum.util import EventHelper
+from plum.util import EventHelper, override
 
 
 class ProcessMonitorListener(object):
@@ -20,7 +20,8 @@ class ProcessMonitorListener(object):
 class ProcessMonitor(ProcessListener):
     """
     This class is a central monitor that keeps track of all the currently
-    running processes.
+    running processes.  This of it as the process manager in your OS that shows
+    you what is currently running.
 
     Clients can listen for messages to indicate when a new process is registered
     and when processes terminate because of finishing or failing.
@@ -56,12 +57,14 @@ class ProcessMonitor(ProcessListener):
         self.__event_helper.remove_listener(listener)
 
     # From ProcessListener #####################################################
+    @override
     def on_process_destroy(self, process):
-        process.remove_process_listener(self)
-        del self._processes[process.pid]
         self.__event_helper.fire_event(
             ProcessMonitorListener.on_monitored_process_destroying, process)
+
+        process.remove_process_listener(self)
+        del self._processes[process.pid]
     ############################################################################
 
 
-monitor = ProcessMonitor()
+MONITOR = ProcessMonitor()

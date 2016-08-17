@@ -56,8 +56,8 @@ class EventsTesterMixin(object):
         self.called('continue')
 
     @override
-    def on_finish(self, retval):
-        super(EventsTesterMixin, self).on_finish(retval)
+    def on_finish(self):
+        super(EventsTesterMixin, self).on_finish()
         self.called('finish')
 
     @override
@@ -152,7 +152,7 @@ class ProcessListenerTester(ProcessListener):
         self.continue_ = True
 
     @override
-    def on_process_finish(self, process, retval):
+    def on_process_finish(self, process):
         assert isinstance(process, Process)
         self.finish = True
 

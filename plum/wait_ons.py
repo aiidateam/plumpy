@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
-from plum.process import Process
+import plum.process_database as process_database
 from plum.persistence.bundle import Bundle
 from plum.wait import WaitOn, validate_callback_func
 from plum.util import override
@@ -13,11 +13,11 @@ class Checkpoint(WaitOn):
     create a checkpoint at this point in the execution of a Process.
     """
     @classmethod
-    def create_from(cls, saved_instance_state, process_factory):
-        return cls(saved_instance_state[cls.CALLBACK_NAME])
+    def create_from(cls, saved_instance_state):
+        return cls(saved_instance_state[WaitOn.BundleKeys.CALLBACK_NAME.value])
 
     @override
-    def is_ready(self, registry=None):
+    def is_ready(self):
         return True
 
 
@@ -32,10 +32,10 @@ class _CompoundWaitOn(WaitOn):
     WAIT_LIST = 'wait_list'
 
     @classmethod
-    def create_from(cls, saved_instance_state, process_factory):
+    def create_from(cls, saved_instance_state):
         return cls(
-            saved_instance_state[cls.CALLBACK_NAME],
-            [WaitOn.create_from(b, process_factory) for b in
+            saved_instance_state[WaitOn.BundleKeys.CALLBACK_NAME.value],
+            [WaitOn.create_from(b) for b in
              saved_instance_state[cls.WAIT_LIST]])
 
     def __init__(self, callback_name, wait_list):
@@ -56,8 +56,8 @@ class _CompoundWaitOn(WaitOn):
 
 class WaitOnAll(_CompoundWaitOn):
     @override
-    def is_ready(self, registry):
-        return all(w.is_ready(registry) for w in self._wait_list)
+    def is_ready(self):
+        return all(w.is_ready() for w in self._wait_list)
 
 
 def wait_on_all(callback, wait_list):
@@ -67,8 +67,8 @@ def wait_on_all(callback, wait_list):
 
 class WaitOnAny(_CompoundWaitOn):
     @override
-    def is_ready(self, registry):
-        return any(w.is_ready(registry) for w in self._wait_list)
+    def is_ready(self):
+        return any(w.is_ready() for w in self._wait_list)
 
 
 def wait_on_any(callback, wait_list):
@@ -80,8 +80,8 @@ class WaitOnProcess(WaitOn):
     WAIT_ON_PID = 'pid'
 
     @classmethod
-    def create_from(cls, bundle, process_factory):
-        return cls(bundle[cls.CALLBACK_NAME],
+    def create_from(cls, bundle):
+        return cls(bundle[WaitOn.BundleKeys.CALLBACK_NAME.value],
                    bundle[cls.WAIT_ON_PID])
 
     def __init__(self, callback_name, pid):
@@ -89,12 +89,13 @@ class WaitOnProcess(WaitOn):
         self._pid = pid
 
     @override
-    def is_ready(self, registry):
-        if not registry:
+    def is_ready(self):
+        db = process_database.get_db()
+        if not db:
             raise RuntimeError(
-                "Unable to check if process has finished because a registry "
-                "was not supplied.")
-        return registry.is_finished(self._pid)
+                "Unable to check if process has finished because a global "
+                "process database was not supplied.")
+        return db.has_finished(self._pid)
 
     @override
     def save_instance_state(self, out_state):
@@ -116,8 +117,8 @@ class WaitOnProcessOutput(WaitOn):
     OUTPUT_PORT = 'output_port'
 
     @classmethod
-    def create_from(cls, bundle, process_factory):
-        return cls(bundle[cls.CALLBACK_NAME],
+    def create_from(cls, bundle):
+        return cls(bundle[WaitOn.BundleKeys.CALLBACK_NAME.value],
                    bundle[cls.WAIT_ON_PID],
                    bundle[cls.OUTPUT_PORT])
 
@@ -127,15 +128,21 @@ class WaitOnProcessOutput(WaitOn):
         self._output_port = output_port
 
     @override
-    def is_ready(self, registry):
-        if not registry:
+    def is_ready(self):
+        db = process_database.get_db()
+        if not db:
             raise RuntimeError(
-                "Unable to check if process has finished because a registry "
-                "was not supplied.")
+                "Unable to check if process has finished because a global "
+                "process database was not supplied.")
+
         try:
-            registry.get_output(self._pid, self._output_port)
+            db.get_output(self._pid, self._output_port)
             return True
-        except ValueError:
+        except KeyError:
+            # If it can't find the output and the process has finished then we
+            # can't continue
+            if db.has_finished(self._pid):
+                raise
             return False
 
     @override

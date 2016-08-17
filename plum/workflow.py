@@ -84,13 +84,12 @@ class WorkflowListener(object):
         """
         pass
 
-    def on_subprocess_finished(self, workflow, subproc, retval):
+    def on_subprocess_finished(self, workflow, subproc):
         """
         Called when the process has finished and the outputs have passed
         checks
         :param workflow: The workflow whose subprocess finished.
         :param subproc: The subprocess that finished.
-        :param retval: The return value from the process
         """
         pass
 
@@ -263,8 +262,8 @@ class Workflow(Process, ProcessListener):
     def on_process_destroy(self, process):
         self._on_subprocess_finalising(process)
 
-    def on_process_finish(self, process, retval):
-        self._on_subprocess_finished(process, retval)
+    def on_process_finish(self, process):
+        self._on_subprocess_finished(process)
     ##################################################
 
     def _run(self, **kwargs):
@@ -364,15 +363,14 @@ class Workflow(Process, ProcessListener):
         self._workflow_evt_helper.fire_event(
             WorkflowListener.on_subprocess_finalising, self, subproc)
 
-    def _on_subprocess_finished(self, subproc, retval):
+    def _on_subprocess_finished(self, subproc):
         """
         Called when the process has finished and the outputs have passed
         checks
         :param subproc: The subprocess that has finished
-        :param retval: The return value from the process
         """
         self._workflow_evt_helper.fire_event(
-            WorkflowListener.on_subprocess_finished, self, subproc, retval)
+            WorkflowListener.on_subprocess_finished, self, subproc)
 
     def _on_value_buffered(self, link, value):
         """

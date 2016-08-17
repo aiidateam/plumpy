@@ -4,7 +4,7 @@ import plum.test_utils as common
 from plum.engine.serial import SerialEngine
 from plum.engine.ticking import TickingEngine
 from plum.util import override
-from plum.process_monitor import monitor, ProcessMonitorListener
+from plum.process_monitor import MONITOR, ProcessMonitorListener
 
 
 class TestExecutionEngine(TestCase):
@@ -68,7 +68,7 @@ class TestExecutionEngine(TestCase):
         """
         class MonitorListener(ProcessMonitorListener):
             def __init__(self):
-                monitor.add_monitor_listener(self)
+                MONITOR.add_monitor_listener(self)
                 self.registered_called = False
                 self.failed_called = False
 

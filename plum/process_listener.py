@@ -16,7 +16,7 @@ class ProcessListener(object):
     def on_process_continue(self, process, wait_on):
         pass
 
-    def on_process_finish(self, process, retval):
+    def on_process_finish(self, process):
         pass
 
     def on_process_stop(self, process):

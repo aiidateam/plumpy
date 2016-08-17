@@ -2,13 +2,17 @@
 
 import uuid
 from enum import Enum
+import time
+import sys
+import traceback
 import plum.util as util
 from abc import ABCMeta, abstractmethod
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
-from plum.process_monitor import monitor
+from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.util import protected
+from plum.wait import WaitOn
 
 
 class ProcessState(Enum):
@@ -25,12 +29,14 @@ class Process(object):
     The Process class is the base for any unit of work in the plum workflow
     engine.
     A process can be in one of the following states:
+
     * CREATED
     * WAITING
     * RUNNING
     * FINISHED
     * STOPPED
     * DESTROYED
+
     as defined in the ProcessState enum.
 
     The possible transition of states are:
@@ -38,6 +44,7 @@ class Process(object):
            /---WAITING---------------\
           /       |                   \
     CREATED -- RUNNING -- FINISHED -- STOPPED -- DESTROYED
+          \___________________________/
 
     When a Process enters a state is always gets a corresponding message, e.g.
     on entering FINISHED it will recieve the on_finish message.  These are
@@ -48,7 +55,38 @@ class Process(object):
 
     # Static class stuff ######################
     _spec_type = ProcessSpec
-    _INPUTS = 'INPUTS'
+
+    class BundleKeys(Enum):
+        """
+        String keys used by the process to save its state in the state bundle.
+
+        See create_from, on_save_instance_state and _load_instance_state.
+        """
+        CLASS = 'class'
+        INPUTS = 'inputs',
+        PID = 'pid',
+        WAITING_ON = 'waiting_on'
+
+    @classmethod
+    def create(cls, pid, inputs):
+        proc = cls()
+        proc.perform_create(pid, inputs)
+        return proc
+
+
+    @classmethod
+    def create_from(cls, saved_instance_state):
+        # Instantiate the class
+        proc_class = saved_instance_state[cls.BundleKeys.CLASS.value]
+        proc = proc_class()
+        # Get it to create itself
+        proc.perform_create(None, None, saved_instance_state)
+
+        return proc
+
+    @classmethod
+    def create_waiting_on(cls, saved_instance_state):
+        return WaitOn.create_from(saved_instance_state[cls.BundleKeys.WAITING_ON.value])
 
     @classmethod
     def _define(cls, spec):
@@ -86,6 +124,7 @@ class Process(object):
             exec_engine = cls._create_default_exec_engine()
         return exec_engine.submit(cls, inputs).result()
 
+
     ############################################
 
     def __init__(self):
@@ -97,8 +136,10 @@ class Process(object):
         self._inputs = None
         self._exec_engine = None
         self._process_registry = None
+        self._waiting_on = None
         self._output_values = {}
         self.__event_helper = util.EventHelper(ProcessListener)
+        self._director = _Director(self)
 
         # Flags to make sure all the necessary event methods were called
         self._called = False
@@ -115,14 +156,32 @@ class Process(object):
     def state(self):
         return self._state
 
+    def get_waiting_on(self):
+        return self._waiting_on
+
     def get_last_outputs(self):
         return self._output_values
 
     def save_instance_state(self, bundle):
+        bundle[self.BundleKeys.CLASS.value] = self.__class__
         if self._inputs is not None:
-            bundle[self._INPUTS] = Bundle(self._inputs)
-        else:
-            bundle[self._INPUTS] = None
+            bundle[self.BundleKeys.INPUTS.value] = Bundle(self._inputs)
+        if self._waiting_on is not None:
+            wait_on_state = Bundle()
+            self._waiting_on.save_instance_state(wait_on_state)
+            bundle[self.BundleKeys.WAITING_ON.value] = wait_on_state
+
+    def do_run(self):
+        return self._run(**self._create_input_args(self.inputs))
+
+    def tick(self):
+        return self._director.tick()
+
+    def run_till_end(self):
+        self._director.run_till_end()
+
+    def stop(self):
+        self._director.stop()
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -143,7 +202,7 @@ class Process(object):
         assert self._called, \
             "on_create was not called\n" \
             "Hint: Did you forget to call the superclass method?"
-        monitor.process_created(self)
+        MONITOR.process_created(self)
 
         self._state = ProcessState.CREATED
 
@@ -185,11 +244,11 @@ class Process(object):
 
         self.perform_run(self.get_exec_engine(), self._process_registry)
 
-    def perform_finish(self, retval):
+    def perform_finish(self):
         assert self.state is ProcessState.RUNNING
 
         self._called = False
-        self.on_finish(retval)
+        self.on_finish()
         assert self._called, \
             "on_finish was not called\n" \
             "Hint: Did you forget to call the superclass method?"
@@ -236,11 +295,16 @@ class Process(object):
         """
         # In this case there is no message fired because no one could have
         # registered themselves as a listener by this point in the lifecycle.
-        self._pid = pid
-        if inputs is None:
-            inputs = {}
-        self._check_inputs(inputs)
-        self._inputs = util.AttributesFrozendict(inputs)
+
+        if saved_instance_state is not None:
+            self._load_instance_state(saved_instance_state)
+        else:
+            self._pid = pid
+            if inputs is None:
+                inputs = {}
+            self._check_inputs(inputs)
+            self._inputs = util.AttributesFrozendict(inputs)
+
         self._called = True
 
     @protected
@@ -258,26 +322,26 @@ class Process(object):
 
     @protected
     def on_wait(self, wait_on):
+        self._waiting_on = wait_on
         self.__event_helper.fire_event(
             ProcessListener.on_process_wait, self, wait_on)
         self._called = True
 
     @protected
     def on_continue(self, wait_on):
+        self._waiting_on = None
         self.__event_helper.fire_event(
             ProcessListener.on_process_continue, self, wait_on)
         self._called = True
 
     @protected
-    def on_finish(self, retval):
+    def on_finish(self):
         """
         Called when the process has finished and the outputs have passed
         checks
-        :param retval: The return value from the process
         """
         self._check_outputs()
-        self.__event_helper.fire_event(
-            ProcessListener.on_process_finish, self, retval)
+        self.__event_helper.fire_event(ProcessListener.on_process_finish, self)
         self._called = True
 
     @protected
@@ -402,8 +466,13 @@ class Process(object):
 
     ############################################################################
 
-    def do_run(self):
-        return self._run(**self._create_input_args(self.inputs))
+    def _load_instance_state(self, bundle):
+        self._pid = bundle[self.BundleKeys.PID.value]
+        self._inputs = util.AttributesFrozendict(bundle[self.BundleKeys.INPUTS.value])
+        try:
+            self._waiting_on = WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
+        except AttributeError:
+            pass
 
     @abstractmethod
     def _run(self, **kwargs):
@@ -446,3 +515,72 @@ class FunctionProcess(Process):
             args.append(kwargs.pop(arg))
 
         self.out(self._output_name, self._func(*args))
+
+
+class _Director(object):
+    """
+    This class is used internally to orchestrate the running of a process i.e.
+    step it through the states.
+    """
+    def __init__(self, process):
+        self._proc = process
+        self._last_retval = None
+        self._stop = False
+
+    def tick(self):
+        try:
+            registry = None
+
+            if self._proc.state is ProcessState.CREATED:
+                if self._stop:
+                    # CREATED -> STOPPED
+                    self._proc.perform_stop()
+                elif self._proc.get_waiting_on():
+                    # CREATED -> WAITING
+                    self._proc.perform_wait(self._proc.get_waiting_on())
+                    return True
+                else:
+                    # CREATED -> RUNNING
+                    self._proc.perform_run(self, registry)
+                    self._last_retval = self._proc.do_run()
+                    return True
+            elif self._proc.state is ProcessState.RUNNING:
+                if isinstance(self._last_retval, WaitOn):
+                    # RUNNING -> WAITING
+                    self._proc.perform_wait(self._last_retval)
+                    return True
+                else:
+                    # RUNNING -> FINISHED
+                    self._proc.perform_finish()
+                    return True
+            elif self._proc.state is ProcessState.WAITING:
+                if self._stop:
+                    # WAITING -> STOPPED
+                    self._proc.perform_stop()
+                elif self._proc.get_waiting_on().is_ready():
+                    # WAITING -> RUNNING
+                    wait_on = self._proc.get_waiting_on()
+                    self._proc.perform_continue(wait_on)
+                    self._last_retval = getattr(self._proc, wait_on.callback)(wait_on)
+                    return True
+                else:
+                    return False
+            elif self._proc.state is ProcessState.FINISHED:
+                # FINISHED -> STOPPED
+                self._proc.perform_stop()
+                return True
+            elif self._proc.state is ProcessState.STOPPED:
+                # STOPPED -> DESTROYED
+                self._proc.perform_destroy()
+                return True
+        except BaseException:
+            MONITOR.process_failed(self._proc.pid)
+            raise
+
+    def run_till_end(self):
+        while self._proc.state is not ProcessState.DESTROYED:
+            if self._proc.tick() is False:
+                time.sleep(5)
+
+    def stop(self):
+        self._stop = True
