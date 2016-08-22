@@ -17,8 +17,10 @@ class WaitOn(object):
     def create_from(cls, bundle):
         assert cls.BundleKeys.CLASS_NAME.value in bundle
 
-        return load_class(bundle[cls.BundleKeys.CLASS_NAME.value]).\
-            create_from(bundle)
+        class_name = bundle[cls.BundleKeys.CLASS_NAME.value]
+        WaitOnClass = bundle.get_class_loader().find_class(class_name)
+
+        return WaitOnClass.create_from(bundle)
 
     def __init__(self, callback_name):
         self._callback_name = callback_name

@@ -96,7 +96,7 @@ class MulAddWithFun(Workflow):
 
 
 if __name__ == '__main__':
-    mul_add = MulAdd.create()
+    mul_add = MulAdd.new_instance()
     print(mul_add.run_and_block({'a': 2, 'b': 3, 'c': 4}))
 
     mul_add(a=2, b=3, c=4)
@@ -107,5 +107,5 @@ if __name__ == '__main__':
     future = exec_engine.submit(mul_add, {'a': 2, 'b': 3, 'c': 4})
     print(future.result())
 
-    TestDynamicOutput.create().run_and_block()
+    TestDynamicOutput.new_instance().run_until_complete()
 

@@ -3,8 +3,7 @@
 import sys
 import threading
 import concurrent.futures
-import uuid
-from plum.process import Process, ProcessState
+from plum.process import ProcessState
 from plum.engine.execution_engine import ExecutionEngine, Future
 from plum.util import override
 from enum import Enum
@@ -17,9 +16,9 @@ class _Future(Future):
         FINISHED = 2
         FAILED = 3
 
-    def __init__(self, engine, pid):
+    def __init__(self, engine, process):
         self._engine = engine
-        self._pid = pid
+        self._process = process
         self._status = self.Status.CURRENT
         self._done_callbacks = []
         self._result = None
@@ -28,8 +27,12 @@ class _Future(Future):
         self._traceback = None
 
     @property
+    def process(self):
+        return self._process
+
+    @property
     def pid(self):
-        return self._pid
+        return self._process.pid
 
     def process_finished(self, result):
         self._status = self.Status.FINISHED
@@ -55,7 +58,7 @@ class _Future(Future):
         self._invoke_callbacks()
 
     def cancel(self):
-        self._engine.stop(self._pid)
+        self._engine.stop(self.pid)
         self._status = self.Status.CANCELLED
 
     def cancelled(self):
@@ -120,25 +123,10 @@ class TickingEngine(ExecutionEngine):
         self._shutting_down = False
 
     @override
-    def submit(self, process_class, inputs=None):
-        assert not self._shutting_down
-
-        proc = process_class.create(self._create_pid(), inputs)
-        fut = _Future(self, proc.pid)
-
+    def run(self, proc):
+        fut = _Future(self, proc)
         # Put it in the queue
         self._current_processes[proc.pid] = self.ProcessInfo(proc, fut)
-
-        return fut
-
-    @override
-    def run_from(self, checkpoint):
-        assert not self._shutting_down
-
-        proc = Process.create_from(checkpoint)
-        fut = _Future(self, proc.pid)
-        self._current_processes[proc.pid] = self.ProcessInfo(proc, fut)
-
         return fut
 
     @override
@@ -148,7 +136,7 @@ class TickingEngine(ExecutionEngine):
     def shutdown(self):
         """
         Shutdown the ticking engine.  This will stop all processes.  This call
-        will block until all processes are cancelled which could take some time
+        will block until all processes are stopped which could take some time
         if there are currently running processes.
         """
         assert not self._shutting_down
@@ -158,8 +146,8 @@ class TickingEngine(ExecutionEngine):
             self.stop(info.pid)
 
         # This will get the processes to stop and destroy themselves
-        for proc_info in self._current_processes:
-            proc_info.process.run_till_end()
+        for info in self._current_processes.itervalues():
+            info.process.run_until_complete()
 
     def tick(self):
         to_delete = []
@@ -180,16 +168,13 @@ class TickingEngine(ExecutionEngine):
                 proc_info.future.process_failed(exc_obj, exc_tb)
                 # Process is dead
                 to_delete.append(pid)
-
-            if proc.state is ProcessState.FINISHED:
-                proc_info.future.process_finished(proc.get_last_outputs())
-            elif proc.state is ProcessState.DESTROYED:
-                to_delete.append(pid)
+            else:
+                if proc.state is ProcessState.FINISHED:
+                    proc_info.future.process_finished(proc.get_last_outputs())
+                elif proc.state is ProcessState.DESTROYED:
+                    to_delete.append(pid)
 
         for pid in to_delete:
             del self._current_processes[pid]
 
         return len(self._current_processes) > 0
-
-    def _create_pid(self):
-        return uuid.uuid1()

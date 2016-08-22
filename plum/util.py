@@ -4,6 +4,7 @@ import threading
 import importlib
 import frozendict
 from plum.settings import check_protected, check_override
+from plum.exceptions import ClassNotFoundException
 import plum.lang
 
 protected = plum.lang.protected(check=check_protected)
@@ -75,8 +76,12 @@ def load_class(classstring):
     class_name = class_data[-1]
 
     module = importlib.import_module(module_path)
-    # Finally, retrieve the Class
-    return getattr(module, class_name)
+
+    # Finally, retrieve the class
+    try:
+        return getattr(module, class_name)
+    except AttributeError:
+        raise ClassNotFoundException("Class {} not found".format(classstring))
 
 
 class AttributesFrozendict(frozendict.frozendict):

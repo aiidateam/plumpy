@@ -5,6 +5,10 @@ from plum.util import EventHelper, override
 
 
 class ProcessMonitorListener(object):
+    """
+    The interface for a process monitor listener.  Override any of the methods
+    to receive these messages.
+    """
     __metaclass__ = ABCMeta
 
     def on_monitored_process_created(self, process):
@@ -20,7 +24,7 @@ class ProcessMonitorListener(object):
 class ProcessMonitor(ProcessListener):
     """
     This class is a central monitor that keeps track of all the currently
-    running processes.  This of it as the process manager in your OS that shows
+    running processes.  Think of it as the process manager in your OS that shows
     you what is currently running.
 
     Clients can listen for messages to indicate when a new process is registered
@@ -31,10 +35,24 @@ class ProcessMonitor(ProcessListener):
         self.__event_helper = EventHelper(ProcessMonitorListener)
 
     def get_process(self, pid):
-        return self._processes[pid]
+        try:
+            return self._processes[pid]
+        except KeyError:
+            raise ValueError("Unknown pid '{}'".format(pid))
 
     def get_pids(self):
         return self._processes.keys()
+
+    def reset(self):
+        """
+        Reset the monitor by stopping listening for messages from any existing
+        Processes.  Be very careful with this as some of the clients may be
+        expecting to get messages about what is happening which will not be
+        sent after this call.
+        """
+        for proc in self._processes.itervalues():
+            proc.remove_process_listener(self)
+        self._processes = {}
 
     def process_created(self, process):
         assert process.pid not in self._processes, \
@@ -67,4 +85,5 @@ class ProcessMonitor(ProcessListener):
     ############################################################################
 
 
+# The global singleton
 MONITOR = ProcessMonitor()

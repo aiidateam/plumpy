@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import uuid
 from plum.engine.execution_engine import ExecutionEngine, Future
 from plum.process import Process
 from plum.util import override
@@ -17,7 +16,7 @@ class SerialEngine(ExecutionEngine):
         def __init__(self, func, process, *args, **kwargs):
             self._exception = None
             self._result = None
-            self._pid = process.pid
+            self._process = process
 
             # Run the damn thing
             try:
@@ -32,8 +31,12 @@ class SerialEngine(ExecutionEngine):
                 self._set_exception_info(exc_obj, exc_tb)
 
         @property
+        def process(self):
+            return self._process
+
+        @property
         def pid(self):
-            return self._pid
+            return self._process.pid
 
         @override
         def cancel(self):
@@ -110,17 +113,8 @@ class SerialEngine(ExecutionEngine):
         self._poll_interval = poll_interval
 
     @override
-    def submit(self, process_class, inputs=None):
-        """
-        Submit a process, this gets executed immediately and in fact the Future
-        will always be done when returned.
-
-        :param process_class: The process to execute
-        :param inputs: The inputs to execute the process with
-        :return: A Future object that represents the execution of the Process.
-        """
-        proc = process_class.create(self._create_pid(), inputs)
-        return SerialEngine.Future(Process.run_till_end, proc)
+    def run(self, process):
+        return SerialEngine.Future(Process.run_until_complete, process)
 
     def run_and_block(self, process_class, inputs):
         """
@@ -131,20 +125,6 @@ class SerialEngine(ExecutionEngine):
         :return: The outputs dictionary from the Process.
         """
         return self.submit(process_class, inputs).result()
-
-    # def _do_run_and_block(self, proc):
-    #     return self._run_lifecycle(proc)
-
-    @override
-    def run_from(self, checkpoint):
-        """
-        Run a process with some inputs immediately.
-
-        :param checkpoint: Continue the process from this checkpoint.
-        :return: A Future object that represents the execution of the Process.
-        """
-        proc = Process.create_from(checkpoint)
-        return SerialEngine.Future(Process.run_till_end, proc)
 
     def run_from_and_block(self, checkpoint):
         """
@@ -161,10 +141,6 @@ class SerialEngine(ExecutionEngine):
 
     def stop(self, pid):
         pass
-
-    def _create_pid(self):
-        return uuid.uuid1()
-
 
 
 

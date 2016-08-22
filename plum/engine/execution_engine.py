@@ -1,12 +1,25 @@
 
 from abc import ABCMeta, abstractmethod, abstractproperty
+from plum.process import Process
 
 
 class Future(object):
     __metaclass__ = ABCMeta
 
     @abstractproperty
+    def process(self):
+        """
+        Get the Process associated with this future.
+        :return: The process.
+        """
+        pass
+
+    @abstractproperty
     def pid(self):
+        """
+        Get the pid of the Process associated with this future.
+        :return:
+        """
         pass
 
     @abstractmethod
@@ -113,6 +126,17 @@ class ExecutionEngine(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
+    def run(self, process):
+        """
+        Run an instance of an existing process.  The engine takes ownership
+        thus the process must not be being ran by another engine or being
+        ticked by the user.
+
+        :param process: The process to run
+        :return: A Future object that represents the execution of the Process.
+        """
+        pass
+
     def submit(self, process_class, inputs=None):
         """
         Submit a process to be executed with some inputs at some point.
@@ -122,9 +146,8 @@ class ExecutionEngine(object):
         :param checkpoint: The checkpoint to continue from (or None)
         :return: A Future object that represents the execution of the Process.
         """
-        pass
+        return self.run(process_class.new_instance(inputs))
 
-    @abstractmethod
     def run_from(self, checkpoint):
         """
         Run a process from the given checkpoint.
@@ -132,7 +155,7 @@ class ExecutionEngine(object):
         :param checkpoint: The checkpoint to continue the process from.
         :return: A Future object that represents the execution of the Process.
         """
-        pass
+        return self.run(Process.create_from(checkpoint))
 
     @abstractmethod
     def stop(self, pid):

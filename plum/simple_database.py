@@ -23,7 +23,7 @@ class SimpleDatabase(ProcessDatabase, ProcessListener, ProcessMonitorListener):
         if self._retain_outputs:
             return self._outputs[pid][port]
         else:
-            raise RuntimeError("Can only supply outputs if retain_ouputs is"
+            raise RuntimeError("Can only supply outputs if retain_ouputs is "
                                "specified on construction")
 
     @override
@@ -31,7 +31,7 @@ class SimpleDatabase(ProcessDatabase, ProcessListener, ProcessMonitorListener):
         if self._retain_outputs:
             return self._outputs[pid]
         else:
-            raise RuntimeError("Can only supply outputs if retain_ouputs is"
+            raise RuntimeError("Can only supply outputs if retain_ouputs is "
                                "specified on construction")
 
     # ProcessMonitorListener events ############################################

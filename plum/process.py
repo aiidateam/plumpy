@@ -3,8 +3,6 @@
 import uuid
 from enum import Enum
 import time
-import sys
-import traceback
 import plum.util as util
 from abc import ABCMeta, abstractmethod
 from plum.persistence.bundle import Bundle
@@ -17,10 +15,10 @@ from plum.wait import WaitOn
 
 class ProcessState(Enum):
     CREATED = 0,
-    RUNNING = 1,
-    WAITING = 2,
-    FINISHED = 3,
-    STOPPED = 4,
+    RUNNING = 1
+    WAITING = 2
+    FINISHED = 3
+    STOPPED = 4
     DESTROYED = 5
 
 
@@ -62,23 +60,24 @@ class Process(object):
 
         See create_from, on_save_instance_state and _load_instance_state.
         """
-        CLASS = 'class'
-        INPUTS = 'inputs',
-        PID = 'pid',
+        CLASS_NAME = 'class_name'
+        INPUTS = 'inputs'
+        PID = 'pid'
         WAITING_ON = 'waiting_on'
 
     @classmethod
-    def create(cls, pid, inputs):
+    def new_instance(cls, inputs=None, pid=None):
         proc = cls()
         proc.perform_create(pid, inputs)
         return proc
 
-
     @classmethod
     def create_from(cls, saved_instance_state):
-        # Instantiate the class
-        proc_class = saved_instance_state[cls.BundleKeys.CLASS.value]
-        proc = proc_class()
+        # Get the class using the class loader and instantiate it
+        class_name = saved_instance_state[cls.BundleKeys.CLASS_NAME.value]
+        ProcClass =\
+            saved_instance_state.get_class_loader().find_class(class_name)
+        proc = ProcClass()
         # Get it to create itself
         proc.perform_create(None, None, saved_instance_state)
 
@@ -86,7 +85,8 @@ class Process(object):
 
     @classmethod
     def create_waiting_on(cls, saved_instance_state):
-        return WaitOn.create_from(saved_instance_state[cls.BundleKeys.WAITING_ON.value])
+        return WaitOn.create_from(
+            saved_instance_state[cls.BundleKeys.WAITING_ON.value])
 
     @classmethod
     def _define(cls, spec):
@@ -134,12 +134,13 @@ class Process(object):
         self._state = None
         self._pid = None
         self._inputs = None
+        self._finished = False
+        self._parsed_inputs = None
         self._exec_engine = None
-        self._process_registry = None
         self._waiting_on = None
         self._output_values = {}
         self.__event_helper = util.EventHelper(ProcessListener)
-        self._director = _Director(self)
+        self.__director = _Director(self)
 
         # Flags to make sure all the necessary event methods were called
         self._called = False
@@ -153,8 +154,15 @@ class Process(object):
         return self._inputs
 
     @property
+    def parsed_inputs(self):
+        return self._parsed_inputs
+
+    @property
     def state(self):
         return self._state
+
+    def has_finished(self):
+        return self._finished
 
     def get_waiting_on(self):
         return self._waiting_on
@@ -163,7 +171,9 @@ class Process(object):
         return self._output_values
 
     def save_instance_state(self, bundle):
-        bundle[self.BundleKeys.CLASS.value] = self.__class__
+        bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
+        bundle[self.BundleKeys.PID.value] = self.pid
+
         if self._inputs is not None:
             bundle[self.BundleKeys.INPUTS.value] = Bundle(self._inputs)
         if self._waiting_on is not None:
@@ -172,16 +182,22 @@ class Process(object):
             bundle[self.BundleKeys.WAITING_ON.value] = wait_on_state
 
     def do_run(self):
-        return self._run(**self._create_input_args(self.inputs))
+        return self._run(**self._parsed_inputs)
 
     def tick(self):
-        return self._director.tick()
+        return self.__director.tick()
 
-    def run_till_end(self):
-        self._director.run_till_end()
+    def run_until(self, process_state):
+        while process_state not in [process_state, ProcessState.DESTROYED]:
+            self.tick()
 
-    def stop(self):
-        self._director.stop()
+    def run_until_complete(self):
+        self.__director.run_till_end()
+
+    def stop(self, execute=False):
+        self.__director.stop()
+        if execute:
+            self.run_until_complete()
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -194,8 +210,19 @@ class Process(object):
     # Methods that signal events have happened, these should be called by the
     # external processes driving the Process (usually the engine)
     def perform_create(self, pid=None, inputs=None, saved_instance_state=None):
-        if pid is None:
-            pid = uuid.uuid1()
+
+        if saved_instance_state is not None:
+            self._load_instance_state(saved_instance_state)
+        else:
+            if pid is None:
+                pid = uuid.uuid1()
+            self._pid = pid
+            self._check_inputs(inputs)
+            if inputs is not None:
+                self._inputs = util.AttributesFrozendict(inputs)
+
+        self._parsed_inputs =\
+            util.AttributesFrozendict(self.create_input_args(self.inputs))
 
         self._called = False
         self.on_create(pid, inputs, saved_instance_state)
@@ -206,12 +233,11 @@ class Process(object):
 
         self._state = ProcessState.CREATED
 
-    def perform_run(self, exec_engine, registry):
+    def perform_run(self, exec_engine):
         assert self.state is ProcessState.CREATED or \
                self.state is ProcessState.WAITING
 
         self._exec_engine = exec_engine
-        self._process_registry = registry
 
         self._called = False
         self.on_run()
@@ -242,7 +268,7 @@ class Process(object):
             "on_continue was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-        self.perform_run(self.get_exec_engine(), self._process_registry)
+        self.perform_run(self.get_exec_engine())
 
     def perform_finish(self):
         assert self.state is ProcessState.RUNNING
@@ -253,11 +279,13 @@ class Process(object):
             "on_finish was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
+        self._finished = True
         self._state = ProcessState.FINISHED
 
     def perform_stop(self):
-        assert self.state is ProcessState.FINISHED or\
-               self.state is ProcessState.WAITING
+        assert self.state in [ProcessState.CREATED,
+                              ProcessState.WAITING,
+                              ProcessState.FINISHED]
 
         self._called = False
         self.on_stop()
@@ -295,15 +323,6 @@ class Process(object):
         """
         # In this case there is no message fired because no one could have
         # registered themselves as a listener by this point in the lifecycle.
-
-        if saved_instance_state is not None:
-            self._load_instance_state(saved_instance_state)
-        else:
-            self._pid = pid
-            if inputs is None:
-                inputs = {}
-            self._check_inputs(inputs)
-            self._inputs = util.AttributesFrozendict(inputs)
 
         self._called = True
 
@@ -367,11 +386,6 @@ class Process(object):
     def get_exec_engine(self):
         return self._exec_engine
 
-    @property
-    @protected
-    def process_registry(self):
-        return self._process_registry
-
     @protected
     def out(self, output_port, value):
         dynamic = False
@@ -408,7 +422,8 @@ class Process(object):
         return self.get_exec_engine().run_from(checkpoint)
 
     # Inputs ##################################################################
-    def _create_input_args(self, inputs):
+    @protected
+    def create_input_args(self, inputs):
         """
         Take the passed input arguments and fill in any default values for
         inputs that have no been supplied.
@@ -421,7 +436,7 @@ class Process(object):
         if inputs is None:
             ins = {}
         else:
-            ins = inputs.copy()
+            ins = dict(inputs)
         # Go through the spec filling in any default and checking for required
         # inputs
         for name, port in self.spec().inputs.iteritems():
@@ -436,10 +451,12 @@ class Process(object):
         return ins
 
     def _check_inputs(self, inputs):
+        if inputs is None:
+            inputs = {}
+
         # Check the inputs meet the requirements
         if not self.spec().has_dynamic_input():
-            unexpected = set(inputs.iterkeys()) - set(
-                self.spec().inputs.iterkeys())
+            unexpected = set(inputs.iterkeys()) - set(self.spec().inputs.iterkeys())
             if unexpected:
                 raise ValueError(
                     "Unexpected inputs found: {}.  If you want to allow dynamic"
@@ -468,10 +485,12 @@ class Process(object):
 
     def _load_instance_state(self, bundle):
         self._pid = bundle[self.BundleKeys.PID.value]
-        self._inputs = util.AttributesFrozendict(bundle[self.BundleKeys.INPUTS.value])
+        self._inputs = \
+            util.AttributesFrozendict(bundle[self.BundleKeys.INPUTS.value])
         try:
-            self._waiting_on = WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
-        except AttributeError:
+            self._waiting_on = \
+                WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
+        except KeyError:
             pass
 
     @abstractmethod
@@ -529,19 +548,18 @@ class _Director(object):
 
     def tick(self):
         try:
-            registry = None
-
             if self._proc.state is ProcessState.CREATED:
                 if self._stop:
                     # CREATED -> STOPPED
                     self._proc.perform_stop()
+                    return True
                 elif self._proc.get_waiting_on():
                     # CREATED -> WAITING
                     self._proc.perform_wait(self._proc.get_waiting_on())
                     return True
                 else:
                     # CREATED -> RUNNING
-                    self._proc.perform_run(self, registry)
+                    self._proc.perform_run(self)
                     self._last_retval = self._proc.do_run()
                     return True
             elif self._proc.state is ProcessState.RUNNING:

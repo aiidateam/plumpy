@@ -9,7 +9,7 @@ class ProcessDatabase(object):
     def get_active_process(self, pid):
         """
         Get an active process.  This is a convenience method that calls through
-        to the process monitor and is quivalent to monitor.get_process(pid)
+        to the process monitor and is equivalent to monitor.get_process(pid)
 
         :param pid: The pid of the active process to get
         :return: The active process instance

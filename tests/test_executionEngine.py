@@ -2,6 +2,7 @@ from unittest import TestCase
 
 import plum.test_utils as common
 from plum.engine.serial import SerialEngine
+from plum.engine.parallel import MultithreadedEngine
 from plum.engine.ticking import TickingEngine
 from plum.util import override
 from plum.process_monitor import MONITOR, ProcessMonitorListener
@@ -21,8 +22,8 @@ class TestExecutionEngine(TestCase):
         serial = SerialEngine()
         self.engines_to_test = [
             serial,
-            ticking
-            #MultithreadedEngine()
+            ticking,
+            MultithreadedEngine()
         ]
 
     @override

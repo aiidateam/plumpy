@@ -5,7 +5,6 @@ from plum.port import InputPort, InputGroupPort, OutputPort,\
 from plum._base import LOGGER
 
 
-
 class ProcessSpec(object):
     """
     A class that defines the specifications of a Process, this includes what

@@ -4,6 +4,7 @@ from plum.test_utils import ProcessListenerTester
 from plum.engine.serial import SerialEngine
 from plum.process import Process, ProcessState
 from plum.util import override
+from plum.process_monitor import MONITOR
 
 
 class DummyProcess(Process):
@@ -42,7 +43,7 @@ class ForgetToCallParent(Process):
         pass
 
     @override
-    def on_finish(self, retval):
+    def on_finish(self):
         pass
 
     @override
@@ -62,6 +63,7 @@ class TestProcess(TestCase):
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
+        MONITOR.reset()
 
     def test_on_run(self):
         self.proc.on_run()
@@ -112,18 +114,10 @@ class TestProcess(TestCase):
             p.inputs.a
 
         # Check that we can access the inputs after creating
-        p.on_create(0, {'a': 5}, None)
+        p.perform_create(0, {'a': 5})
         self.assertEqual(p.inputs.a, 5)
         with self.assertRaises(AttributeError):
             p.inputs.b
-        p.on_destroy()
-
-        # Check that we can't access inputs after finishing
-        p = Proc()
-        p.run(inputs={'a': 5})
-        with self.assertRaises(AttributeError):
-            p.inputs.a
-        p.on_destroy()
 
     def test_run(self):
         engine = SerialEngine()
@@ -137,7 +131,7 @@ class TestProcess(TestCase):
             p.perform_create(None, None)
 
         with self.assertRaises(AssertionError):
-            p.perform_run(None, None)
+            p.perform_run(None)
 
         with self.assertRaises(AssertionError):
             p.perform_wait(None)
@@ -154,8 +148,21 @@ class TestProcess(TestCase):
         with self.assertRaises(AssertionError):
             p.perform_destroy()
 
+    def test_pid(self):
+        # Test auto generation of pid
+        p = DummyProcess.new_instance()
+        self.assertIsNotNone(p.pid)
+
+        # Test using integer as pid
+        p = DummyProcess.new_instance(pid=5)
+        self.assertEquals(p.pid, 5)
+
+        # Test using string as pid
+        p = DummyProcess.new_instance(pid='a')
+        self.assertEquals(p.pid, 'a')
+
     def test_tick(self):
-        proc = DummyProcess.create(None, None)
+        proc = DummyProcess.new_instance()
         self.assertEqual(proc.state, ProcessState.CREATED)
         proc.tick()
         self.assertEqual(proc.state, ProcessState.RUNNING)
