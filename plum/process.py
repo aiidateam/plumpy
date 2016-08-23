@@ -79,7 +79,7 @@ class Process(object):
             saved_instance_state.get_class_loader().find_class(class_name)
         proc = ProcClass()
         # Get it to create itself
-        proc.perform_create(None, None, saved_instance_state)
+        proc.perform_create(saved_instance_state=saved_instance_state)
 
         return proc
 
@@ -212,7 +212,7 @@ class Process(object):
     def perform_create(self, pid=None, inputs=None, saved_instance_state=None):
 
         if saved_instance_state is not None:
-            self._load_instance_state(saved_instance_state)
+            self.load_instance_state(saved_instance_state)
         else:
             if pid is None:
                 pid = uuid.uuid1()
@@ -233,11 +233,29 @@ class Process(object):
 
         self._state = ProcessState.CREATED
 
-    def perform_run(self, exec_engine):
-        assert self.state is ProcessState.CREATED or \
-               self.state is ProcessState.WAITING
+    def perform_launch(self):
+        """
+        Perform the state transition from CREATED -> RUNNING.
+        Messages issued:
+         - on_start
+         - on_run
+        """
+        assert self.state is ProcessState.CREATED
 
-        self._exec_engine = exec_engine
+        self._called = False
+        self.on_start()
+        assert self._called, \
+            "on_run was not called\n" \
+            "Hint: Did you forget to call the superclass method?"
+
+        self.perform_run()
+
+    def perform_run(self):
+        """
+        Messages issued:
+         - on_run
+        """
+        assert self.state in [ProcessState.CREATED, ProcessState.WAITING]
 
         self._called = False
         self.on_run()
@@ -248,8 +266,11 @@ class Process(object):
         self._state = ProcessState.RUNNING
 
     def perform_wait(self, wait_on):
-        assert self.state is ProcessState.RUNNING or \
-               self.state is ProcessState.CREATED
+        """
+        Messages issued:
+         - on_wait
+        """
+        assert self.state in [ProcessState.RUNNING, ProcessState.CREATED]
 
         self._called = False
         self.on_wait(wait_on)
@@ -260,6 +281,11 @@ class Process(object):
         self._state = ProcessState.WAITING
 
     def perform_continue(self, wait_on):
+        """
+        Messages issued:
+         - on_continue
+         - on_run
+        """
         assert self.state is ProcessState.WAITING
 
         self._called = False
@@ -268,7 +294,7 @@ class Process(object):
             "on_continue was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-        self.perform_run(self.get_exec_engine())
+        self.perform_run()
 
     def perform_finish(self):
         assert self.state is ProcessState.RUNNING
@@ -283,8 +309,7 @@ class Process(object):
         self._state = ProcessState.FINISHED
 
     def perform_stop(self):
-        assert self.state in [ProcessState.CREATED,
-                              ProcessState.WAITING,
+        assert self.state in [ProcessState.CREATED, ProcessState.WAITING,
                               ProcessState.FINISHED]
 
         self._called = False
@@ -327,10 +352,25 @@ class Process(object):
         self._called = True
 
     @protected
+    def on_start(self):
+        """
+        Called when the process is about to start for the first time.
+
+
+        Any class overriding this method should make sure to call the super
+        method, usually at the end of the function.
+
+        """
+        self.__event_helper.fire_event(ProcessListener.on_process_start, self)
+        self._called = True
+
+    @protected
     def on_run(self):
         """
-        Called when the inputs of a process passed checks and the process
-        is about to begin.
+        Called when the process is about to run some code either for the first
+        time (in which case an on_start message would have been received) or
+        after something it was waiting on has finished (in which case an
+        on_continue message would have been received).
 
         Any class overriding this method should make sure to call the super
         method, usually at the end of the function.
@@ -421,6 +461,17 @@ class Process(object):
     def run_from(self, checkpoint):
         return self.get_exec_engine().run_from(checkpoint)
 
+    @protected
+    def load_instance_state(self, bundle):
+        self._pid = bundle[self.BundleKeys.PID.value]
+        self._inputs = \
+            util.AttributesFrozendict(bundle[self.BundleKeys.INPUTS.value])
+        try:
+            self._waiting_on = \
+                WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
+        except KeyError:
+            pass
+
     # Inputs ##################################################################
     @protected
     def create_input_args(self, inputs):
@@ -482,16 +533,6 @@ class Process(object):
                                    format(self.get_name(), msg))
 
     ############################################################################
-
-    def _load_instance_state(self, bundle):
-        self._pid = bundle[self.BundleKeys.PID.value]
-        self._inputs = \
-            util.AttributesFrozendict(bundle[self.BundleKeys.INPUTS.value])
-        try:
-            self._waiting_on = \
-                WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
-        except KeyError:
-            pass
 
     @abstractmethod
     def _run(self, **kwargs):
@@ -559,7 +600,7 @@ class _Director(object):
                     return True
                 else:
                     # CREATED -> RUNNING
-                    self._proc.perform_run(self)
+                    self._proc.perform_launch()
                     self._last_retval = self._proc.do_run()
                     return True
             elif self._proc.state is ProcessState.RUNNING:

@@ -4,6 +4,9 @@ from abc import ABCMeta
 class ProcessListener(object):
     __metaclass__ = ABCMeta
 
+    def on_process_start(self, process):
+        pass
+
     def on_process_run(self, process):
         pass
 

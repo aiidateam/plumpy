@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import threading
+import inspect
 import importlib
 import frozendict
 from plum.settings import check_protected, check_override
@@ -64,7 +65,10 @@ def fullname(object):
     :param object: The object to get the name from.
     :return: The fully qualified name.
     """
-    return object.__module__ + "." + object.__class__.__name__
+    if inspect.isclass(object):
+        return object.__module__ + "." + object.__name__
+    else:
+        return object.__module__ + "." + object.__class__.__name__
 
 
 def load_class(classstring):

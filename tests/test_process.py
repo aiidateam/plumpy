@@ -27,6 +27,10 @@ class ForgetToCallParent(Process):
         pass
 
     @override
+    def on_start(self):
+        pass
+
+    @override
     def on_run(self):
         pass
 
@@ -128,10 +132,10 @@ class TestProcess(TestCase):
         p = ForgetToCallParent()
 
         with self.assertRaises(AssertionError):
-            p.perform_create(None, None)
+            p.perform_create(None, None, None)
 
         with self.assertRaises(AssertionError):
-            p.perform_run(None)
+            p.perform_launch()
 
         with self.assertRaises(AssertionError):
             p.perform_wait(None)
