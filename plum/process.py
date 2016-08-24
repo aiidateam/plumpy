@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import collections
 import uuid
 from enum import Enum
 import time
@@ -14,12 +15,13 @@ from plum.wait import WaitOn
 
 
 class ProcessState(Enum):
-    CREATED = 0,
-    RUNNING = 1
-    WAITING = 2
-    FINISHED = 3
-    STOPPED = 4
-    DESTROYED = 5
+    CREATED = 0
+    STARTED = 1
+    RUNNING = 2
+    WAITING = 3
+    FINISHED = 4
+    STOPPED = 5
+    DESTROYED = 6
 
 
 class Process(object):
@@ -29,6 +31,7 @@ class Process(object):
     A process can be in one of the following states:
 
     * CREATED
+    * STARTED
     * WAITING
     * RUNNING
     * FINISHED
@@ -39,10 +42,11 @@ class Process(object):
 
     The possible transition of states are:
 
-           /---WAITING---------------\
-          /       |                   \
-    CREATED -- RUNNING -- FINISHED -- STOPPED -- DESTROYED
-          \___________________________/
+                    /------WAITING----------------\
+                   /        | |                   \
+    CREATED -- STARTED -- RUNNING -- FINISHED -- STOPPED -- DESTROYED
+       \           \______________________________/            /
+        \_____________________________________________________/
 
     When a Process enters a state is always gets a corresponding message, e.g.
     on entering FINISHED it will recieve the on_finish message.  These are
@@ -134,8 +138,10 @@ class Process(object):
         self._state = None
         self._pid = None
         self._inputs = None
-        self._finished = False
         self._parsed_inputs = None
+
+        self._finished = False
+
         self._exec_engine = None
         self._waiting_on = None
         self._output_values = {}
@@ -181,21 +187,49 @@ class Process(object):
             self._waiting_on.save_instance_state(wait_on_state)
             bundle[self.BundleKeys.WAITING_ON.value] = wait_on_state
 
-    def do_run(self):
-        return self._run(**self._parsed_inputs)
-
     def tick(self):
         return self.__director.tick()
 
-    def run_until(self, process_state):
-        while process_state not in [process_state, ProcessState.DESTROYED]:
-            self.tick()
+    def run_until(self, process_state=ProcessState.DESTROYED, break_on_wait_not_ready=False):
+        """
+        Run the Process until a particular state or one of a set of possible
+        states is reached.
+
+        If the passed state(s) is not reached at all this call will return when
+        DESTROYED is reached.
+
+        :param process_state: Either a state to be reached or an iterable of
+        possible states to be reached, in which case the call will return if
+        any of them is reached.
+        :param break_on_wait_not_ready: Break running if a the process is
+        waiting for something that is not ready.
+        :return: True if the passed state has been reached, False otherwise.
+        """
+        if isinstance(process_state, collections.Iterable):
+            termination_states = process_state
+        else:
+            assert process_state in ProcessState
+            termination_states = [process_state]
+
+        states = set(termination_states)
+        states.add(ProcessState.DESTROYED)
+
+        while self.state not in states:
+            if not self.tick() and break_on_wait_not_ready:
+                break
+
+        return self.state in termination_states
 
     def run_until_complete(self):
         self.__director.run_till_end()
 
     def stop(self, execute=False):
         self.__director.stop()
+        if execute:
+            self.run_until_complete()
+
+    def destroy(self, execute=False):
+        self.__director.destroy()
         if execute:
             self.run_until_complete()
 
@@ -233,12 +267,11 @@ class Process(object):
 
         self._state = ProcessState.CREATED
 
-    def perform_launch(self):
+    def perform_start(self):
         """
-        Perform the state transition from CREATED -> RUNNING.
+        Perform the state transition from CREATED -> STARTED.
         Messages issued:
          - on_start
-         - on_run
         """
         assert self.state is ProcessState.CREATED
 
@@ -248,14 +281,14 @@ class Process(object):
             "on_run was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-        self.perform_run()
+        self._state = ProcessState.STARTED
 
     def perform_run(self):
         """
         Messages issued:
          - on_run
         """
-        assert self.state in [ProcessState.CREATED, ProcessState.WAITING]
+        assert self.state in [ProcessState.STARTED, ProcessState.WAITING]
 
         self._called = False
         self.on_run()
@@ -270,7 +303,7 @@ class Process(object):
         Messages issued:
          - on_wait
         """
-        assert self.state in [ProcessState.RUNNING, ProcessState.CREATED]
+        assert self.state in [ProcessState.STARTED, ProcessState.RUNNING]
 
         self._called = False
         self.on_wait(wait_on)
@@ -309,7 +342,7 @@ class Process(object):
         self._state = ProcessState.FINISHED
 
     def perform_stop(self):
-        assert self.state in [ProcessState.CREATED, ProcessState.WAITING,
+        assert self.state in [ProcessState.STARTED, ProcessState.WAITING,
                               ProcessState.FINISHED]
 
         self._called = False
@@ -321,7 +354,7 @@ class Process(object):
         self._state = ProcessState.STOPPED
 
     def perform_destroy(self):
-        assert self.state is ProcessState.STOPPED
+        assert self.state in [ProcessState.CREATED, ProcessState.STOPPED]
 
         self._called = False
         self.on_destroy()
@@ -423,6 +456,10 @@ class Process(object):
     #####################################################################
 
     @protected
+    def do_run(self):
+        return self._run(**self._parsed_inputs)
+
+    @protected
     def get_exec_engine(self):
         return self._exec_engine
 
@@ -464,8 +501,13 @@ class Process(object):
     @protected
     def load_instance_state(self, bundle):
         self._pid = bundle[self.BundleKeys.PID.value]
-        self._inputs = \
-            util.AttributesFrozendict(bundle[self.BundleKeys.INPUTS.value])
+        inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
+
+        if inputs is not None:
+            self._inputs = util.AttributesFrozendict(inputs)
+        else:
+            self._inputs = None
+
         try:
             self._waiting_on = \
                 WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
@@ -586,21 +628,31 @@ class _Director(object):
         self._proc = process
         self._last_retval = None
         self._stop = False
+        self._destroy = False
 
     def tick(self):
         try:
             if self._proc.state is ProcessState.CREATED:
+                if self._destroy:
+                    # CREATED -> DESTROYED
+                    self._proc.perform_destroy()
+                    return True
+                else:
+                    # CREATED -> STARTED
+                    self._proc.perform_start()
+                    return True
+            elif self._proc.state is ProcessState.STARTED:
                 if self._stop:
-                    # CREATED -> STOPPED
+                    # STARTED -> STOPPED
                     self._proc.perform_stop()
                     return True
                 elif self._proc.get_waiting_on():
-                    # CREATED -> WAITING
+                    # STARTED -> WAITING
                     self._proc.perform_wait(self._proc.get_waiting_on())
                     return True
                 else:
-                    # CREATED -> RUNNING
-                    self._proc.perform_launch()
+                    # STARTED -> RUNNING
+                    self._proc.perform_run()
                     self._last_retval = self._proc.do_run()
                     return True
             elif self._proc.state is ProcessState.RUNNING:
@@ -643,3 +695,7 @@ class _Director(object):
 
     def stop(self):
         self._stop = True
+
+    def destroy(self):
+        self._destroy = True
+

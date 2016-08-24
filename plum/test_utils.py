@@ -84,10 +84,10 @@ class ProcessEventsTester(EventsTesterMixin, Process):
         self.out("test", 5)
 
 
-class CheckpointProcess(ProcessEventsTester):
+class TwoCheckpointProcess(ProcessEventsTester):
     @override
     def on_create(self, pid, inputs, saved_instance_state):
-        super(CheckpointProcess, self).on_create(
+        super(TwoCheckpointProcess, self).on_create(
             pid, inputs, saved_instance_state)
         self._last_checkpoint = None
 
@@ -115,7 +115,7 @@ class ExceptionProcess(ProcessEventsTester):
         raise RuntimeError("Great scott!")
 
 
-class CheckpointThenExceptionProcess(CheckpointProcess):
+class TwoCheckpointThenExceptionProcess(TwoCheckpointProcess):
     @override
     def finish(self, wait_on):
         raise RuntimeError("Great scott!")

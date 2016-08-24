@@ -4,6 +4,8 @@ from plum.test_utils import ProcessListenerTester
 from plum.engine.serial import SerialEngine
 from plum.process import Process, ProcessState
 from plum.util import override
+from plum.test_utils import ExceptionProcess, TwoCheckpointProcess
+from plum.persistence.bundle import Bundle
 from plum.process_monitor import MONITOR
 
 
@@ -135,7 +137,10 @@ class TestProcess(TestCase):
             p.perform_create(None, None, None)
 
         with self.assertRaises(AssertionError):
-            p.perform_launch()
+            p.perform_start()
+
+        with self.assertRaises(AssertionError):
+            p.perform_run()
 
         with self.assertRaises(AssertionError):
             p.perform_wait(None)
@@ -165,9 +170,11 @@ class TestProcess(TestCase):
         p = DummyProcess.new_instance(pid='a')
         self.assertEquals(p.pid, 'a')
 
-    def test_tick(self):
+    def test_tick_simple(self):
         proc = DummyProcess.new_instance()
         self.assertEqual(proc.state, ProcessState.CREATED)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.STARTED)
         proc.tick()
         self.assertEqual(proc.state, ProcessState.RUNNING)
         proc.tick()
@@ -176,6 +183,54 @@ class TestProcess(TestCase):
         self.assertEqual(proc.state, ProcessState.STOPPED)
         proc.tick()
         self.assertEqual(proc.state, ProcessState.DESTROYED)
+        del proc
+
+    def test_tick_exception(self):
+        proc = ExceptionProcess.new_instance()
+        self.assertEqual(proc.state, ProcessState.CREATED)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.STARTED)
+        with self.assertRaises(RuntimeError):
+            proc.tick()
+        self.assertEqual(proc.state, ProcessState.RUNNING)
+        del proc
+
+    def test_tick_two_checkpoints(self):
+        proc = TwoCheckpointProcess.new_instance()
+        self.assertEqual(proc.state, ProcessState.CREATED)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.STARTED)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.RUNNING)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.WAITING)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.RUNNING)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.WAITING)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.RUNNING)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.FINISHED)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.STOPPED)
+        proc.tick()
+        self.assertEqual(proc.state, ProcessState.DESTROYED)
+        del proc
 
     def test_instance_state(self):
-        pass
+        proc = TwoCheckpointProcess.new_instance()
+        proc.run_until(ProcessState.WAITING)
+        b = Bundle()
+        proc.save_instance_state(b)
+
+        proc.stop()
+        proc.run_until_complete()
+
+        proc = TwoCheckpointProcess.create_from(b)
+        proc.run_until(ProcessState.WAITING)
+        b = Bundle()
+        proc.save_instance_state(b)
+
+        proc.stop()
+        proc.run_until_complete()

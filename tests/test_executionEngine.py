@@ -40,9 +40,9 @@ class TestExecutionEngine(TestCase):
 
     def test_submit_with_checkpoint(self):
         for engine in self.engines_to_test:
-            engine.submit(common.CheckpointProcess, None).result()
+            engine.submit(common.TwoCheckpointProcess, None).result()
             self._test_engine_events(
-                common.CheckpointProcess.called_events,
+                common.TwoCheckpointProcess.called_events,
                 ['create', 'exception'])
 
     def test_submit_exception(self):
@@ -55,11 +55,11 @@ class TestExecutionEngine(TestCase):
 
     def test_submit_checkpoint_then_exception(self):
         for engine in self.engines_to_test:
-            e = engine.submit(common.CheckpointThenExceptionProcess, None).\
+            e = engine.submit(common.TwoCheckpointThenExceptionProcess, None).\
                 exception()
             self.assertIsInstance(e, RuntimeError)
             self._test_engine_events(
-                common.CheckpointThenExceptionProcess.called_events,
+                common.TwoCheckpointThenExceptionProcess.called_events,
                 ['stop', 'finish', 'destroy'])
 
     def test_exception_monitor_notification(self):
@@ -83,7 +83,7 @@ class TestExecutionEngine(TestCase):
 
         for engine in self.engines_to_test:
             l = MonitorListener()
-            engine.submit(common.CheckpointThenExceptionProcess).exception()
+            engine.submit(common.TwoCheckpointThenExceptionProcess).exception()
             self.assertTrue(l.registered_called)
             self.assertTrue(l.failed_called)
 
