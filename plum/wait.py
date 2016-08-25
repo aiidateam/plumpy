@@ -18,7 +18,7 @@ class WaitOn(object):
         assert cls.BundleKeys.CLASS_NAME.value in bundle
 
         class_name = bundle[cls.BundleKeys.CLASS_NAME.value]
-        WaitOnClass = bundle.get_class_loader().find_class(class_name)
+        WaitOnClass = bundle.get_class_loader().load_class(class_name)
 
         return WaitOnClass.create_from(bundle)
 

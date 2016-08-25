@@ -80,7 +80,7 @@ class Process(object):
         # Get the class using the class loader and instantiate it
         class_name = saved_instance_state[cls.BundleKeys.CLASS_NAME.value]
         ProcClass =\
-            saved_instance_state.get_class_loader().find_class(class_name)
+            saved_instance_state.get_class_loader().load_class(class_name)
         proc = ProcClass()
         # Get it to create itself
         proc.perform_create(saved_instance_state=saved_instance_state)
