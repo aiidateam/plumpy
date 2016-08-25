@@ -180,12 +180,16 @@ class Process(object):
         bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
         bundle[self.BundleKeys.PID.value] = self.pid
 
+        inputs = None
         if self._inputs is not None:
-            bundle[self.BundleKeys.INPUTS.value] = Bundle(self._inputs)
+            inputs = Bundle(self._inputs)
+        bundle[self.BundleKeys.INPUTS.value] = inputs
+
+        wait_on_state = None
         if self._waiting_on is not None:
             wait_on_state = Bundle()
             self._waiting_on.save_instance_state(wait_on_state)
-            bundle[self.BundleKeys.WAITING_ON.value] = wait_on_state
+        bundle[self.BundleKeys.WAITING_ON.value] = wait_on_state
 
     def tick(self):
         return self.__director.tick()
@@ -505,14 +509,10 @@ class Process(object):
 
         if inputs is not None:
             self._inputs = util.AttributesFrozendict(inputs)
-        else:
-            self._inputs = None
 
-        try:
+        if bundle[self.BundleKeys.WAITING_ON.value]:
             self._waiting_on = \
                 WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
-        except KeyError:
-            pass
 
     # Inputs ##################################################################
     @protected

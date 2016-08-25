@@ -22,7 +22,7 @@ class TestPicklePersistence(TestCase):
         self.assertEqual(len(MONITOR.get_pids()), 0)
 
         self.store_dir = tempfile.mkdtemp()
-        self.pickle_persistence = PicklePersistence(directory=self.store_dir)
+        self.pickle_persistence = PicklePersistence(running_directory=self.store_dir)
 
     def tearDown(self):
         self.assertEqual(len(MONITOR.get_pids()), 0)

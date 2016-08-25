@@ -7,13 +7,13 @@ import pickle
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR, ProcessMonitorListener
-from plum.util import override
+from plum.util import override, protected
 from plum.persistence._base import LOGGER
 
 
-_STORE_DIRECTORY = path.join(tempfile.gettempdir(), "process_records")
-_FINISHED_DIRECTORY = path.join(_STORE_DIRECTORY, "finished")
-_FAILED_DIRECTORY = path.join(_STORE_DIRECTORY, "failed")
+_RUNNING_DIRECTORY = path.join(tempfile.gettempdir(), "running")
+_FINISHED_DIRECTORY = path.join(_RUNNING_DIRECTORY, "finished")
+_FAILED_DIRECTORY = path.join(_RUNNING_DIRECTORY, "failed")
 
 
 class PicklePersistence(ProcessListener, ProcessMonitorListener):
@@ -26,7 +26,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
     instance state of Processes.
     """
     def __init__(self, auto_persist=False,
-                 directory=_STORE_DIRECTORY,
+                 running_directory=_RUNNING_DIRECTORY,
                  finished_directory=_FINISHED_DIRECTORY,
                  failed_directory=_FAILED_DIRECTORY):
         """
@@ -38,18 +38,18 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
 
         The directory structure that will be used is:
 
-        directory/[pid].pickle - Currently active processes
-        directory/finished_directory/[pid].pickle - Finished processes
-        directory/failed_directory/[pid].pickle - Failed processes
+        running_directory/[pid].pickle - Currently active processes
+        finished_directory/[pid].pickle - Finished processes
+        failed_directory/[pid].pickle - Failed processes
 
         :param auto_persist: Will automatically persist Processes if True.
-        :param directory: The base directory to store all pickles in.
+        :param running_directory: The base directory to store all pickles in.
         :param finished_directory: The (relative) subdirectory to put finished
         Process pickles in.  If None they will be deleted when finished.
         :param failed_directory: The (relative) subdirectory to put failed
         Process pickles in.  If None they will be deleted on fail.
         """
-        self._running_directory = directory
+        self._running_directory = running_directory
         self._finished_directory = finished_directory
         self._failed_directory = failed_directory
         self._auto_persist = auto_persist
@@ -101,7 +101,11 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
                     "exception raised trying to pickle process (pid={}).\n"
                     "{}".format(process.pid, e.message))
 
-        process.add_process_listener(self)
+        try:
+            process.add_process_listener(self)
+        except AssertionError:
+            # Happens if we're already listening
+            pass
 
     def get_running_path(self, pid):
         """
@@ -113,8 +117,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         return path.join(self._running_directory, self.pickle_filename(pid))
 
     def save(self, process):
-        checkpoint = Bundle()
-        process.save_instance_state(checkpoint)
+        checkpoint = self.create_bundle(process)
         self._ensure_directory(self._running_directory)
         filename = self.get_running_path(process.pid)
         try:
@@ -169,6 +172,17 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         if self._auto_persist:
             self.persist_process(process)
 
+    @protected
+    def create_bundle(self, process):
+        checkpoint = Bundle()
+        process.save_instance_state(checkpoint)
+        return checkpoint
+
+    @staticmethod
+    def _ensure_directory(dir_path):
+        if not path.isdir(dir_path):
+            os.makedirs(dir_path)
+
     def _release_process(self, pid, save_path):
         # Get the current location of the pickle
         pickle_path = self.get_running_path(pid)
@@ -184,7 +198,6 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
             raise ValueError(
                 "Cannot find pickle for process with pid '{}'".format(pid))
 
-    @staticmethod
-    def _ensure_directory(dir_path):
-        if not path.isdir(dir_path):
-            os.makedirs(dir_path)
+
+
+
