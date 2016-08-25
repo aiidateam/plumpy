@@ -94,7 +94,7 @@ class Process(object):
 
     @classmethod
     def _define(cls, spec):
-        pass
+        cls._called = True
 
     @classmethod
     def spec(cls):
@@ -102,7 +102,12 @@ class Process(object):
             return cls._spec
         except AttributeError:
             cls._spec = cls._spec_type()
+            cls._called = False
             cls._define(cls._spec)
+            assert cls._called, \
+                "Process._define() was not called\n" \
+                "Hint: Did you forget to call the superclass method in your _define? " \
+                "Try: super([class_name], cls)._define(spec)"
             return cls._spec
 
     @classmethod

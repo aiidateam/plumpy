@@ -12,6 +12,8 @@ from plum.process_monitor import MONITOR
 class DummyProcess(Process):
     @classmethod
     def _define(cls, spec):
+        super(DummyProcess, cls)._define(spec)
+
         spec.dynamic_input()
         spec.dynamic_output()
 
@@ -95,6 +97,8 @@ class TestProcess(TestCase):
         class WithDynamic(Process):
             @classmethod
             def _define(cls, spec):
+                super(WithDynamic, cls)._define(spec)
+
                 spec.dynamic_input()
 
             def _run(self, **kwargs):
@@ -108,6 +112,8 @@ class TestProcess(TestCase):
         class Proc(Process):
             @classmethod
             def _define(cls, spec):
+                super(Proc, cls)._define(spec)
+
                 spec.input('a')
 
             def _run(self, a):

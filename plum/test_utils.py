@@ -74,6 +74,7 @@ class EventsTesterMixin(object):
 class ProcessEventsTester(EventsTesterMixin, Process):
     @classmethod
     def _define(cls, spec):
+        super(ProcessEventsTester, cls)._define(spec)
         spec.dynamic_output()
 
     def __init__(self):
