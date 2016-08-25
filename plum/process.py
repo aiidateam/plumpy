@@ -147,7 +147,6 @@ class Process(object):
 
         self._finished = False
 
-        self._exec_engine = None
         self._waiting_on = None
         self._output_values = {}
         self.__event_helper = util.EventHelper(ProcessListener)
@@ -470,7 +469,7 @@ class Process(object):
 
     @protected
     def get_exec_engine(self):
-        return self._exec_engine
+        raise NotImplementedError("Transitioning to change the way this works")
 
     @protected
     def out(self, output_port, value):
