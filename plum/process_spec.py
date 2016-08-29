@@ -56,8 +56,11 @@ class ProcessSpec(object):
     def dynamic_input(self, **kwargs):
         self.input_port(DynamicInputPort.NAME, DynamicInputPort(self, **kwargs))
 
-    def remove_dynamic_input(self):
-        self.remove_input(DynamicInputPort.NAME)
+    def no_dynamic_input(self):
+        try:
+            self.remove_input(DynamicInputPort.NAME)
+        except KeyError:
+            pass
 
     def has_dynamic_input(self):
         return self.has_input(DynamicInputPort.NAME)
@@ -118,8 +121,11 @@ class ProcessSpec(object):
         self.output_port(
             DynamicOutputPort.NAME, DynamicOutputPort(self, **kwargs))
 
-    def remove_dynamic_output(self):
-        self.remove_output(DynamicOutputPort.NAME)
+    def no_dynamic_output(self):
+        try:
+            self.remove_output(DynamicOutputPort.NAME)
+        except KeyError:
+            pass
 
     def remove_output(self, name):
         if self.sealed:
