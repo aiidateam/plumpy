@@ -3,7 +3,7 @@ from unittest import TestCase
 from plum.test_utils import ProcessListenerTester
 from plum.process import Process, ProcessState
 from plum.util import override
-from plum.test_utils import ExceptionProcess, TwoCheckpointProcess,\
+from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpointProcess,\
     DummyProcessWithOutput, TEST_PROCESSES
 from plum.persistence.bundle import Bundle
 from plum.process_monitor import MONITOR
@@ -61,6 +61,22 @@ class TestProcess(TestCase):
         self.proc.remove_process_listener(self.events_tester)
         MONITOR.reset()
 
+    def test_spec(self):
+        """
+        Check that the references to specs are doing the right thing...
+        """
+        dp = DummyProcess.new_instance()
+        self.assertIsNot(DummyProcess.spec(), Process.spec())
+        self.assertIs(dp.spec(), DummyProcess.spec())
+
+        class Proc(DummyProcess):
+            pass
+
+        self.assertIsNot(Proc.spec(), Process.spec())
+        self.assertIsNot(Proc.spec(), DummyProcess.spec())
+        p = Proc.new_instance()
+        self.assertIs(p.spec(), Proc.spec())
+
     def test_on_run(self):
         self.proc.on_run()
         self.assertTrue(self.events_tester.run)
@@ -111,13 +127,28 @@ class TestProcess(TestCase):
 
         # Check that we can't access inputs before creating
         with self.assertRaises(AttributeError):
-            p.inputs.a
+            p.raw_inputs.a
 
         # Check that we can access the inputs after creating
         p.perform_create(0, {'a': 5})
-        self.assertEqual(p.inputs.a, 5)
+        self.assertEqual(p.raw_inputs.a, 5)
         with self.assertRaises(AttributeError):
-            p.inputs.b
+            p.raw_inputs.b
+
+    def test_inputs_default(self):
+        class Proc(DummyProcess):
+            @classmethod
+            def _define(cls, spec):
+                super(Proc, cls)._define(spec)
+                spec.input("input", default=5, required=False)
+
+        # Supply a value
+        p = Proc.new_instance(inputs={'input': 2})
+        self.assertEqual(p.inputs['input'], 2)
+
+        # Don't supply, use default
+        p = Proc.new_instance()
+        self.assertEqual(p.inputs['input'], 5)
 
     def test_run(self):
         dp = DummyProcessWithOutput.new_instance()

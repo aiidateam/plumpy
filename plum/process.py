@@ -100,7 +100,7 @@ class Process(object):
     @classmethod
     def spec(cls):
         try:
-            return cls._spec
+            return cls.__getattribute__(cls, '_spec')
         except AttributeError:
             cls._spec = cls._spec_type()
             cls._called = False
@@ -145,7 +145,7 @@ class Process(object):
         self._waiting_on = None
 
         # Input/output
-        self._inputs = None
+        self._raw_inputs = None
         self._parsed_inputs = None
         self._outputs = {}
 
@@ -161,11 +161,11 @@ class Process(object):
         return self._pid
 
     @property
-    def inputs(self):
-        return self._inputs
+    def raw_inputs(self):
+        return self._raw_inputs
 
     @property
-    def parsed_inputs(self):
+    def inputs(self):
         return self._parsed_inputs
 
     @property
@@ -194,8 +194,8 @@ class Process(object):
 
         # Save inputs
         inputs = None
-        if self._inputs is not None:
-            inputs = Bundle(self._inputs)
+        if self._raw_inputs is not None:
+            inputs = Bundle(self._raw_inputs)
         bundle[self.BundleKeys.INPUTS.value] = inputs
 
         bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
@@ -272,10 +272,10 @@ class Process(object):
             self._pid = pid
             self._check_inputs(inputs)
             if inputs is not None:
-                self._inputs = util.AttributesFrozendict(inputs)
+                self._raw_inputs = util.AttributesFrozendict(inputs)
 
         self._parsed_inputs =\
-            util.AttributesFrozendict(self.create_input_args(self.inputs))
+            util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
         self._called = False
         self.on_create(pid, inputs, saved_instance_state)
@@ -527,7 +527,7 @@ class Process(object):
 
         inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
         if inputs is not None:
-            self._inputs = util.AttributesFrozendict(inputs)
+            self._raw_inputs = util.AttributesFrozendict(inputs)
 
         self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict()
 

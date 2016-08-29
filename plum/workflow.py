@@ -141,7 +141,7 @@ class WorkflowSpec(ProcessSpec):
 
     def exposed_inputs(self, process_name):
         proc = self.get_process(process_name)
-        for name, port in proc.spec().inputs.iteritems():
+        for name, port in proc.spec().raw_inputs.iteritems():
             self.input_port(name, port)
             self.link(":{}".format(name),
                       "{}:{}".format(process_name, name))
@@ -309,7 +309,7 @@ class Workflow(Process, ProcessListener):
 
     def _generate_inputs_for(self, proc):
         ready_links = []
-        for input_name in proc.spec().inputs:
+        for input_name in proc.spec().raw_inputs:
             sink = "{}:{}".format(self.get_local_name(proc), input_name)
             for link in self.spec().get_incoming_links(sink):
                 if str(link) in self._input_buffer:
