@@ -66,6 +66,7 @@ class Process(object):
         """
         CLASS_NAME = 'class_name'
         INPUTS = 'inputs'
+        OUTPUTS = 'outputs'
         PID = 'pid'
         WAITING_ON = 'waiting_on'
 
@@ -105,9 +106,9 @@ class Process(object):
             cls._called = False
             cls._define(cls._spec)
             assert cls._called, \
-                "Process._define() was not called\n" \
+                "Process._define() was not called by {}\n" \
                 "Hint: Did you forget to call the superclass method in your _define? " \
-                "Try: super([class_name], cls)._define(spec)"
+                "Try: super([class_name], cls)._define(spec)".format(cls)
             return cls._spec
 
     @classmethod
@@ -126,13 +127,10 @@ class Process(object):
         return SerialEngine()
 
     @classmethod
-    def run(cls, inputs=None, exec_engine=None):
-        if inputs is None:
-            inputs = {}
-        if not exec_engine:
-            exec_engine = cls._create_default_exec_engine()
-        return exec_engine.submit(cls, inputs).result()
-
+    def run(cls, inputs=None):
+        p = cls.new_instance(inputs)
+        p.run_until_complete()
+        return p.outputs
 
     ############################################
 
@@ -140,15 +138,18 @@ class Process(object):
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
+        # State stuff
         self._state = None
         self._pid = None
+        self._finished = False
+        self._waiting_on = None
+
+        # Input/output
         self._inputs = None
         self._parsed_inputs = None
+        self._outputs = {}
 
-        self._finished = False
-
-        self._waiting_on = None
-        self._output_values = {}
+        # Events and running
         self.__event_helper = util.EventHelper(ProcessListener)
         self.__director = _Director(self)
 
@@ -168,6 +169,16 @@ class Process(object):
         return self._parsed_inputs
 
     @property
+    def outputs(self):
+        """
+        Get the current outputs emitted by the Process.  These may grow over
+        time as the process runs.
+
+        :return: A mapping of {output_port: value} outputs
+        """
+        return self._outputs
+
+    @property
     def state(self):
         return self._state
 
@@ -177,17 +188,17 @@ class Process(object):
     def get_waiting_on(self):
         return self._waiting_on
 
-    def get_last_outputs(self):
-        return self._output_values
-
     def save_instance_state(self, bundle):
         bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
         bundle[self.BundleKeys.PID.value] = self.pid
 
+        # Save inputs
         inputs = None
         if self._inputs is not None:
             inputs = Bundle(self._inputs)
         bundle[self.BundleKeys.INPUTS.value] = inputs
+
+        bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
 
         wait_on_state = None
         if self._waiting_on is not None:
@@ -298,6 +309,8 @@ class Process(object):
         """
         assert self.state in [ProcessState.STARTED, ProcessState.WAITING]
 
+        self._waiting_on = None
+
         self._called = False
         self.on_run()
         assert self._called, \
@@ -352,6 +365,8 @@ class Process(object):
     def perform_stop(self):
         assert self.state in [ProcessState.STARTED, ProcessState.WAITING,
                               ProcessState.FINISHED]
+
+        self._waiting_on = None
 
         self._called = False
         self.on_stop()
@@ -495,7 +510,7 @@ class Process(object):
                     "Expected '{}', got '{}'".
                     format(output_port, port.valid_type, type(value)))
 
-        self._output_values[output_port] = value
+        self._outputs[output_port] = value
         self._on_output_emitted(output_port, value, dynamic)
 
     @protected
@@ -509,10 +524,12 @@ class Process(object):
     @protected
     def load_instance_state(self, bundle):
         self._pid = bundle[self.BundleKeys.PID.value]
-        inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
 
+        inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
         if inputs is not None:
             self._inputs = util.AttributesFrozendict(inputs)
+
+        self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict()
 
         if bundle[self.BundleKeys.WAITING_ON.value]:
             self._waiting_on = \
@@ -573,7 +590,7 @@ class Process(object):
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
         for name, port in self.spec().outputs.iteritems():
-            valid, msg = port.validate(self._output_values.get(name, None))
+            valid, msg = port.validate(self._outputs.get(name, None))
             if not valid:
                 raise RuntimeError("Process {} failed because {}".
                                    format(self.get_name(), msg))
@@ -630,7 +647,6 @@ class _Director(object):
     """
     def __init__(self, process):
         self._proc = process
-        self._last_retval = None
         self._stop = False
         self._destroy = False
 
@@ -655,30 +671,23 @@ class _Director(object):
                     self._proc.perform_wait(self._proc.get_waiting_on())
                     return True
                 else:
-                    # STARTED -> RUNNING
+                    # WAITING -> RUNNING -> WAITING or FINISHED
                     self._proc.perform_run()
-                    self._last_retval = self._proc.do_run()
-                    return True
-            elif self._proc.state is ProcessState.RUNNING:
-                if isinstance(self._last_retval, WaitOn):
-                    # RUNNING -> WAITING
-                    self._proc.perform_wait(self._last_retval)
-                    return True
-                else:
-                    # RUNNING -> FINISHED
-                    self._proc.perform_finish()
+                    self._finish_running(self._proc.do_run())
                     return True
             elif self._proc.state is ProcessState.WAITING:
                 if self._stop:
                     # WAITING -> STOPPED
                     self._proc.perform_stop()
+                    return True
                 elif self._proc.get_waiting_on().is_ready():
-                    # WAITING -> RUNNING
+                    # WAITING -> RUNNING -> WAITING or FINISHED
                     wait_on = self._proc.get_waiting_on()
                     self._proc.perform_continue(wait_on)
-                    self._last_retval = getattr(self._proc, wait_on.callback)(wait_on)
+                    self._finish_running(getattr(self._proc, wait_on.callback)(wait_on))
                     return True
                 else:
+                    # Not ready
                     return False
             elif self._proc.state is ProcessState.FINISHED:
                 # FINISHED -> STOPPED
@@ -688,6 +697,8 @@ class _Director(object):
                 # STOPPED -> DESTROYED
                 self._proc.perform_destroy()
                 return True
+            else:
+                raise RuntimeError("Cannot tick a process in state {}".format(self._proc.state))
         except BaseException:
             MONITOR.process_failed(self._proc.pid)
             raise
@@ -703,3 +714,17 @@ class _Director(object):
     def destroy(self):
         self._destroy = True
 
+    def _finish_running(self, retval):
+        """
+        Transition to the next state after RUNNING.  If retval was a wait_on
+        then it will transition to WAITING.  Otherwise it will transition to
+        FINISHED
+        :param retval:
+        :return:
+        """
+        if isinstance(retval, WaitOn):
+            # RUNNING -> WAITING
+            self._proc.perform_wait(retval)
+        else:
+            # RUNNING -> FINISHED
+            self._proc.perform_finish()

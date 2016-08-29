@@ -1,24 +1,12 @@
 from unittest import TestCase
 
 from plum.test_utils import ProcessListenerTester
-from plum.engine.serial import SerialEngine
 from plum.process import Process, ProcessState
 from plum.util import override
-from plum.test_utils import ExceptionProcess, TwoCheckpointProcess
+from plum.test_utils import ExceptionProcess, TwoCheckpointProcess,\
+    DummyProcessWithOutput, TEST_PROCESSES
 from plum.persistence.bundle import Bundle
 from plum.process_monitor import MONITOR
-
-
-class DummyProcess(Process):
-    @classmethod
-    def _define(cls, spec):
-        super(DummyProcess, cls)._define(spec)
-
-        spec.dynamic_input()
-        spec.dynamic_output()
-
-    def _run(self, **kwargs):
-        self.out("default", 5)
 
 
 class ForgetToCallParent(Process):
@@ -66,7 +54,7 @@ class ForgetToCallParent(Process):
 class TestProcess(TestCase):
     def setUp(self):
         self.events_tester = ProcessListenerTester()
-        self.proc = DummyProcess()
+        self.proc = DummyProcessWithOutput()
         self.proc.add_process_listener(self.events_tester)
 
     def tearDown(self):
@@ -132,8 +120,16 @@ class TestProcess(TestCase):
             p.inputs.b
 
     def test_run(self):
-        engine = SerialEngine()
-        results = DummyProcess.run(None, engine)
+        dp = DummyProcessWithOutput.new_instance()
+        dp.run_until_complete()
+
+        self.assertTrue(dp.has_finished())
+        self.assertEqual(dp.state, ProcessState.DESTROYED)
+        self.assertEqual(dp.outputs, {'default': 5})
+
+    def test_run_from_class(self):
+        # Test running through class method
+        results = DummyProcessWithOutput.run()
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
@@ -165,24 +161,22 @@ class TestProcess(TestCase):
 
     def test_pid(self):
         # Test auto generation of pid
-        p = DummyProcess.new_instance()
+        p = DummyProcessWithOutput.new_instance()
         self.assertIsNotNone(p.pid)
 
         # Test using integer as pid
-        p = DummyProcess.new_instance(pid=5)
+        p = DummyProcessWithOutput.new_instance(pid=5)
         self.assertEquals(p.pid, 5)
 
         # Test using string as pid
-        p = DummyProcess.new_instance(pid='a')
+        p = DummyProcessWithOutput.new_instance(pid='a')
         self.assertEquals(p.pid, 'a')
 
     def test_tick_simple(self):
-        proc = DummyProcess.new_instance()
+        proc = DummyProcessWithOutput.new_instance()
         self.assertEqual(proc.state, ProcessState.CREATED)
         proc.tick()
         self.assertEqual(proc.state, ProcessState.STARTED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.RUNNING)
         proc.tick()
         self.assertEqual(proc.state, ProcessState.FINISHED)
         proc.tick()
@@ -207,15 +201,9 @@ class TestProcess(TestCase):
         proc.tick()
         self.assertEqual(proc.state, ProcessState.STARTED)
         proc.tick()
-        self.assertEqual(proc.state, ProcessState.RUNNING)
-        proc.tick()
         self.assertEqual(proc.state, ProcessState.WAITING)
         proc.tick()
-        self.assertEqual(proc.state, ProcessState.RUNNING)
-        proc.tick()
         self.assertEqual(proc.state, ProcessState.WAITING)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.RUNNING)
         proc.tick()
         self.assertEqual(proc.state, ProcessState.FINISHED)
         proc.tick()
@@ -229,6 +217,7 @@ class TestProcess(TestCase):
         proc.run_until(ProcessState.WAITING)
         b = Bundle()
         proc.save_instance_state(b)
+        self.assertEqual(proc.outputs, b[Process.BundleKeys.OUTPUTS.value].get_dict())
 
         proc.stop()
         proc.run_until_complete()
@@ -237,6 +226,57 @@ class TestProcess(TestCase):
         proc.run_until(ProcessState.WAITING)
         b = Bundle()
         proc.save_instance_state(b)
+        self.assertEqual(proc.outputs, b[Process.BundleKeys.OUTPUTS.value].get_dict())
 
         proc.stop()
         proc.run_until_complete()
+
+    def test_saving_each_step(self):
+        from collections import namedtuple
+
+        ProcInfo = namedtuple('ProcInfo', ['state', 'bundle', 'outputs'])
+
+        for ProcClass in TEST_PROCESSES:
+            proc = ProcClass.new_instance()
+            snapshots = list()
+            while proc.state is not ProcessState.DESTROYED:
+                b = Bundle()
+                proc.save_instance_state(b)
+                snapshots.append(ProcInfo(proc.state, b, proc.outputs.copy()))
+                # The process may crash, so catch it here
+                try:
+                    proc.tick()
+                except BaseException:
+                    break
+
+            for i, info in zip(range(0, len(snapshots)), snapshots):
+                loaded = ProcClass.create_from(info.bundle)
+                # Get the process back to the state it was in when it was saved
+                loaded.run_until(info.state)
+
+                # Now go forward from that point in making sure the bundles match
+                j = i
+                while loaded.state is not ProcessState.DESTROYED:
+                    snapshot = snapshots[j]
+                    self.assertEqual(snapshot.state, loaded.state)
+
+                    new_bundle = Bundle()
+                    loaded.save_instance_state(new_bundle)
+                    self.assertEqual(snapshot.bundle, new_bundle,
+                                     "Bundle mismatch with process class {}\n"
+                                     "Original after {} ticks:\n{}\n"
+                                     "Loaded after {} ticks:\n{}".format(
+                                         ProcClass, j, snapshot.bundle, j - i, new_bundle))
+
+                    self.assertEqual(snapshot.outputs, loaded.outputs,
+                                     "Outputs mismatch with process class {}\n"
+                                     "Original after {} ticks:\n{}\n"
+                                     "Loaded after {} ticks:\n{}".format(
+                                         ProcClass, j, snapshot.outputs, j - i, loaded.outputs))
+                    try:
+                        loaded.tick()
+                    except BaseException:
+                        break
+
+                    j += 1
+

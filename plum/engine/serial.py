@@ -21,7 +21,7 @@ class SerialEngine(ExecutionEngine):
             # Run the damn thing
             try:
                 func(process, *args, **kwargs)
-                self._set_result(process.get_last_outputs())
+                self._set_result(process.outputs)
             except KeyboardInterrupt:
                 # If the user interuppted the process then we should just raise
                 # not, not wait around for the process to finish

@@ -1,18 +1,11 @@
 
 from unittest import TestCase
-from plum.process import Process, ProcessState
+from plum.process import ProcessState
 from plum.persistence.pickle_persistence import PicklePersistence
-from plum.wait_ons import checkpoint
+from plum.persistence.bundle import Bundle
 from plum.process_monitor import MONITOR
+from plum.test_utils import ProcessWithCheckpoint, TEST_PROCESSES
 import os.path
-
-
-class DummyProcess(Process):
-    def _run(self):
-        return checkpoint(self.finish)
-
-    def finish(self, wait_on):
-        pass
 
 
 class TestPicklePersistence(TestCase):
@@ -33,7 +26,7 @@ class TestPicklePersistence(TestCase):
                          self.pickle_persistence.store_directory)
 
     def test_on_starting_process(self):
-        proc = DummyProcess.new_instance()
+        proc = ProcessWithCheckpoint.new_instance()
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
@@ -42,7 +35,7 @@ class TestPicklePersistence(TestCase):
         self.assertTrue(os.path.isfile(save_path))
 
     def test_on_waiting_process(self):
-        proc = DummyProcess.new_instance()
+        proc = ProcessWithCheckpoint.new_instance()
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
@@ -54,7 +47,7 @@ class TestPicklePersistence(TestCase):
         proc.stop(True)
 
     def test_on_finishing_process(self):
-        proc = DummyProcess.new_instance()
+        proc = ProcessWithCheckpoint.new_instance()
         pid = proc.pid
         self.pickle_persistence.persist_process(proc)
         running_path = self.pickle_persistence.get_running_path(proc.pid)
@@ -73,7 +66,7 @@ class TestPicklePersistence(TestCase):
         self._empty_directory()
         # Create some processes
         for i in range(0, 3):
-            proc = DummyProcess.new_instance(pid=i)
+            proc = ProcessWithCheckpoint.new_instance(pid=i)
             self.pickle_persistence.persist_process(proc)
             proc.stop(True)
 
@@ -82,12 +75,71 @@ class TestPicklePersistence(TestCase):
         self.assertEqual(num_cps, 3)
 
     def test_save(self):
-        proc = DummyProcess.new_instance()
+        proc = ProcessWithCheckpoint.new_instance()
         running_path = self.pickle_persistence.get_running_path(proc.pid)
         self.pickle_persistence.save(proc)
         self.assertTrue(os.path.isfile(running_path))
 
         proc.stop(True)
+
+    def test_save_and_load(self):
+        for ProcClass in TEST_PROCESSES:
+            proc = ProcClass.new_instance()
+            while proc.state is not ProcessState.DESTROYED:
+                # Create a bundle manually
+                b = Bundle()
+                proc.save_instance_state(b)
+
+                self.pickle_persistence.save(proc)
+                b2 = self.pickle_persistence.load_checkpoint(proc.pid)
+
+                self.assertEqual(b, b2, "Bundle not the same after loading from pickle")
+
+                # The process may crash, so catch it here
+                try:
+                    proc.tick()
+                except BaseException:
+                    break
+
+
+    def test_saving_each_step(self):
+        for ProcClass in TEST_PROCESSES:
+            proc = ProcClass.new_instance()
+            bundles = list()
+            while proc.state is not ProcessState.DESTROYED:
+                self.pickle_persistence.save(proc)
+                b = Bundle()
+                proc.save_instance_state(b)
+                bundles.append((proc.state, b))
+                # The process may crash, so catch it here
+                try:
+                    proc.tick()
+                except BaseException:
+                    break
+
+            for i in range(0, len(bundles)):
+                state, bundle = bundles[i]
+                loaded = ProcClass.create_from(bundle)
+                # Get the process back to the state it was in when it was saved
+                loaded.run_until(state)
+                # Now go forward from that point in making sure the bundles match
+                j = i
+                while loaded.state is not ProcessState.DESTROYED:
+                    self.assertEqual(bundles[j][0], loaded.state)
+
+                    new_bundle = Bundle()
+                    loaded.save_instance_state(new_bundle)
+                    self.assertEqual(bundles[j][1], new_bundle,
+                                     "Bundle mismatch with class {}\n"
+                                     "Original after {} ticks:\n{}\n"
+                                     "Loaded after {} ticks:\n{}".format(
+                                         ProcClass, j, bundles[j][1], j - i, new_bundle))
+                    try:
+                        loaded.tick()
+                    except BaseException:
+                        break
+
+                    j += 1
 
     def _empty_directory(self):
         import shutil

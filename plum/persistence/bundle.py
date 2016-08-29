@@ -19,6 +19,9 @@ class Bundle(collections.MutableMapping):
     def get_class_loader(self):
         return self._class_loader
 
+    def get_dict(self):
+        return self.__dict
+
     # From MutableMapping
     @override
     def __getitem__(self, key):

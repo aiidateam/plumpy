@@ -12,6 +12,27 @@ class DummyProcess(Process):
         pass
 
 
+class DummyProcessWithOutput(Process):
+    @classmethod
+    def _define(cls, spec):
+        super(DummyProcessWithOutput, cls)._define(spec)
+
+        spec.dynamic_input()
+        spec.dynamic_output()
+
+    def _run(self, **kwargs):
+        self.out("default", 5)
+
+
+class ProcessWithCheckpoint(Process):
+    @override
+    def _run(self):
+        return checkpoint(self.finish)
+
+    def finish(self, wait_on):
+        pass
+
+
 class EventsTesterMixin(object):
     EVENTS = ["create", "run", "continue", "finish", "emitted", "wait",
               "stop", "destroy", ]
@@ -95,18 +116,13 @@ class TwoCheckpointProcess(ProcessEventsTester):
     @override
     def _run(self):
         self.out("test", 5)
-        cp = checkpoint(self.middle_step)
-        self._last_checkpoint = cp
-        return cp
+        return checkpoint(self.middle_step)
 
     def middle_step(self, wait_on):
-        assert wait_on is self._last_checkpoint
-        cp = checkpoint(self.finish)
-        self._last_checkpoint = cp
-        return cp
+        return checkpoint(self.finish)
 
     def finish(self, wait_on):
-        assert wait_on is self._last_checkpoint
+        pass
 
 
 class ExceptionProcess(ProcessEventsTester):
@@ -166,3 +182,9 @@ class ProcessListenerTester(ProcessListener):
     def on_process_destroy(self, process):
         assert isinstance(process, Process)
         self.destroy = True
+
+
+# All the Processes that can be used
+TEST_PROCESSES = [DummyProcess, DummyProcessWithOutput, ProcessEventsTester,
+                  ProcessWithCheckpoint, TwoCheckpointProcess,
+                  ExceptionProcess, TwoCheckpointThenExceptionProcess]
