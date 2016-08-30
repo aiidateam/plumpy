@@ -25,6 +25,11 @@ class EventTracker(ProcessMonitorListener):
     def on_monitored_process_failed(self, pid):
         self.failed_called = True
 
+    def reset(self):
+        self.created_called = False
+        self.failed_called = False
+        self.destroyed_called = False
+
     def __del__(self):
         MONITOR.remove_monitor_listener(self)
 
@@ -40,11 +45,28 @@ class TestProcessMonitor(TestCase):
     def test_create_destroy(self):
         l = EventTracker()
 
-        self.engine.submit(DummyProcess)
+        pid = self.engine.submit(DummyProcess).pid
+
+        with self.assertRaises(ValueError):
+            MONITOR.get_process(pid)
 
         self.assertTrue(l.created_called)
         self.assertTrue(l.destroyed_called)
         self.assertFalse(l.failed_called)
+
+        del l
+
+    def test_create_fail(self):
+        l = EventTracker()
+
+        pid = self.engine.submit(ExceptionProcess).pid
+
+        with self.assertRaises(ValueError):
+            MONITOR.get_process(pid)
+
+        self.assertTrue(l.created_called)
+        self.assertFalse(l.destroyed_called)
+        self.assertTrue(l.failed_called)
 
         del l
 
@@ -59,13 +81,3 @@ class TestProcessMonitor(TestCase):
             MONITOR.get_process(pid)
         self.assertEqual(len(MONITOR.get_pids()), 0)
 
-    def test_create_fail(self):
-        l = EventTracker()
-
-        self.engine.submit(ExceptionProcess)
-
-        self.assertTrue(l.created_called)
-        self.assertFalse(l.destroyed_called)
-        self.assertTrue(l.failed_called)
-
-        del l

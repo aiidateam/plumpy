@@ -704,10 +704,13 @@ class _Director(object):
                 self._proc.perform_destroy()
                 return True
             else:
-                raise RuntimeError("Cannot tick a process in state {}".format(self._proc.state))
+                unticked = True
         except BaseException:
             MONITOR.process_failed(self._proc.pid)
             raise
+
+        if unticked:
+            raise RuntimeError("Cannot tick a process in state {}".format(self._proc.state))
 
     def run_till_end(self):
         while self._proc.state is not ProcessState.DESTROYED:

@@ -48,7 +48,7 @@ class TestExecutionEngine(TestCase):
     def test_submit_exception(self):
         for engine in self.engines_to_test:
             e = engine.submit(common.ExceptionProcess, None).exception()
-            self.assertIsInstance(e, RuntimeError)
+            self.assertIsInstance(e, BaseException)
             self._test_engine_events(
                 common.ExceptionProcess.called_events,
                 ['finish', 'wait', 'continue', 'stop', 'finish', 'destroy'])

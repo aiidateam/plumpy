@@ -224,7 +224,7 @@ class TestProcess(TestCase):
         self.assertEqual(proc.state, ProcessState.CREATED)
         proc.tick()
         self.assertEqual(proc.state, ProcessState.STARTED)
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(BaseException):
             proc.tick()
         self.assertEqual(proc.state, ProcessState.RUNNING)
         del proc
