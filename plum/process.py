@@ -230,6 +230,12 @@ class Process(object):
             assert process_state in ProcessState
             termination_states = [process_state]
 
+        if ProcessState.RUNNING in termination_states:
+            raise ValueError(
+                "Cannot run a process until RUNNING because it never stops in "
+                "this state.  You may wish to run until a following state "
+                "i.e. WAITING or FINISHED")
+
         states = set(termination_states)
         states.add(ProcessState.DESTROYED)
 
@@ -671,7 +677,7 @@ class _Director(object):
                     self._proc.perform_wait(self._proc.get_waiting_on())
                     return True
                 else:
-                    # WAITING -> RUNNING -> WAITING or FINISHED
+                    # STARTED -> RUNNING -> WAITING or FINISHED
                     self._proc.perform_run()
                     self._finish_running(self._proc.do_run())
                     return True

@@ -4,9 +4,12 @@ from plum.test_utils import ProcessListenerTester
 from plum.process import Process, ProcessState
 from plum.util import override
 from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpointProcess,\
-    DummyProcessWithOutput, TEST_PROCESSES
+    DummyProcessWithOutput, TEST_PROCESSES, create_snapshot
 from plum.persistence.bundle import Bundle
 from plum.process_monitor import MONITOR
+
+
+
 
 
 class ForgetToCallParent(Process):
@@ -263,51 +266,67 @@ class TestProcess(TestCase):
         proc.run_until_complete()
 
     def test_saving_each_step(self):
-        from collections import namedtuple
-
-        ProcInfo = namedtuple('ProcInfo', ['state', 'bundle', 'outputs'])
-
         for ProcClass in TEST_PROCESSES:
             proc = ProcClass.new_instance()
             snapshots = list()
             while proc.state is not ProcessState.DESTROYED:
-                b = Bundle()
-                proc.save_instance_state(b)
-                snapshots.append(ProcInfo(proc.state, b, proc.outputs.copy()))
+                snapshots.append(create_snapshot(proc))
                 # The process may crash, so catch it here
                 try:
                     proc.tick()
                 except BaseException:
                     break
 
-            for i, info in zip(range(0, len(snapshots)), snapshots):
-                loaded = ProcClass.create_from(info.bundle)
-                # Get the process back to the state it was in when it was saved
-                loaded.run_until(info.state)
+            self._check_process_against_snapshots(ProcClass, snapshots)
 
-                # Now go forward from that point in making sure the bundles match
-                j = i
-                while loaded.state is not ProcessState.DESTROYED:
-                    snapshot = snapshots[j]
-                    self.assertEqual(snapshot.state, loaded.state)
+    def test_saving_each_step_interleaved(self):
+        all_snapshots = {}
+        for ProcClass in TEST_PROCESSES:
+            proc = ProcClass.new_instance()
+            snapshots = list()
+            while proc.state is not ProcessState.DESTROYED:
+                snapshots.append(create_snapshot(proc))
+                # The process may crash, so catch it here
+                try:
+                    proc.tick()
+                except BaseException:
+                    break
 
-                    new_bundle = Bundle()
-                    loaded.save_instance_state(new_bundle)
-                    self.assertEqual(snapshot.bundle, new_bundle,
-                                     "Bundle mismatch with process class {}\n"
-                                     "Original after {} ticks:\n{}\n"
-                                     "Loaded after {} ticks:\n{}".format(
-                                         ProcClass, j, snapshot.bundle, j - i, new_bundle))
+            all_snapshots[ProcClass] = snapshots
 
-                    self.assertEqual(snapshot.outputs, loaded.outputs,
-                                     "Outputs mismatch with process class {}\n"
-                                     "Original after {} ticks:\n{}\n"
-                                     "Loaded after {} ticks:\n{}".format(
-                                         ProcClass, j, snapshot.outputs, j - i, loaded.outputs))
-                    try:
-                        loaded.tick()
-                    except BaseException:
-                        break
+            self._check_process_against_snapshots(ProcClass, snapshots)
 
-                    j += 1
+    def _check_process_against_snapshots(self, proc_class, snapshots):
+        for i, info in zip(range(0, len(snapshots)), snapshots):
+            loaded = proc_class.create_from(info.bundle)
+            # Get the process back to the state it was in when it was saved
+            loaded.run_until(info.state)
 
+            # Now go forward from that point in making sure the bundles match
+            j = i
+            while loaded.state is not ProcessState.DESTROYED:
+                self._check_process_against_snapshot(snapshots[j], loaded)
+
+                try:
+                    loaded.tick()
+                except BaseException:
+                    break
+
+                j += 1
+
+    def _check_process_against_snapshot(self, snapshot, proc):
+        self.assertEqual(snapshot.state, proc.state)
+
+        new_bundle = Bundle()
+        proc.save_instance_state(new_bundle)
+        self.assertEqual(snapshot.bundle, new_bundle,
+                         "Bundle mismatch with process class {}\n"
+                         "Snapshot:\n{}\n"
+                         "Loaded:\n{}".format(
+                             proc.__class__, snapshot.bundle, new_bundle))
+
+        self.assertEqual(snapshot.outputs, proc.outputs,
+                         "Outputs mismatch with process class {}\n"
+                         "Snapshot:\n{}\n"
+                         "Loaded:\n{}".format(
+                             proc.__class__, snapshot.outputs, proc.outputs))

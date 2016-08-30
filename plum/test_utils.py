@@ -1,9 +1,20 @@
 
+from collections import namedtuple
 
+from plum.persistence.bundle import Bundle
 from plum.process import Process
 from plum.process_listener import ProcessListener
 from plum.util import override
 from plum.wait_ons import checkpoint
+
+
+Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
+
+
+def create_snapshot(proc):
+    b = Bundle()
+    proc.save_instance_state(b)
+    return Snapshot(proc.state, b, proc.outputs.copy())
 
 
 class DummyProcess(Process):

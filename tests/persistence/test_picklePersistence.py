@@ -101,46 +101,6 @@ class TestPicklePersistence(TestCase):
                 except BaseException:
                     break
 
-
-    def test_saving_each_step(self):
-        for ProcClass in TEST_PROCESSES:
-            proc = ProcClass.new_instance()
-            bundles = list()
-            while proc.state is not ProcessState.DESTROYED:
-                self.pickle_persistence.save(proc)
-                b = Bundle()
-                proc.save_instance_state(b)
-                bundles.append((proc.state, b))
-                # The process may crash, so catch it here
-                try:
-                    proc.tick()
-                except BaseException:
-                    break
-
-            for i in range(0, len(bundles)):
-                state, bundle = bundles[i]
-                loaded = ProcClass.create_from(bundle)
-                # Get the process back to the state it was in when it was saved
-                loaded.run_until(state)
-                # Now go forward from that point in making sure the bundles match
-                j = i
-                while loaded.state is not ProcessState.DESTROYED:
-                    self.assertEqual(bundles[j][0], loaded.state)
-
-                    new_bundle = Bundle()
-                    loaded.save_instance_state(new_bundle)
-                    self.assertEqual(bundles[j][1], new_bundle,
-                                     "Bundle mismatch with class {}\n"
-                                     "Original after {} ticks:\n{}\n"
-                                     "Loaded after {} ticks:\n{}".format(
-                                         ProcClass, j, bundles[j][1], j - i, new_bundle))
-                    try:
-                        loaded.tick()
-                    except BaseException:
-                        break
-
-                    j += 1
-
     def _empty_directory(self):
         import shutil
         if os.path.isdir(self.store_dir):
