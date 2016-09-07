@@ -160,7 +160,7 @@ class TickingEngine(ExecutionEngine):
             try:
                 proc.tick()
             except KeyboardInterrupt:
-                # If the user interuppted the process then we should just raise
+                # If the user interrupted the process then we should just raise
                 # not, not wait around for the process to finish
                 raise
             except BaseException:

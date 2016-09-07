@@ -5,6 +5,7 @@ from plum.persistence.bundle import Bundle
 from plum.process import Process
 from plum.process_listener import ProcessListener
 from plum.util import override
+from plum.wait import WaitOn
 from plum.wait_ons import checkpoint
 
 
@@ -42,6 +43,38 @@ class ProcessWithCheckpoint(Process):
 
     def finish(self, wait_on):
         pass
+
+
+class WaitForSignal(WaitOn):
+    def __init__(self, callback_name):
+        super(WaitForSignal, self).__init__(callback_name)
+        self._ready = False
+
+    def signal(self):
+        self._ready = True
+
+    @override
+    def is_ready(self):
+        return self._ready
+
+
+class WaitForSignalProcess(Process):
+    @override
+    def _run(self):
+        self._signal = WaitForSignal('finish')
+        return self._signal
+
+    def finish(self, wait_on):
+        pass
+
+    def signal(self):
+        self._signal.signal()
+
+
+class KeyboardInterruptProc(Process):
+    @override
+    def _run(self):
+        raise KeyboardInterrupt()
 
 
 class EventsTesterMixin(object):

@@ -100,6 +100,17 @@ class TestExecutionEngine(TestCase):
             f = engine.submit(common.DummyProcess, None)
             f.result()
             self.assertTrue(f.done())
+    #
+    # Not sure how to do this test because normally I expect the
+    # KeyboardInterrupt exception on the main thread...
+    # but this could lead to one one a different thread...
+    #
+    # def test_keyboard_interrupt(self):
+    #     for e in self.engines_to_test:
+    #         # Make sure the serial engine raises this error
+    #         with self.assertRaises(KeyboardInterrupt):
+    #             e.submit(common.KeyboardInterruptProc).result()
+
 
     def _test_engine_events(self, outs, exclude_events):
         """
