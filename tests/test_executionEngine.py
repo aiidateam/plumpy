@@ -1,4 +1,6 @@
 from unittest import TestCase
+import thread
+import threading
 
 import plum.test_utils as common
 from plum.engine.serial import SerialEngine
@@ -11,7 +13,6 @@ from plum.process_monitor import MONITOR, ProcessMonitorListener
 class TestExecutionEngine(TestCase):
     @override
     def setUp(self):
-        import threading
         from threading import Thread
 
         ticking = TickingEngine()
@@ -93,24 +94,26 @@ class TestExecutionEngine(TestCase):
         :param engine: the ticking engine
         """
         while not self.stop_ticking.is_set():
-            engine.tick()
+            try:
+                engine.tick()
+            except KeyboardInterrupt:
+                thread.interrupt_main()
 
     def test_future_ready(self):
         for engine in self.engines_to_test:
             f = engine.submit(common.DummyProcess, None)
             f.result()
             self.assertTrue(f.done())
-    #
+
     # Not sure how to do this test because normally I expect the
     # KeyboardInterrupt exception on the main thread...
     # but this could lead to one one a different thread...
     #
-    # def test_keyboard_interrupt(self):
-    #     for e in self.engines_to_test:
-    #         # Make sure the serial engine raises this error
-    #         with self.assertRaises(KeyboardInterrupt):
-    #             e.submit(common.KeyboardInterruptProc).result()
-
+    def test_keyboard_interrupt(self):
+        for e in self.engines_to_test:
+            # Make sure the serial engine raises this error
+            with self.assertRaises(KeyboardInterrupt):
+                e.submit(common.KeyboardInterruptProc).result()
 
     def _test_engine_events(self, outs, exclude_events):
         """
