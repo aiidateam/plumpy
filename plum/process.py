@@ -15,6 +15,9 @@ from plum.wait import WaitOn
 
 
 class ProcessState(Enum):
+    """
+    The possible states that a :class:`Process` can be in.
+    """
     CREATED = 0
     STARTED = 1
     RUNNING = 2
@@ -38,15 +41,17 @@ class Process(object):
     * STOPPED
     * DESTROYED
 
-    as defined in the ProcessState enum.
+    as defined in the :class:`ProcessState` enum.
 
-    The possible transition of states are:
+    ::
+        The possible transition of states are:
 
-                    /------WAITING----------------\
-                   /        | |                   \
-    CREATED -- STARTED -- RUNNING -- FINISHED -- STOPPED -- DESTROYED
-       \           \______________________________/            /
-        \_____________________________________________________/
+                        /------WAITING----------------\
+                       /        | |                   \
+        CREATED -- STARTED -- RUNNING -- FINISHED -- STOPPED -- DESTROYED
+           \           \______________________________/            /
+            \_____________________________________________________/
+    ::
 
     When a Process enters a state is always gets a corresponding message, e.g.
     on entering FINISHED it will recieve the on_finish message.  These are
@@ -72,6 +77,15 @@ class Process(object):
 
     @classmethod
     def new_instance(cls, inputs=None, pid=None):
+        """
+        Create a new instance of this Process class with the given inputs and
+        pid.
+
+        :param inputs: The inputs for the newly created :class:`Process`
+            instance.  Any mapping type is valid
+        :param pid: The process id given to the new process.
+        :return: An instance of this :class:`Process`.
+        """
         proc = cls()
         proc.perform_create(pid, inputs)
         return proc
@@ -94,10 +108,6 @@ class Process(object):
             saved_instance_state[cls.BundleKeys.WAITING_ON.value])
 
     @classmethod
-    def _define(cls, spec):
-        cls._called = True
-
-    @classmethod
     def spec(cls):
         try:
             return cls.__getattribute__(cls, '_spec')
@@ -116,6 +126,38 @@ class Process(object):
         return cls.__name__
 
     @classmethod
+    def get_description(cls):
+        """
+        Get a human readable description of what this :class:`Process` does.
+
+        :return: The description.
+        :rtype: str
+        """
+        desc = []
+        if cls.__doc__:
+            desc.append("Description")
+            desc.append("===========")
+            desc.append(cls.__doc__)
+
+        spec_desc = cls.spec().get_description()
+        if spec_desc:
+            desc.append("Specifications")
+            desc.append("==============")
+            desc.append(spec_desc)
+
+        return "\n".join(desc)
+
+    @classmethod
+    def run(cls, inputs=None):
+        p = cls.new_instance(inputs)
+        p.run_until_complete()
+        return p.outputs
+
+    @classmethod
+    def _define(cls, spec):
+        cls._called = True
+
+    @classmethod
     def _create_default_exec_engine(cls):
         """
         Crate the default execution engine.  Used if the run() method is
@@ -125,12 +167,6 @@ class Process(object):
         """
         from plum.engine.serial import SerialEngine
         return SerialEngine()
-
-    @classmethod
-    def run(cls, inputs=None):
-        p = cls.new_instance(inputs)
-        p.run_until_complete()
-        return p.outputs
 
     ############################################
 

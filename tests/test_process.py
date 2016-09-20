@@ -3,13 +3,10 @@ from unittest import TestCase
 from plum.test_utils import ProcessListenerTester
 from plum.process import Process, ProcessState
 from plum.util import override
-from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpointProcess,\
+from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpointProcess, \
     DummyProcessWithOutput, TEST_PROCESSES, create_snapshot
 from plum.persistence.bundle import Bundle
 from plum.process_monitor import MONITOR
-
-
-
 
 
 class ForgetToCallParent(Process):
@@ -228,6 +225,18 @@ class TestProcess(TestCase):
             proc.tick()
         self.assertEqual(proc.state, ProcessState.RUNNING)
         del proc
+
+    def test_get_description(self):
+        # Not all that much we can test for, but check if it's a string at
+        # least
+        for ProcClass in TEST_PROCESSES:
+            desc = ProcClass.get_description()
+            self.assertIsInstance(desc, str)
+
+        # Dummy process should at least use the docstring as part of the
+        # description and so it shouldn't be empty
+        desc = DummyProcess.get_description()
+        self.assertNotEqual(desc, "")
 
     def test_tick_two_checkpoints(self):
         proc = TwoCheckpointProcess.new_instance()

@@ -7,11 +7,11 @@ from plum._base import LOGGER
 
 class ProcessSpec(object):
     """
-    A class that defines the specifications of a Process, this includes what
-    its inputs, outputs, etc are.
+    A class that defines the specifications of a :class:`plum.process.Process`,
+    this includes what its inputs, outputs, etc are.
 
-    All methods to modify the spec should be statements that describe the spec
-    e.g.: input, output
+    All methods to modify the spec should have declarative names describe the
+    spec e.g.: input, output
 
     Every Process class has one of these.
     """
@@ -28,7 +28,29 @@ class ProcessSpec(object):
 
     @property
     def sealed(self):
+        """
+        Indicates if the spec is sealed or not.
+
+        :return: True if sealed, False otherwise
+        :rtype: bool
+        """
         return self._sealed
+
+    def get_description(self):
+        desc = []
+        if self.inputs:
+            desc.append("Inputs")
+            desc.append("======")
+            desc.extend([p.get_description() + "\n" for k, p in
+                         sorted(self.inputs.iteritems(), key=lambda x: x[0])])
+
+        if self.outputs:
+            desc.append("Outputs")
+            desc.append("=======")
+            desc.extend([p.get_description() + "\n" for k, p in
+                         sorted(self.outputs.iteritems(), key=lambda x: x[0])])
+
+        return "\n".join(desc)
 
     # Inputs ##################################################################
     @property

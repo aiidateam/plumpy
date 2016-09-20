@@ -5,6 +5,10 @@ import collections
 
 
 class ValueSpec(object):
+    """
+    Specifications relating to a general input/output value including
+    properties like whether it is required, valid types, the help string, etc.
+    """
     __metaclass__ = ABCMeta
 
     def __init__(self, process, name, valid_type=None, help=None,
@@ -15,6 +19,19 @@ class ValueSpec(object):
         self._help = help
         self._required = required
         self._validator = validator
+
+    def __str__(self):
+        return self.get_description()
+
+    def get_description(self):
+        desc = ["{}".format(self.name)]
+        if self.valid_type:
+            desc.append("valid type(s): {}".format(self.valid_type))
+        if self.help:
+            desc.append("help: {}".format(self.help))
+        if self.required:
+            desc.append("required: {}".format(self.required))
+        return ", ".join(desc)
 
     @property
     def name(self):
@@ -48,9 +65,10 @@ class ValueSpec(object):
         else:
             if self._valid_type is not None and \
                     not isinstance(value, self._valid_type):
-                return False, "parameter '{}' is not of the right type. " \
-                              "Got '{}', expected '{}'".format(
-                    self.name, type(value), self._valid_type)
+                msg = "value '{}' is not of the right type. " \
+                      "Got '{}', expected '{}'".format(
+                            self.name, type(value), self._valid_type)
+                return False, msg
 
         if self._validator is not None:
             result = self._validator(value)
@@ -70,14 +88,6 @@ class Attribute(ValueSpec):
                                         help=help, required=required)
         self._default = default
 
-    def __str__(self):
-        my_desc = ["=>", "name: {}".format(self.name)]
-        if self._valid_type:
-            my_desc.append("type: {}".format(self._valid_type))
-        if self._default:
-            my_desc.append("default: {}".format(self._default))
-        return ", ".join(my_desc)
-
     @property
     def default(self):
         return self._default
@@ -89,20 +99,28 @@ class Port(ValueSpec):
 
 
 class InputPort(Port):
+    """
+    A simple input port for a value being received by a workflow.
+    """
     def __init__(self, process, name, valid_type=None, help=None, default=None,
                  required=True, validator=None):
         super(InputPort, self).__init__(
             process, name, valid_type=valid_type, help=help, required=required,
             validator=validator)
+
+        if default is not None:
+            default_valid, msg = self.validate(default)
+            if not default_valid:
+                raise ValueError("Invalid default value: {}".format(msg))
+
         self._default = default
 
     def __str__(self):
-        my_desc = ["=>", "name: {}".format(self.name)]
-        if self._valid_type:
-            my_desc.append("type: {}".format(self._valid_type))
-        if self._default:
-            my_desc.append("default: {}".format(self._default))
-        return ", ".join(my_desc)
+        desc = [super(InputPort, self).__str__()]
+        if self.default:
+            desc.append(str(self.default))
+
+        return "->" + ",".join(desc)
 
     @property
     def default(self):
@@ -112,21 +130,16 @@ class InputPort(Port):
 class InputGroupPort(InputPort):
     def __init__(self, process, name, valid_type=None, help=None, default=None,
                  required=False):
-        super(InputGroupPort, self).__init__(process, name, valid_type=dict,
-                                             help=help,
-                                             default=default, required=required)
-
+        # We have to set _valid_inner_type before calling the super constructor
+        # because it will call validate on the default value (if supplied)
+        # which in turn needs this value to be set.
         if default is not None and not isinstance(default, dict):
             raise ValueError("Input group default must be of type dict")
         self._valid_inner_type = valid_type
 
-    def __str__(self):
-        my_desc = ["=>", "name: {}".format(self.name)]
-        if self._valid_type:
-            my_desc.append("type: {}".format(self._valid_type))
-        if self._default:
-            my_desc.append("default: {}".format(self._default))
-        return ", ".join(my_desc)
+        super(InputGroupPort, self).__init__(process, name, valid_type=dict,
+                                             help=help,
+                                             default=default, required=required)
 
     @property
     def default(self):

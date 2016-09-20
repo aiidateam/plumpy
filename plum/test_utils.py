@@ -19,6 +19,10 @@ def create_snapshot(proc):
 
 
 class DummyProcess(Process):
+    """
+    Process with no inputs or ouputs and does nothing when ran.
+    """
+
     @override
     def _run(self):
         pass
