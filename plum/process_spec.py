@@ -73,10 +73,10 @@ class ProcessSpec(object):
         :param name: The name of the input.
         :param kwargs: The input port options.
         """
-        self.input_port(name, InputPort(self, name, **kwargs))
+        self.input_port(name, InputPort(name, **kwargs))
 
     def dynamic_input(self, **kwargs):
-        self.input_port(DynamicInputPort.NAME, DynamicInputPort(self, **kwargs))
+        self.input_port(DynamicInputPort.NAME, DynamicInputPort(**kwargs))
 
     def no_dynamic_input(self):
         try:
@@ -88,7 +88,7 @@ class ProcessSpec(object):
         return self.has_input(DynamicInputPort.NAME)
 
     def input_group(self, name, **kwargs):
-        self.input_port(name, InputGroupPort(self, name, **kwargs))
+        self.input_port(name, InputGroupPort(name, **kwargs))
 
     def input_port(self, name, port):
         if self.sealed:
@@ -124,10 +124,10 @@ class ProcessSpec(object):
         return self.has_output(DynamicOutputPort.NAME)
 
     def output(self, name, **kwargs):
-        self.output_port(name, OutputPort(self, name, **kwargs))
+        self.output_port(name, OutputPort(name, **kwargs))
 
     def optional_output(self, name, **kwargs):
-        self.output_port(name, OutputPort(self, name, required=False, **kwargs))
+        self.output_port(name, OutputPort(name, required=False, **kwargs))
 
     def output_port(self, name, port):
         if self.sealed:
@@ -141,7 +141,7 @@ class ProcessSpec(object):
 
     def dynamic_output(self, **kwargs):
         self.output_port(
-            DynamicOutputPort.NAME, DynamicOutputPort(self, **kwargs))
+            DynamicOutputPort.NAME, DynamicOutputPort(**kwargs))
 
     def no_dynamic_output(self):
         try:

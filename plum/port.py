@@ -11,10 +11,9 @@ class ValueSpec(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, process, name, valid_type=None, help=None,
-                 required=True, validator=None):
+    def __init__(self, name, valid_type=None, help=None, required=True,
+                 validator=None):
         self._name = name
-        self._process = process
         self._valid_type = valid_type
         self._help = help
         self._required = required
@@ -36,10 +35,6 @@ class ValueSpec(object):
     @property
     def name(self):
         return self._name
-
-    @property
-    def process(self):
-        return self._process
 
     @property
     def valid_type(self):
@@ -82,9 +77,8 @@ class ValueSpec(object):
 
 
 class Attribute(ValueSpec):
-    def __init__(self, process, name, valid_type=None, help=None, default=None,
-                 required=False):
-        super(Attribute, self).__init__(process, name, valid_type=valid_type,
+    def __init__(self, name, valid_type=None, help=None, default=None, required=False):
+        super(Attribute, self).__init__(name, valid_type=valid_type,
                                         help=help, required=required)
         self._default = default
 
@@ -102,10 +96,10 @@ class InputPort(Port):
     """
     A simple input port for a value being received by a workflow.
     """
-    def __init__(self, process, name, valid_type=None, help=None, default=None,
+    def __init__(self, name, valid_type=None, help=None, default=None,
                  required=True, validator=None):
         super(InputPort, self).__init__(
-            process, name, valid_type=valid_type, help=help, required=required,
+            name, valid_type=valid_type, help=help, required=required,
             validator=validator)
 
         if default is not None:
@@ -128,7 +122,7 @@ class InputPort(Port):
 
 
 class InputGroupPort(InputPort):
-    def __init__(self, process, name, valid_type=None, help=None, default=None,
+    def __init__(self, name, valid_type=None, help=None, default=None,
                  required=False):
         # We have to set _valid_inner_type before calling the super constructor
         # because it will call validate on the default value (if supplied)
@@ -137,7 +131,7 @@ class InputGroupPort(InputPort):
             raise ValueError("Input group default must be of type dict")
         self._valid_inner_type = valid_type
 
-        super(InputGroupPort, self).__init__(process, name, valid_type=dict,
+        super(InputGroupPort, self).__init__(name, valid_type=dict,
                                              help=help,
                                              default=default, required=required)
 
@@ -167,15 +161,15 @@ class DynamicInputPort(InputPort):
     """
     NAME = "dynamic"
 
-    def __init__(self, process, valid_type=None, help_=None):
+    def __init__(self, valid_type=None, help_=None):
         super(DynamicInputPort, self).__init__(
-            process, self.NAME, valid_type=valid_type, help=help_, default=None,
+            self.NAME, valid_type=valid_type, help=help_, default=None,
             required=False)
 
 
 class OutputPort(Port):
-    def __init__(self, process, name, valid_type=None, required=True):
-        super(OutputPort, self).__init__(process, name, valid_type)
+    def __init__(self, name, valid_type=None, required=True):
+        super(OutputPort, self).__init__(name, valid_type)
         self._required = required
 
     @property
@@ -190,6 +184,6 @@ class DynamicOutputPort(OutputPort):
     """
     NAME = "dynamic"
 
-    def __init__(self, process, valid_type=None):
+    def __init__(self, valid_type=None):
         super(DynamicOutputPort, self).__init__(
-            process, self.NAME, valid_type=valid_type, required=False)
+            self.NAME, valid_type=valid_type, required=False)
