@@ -35,12 +35,24 @@ class ProcessMonitor(ProcessListener):
         self.__event_helper = EventHelper(ProcessMonitorListener)
 
     def get_process(self, pid):
+        """
+        Get the process instance for a currently running process.
+
+        :param pid: The pid of the process instance to get.
+        :return: The process with the given pid.
+        :raises: ValueError
+        """
         try:
             return self._processes[pid]
         except KeyError:
             raise ValueError("Unknown pid '{}'".format(pid))
 
     def get_pids(self):
+        """
+        Get the pids of all currently running processes.
+
+        :return: A sequence of pids.
+        """
         return self._processes.keys()
 
     def reset(self):

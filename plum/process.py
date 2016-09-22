@@ -6,6 +6,9 @@ from enum import Enum
 import time
 import plum.util as util
 from abc import ABCMeta, abstractmethod
+
+import plum.knowledge_provider as knowledge_provider
+import plum.error as error
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
@@ -43,11 +46,10 @@ class Process(object):
 
     as defined in the :class:`ProcessState` enum.
 
-    ::
-        The possible transition of states are:
+    The possible transition of states are::
 
-                        /------WAITING----------------\
-                       /        | |                   \
+                        /------WAITING----------------\\
+                       /        | |                    \\
         CREATED -- STARTED -- RUNNING -- FINISHED -- STOPPED -- DESTROYED
            \           \______________________________/            /
             \_____________________________________________________/
@@ -522,7 +524,10 @@ class Process(object):
 
     @protected
     def do_run(self):
-        return self._run(**self._parsed_inputs)
+        try:
+            return self.fast_forward()
+        except error.FastForwardError:
+            return self._run(**self._parsed_inputs)
 
     @protected
     def get_exec_engine(self):
@@ -576,6 +581,35 @@ class Process(object):
         if bundle[self.BundleKeys.WAITING_ON.value]:
             self._waiting_on = \
                 WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
+
+    @protected
+    def fast_forward(self):
+        if not self.spec().is_deterministic():
+            raise error.FastForwardError("Cannot fast-forward a process that "
+                                         "is not deterministic")
+
+        kp = knowledge_provider.get_global_provider()
+        if kp is None:
+            raise error.FastForwardError("Cannot fast-forward because a global"
+                                         "knowledge provider is not available")
+
+        # Try and find out if anyone else has had the same inputs
+        try:
+            pids = kp.get_pids_from_classname(util.fullname(self))
+        except knowledge_provider.NotKnown:
+            pass
+        else:
+            for pid in pids:
+                try:
+                    if kp.get_inputs(pid) == self.inputs:
+                        for name, value in kp.get_outputs(pid).iteritems():
+                            self.out(name, value)
+                        return
+                except knowledge_provider.NotKnown:
+                    pass
+
+        raise error.FastForwardError("Cannot fast forward")
+
 
     # Inputs ##################################################################
     @protected
@@ -684,6 +718,8 @@ class FunctionProcess(Process):
 
 class _Director(object):
     """
+    The director runs the show.
+
     This class is used internally to orchestrate the running of a process i.e.
     step it through the states.
     """

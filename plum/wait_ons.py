@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
-import plum.process_database as process_database
+import plum.knowledge_provider as process_database
 from plum.persistence.bundle import Bundle
-from plum.wait import WaitOn, validate_callback_func
+from plum.wait import WaitOn, WaitOnError, validate_callback_func
 from plum.util import override
 
 
@@ -90,11 +90,13 @@ class WaitOnProcess(WaitOn):
 
     @override
     def is_ready(self):
-        db = process_database.get_db()
+        db = process_database.get_global_provider()
         if not db:
-            raise RuntimeError(
+            raise WaitOnError(
                 "Unable to check if process has finished because a global "
-                "process database was not supplied.")
+                "process database was not supplied.",
+                WaitOnError.Nature.PERMANENT
+            )
         return db.has_finished(self._pid)
 
     @override
@@ -129,11 +131,13 @@ class WaitOnProcessOutput(WaitOn):
 
     @override
     def is_ready(self):
-        db = process_database.get_db()
+        db = process_database.get_global_provider()
         if not db:
-            raise RuntimeError(
+            raise WaitOnError(
                 "Unable to check if process has finished because a global "
-                "process database was not supplied.")
+                "process database was not supplied.",
+                WaitOnError.Nature.PERMANENT
+            )
 
         try:
             db.get_output(self._pid, self._output_port)

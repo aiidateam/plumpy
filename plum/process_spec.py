@@ -3,6 +3,7 @@
 from plum.port import InputPort, InputGroupPort, OutputPort,\
     DynamicOutputPort, DynamicInputPort
 from plum._base import LOGGER
+from plum.util import protected
 
 
 class ProcessSpec(object):
@@ -18,6 +19,7 @@ class ProcessSpec(object):
     def __init__(self):
         self._inputs = {}
         self._outputs = {}
+        self._deterministic = None
         self._sealed = False
 
     def seal(self):
@@ -154,3 +156,25 @@ class ProcessSpec(object):
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._outputs.pop(name)
     ###########################################################################
+
+    def deterministic(self):
+        self.set_deterministic(True)
+
+    def not_deterministic(self):
+        self.set_deterministic(False)
+
+    def is_deterministic(self):
+        return self._deterministic
+
+    @protected
+    def set_deterministic(self, to):
+        assert not self.sealed, "Cannot change the spec after it is sealed"
+
+        if self._deterministic is False:
+            LOGGER.warn("A process spec that was not deterministic has been "
+                        "changed to be deterministic.  This may be ok if the "
+                        "caller knows for sure this is the case but a subclass "
+                        "may have set the flag because it is really not "
+                        "deterministic.")
+
+        self._deterministic = to

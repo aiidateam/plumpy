@@ -1,12 +1,12 @@
 from unittest import TestCase
 
-from plum.test_utils import ProcessListenerTester
+from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
-from plum.util import override
+from plum.process_monitor import MONITOR
 from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpointProcess, \
     DummyProcessWithOutput, TEST_PROCESSES, create_snapshot
-from plum.persistence.bundle import Bundle
-from plum.process_monitor import MONITOR
+from plum.test_utils import ProcessListenerTester
+from plum.util import override
 
 
 class ForgetToCallParent(Process):
@@ -287,6 +287,69 @@ class TestProcess(TestCase):
                     break
 
             self._check_process_against_snapshots(ProcClass, snapshots)
+
+    def test_fast_forward(self):
+        import plum.knowledge_provider as knowledge_provider
+        from plum.in_memory_database import InMemoryDatabase
+
+
+        class FastForwarding(Process):
+            @classmethod
+            def _define(cls, spec):
+                super(FastForwarding, cls)._define(spec)
+
+                spec.input("a", required=True)
+                spec.output("out")
+                spec.deterministic()
+
+            def __init__(self):
+                super(FastForwarding, self).__init__()
+                self.did_ff = False
+
+            @override
+            def fast_forward(self):
+                super(FastForwarding, self).fast_forward()
+                self.did_ff = True
+
+            @override
+            def _run(self, **kwargs):
+                self.out("out", self.inputs.a)
+
+        old_kp = knowledge_provider.get_global_provider()
+        imdb = InMemoryDatabase(retain_inputs=True, retain_outputs=True)
+        knowledge_provider.set_global_provider(imdb)
+
+        for ProcClass in TEST_PROCESSES:
+            # Try running first time
+            try:
+                outputs = ProcClass.run()
+            except BaseException:
+                pass
+            else:
+                # Check that calling again doesn't mess with the process
+                outputs2 = ProcClass.run()
+                self.assertEqual(outputs, outputs2)
+
+        ff_proc = FastForwarding.new_instance(inputs={'a': 5})
+        ff_proc.run_until_complete()
+        outs1 = ff_proc.outputs
+        self.assertFalse(ff_proc.did_ff)
+
+        # Check the same inputs again
+        ff_proc = FastForwarding.new_instance(inputs={'a': 5})
+        ff_proc.run_until_complete()
+        outs2 = ff_proc.outputs
+        self.assertTrue(ff_proc.did_ff)
+        self.assertEqual(outs1, outs2)
+
+        # Now check different inputs
+        ff_proc = FastForwarding.new_instance(inputs={'a': 6})
+        ff_proc.run_until_complete()
+        outs3 = ff_proc.outputs
+        self.assertFalse(ff_proc.did_ff)
+        self.assertNotEqual(outs1, outs3)
+
+        knowledge_provider.set_global_provider(old_kp)
 
     def test_saving_each_step_interleaved(self):
         all_snapshots = {}
