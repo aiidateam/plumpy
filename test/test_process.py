@@ -59,7 +59,9 @@ class TestProcess(TestCase):
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
-        MONITOR.reset()
+        if not self.events_tester.destroy:
+            self.proc.on_destroy()
+        MONITOR._reset()
 
     def test_spec(self):
         """
@@ -117,7 +119,6 @@ class TestProcess(TestCase):
             @classmethod
             def _define(cls, spec):
                 super(Proc, cls)._define(spec)
-
                 spec.input('a')
 
             def _run(self, a):

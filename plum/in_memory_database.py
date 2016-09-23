@@ -6,6 +6,15 @@ from plum.process_monitor import MONITOR, ProcessMonitorListener
 
 
 class InMemoryDatabase(KnowledgeProvider, ProcessListener, ProcessMonitorListener):
+    """
+    A knowledge provider that keeps track of what happened to processes by
+    listening to the process monitor.
+
+    .. warning:: If asked to retain inputs or outputs a reference to these will
+        be kept and so the memory usage may become huge if many processes with
+        large inputs or outputs are executed.
+    """
+
     def __init__(self, retain_inputs, retain_outputs):
         self._retain_inputs = retain_inputs
         self._retain_outputs = retain_outputs

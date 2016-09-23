@@ -4,14 +4,29 @@ from plum.process_monitor import MONITOR
 
 
 class NotKnown(Exception):
-    def __init__(self, msg=None):
-        super(NotKnown, self).__init__(msg)
+    """
+    An exception raised when a knowledge provider doesn't know the answer to
+    the query.  The message may indicate the reason.
+    """
+    pass
 
 
 class KnowledgeProvider(object):
+    """
+    An object that can potentially supply some knowledge about a Process such
+    as: has it ran, what were its inputs, what were its outputs, etc.
+    """
     __metaclass__ = ABCMeta
 
     def has_finished(self, pid):
+        """
+        Has the process finished?
+
+        :param pid: The process id.
+        :return: True if finished, False otherwise.
+        :rtype: bool
+        :raises: NotKnown
+        """
         raise NotKnown()
 
     def get_input(self, pid, port_name):
@@ -23,7 +38,7 @@ class KnowledgeProvider(object):
         :return: The corresponding input value.
         :raises: NotKnown
         """
-        raise NotKnown()
+        return self.get_inputs(pid)[port_name]
 
     def get_inputs(self, pid):
         """
@@ -45,7 +60,7 @@ class KnowledgeProvider(object):
         :return: The corresponding output value
         :raises: NotKnown
         """
-        raise NotKnown()
+        return self.get_outputs(pid)[port_name]
 
     def get_outputs(self, pid):
         """
