@@ -94,6 +94,14 @@ class Process(object):
 
     @classmethod
     def create_from(cls, saved_instance_state):
+        """
+        Create a process from a saved instance state.
+
+        :param saved_instance_state: The saved state
+        :type saved_instance_state: Bundle
+        :return: An instance of this process with its state loaded from the save state.
+        :rtype: :class:`Process`
+        """
         # Get the class using the class loader and instantiate it
         class_name = saved_instance_state[cls.BundleKeys.CLASS_NAME.value]
         ProcClass =\
@@ -120,7 +128,7 @@ class Process(object):
             assert cls._called, \
                 "Process._define() was not called by {}\n" \
                 "Hint: Did you forget to call the superclass method in your _define? " \
-                "Try: super([class_name], cls)._define(spec)".format(cls)
+                "Try: super({}, cls)._define(spec)".format(cls, cls.__name__)
             return cls._spec
 
     @classmethod

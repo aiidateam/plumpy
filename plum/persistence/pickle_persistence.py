@@ -17,14 +17,38 @@ _FAILED_DIRECTORY = path.join(_RUNNING_DIRECTORY, "failed")
 
 
 class PicklePersistence(ProcessListener, ProcessMonitorListener):
-    @staticmethod
-    def pickle_filename(pid):
-        return "{}.pickle".format(pid)
-
     """
     Class that uses pickles stored in particular directories to persist the
     instance state of Processes.
     """
+
+    @staticmethod
+    def pickle_filename(pid):
+        return "{}.pickle".format(pid)
+
+    @classmethod
+    def create_from_basedir(cls, basedir, **kwargs):
+        """
+        Create using a base directory, the pickles will be stored in:
+          - running: [basedir]/running
+          - finished: [basedir]/finished
+          - failed: [basedir]/failed
+
+        :param basedir: The base directory to storage pickle under
+        :type basedir: str
+        :param kwargs: Any additional arguments to pass to the constructor
+        :return: A new instance.
+        :rtype: :class:`PicklePersistence`.
+        """
+        if kwargs is None:
+            kwargs = {}
+
+        # Set up the subdirectories
+        kwargs['running_directory'] = path.join(basedir, "running")
+        kwargs['finished_directory'] = path.join(basedir, "finished")
+        kwargs['failed_directory'] = path.join(basedir, "failed")
+        return cls(**kwargs)
+
     def __init__(self, auto_persist=False,
                  running_directory=_RUNNING_DIRECTORY,
                  finished_directory=_FINISHED_DIRECTORY,
@@ -34,7 +58,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         this object will automatically persist any Processes that are created
         and will keep their persisted state up to date as they run.  By default
         this is turned off as the user may prefer to manually specify which
-        Processes should be persisted.
+        process should be persisted.
 
         The directory structure that will be used is:
 
@@ -43,11 +67,15 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         failed_directory/[pid].pickle - Failed processes
 
         :param auto_persist: Will automatically persist Processes if True.
+        :type auto_persist: bool
         :param running_directory: The base directory to store all pickles in.
+        :type running_directory: str
         :param finished_directory: The (relative) subdirectory to put finished
-        Process pickles in.  If None they will be deleted when finished.
+            Process pickles in.  If None they will be deleted when finished.
+        :type finished_directory: str
         :param failed_directory: The (relative) subdirectory to put failed
-        Process pickles in.  If None they will be deleted on fail.
+            Process pickles in.  If None they will be deleted on fail.
+        :type failed_directory: str
         """
         self._running_directory = running_directory
         self._finished_directory = finished_directory

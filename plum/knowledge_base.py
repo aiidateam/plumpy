@@ -67,8 +67,7 @@ class KnowledgeBase(KnowledgeProvider):
     def has_finished(self, pid):
         for p in self._providers:
             try:
-                if p.has_finished(pid):
-                    return True
+                return p.has_finished(pid)
             except NotKnown:
                 pass
         raise NotKnown()
