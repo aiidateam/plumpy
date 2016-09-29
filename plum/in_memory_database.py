@@ -20,6 +20,7 @@ class InMemoryDatabase(KnowledgeProvider, ProcessListener, ProcessMonitorListene
         self._retain_outputs = retain_outputs
         self._inputs = {}
         self._outputs = {}
+        self._known_pids = []
         self._pids_by_classname = {}
         self._finished = []
         # Listen for processes begin created and destroyed
@@ -27,6 +28,9 @@ class InMemoryDatabase(KnowledgeProvider, ProcessListener, ProcessMonitorListene
 
     @override
     def has_finished(self, pid):
+        if pid not in self._known_pids:
+            raise NotKnown()
+
         return pid in self._finished
 
     @override
@@ -68,6 +72,7 @@ class InMemoryDatabase(KnowledgeProvider, ProcessListener, ProcessMonitorListene
     @override
     def on_monitored_process_created(self, process):
         process.add_process_listener(self)
+        self._known_pids.append(process.pid)
 
         pids = self._pids_by_classname.setdefault(fullname(process), [])
         pids.append(process.pid)
