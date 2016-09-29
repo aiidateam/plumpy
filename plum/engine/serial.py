@@ -14,6 +14,16 @@ class SerialEngine(ExecutionEngine):
 
     class Future(Future):
         def __init__(self, func, process, *args, **kwargs):
+            """
+
+            :param func: The function to call to run the process
+            :param process: The process instance
+            :type process: :class:`Process`
+            :param args: Positional arguments for the run function
+            :param kwargs: Keyword arguments for the run function
+            """
+            assert isinstance(process, Process)
+
             self._exception = None
             self._result = None
             self._process = process
@@ -114,6 +124,9 @@ class SerialEngine(ExecutionEngine):
 
     @override
     def run(self, process):
+        if not isinstance(process, Process):
+            raise TypeError("process must be of type Process")
+
         return SerialEngine.Future(Process.run_until_complete, process)
 
     def run_and_block(self, process_class, inputs):

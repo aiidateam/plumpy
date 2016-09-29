@@ -46,13 +46,12 @@ class KnowledgeBase(KnowledgeProvider):
 
     @override
     def get_output(self, pid, port_name):
-        def get_input(self, pid, port_name):
-            for p in self._providers:
-                try:
-                    return p.get_output(pid, port_name)
-                except NotKnown:
-                    pass
-            raise NotKnown()
+        for p in self._providers:
+            try:
+                return p.get_output(pid, port_name)
+            except NotKnown:
+                pass
+        raise NotKnown()
 
     @override
     def get_outputs(self, pid):

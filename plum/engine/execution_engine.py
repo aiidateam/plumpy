@@ -133,7 +133,9 @@ class ExecutionEngine(object):
         ticked by the user.
 
         :param process: The process to run
-        :return: A Future object that represents the execution of the Process.
+        :type process: :class:`Process`
+        :return: A future that represents the execution of the process.
+        :rtype: :class:`Future`
         """
         pass
 
@@ -143,8 +145,8 @@ class ExecutionEngine(object):
 
         :param process_class: The process class to execute
         :param inputs: The inputs to execute the process with
-        :param checkpoint: The checkpoint to continue from (or None)
-        :return: A Future object that represents the execution of the Process.
+        :return: A future that represents the execution of the process.
+        :rtype: :class:`Future`
         """
         return self.run(process_class.new_instance(inputs))
 
@@ -153,7 +155,8 @@ class ExecutionEngine(object):
         Run a process from the given checkpoint.
 
         :param checkpoint: The checkpoint to continue the process from.
-        :return: A Future object that represents the execution of the Process.
+        :return: A future that represents the execution of the process.
+        :rtype: :class:`Future`
         """
         return self.run(Process.create_from(checkpoint))
 
@@ -163,6 +166,7 @@ class ExecutionEngine(object):
         Stop a running process.  If a process is in or enters a waiting state it
         will be stopped at this point.  Otherwise the process will continue
         until finished and stop after this.
+
         :param pid: The pid of the process to stop.
         """
         pass

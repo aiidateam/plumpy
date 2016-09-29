@@ -15,7 +15,7 @@ class InMemoryDatabase(KnowledgeProvider, ProcessListener, ProcessMonitorListene
         large inputs or outputs are executed.
     """
 
-    def __init__(self, retain_inputs, retain_outputs):
+    def __init__(self, retain_inputs=False, retain_outputs=False):
         self._retain_inputs = retain_inputs
         self._retain_outputs = retain_outputs
         self._inputs = {}

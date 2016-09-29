@@ -11,6 +11,10 @@ from plum.process_monitor import MONITOR, ProcessMonitorListener
 
 
 class TestExecutionEngine(TestCase):
+    """
+    General tests that all execution engines are expected to be able to pass.
+    """
+
     @override
     def setUp(self):
         from threading import Thread
@@ -114,6 +118,12 @@ class TestExecutionEngine(TestCase):
             # Make sure the serial engine raises this error
             with self.assertRaises(KeyboardInterrupt):
                 e.submit(common.KeyboardInterruptProc).result()
+
+    def test_futures(self):
+        for engine in self.engines_to_test:
+            dp = common.DummyProcess.new_instance()
+            f = engine.run(dp)
+            self.assertEqual(f.pid, dp.pid)
 
     def _test_engine_events(self, outs, exclude_events):
         """
