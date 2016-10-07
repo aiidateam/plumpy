@@ -46,7 +46,7 @@ class Process(object):
 
     as defined in the :class:`ProcessState` enum.
 
-    The possible transition of states are::
+    The possible transitions between states are::
 
                         /------WAITING----------------\\
                        /        | |                    \\
@@ -56,8 +56,8 @@ class Process(object):
     ::
 
     When a Process enters a state is always gets a corresponding message, e.g.
-    on entering FINISHED it will recieve the on_finish message.  These are
-    always called just before that state is entered.
+    on entering FINISHED it will receive the on_finish message.  These are
+    always called immediately before that state is entered.
 
     """
     __metaclass__ = ABCMeta
@@ -577,20 +577,6 @@ class Process(object):
         return self.get_exec_engine().run_from(checkpoint)
 
     @protected
-    def load_instance_state(self, bundle):
-        self._pid = bundle[self.BundleKeys.PID.value]
-
-        inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
-        if inputs is not None:
-            self._raw_inputs = util.AttributesFrozendict(inputs)
-
-        self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict()
-
-        if bundle[self.BundleKeys.WAITING_ON.value]:
-            self._waiting_on = \
-                WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
-
-    @protected
     def fast_forward(self):
         if not self.spec().is_deterministic():
             raise error.FastForwardError("Cannot fast-forward a process that "
@@ -618,6 +604,19 @@ class Process(object):
 
         raise error.FastForwardError("Cannot fast forward")
 
+    @protected
+    def load_instance_state(self, bundle):
+        self._pid = bundle[self.BundleKeys.PID.value]
+
+        inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
+        if inputs is not None:
+            self._raw_inputs = util.AttributesFrozendict(inputs)
+
+        self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict()
+
+        if bundle[self.BundleKeys.WAITING_ON.value]:
+            self._waiting_on = \
+                WaitOn.create_from(bundle[self.BundleKeys.WAITING_ON.value])
 
     # Inputs ##################################################################
     @protected
