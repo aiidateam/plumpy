@@ -82,9 +82,9 @@ class Process(object):
     def instantiate(ProcClass, logger=None):
         p = ProcClass()
         if logger:
-            p._set_logger(logger)
+            p.set_logger(logger)
         else:
-            p._set_logger(LOGGER)
+            p.set_logger(LOGGER)
         return p
 
     @classmethod
@@ -463,7 +463,11 @@ class Process(object):
 
         self._state = ProcessState.DESTROYED
 
-    ############################################################################
+    ###########################################################################
+
+    @protected
+    def set_logger(self, logger):
+        self._logger = logger
 
     # Process messages #####################################################
     # These should only be called by an execution engine (or tests)
@@ -670,9 +674,6 @@ class Process(object):
                             name))
 
         return ins
-
-    def _set_logger(self, logger):
-        self._logger = logger
 
     def _check_inputs(self, inputs):
         if inputs is None:
