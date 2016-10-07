@@ -15,6 +15,7 @@ from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.util import protected
 from plum.wait import WaitOn
+from plum._base import LOGGER
 
 
 class ProcessState(Enum):
@@ -77,8 +78,17 @@ class Process(object):
         PID = 'pid'
         WAITING_ON = 'waiting_on'
 
+    @staticmethod
+    def instantiate(ProcClass, logger=None):
+        p = ProcClass()
+        if logger:
+            p._set_logger(logger)
+        else:
+            p._set_logger(LOGGER)
+        return p
+
     @classmethod
-    def new_instance(cls, inputs=None, pid=None):
+    def new_instance(cls, inputs=None, pid=None, logger=None):
         """
         Create a new instance of this Process class with the given inputs and
         pid.
@@ -86,14 +96,16 @@ class Process(object):
         :param inputs: The inputs for the newly created :class:`Process`
             instance.  Any mapping type is valid
         :param pid: The process id given to the new process.
+        :param logger: The logger for this process to use, can be None.
+        :type logger: :class:`logging.Logger`
         :return: An instance of this :class:`Process`.
         """
-        proc = cls()
+        proc = Process.instantiate(cls, logger)
         proc.perform_create(pid, inputs)
         return proc
 
     @classmethod
-    def create_from(cls, saved_instance_state):
+    def create_from(cls, saved_instance_state, logger=None):
         """
         Create a process from a saved instance state.
 
@@ -106,7 +118,7 @@ class Process(object):
         class_name = saved_instance_state[cls.BundleKeys.CLASS_NAME.value]
         ProcClass =\
             saved_instance_state.get_class_loader().load_class(class_name)
-        proc = ProcClass()
+        proc = Process.instantiate(ProcClass, logger)
         # Get it to create itself
         proc.perform_create(saved_instance_state=saved_instance_state)
 
@@ -184,6 +196,8 @@ class Process(object):
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
+        self._logger = None
+
         # State stuff
         self._state = None
         self._pid = None
@@ -227,6 +241,16 @@ class Process(object):
     @property
     def state(self):
         return self._state
+
+    @property
+    def logger(self):
+        """
+        Get the logger for this class.  Can be None.
+
+        :return: The logger.
+        :rtype: :class:`logging.Logger`
+        """
+        return self._logger
 
     def has_finished(self):
         return self._finished
@@ -646,6 +670,9 @@ class Process(object):
                             name))
 
         return ins
+
+    def _set_logger(self, logger):
+        self._logger = logger
 
     def _check_inputs(self, inputs):
         if inputs is None:

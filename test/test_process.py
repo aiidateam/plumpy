@@ -293,7 +293,6 @@ class TestProcess(TestCase):
         import plum.knowledge_provider as knowledge_provider
         from plum.in_memory_database import InMemoryDatabase
 
-
         class FastForwarding(Process):
             @classmethod
             def _define(cls, spec):
@@ -368,6 +367,16 @@ class TestProcess(TestCase):
             all_snapshots[ProcClass] = snapshots
 
             self._check_process_against_snapshots(ProcClass, snapshots)
+
+    def test_logging(self):
+        class LoggerTester(Process):
+            def _run(self, **kwargs):
+                self.logger.info("Test")
+
+        # TODO: Test giving a custom logger to see if it gets used
+        p = LoggerTester.new_instance()
+        p.run()
+
 
     def _check_process_against_snapshots(self, proc_class, snapshots):
         for i, info in zip(range(0, len(snapshots)), snapshots):
