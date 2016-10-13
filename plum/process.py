@@ -812,7 +812,9 @@ class _Director(object):
                 return True
             else:
                 unticked = True
-        except BaseException:
+        except BaseException as e:
+            # TODO: Log traceback
+            #self._proc.logger.error("Error occured ticking process:{}".format(traceback.print_exc()))
             MONITOR.process_failed(self._proc.pid)
             raise
 

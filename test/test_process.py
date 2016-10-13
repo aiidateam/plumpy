@@ -377,7 +377,6 @@ class TestProcess(TestCase):
         p = LoggerTester.new_instance()
         p.run()
 
-
     def _check_process_against_snapshots(self, proc_class, snapshots):
         for i, info in zip(range(0, len(snapshots)), snapshots):
             loaded = proc_class.create_from(info.bundle)
