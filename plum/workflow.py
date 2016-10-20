@@ -259,7 +259,7 @@ class Workflow(Process, ProcessListener):
             # The output isn't connected, nae dramas
             sink = None
 
-    def on_process_destroy(self, process):
+    def on_process_stopped(self, process):
         self._on_subprocess_finalising(process)
 
     def on_process_finish(self, process):

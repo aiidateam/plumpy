@@ -1,10 +1,11 @@
 from unittest import TestCase
 
+import threading
 from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.process_monitor import MONITOR
 from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpointProcess, \
-    DummyProcessWithOutput, TEST_PROCESSES, create_snapshot
+    DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver
 from plum.test_utils import ProcessListenerTester
 from plum.util import override
 
@@ -24,14 +25,6 @@ class ForgetToCallParent(Process):
 
     @override
     def on_run(self):
-        pass
-
-    @override
-    def on_wait(self, wait_on):
-        pass
-
-    @override
-    def on_continue(self, wait_on):
         pass
 
     @override
@@ -59,9 +52,6 @@ class TestProcess(TestCase):
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
-        if not self.events_tester.destroy:
-            self.proc.on_destroy()
-        MONITOR._reset()
 
     def test_spec(self):
         """
@@ -86,10 +76,6 @@ class TestProcess(TestCase):
     def test_on_output_emitted(self):
         self.proc._run()
         self.assertTrue(self.events_tester.emitted)
-
-    def test_on_destroy(self):
-        self.proc.on_destroy()
-        self.assertTrue(self.events_tester.destroy)
 
     def test_on_finished(self):
         self.proc.on_finish()
@@ -131,7 +117,7 @@ class TestProcess(TestCase):
             p.raw_inputs.a
 
         # Check that we can access the inputs after creating
-        p.perform_create(0, {'a': 5})
+        p._perform_create(0, {'a': 5})
         self.assertEqual(p.raw_inputs.a, 5)
         with self.assertRaises(AttributeError):
             p.raw_inputs.b
@@ -152,12 +138,12 @@ class TestProcess(TestCase):
         self.assertEqual(p.inputs['input'], 5)
 
     def test_run(self):
-        dp = DummyProcessWithOutput.new_instance()
-        dp.run_until_complete()
+        p = DummyProcessWithOutput.new_instance()
+        p.start()
 
-        self.assertTrue(dp.has_finished())
-        self.assertEqual(dp.state, ProcessState.DESTROYED)
-        self.assertEqual(dp.outputs, {'default': 5})
+        self.assertTrue(p.has_finished())
+        self.assertEqual(p.state, ProcessState.DESTROYED)
+        self.assertEqual(p.outputs, {'default': 5})
 
     def test_run_from_class(self):
         # Test running through class method
@@ -168,28 +154,22 @@ class TestProcess(TestCase):
         p = ForgetToCallParent()
 
         with self.assertRaises(AssertionError):
-            p.perform_create(None, None, None)
+            p._perform_create(None, None, None)
 
         with self.assertRaises(AssertionError):
-            p.perform_start()
+            p._perform_start()
 
         with self.assertRaises(AssertionError):
-            p.perform_run()
+            p._perform_run()
 
         with self.assertRaises(AssertionError):
-            p.perform_wait(None)
+            p._perform_finish()
 
         with self.assertRaises(AssertionError):
-            p.perform_continue(None)
+            p._perform_stop()
 
         with self.assertRaises(AssertionError):
-            p.perform_finish()
-
-        with self.assertRaises(AssertionError):
-            p.perform_stop()
-
-        with self.assertRaises(AssertionError):
-            p.perform_destroy()
+            p._perform_destroy()
 
     def test_pid(self):
         # Test auto generation of pid
@@ -204,26 +184,10 @@ class TestProcess(TestCase):
         p = DummyProcessWithOutput.new_instance(pid='a')
         self.assertEquals(p.pid, 'a')
 
-    def test_tick_simple(self):
-        proc = DummyProcessWithOutput.new_instance()
-        self.assertEqual(proc.state, ProcessState.CREATED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.STARTED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.FINISHED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.STOPPED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.DESTROYED)
-        del proc
-
-    def test_tick_exception(self):
+    def test_exception(self):
         proc = ExceptionProcess.new_instance()
-        self.assertEqual(proc.state, ProcessState.CREATED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.STARTED)
         with self.assertRaises(BaseException):
-            proc.tick()
+            proc.start()
         self.assertEqual(proc.state, ProcessState.RUNNING)
         del proc
 
@@ -239,55 +203,44 @@ class TestProcess(TestCase):
         desc = DummyProcess.get_description()
         self.assertNotEqual(desc, "")
 
-    def test_tick_two_checkpoints(self):
-        proc = TwoCheckpointProcess.new_instance()
-        self.assertEqual(proc.state, ProcessState.CREATED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.STARTED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.WAITING)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.WAITING)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.FINISHED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.STOPPED)
-        proc.tick()
-        self.assertEqual(proc.state, ProcessState.DESTROYED)
-        del proc
+    def test_created_bundle(self):
+        """
+        Check that the bundle after just creating a process is as we expect
+        :return:
+        """
+        proc = DummyProcessWithOutput.new_instance()
+        b = Bundle()
+        proc.save_instance_state(b)
+        self.assertIsNone(b.get('inputs', None))
+        self.assertEqual(len(b['outputs']), 0)
 
     def test_instance_state(self):
-        proc = TwoCheckpointProcess.new_instance()
-        proc.run_until(ProcessState.WAITING)
-        b = Bundle()
-        proc.save_instance_state(b)
-        self.assertEqual(proc.outputs, b[Process.BundleKeys.OUTPUTS.value].get_dict())
+        proc = DummyProcessWithOutput.new_instance()
 
-        proc.stop()
-        proc.run_until_complete()
+        saver = ProcessSaver(proc)
+        proc.start()
 
-        proc = TwoCheckpointProcess.create_from(b)
-        proc.run_until(ProcessState.WAITING)
-        b = Bundle()
-        proc.save_instance_state(b)
-        self.assertEqual(proc.outputs, b[Process.BundleKeys.OUTPUTS.value].get_dict())
+        for info, outputs in zip(saver.snapshots, saver.outputs):
+            state, bundle = info
+            # Check that it is a copy
+            self.assertIsNot(
+                outputs, bundle[Process.BundleKeys.OUTPUTS.value].get_dict())
+            # Check the contents are the same
+            self.assertEqual(
+                outputs, bundle[Process.BundleKeys.OUTPUTS.value].get_dict())
 
-        proc.stop()
-        proc.run_until_complete()
+        self.assertIsNot(
+            proc.outputs, saver.snapshots[-1][1][Process.BundleKeys.OUTPUTS.value])
 
     def test_saving_each_step(self):
         for ProcClass in TEST_PROCESSES:
             proc = ProcClass.new_instance()
-            snapshots = list()
-            while proc.state is not ProcessState.DESTROYED:
-                snapshots.append(create_snapshot(proc))
-                # The process may crash, so catch it here
-                try:
-                    proc.tick()
-                except BaseException:
-                    break
 
-            self._check_process_against_snapshots(ProcClass, snapshots)
+            saver = ProcessSaver(proc)
+            proc.start()
+
+            self.assertEqual(proc.state, ProcessState.DESTROYED)
+            self._check_process_against_snapshots(ProcClass, saver.snapshots)
 
     def test_fast_forward(self):
         import plum.knowledge_provider as knowledge_provider
@@ -331,20 +284,20 @@ class TestProcess(TestCase):
                 self.assertEqual(outputs, outputs2)
 
         ff_proc = FastForwarding.new_instance(inputs={'a': 5})
-        ff_proc.run_until_complete()
+        ff_proc.start()
         outs1 = ff_proc.outputs
         self.assertFalse(ff_proc.did_ff)
 
         # Check the same inputs again
         ff_proc = FastForwarding.new_instance(inputs={'a': 5})
-        ff_proc.run_until_complete()
+        ff_proc.start()
         outs2 = ff_proc.outputs
         self.assertTrue(ff_proc.did_ff)
         self.assertEqual(outs1, outs2)
 
         # Now check different inputs
         ff_proc = FastForwarding.new_instance(inputs={'a': 6})
-        ff_proc.run_until_complete()
+        ff_proc.start()
         outs3 = ff_proc.outputs
         self.assertFalse(ff_proc.did_ff)
         self.assertNotEqual(outs1, outs3)
@@ -352,21 +305,15 @@ class TestProcess(TestCase):
         knowledge_provider.set_global_provider(old_kp)
 
     def test_saving_each_step_interleaved(self):
-        all_snapshots = {}
         for ProcClass in TEST_PROCESSES:
             proc = ProcClass.new_instance()
-            snapshots = list()
-            while proc.state is not ProcessState.DESTROYED:
-                snapshots.append(create_snapshot(proc))
-                # The process may crash, so catch it here
-                try:
-                    proc.tick()
-                except BaseException:
-                    break
+            ps = ProcessSaver(proc)
+            try:
+                proc.start()
+            except BaseException:
+                pass
 
-            all_snapshots[ProcClass] = snapshots
-
-            self._check_process_against_snapshots(ProcClass, snapshots)
+            self._check_process_against_snapshots(ProcClass, ps.snapshots)
 
     def test_logging(self):
         class LoggerTester(Process):
@@ -377,22 +324,31 @@ class TestProcess(TestCase):
         p = LoggerTester.new_instance()
         p.run()
 
+    def test_abort(self):
+        # Can't abort a process that hasn't been started
+        proc = DummyProcess.new_instance()
+        self.assertTrue(proc.abort())
+        proc.start()
+
+        self.assertTrue(proc.aborted)
+        self.assertEqual(proc.state, ProcessState.DESTROYED)
+
     def _check_process_against_snapshots(self, proc_class, snapshots):
         for i, info in zip(range(0, len(snapshots)), snapshots):
-            loaded = proc_class.create_from(info.bundle)
-            # Get the process back to the state it was in when it was saved
-            loaded.run_until(info.state)
+            loaded = proc_class.create_from(info[1])
 
-            # Now go forward from that point in making sure the bundles match
-            j = i
-            while loaded.state is not ProcessState.DESTROYED:
-                self._check_process_against_snapshot(snapshots[j], loaded)
+            ps = ProcessSaver(loaded)
+            # Run the process
+            loaded.start()
 
-                try:
-                    loaded.tick()
-                except BaseException:
+            # Now check going backwards until running that the saved states match
+            j = 1
+            while True:
+                if j >= min(len(snapshots), len(ps.snapshots)) or \
+                                snapshots[-j][0] is ProcessState.STARTED:
                     break
 
+                self.assertEqual(snapshots[-j], ps.snapshots[-j])
                 j += 1
 
     def _check_process_against_snapshot(self, snapshot, proc):

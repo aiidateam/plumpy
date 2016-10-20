@@ -6,7 +6,8 @@ from plum.process import Process
 from plum.process_listener import ProcessListener
 from plum.util import override
 from plum.wait import WaitOn
-from plum.wait_ons import checkpoint
+from plum.wait_ons import Checkpoint
+from plum.waiting_process import WaitingProcess, WaitListener
 
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
@@ -40,33 +41,34 @@ class DummyProcessWithOutput(Process):
         self.out("default", 5)
 
 
-class ProcessWithCheckpoint(Process):
+class KeyboardInterruptProc(Process):
     @override
     def _run(self):
-        return checkpoint(self.finish)
+        raise KeyboardInterrupt()
+
+
+class ProcessWithCheckpoint(WaitingProcess):
+    @override
+    def _run(self):
+        return Checkpoint(), self.finish.__name__
 
     def finish(self, wait_on):
         pass
 
 
 class WaitForSignal(WaitOn):
-    def __init__(self, callback_name):
-        super(WaitForSignal, self).__init__(callback_name)
-        self._ready = False
+    def __init__(self):
+        super(WaitForSignal, self).__init__()
 
     def signal(self):
-        self._ready = True
-
-    @override
-    def is_ready(self):
-        return self._ready
+        self.done(True)
 
 
-class WaitForSignalProcess(Process):
+class WaitForSignalProcess(WaitingProcess):
     @override
     def _run(self):
-        self._signal = WaitForSignal('finish')
-        return self._signal
+        self._signal = WaitForSignal()
+        return self._signal, self.finish.__name__
 
     def finish(self, wait_on):
         pass
@@ -75,15 +77,9 @@ class WaitForSignalProcess(Process):
         self._signal.signal()
 
 
-class KeyboardInterruptProc(Process):
-    @override
-    def _run(self):
-        raise KeyboardInterrupt()
-
-
 class EventsTesterMixin(object):
     EVENTS = ["create", "run", "continue", "finish", "emitted", "wait",
-              "stop", "destroy", ]
+              "stop", "destroy"]
 
     called_events = []
 
@@ -95,6 +91,7 @@ class EventsTesterMixin(object):
     def __init__(self):
         assert isinstance(self, Process),\
             "Mixin has to be used with a type derived from a Process"
+        super(EventsTesterMixin, self).__init__()
         self.__class__.called_events = []
 
     @override
@@ -140,14 +137,15 @@ class EventsTesterMixin(object):
         self.called('destroy')
 
 
-class ProcessEventsTester(EventsTesterMixin, Process):
+class ProcessEventsTester(EventsTesterMixin, WaitingProcess):
     @classmethod
     def _define(cls, spec):
         super(ProcessEventsTester, cls)._define(spec)
         spec.dynamic_output()
 
     def __init__(self):
-        Process.__init__(self)
+        #Process.__init__(self)
+        super(ProcessEventsTester, self).__init__()
 
     @override
     def _run(self):
@@ -164,10 +162,10 @@ class TwoCheckpointProcess(ProcessEventsTester):
     @override
     def _run(self):
         self.out("test", 5)
-        return checkpoint(self.middle_step)
+        return Checkpoint(), self.middle_step.__name__
 
     def middle_step(self, wait_on):
-        return checkpoint(self.finish)
+        return Checkpoint(), self.finish.__name__
 
     def finish(self, wait_on):
         pass
@@ -194,7 +192,7 @@ class ProcessListenerTester(ProcessListener):
         self.finish = False
         self.emitted = False
         self.stop = False
-        self.destroy = False
+        self.stopped = False
 
     @override
     def on_process_run(self, process):
@@ -227,12 +225,81 @@ class ProcessListenerTester(ProcessListener):
         self.stop = True
 
     @override
-    def on_process_destroy(self, process):
+    def on_process_stopped(self, process):
         assert isinstance(process, Process)
-        self.destroy = True
+        self.stopped = True
+
+
+class Saver(object):
+    def __init__(self):
+        self.snapshots = []
+        self.outputs = []
+
+    def _save(self, p):
+        b = Bundle()
+        p.save_instance_state(b)
+        self.snapshots.append((p.state, b))
+        self.outputs.append(p.outputs.copy())
+
+
+class ProcessSaver(ProcessListener, Saver):
+    """
+    Save the instance state of a process each time it is about to enter a new
+    state
+    """
+    def __init__(self, p):
+        ProcessListener.__init__(self)
+        Saver.__init__(self)
+        p.add_process_listener(self)
+
+    @override
+    def on_process_start(self, process):
+        self._save(process)
+
+    @override
+    def on_process_run(self, process):
+        self._save(process)
+
+    @override
+    def on_output_emitted(self, process, output_port, value, dynamic):
+        self._save(process)
+
+    @override
+    def on_process_finish(self, process):
+        self._save(process)
+
+    @override
+    def on_process_stop(self, process):
+        self._save(process)
+
+    @override
+    def on_process_stopped(self, process):
+        self._save(process)
+
+
+class WaitSaver(WaitListener, Saver):
+    """
+    Save the instance state of a process when it waits
+    """
+    def __init__(self, p):
+        WaitListener.__init__(self)
+        Saver.__init__(self)
+        p.add_wait_listener(self)
+
+    @override
+    def on_process_wait(self, p, w):
+        self._save(p)
+
+
+class ProcessWaitSaver(ProcessSaver, WaitSaver):
+    def __init__(self, proc):
+        ProcessSaver.__init__(self, proc)
+        WaitSaver.__init__(self, proc)
 
 
 # All the Processes that can be used
-TEST_PROCESSES = [DummyProcess, DummyProcessWithOutput, ProcessEventsTester,
-                  ProcessWithCheckpoint, TwoCheckpointProcess,
-                  ExceptionProcess, TwoCheckpointThenExceptionProcess]
+TEST_PROCESSES = [DummyProcess, DummyProcessWithOutput]
+
+TEST_WAITING_PROCESSES = [ProcessWithCheckpoint, TwoCheckpointProcess,
+                          ExceptionProcess, ProcessEventsTester,
+                          TwoCheckpointThenExceptionProcess]

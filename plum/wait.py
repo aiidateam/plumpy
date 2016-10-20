@@ -1,77 +1,97 @@
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta, abstractmethod
-from enum import Enum
-from plum.util import fullname, load_class
-import inspect
+from abc import ABCMeta
+import threading
+from plum.util import fullname, protected
+from plum.persistence.bundle import Bundle
 
 
 class WaitOn(object):
     __metaclass__ = ABCMeta
 
-    class BundleKeys(Enum):
-        CLASS_NAME = "class_name"
-        CALLBACK_NAME = "callback_name"
+    CLASS_NAME = "class_name"
+    OUTCOME = "outcome"
 
-    @classmethod
-    def create_from(cls, bundle):
-        assert cls.BundleKeys.CLASS_NAME.value in bundle
+    @staticmethod
+    def _is_saved_state(args):
+        return len(args) == 1 and isinstance(args[0], Bundle)
 
-        class_name = bundle[cls.BundleKeys.CLASS_NAME.value]
+    @staticmethod
+    def create_from(bundle):
+        class_name = bundle[WaitOn.CLASS_NAME]
         WaitOnClass = bundle.get_class_loader().load_class(class_name)
+        return WaitOnClass(bundle)
 
-        return WaitOnClass.create_from(bundle)
+    def __init__(self, *args, **kwargs):
+        self._done = threading.Event()
+        self._outcome = None
+        self._done_callbacks = list()
 
-    def __init__(self, callback_name):
-        self._callback_name = callback_name
+        if self._is_saved_state(args):
+            self.load_instance_state(args[0])
+        else:
+            self.init(*args, **kwargs)
 
-    @property
-    def callback(self):
-        return self._callback_name
+    def is_done(self):
+        """
+        Indicate if finished waiting or not.
+        To find out if what the outcome is call `get_outcome`
 
-    @abstractmethod
-    def is_ready(self):
-        pass
+        :return: True if finished, False otherwise.
+        """
+        return self._outcome is not None
+
+    def get_outcome(self):
+        """
+        Get the outcome of waiting.  Returns a tuple consisting of (bool, str)
+        where the first value indicates success or failure, while the second
+        gives an optional message.
+
+        :return: A tuple indicating the outcome of waiting.
+        :rtype: tuple
+        """
+        return self._outcome
+
+    def add_done_callback(self, fn):
+        self._done_callbacks.append(fn)
+        if self.is_done():
+            fn(self)
+
+    def remove_done_callback(self, fn):
+        del self._done_callbacks[fn]
 
     def save_instance_state(self, out_state):
-        out_state[self.BundleKeys.CLASS_NAME.value] = fullname(self)
-        out_state[self.BundleKeys.CALLBACK_NAME.value] = self.callback
+        out_state[self.CLASS_NAME] = fullname(self)
+        out_state[self.OUTCOME] = self._outcome
 
+    def wait(self, timeout=None):
+        self._done.wait(timeout)
 
-class WaitOnError(Exception):
-    """
-    Exception raised when a wait on cannot determine if it is ready.  This may
-    be a permanent or a temporary failure.
-    """
+    @protected
+    def init(self, *args, **kwargs):
+        pass
 
-    class Nature(Enum):
+    @protected
+    def load_instance_state(self, bundle):
+        self._outcome = bundle[self.OUTCOME]
+        if self._outcome is not None:
+            self._done.set()
+
+    @protected
+    def done(self, success, msg=None):
         """
-        Indicates nature of the wait on error.  It can be:
-         - UNKNOWN
-         - PERMANENT (i.e. it will never fix itself)
-         - TEMPORARY (i.e. it will fix itself sometime before the end of the universe)
-         - OTHER (e.g. it may be possible to be fixed with user intervention)
+        Implementing classes should call this when they are done waiting.  As
+        well as indicating success or failure they can provide an outcome
+        message.
+
+        :param success: True if finished waiting successfully, False otherwise.
+        :type success: bool
+        :param msg: An (optional) message
+        :type msg: str
         """
-        UNKNOWN = 0
-        PERMANENT = 1
-        TEMPORARY = 2
-        OTHER =3
+        assert not self._done.is_set()
 
-    def __init__(self, msg, nature=Nature.UNKNOWN):
-        super(WaitOnError, self).__init__(msg)
-        self._nature = nature
-
-    @property
-    def nature(self):
-        return self._nature
-
-
-def validate_callback_func(callback):
-    from plum.process import Process
-
-    assert inspect.ismethod(callback), "Callback is not a member function"
-    assert isinstance(callback.im_self, Process),\
-        "Callback must be a method of a Process instance"
-    args = inspect.getargspec(callback)[0]
-    assert len(args) == 2, \
-        "Callback function must take two arguments: self and the wait_on"
+        self._outcome = success, msg
+        self._done.set()
+        for fn in self._done_callbacks:
+            fn(self)

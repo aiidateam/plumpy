@@ -3,9 +3,7 @@ import thread
 import threading
 
 import plum.test_utils as common
-from plum.engine.serial import SerialEngine
 from plum.engine.parallel import MultithreadedEngine
-from plum.engine.ticking import TickingEngine
 from plum.util import override
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 
@@ -17,24 +15,11 @@ class TestExecutionEngine(TestCase):
 
     @override
     def setUp(self):
-        from threading import Thread
-
-        ticking = TickingEngine()
-        self.stop_ticking = threading.Event()
-        self.thread = Thread(target=self.tick_ticking, args=(ticking,))
-        self.thread.start()
-
-        serial = SerialEngine()
-        self.engines_to_test = [
-            serial,
-            ticking,
-            MultithreadedEngine()
-        ]
+        self.engines_to_test = [MultithreadedEngine()]
 
     @override
     def tearDown(self):
-        self.stop_ticking.set()
-        self.thread.join()
+        pass
 
     def test_submit_simple(self):
         for engine in self.engines_to_test:
@@ -56,7 +41,7 @@ class TestExecutionEngine(TestCase):
             self.assertIsInstance(e, BaseException)
             self._test_engine_events(
                 common.ExceptionProcess.called_events,
-                ['finish', 'wait', 'continue', 'stop', 'finish', 'destroy'])
+                ['finish', 'wait', 'continue', 'stop', 'destroy'])
 
     def test_submit_checkpoint_then_exception(self):
         for engine in self.engines_to_test:
@@ -91,17 +76,6 @@ class TestExecutionEngine(TestCase):
             engine.submit(common.TwoCheckpointThenExceptionProcess).exception()
             self.assertTrue(l.registered_called)
             self.assertTrue(l.failed_called)
-
-    def tick_ticking(self, engine):
-        """
-        Keep ticking the ticking engine until the event is set to stop
-        :param engine: the ticking engine
-        """
-        while not self.stop_ticking.is_set():
-            try:
-                engine.tick()
-            except KeyboardInterrupt:
-                thread.interrupt_main()
 
     def test_future_ready(self):
         for engine in self.engines_to_test:

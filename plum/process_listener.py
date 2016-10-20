@@ -13,16 +13,13 @@ class ProcessListener(object):
     def on_output_emitted(self, process, output_port, value, dynamic):
         pass
 
-    def on_process_wait(self, process, wait_on):
-        pass
-
-    def on_process_continue(self, process, wait_on):
-        pass
-
     def on_process_finish(self, process):
         pass
 
     def on_process_stop(self, process):
+        pass
+
+    def on_process_stopped(self, process):
         pass
 
     def on_process_destroy(self, process):

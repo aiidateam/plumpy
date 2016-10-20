@@ -4,8 +4,9 @@ from plum.process import ProcessState
 from plum.persistence.pickle_persistence import PicklePersistence
 from plum.persistence.bundle import Bundle
 from plum.process_monitor import MONITOR
-from plum.test_utils import ProcessWithCheckpoint, TEST_PROCESSES
+from plum.test_utils import ProcessWithCheckpoint, TEST_PROCESSES, WaitForSignalProcess
 import os.path
+import threading
 
 
 class TestPicklePersistence(TestCase):
@@ -25,26 +26,26 @@ class TestPicklePersistence(TestCase):
         self.assertEqual(self.store_dir,
                          self.pickle_persistence.store_directory)
 
-    def test_on_starting_process(self):
+    def test_on_create_process(self):
         proc = ProcessWithCheckpoint.new_instance()
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
-        self.assertTrue(os.path.isfile(save_path))
-        proc.stop(True)
         self.assertTrue(os.path.isfile(save_path))
 
     def test_on_waiting_process(self):
-        proc = ProcessWithCheckpoint.new_instance()
+        proc = WaitForSignalProcess.new_instance()
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
-        proc.run_until(ProcessState.WAITING)
+        t = threading.Thread(target=proc.start)
+        t.start()
 
         # Check the file exists
         self.assertTrue(os.path.isfile(save_path))
 
-        proc.stop(True)
+        proc.abort()
+        t.join()
 
     def test_on_finishing_process(self):
         proc = ProcessWithCheckpoint.new_instance()
@@ -53,7 +54,7 @@ class TestPicklePersistence(TestCase):
         running_path = self.pickle_persistence.get_running_path(proc.pid)
 
         self.assertTrue(os.path.isfile(running_path))
-        proc.run_until_complete()
+        proc.start()
         self.assertFalse(os.path.isfile(running_path))
         finished_path =\
             os.path.join(self.store_dir,
@@ -68,7 +69,6 @@ class TestPicklePersistence(TestCase):
         for i in range(0, 3):
             proc = ProcessWithCheckpoint.new_instance(pid=i)
             self.pickle_persistence.persist_process(proc)
-            proc.stop(True)
 
         # Check that the number of checkpoints matches we we expected
         num_cps = len(self.pickle_persistence.load_all_checkpoints())
@@ -79,8 +79,6 @@ class TestPicklePersistence(TestCase):
         running_path = self.pickle_persistence.get_running_path(proc.pid)
         self.pickle_persistence.save(proc)
         self.assertTrue(os.path.isfile(running_path))
-
-        proc.stop(True)
 
     def test_save_and_load(self):
         for ProcClass in TEST_PROCESSES:

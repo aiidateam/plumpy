@@ -19,11 +19,11 @@ class TestMultithreadedEngine(TestCase):
 
         t0 = time()
         while time() - t0 < 10.:
-            if proc.state is ProcessState.WAITING:
+            if proc.is_waiting():
                 break
-        self.assertEquals(proc.state, ProcessState.WAITING)
+        self.assertEquals(proc.state, ProcessState.RUNNING)
 
-        # Now it's waiting so singal that it can continue and wait for the
+        # Now it's waiting so signal that it can continue and wait for the
         # engine to make it happen
         proc.signal()
         t0 = time()

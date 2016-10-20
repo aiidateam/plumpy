@@ -23,14 +23,6 @@ class MultithreadedEngine(execution_engine.ExecutionEngine, ProcessMonitorListen
             return self._process
 
         @override
-        def cancel(self):
-            return self._future.cancel()
-
-        @override
-        def cancelled(self):
-            return self._future.cancelled()
-
-        @override
         def running(self):
             return self._future.running()
 
@@ -58,7 +50,7 @@ class MultithreadedEngine(execution_engine.ExecutionEngine, ProcessMonitorListen
 
     @override
     def run(self, process):
-        f = self._executor.submit(Process.run_until_complete, process)
+        f = self._executor.submit(Process.start, process)
         self._processes[process.pid] = f
         return self.Future(process, f)
 

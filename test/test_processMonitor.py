@@ -1,9 +1,12 @@
 
 from unittest import TestCase
+import threading
+import time
+from plum.process import ProcessState
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.util import override
-from plum.test_utils import DummyProcess, ExceptionProcess
-from plum.engine.serial import SerialEngine
+from plum.test_utils import DummyProcess, ExceptionProcess, WaitForSignalProcess
+from plum.wait_ons import wait_until_destroyed, WaitOnState
 
 
 class EventTracker(ProcessMonitorListener):
@@ -37,7 +40,6 @@ class EventTracker(ProcessMonitorListener):
 class TestProcessMonitor(TestCase):
     def setUp(self):
         self.assertEqual(len(MONITOR.get_pids()), 0)
-        self.engine = SerialEngine()
 
     def tearDown(self):
         self.assertEqual(len(MONITOR.get_pids()), 0)
@@ -45,10 +47,11 @@ class TestProcessMonitor(TestCase):
     def test_create_destroy(self):
         l = EventTracker()
 
-        pid = self.engine.submit(DummyProcess).pid
+        self.assertFalse(l.created_called)
+        self.assertFalse(l.destroyed_called)
+        self.assertFalse(l.failed_called)
 
-        with self.assertRaises(ValueError):
-            MONITOR.get_process(pid)
+        DummyProcess.run()
 
         self.assertTrue(l.created_called)
         self.assertTrue(l.destroyed_called)
@@ -59,10 +62,14 @@ class TestProcessMonitor(TestCase):
     def test_create_fail(self):
         l = EventTracker()
 
-        pid = self.engine.submit(ExceptionProcess).pid
+        self.assertFalse(l.created_called)
+        self.assertFalse(l.destroyed_called)
+        self.assertFalse(l.failed_called)
 
-        with self.assertRaises(ValueError):
-            MONITOR.get_process(pid)
+        try:
+            ExceptionProcess.run()
+        except:
+            pass
 
         self.assertTrue(l.created_called)
         self.assertFalse(l.destroyed_called)
@@ -70,14 +77,30 @@ class TestProcessMonitor(TestCase):
 
         del l
 
-    def test_get_proecss(self):
-        dp = DummyProcess.new_instance()
-        pid = dp.pid
-
-        self.assertIs(dp, MONITOR.get_process(pid))
-        self.assertEqual(pid, MONITOR.get_pids()[0])
-        dp.run_until_complete()
-        with self.assertRaises(ValueError):
-            MONITOR.get_process(pid)
-        self.assertEqual(len(MONITOR.get_pids()), 0)
+    # def test_run_through(self):
+    #     p = WaitForSignalProcess.new_instance()
+    #     pid = p.pid
+    #
+    #     # Start the process
+    #     t = threading.Thread(target=p.start)
+    #     t.start()
+    #
+    #     # Wait until it is running
+    #     WaitOnState(p, ProcessState.RUNNING).wait()
+    #
+    #     # Check that the process monitor knows about it
+    #     self.assertIsNotNone(MONITOR.get_process(pid))
+    #     self.assertEqual(pid, MONITOR.get_pids()[0])
+    #
+    #     # Tell the process to continue
+    #     p.signal()
+    #     wait_until_destroyed(p)
+    #     self.assertEqual(p.state, ProcessState.DESTROYED)
+    #
+    #     t.join()
+    #
+    #     # Check that the process monitor knows it's done
+    #     with self.assertRaises(ValueError):
+    #         MONITOR.get_process(pid)
+    #     self.assertEqual(len(MONITOR.get_pids()), 0)
 
