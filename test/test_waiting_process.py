@@ -42,15 +42,6 @@ class TestWaitingProcess(TestCase):
 
             self.assertTrue(check_process_against_snapshots(ProcClass, saver.snapshots))
 
-    def test_logging(self):
-        class LoggerTester(Process):
-            def _run(self, **kwargs):
-                self.logger.info("Test")
-
-        # TODO: Test giving a custom logger to see if it gets used
-        p = LoggerTester.new_instance()
-        p.run()
-
     def test_abort(self):
         p = WaitForSignalProcess.new_instance()
         t = threading.Thread(target=p.start)

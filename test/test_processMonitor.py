@@ -33,9 +33,6 @@ class EventTracker(ProcessMonitorListener):
         self.failed_called = False
         self.destroyed_called = False
 
-    def __del__(self):
-        MONITOR.remove_monitor_listener(self)
-
 
 class TestProcessMonitor(TestCase):
     def setUp(self):

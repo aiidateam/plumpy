@@ -260,7 +260,7 @@ class TestProcess(TestCase):
 
         # TODO: Test giving a custom logger to see if it gets used
         p = LoggerTester.new_instance()
-        p.run()
+        p.start()
 
     def test_abort(self):
         # Can't abort a process that hasn't been started
