@@ -2,7 +2,7 @@
 from collections import namedtuple
 
 from plum.persistence.bundle import Bundle
-from plum.process import Process
+from plum.process import Process, ProcessState
 from plum.process_listener import ProcessListener
 from plum.util import override
 from plum.wait import WaitOn
@@ -261,10 +261,6 @@ class ProcessSaver(ProcessListener, Saver):
         self._save(process)
 
     @override
-    def on_output_emitted(self, process, output_port, value, dynamic):
-        self._save(process)
-
-    @override
     def on_process_finish(self, process):
         self._save(process)
 
@@ -303,3 +299,40 @@ TEST_PROCESSES = [DummyProcess, DummyProcessWithOutput]
 TEST_WAITING_PROCESSES = [ProcessWithCheckpoint, TwoCheckpointProcess,
                           ExceptionProcess, ProcessEventsTester,
                           TwoCheckpointThenExceptionProcess]
+
+
+def check_process_against_snapshots(proc_class, snapshots):
+    """
+    Take the series of snapshots from a Process that executed and run it
+    forward from each one.  Check that the subsequent snapshots match.
+    This will only check up to the STARTED state because from that state back
+    they should of course differ.
+
+    Return True if they match, False otherwise.
+
+    :param proc_class: The process class to check
+    :type proc_class: :class:`Process`
+    :param snapshots: The snapshots taken from from an execution of that
+      process
+    :return: True if snapshots match False otherwise
+    :rtype: bool
+    """
+    for i, info in zip(range(0, len(snapshots)), snapshots):
+        loaded = proc_class.create_from(info[1])
+        ps = ProcessSaver(loaded)
+        try:
+            loaded.start()
+        except BaseException:
+            pass
+
+        # Now check going backwards until running that the saved states match
+        j = 1
+        while True:
+            if j >= min(len(snapshots), len(ps.snapshots)) or \
+                            ps.snapshots[-j][0] is ProcessState.STARTED:
+                break
+
+            if snapshots[-j] != ps.snapshots[-j]:
+                return False
+            j += 1
+        return True

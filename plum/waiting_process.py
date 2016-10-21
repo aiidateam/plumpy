@@ -89,7 +89,6 @@ class WaitingProcess(Process):
 
     @override
     def interrupt(self):
-        print("Interrupting")
         self.__interrupted = True
         self._waiter.set()
 
