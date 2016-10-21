@@ -23,27 +23,10 @@ class Future(object):
         pass
 
     @abstractmethod
-    def cancel(self):
-        """
-        Attempt to cancel the Process. If the call is currently being executed
-        and cannot be cancelled then the method will return False, otherwise the
-        Process will be cancelled and the method will return True.
-        """
-        pass
-
-    @abstractmethod
-    def cancelled(self):
-        """
-        Return True if the Process was successfully cancelled.
-        """
-        pass
-
-    @abstractmethod
     def running(self):
         """
-        Return True if the Process is currently being executed and cannot be
-        cancelled.
-        :return:
+        Return True if the Process is currently being executed.
+        :return: True if running, False otherwise.
         """
         pass
 

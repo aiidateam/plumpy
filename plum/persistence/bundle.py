@@ -1,5 +1,6 @@
 
 import collections
+import copy
 import functools
 import operator
 from plum.util import override
@@ -22,6 +23,9 @@ class Bundle(collections.MutableMapping):
     def get_dict(self):
         return self.__dict
 
+    def get_dict_deepcopy(self):
+        return copy.deepcopy(self.__dict)
+
     # From MutableMapping
     @override
     def __getitem__(self, key):
@@ -35,7 +39,6 @@ class Bundle(collections.MutableMapping):
     def __delitem__(self, key):
         del self.__dict[key]
 
-    @override
     def copy(self, **add_or_replace):
         b = Bundle(self._class_loader)
         b.__dict.update(self.__dict)
@@ -60,4 +63,3 @@ class Bundle(collections.MutableMapping):
             self.__hash = functools.reduce(operator.xor, hashes, 0)
 
         return self.__hash
-    ##########################

@@ -1,6 +1,5 @@
 import time
-
-from plum.engine.serial import SerialEngine
+import threading
 from plum.process import Process
 from plum.util import override
 from plum.wait import WaitOn
@@ -9,22 +8,28 @@ from plum.wait import WaitOn
 class WaitUntil(WaitOn):
     END_TIME = 'end_time'
 
-    @classmethod
-    def create_from(cls, bundle, process_factory):
-        return WaitUntil(bundle[cls.END_TIME], bundle[cls.CALLBACK_NAME])
-
-    def __init__(self, seconds, callback_name):
-        super(WaitUntil, self).__init__(callback_name)
-        self._end_time = time.time() + seconds
+    @override
+    def init(self, wait_for):
+        self._end_time = time.time() + wait_for
+        self._timer = threading.Timer(wait_for, self._timeout)
+        self._timer.start()
 
     @override
-    def is_ready(self):
-        return time.time() >= self._end_time
+    def load_instance_state(self, bundle):
+        self._end_time = bundle[self.END_TIME]
+        self._timer = threading.Timer(
+            time.time() - self._end_time, self._timeout)
+        self._timer.start()
 
     @override
     def save_instance_state(self, out_state):
         super(WaitUntil, self).save_instance_state(out_state)
         out_state[self.END_TIME] = self._end_time
+
+    def _timeout(self):
+        self._timer.join()
+        self._timer = None
+        self.done(True)
 
 
 class Add(Process):
@@ -34,8 +39,8 @@ class Add(Process):
         spec.input('b', default=0)
         spec.output('value')
 
-    def __init__(self, pid):
-        super(Add, self).__init__(pid)
+    def __init__(self):
+        super(Add, self).__init__()
         self._a = None
         self._b = None
 
@@ -50,9 +55,7 @@ class Add(Process):
 
 
 if __name__ == '__main__':
-    add = Add(0)
+    Add.run()
 
-    exec_engine = SerialEngine(persistence=FilePersistenceManager())
-    exec_engine.run_and_block(add, {'a': 2, 'b': 3})
 
 

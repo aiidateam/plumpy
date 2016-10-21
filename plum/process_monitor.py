@@ -55,7 +55,7 @@ class ProcessMonitor(ProcessListener):
         """
         return self._processes.keys()
 
-    def process_created(self, process):
+    def process_starting(self, process):
         assert process.pid not in self._processes, \
                "A process with the same PID cannot be registered twice!"
 
@@ -77,7 +77,7 @@ class ProcessMonitor(ProcessListener):
 
     # From ProcessListener #####################################################
     @override
-    def on_process_destroy(self, process):
+    def on_process_stopped(self, process):
         self.__event_helper.fire_event(
             ProcessMonitorListener.on_monitored_process_destroying, process)
 

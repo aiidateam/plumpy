@@ -104,8 +104,6 @@ class AttributesFrozendict(frozendict.frozendict):
     def __dir__(self):
         """
         So we get tab completion.
-
         :return: The keys of the dict
-        :rtype: dict
         """
         return self.keys()
