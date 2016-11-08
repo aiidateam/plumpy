@@ -215,6 +215,7 @@ class Process(object):
         time as the process runs.
 
         :return: A mapping of {output_port: value} outputs
+        :rtype: dict
         """
         return self._outputs
 

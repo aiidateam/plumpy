@@ -51,6 +51,13 @@ class MultithreadedEngine(ProcessMonitorListener):
         return self.start(ProcClass.new_instance(inputs))
 
     def start(self, process):
+        """
+        Start running a process instance in a new thread.
+
+        :param process: The process instance to start
+        :return: A future repersenting the execution of the process
+        :rtype: :class:`MultithreadedEngine.Future`
+        """
         f = self._executor.submit(Process.start, process)
         self._processes[process.pid] = f
         return self.Future(process, f)
