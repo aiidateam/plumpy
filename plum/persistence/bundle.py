@@ -8,6 +8,10 @@ from plum.class_loader import ClassLoader
 
 # For now a bundle is just a dictionary
 class Bundle(collections.MutableMapping):
+    # Some common keys
+    CLASS = 'class'
+
+
     def __init__(self, *args, ** kwargs):
         self.__dict = dict(*args, **kwargs)
         self.__hash = None

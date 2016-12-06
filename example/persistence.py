@@ -29,7 +29,7 @@ class WaitUntil(WaitOn):
 
 class Add(Process):
     @classmethod
-    def _define(cls, spec):
+    def define(cls, spec):
         spec.input('a', default=0)
         spec.input('b', default=0)
         spec.output('value')

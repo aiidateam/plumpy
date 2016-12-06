@@ -39,7 +39,7 @@ class _CompoundWaitOn(WaitOn):
              saved_instance_state[cls.WAIT_LIST]])
 
     def __init__(self, callback_name, wait_list):
-        super(self.__class__, self).__init__(callback_name)
+        WaitOn.__init__(self, callback_name)
         self._wait_list = wait_list
 
     @override

@@ -102,8 +102,8 @@ class TestProcess(TestCase):
 
         class WithDynamic(Process):
             @classmethod
-            def _define(cls, spec):
-                super(WithDynamic, cls)._define(spec)
+            def define(cls, spec):
+                super(WithDynamic, cls).define(spec)
 
                 spec.dynamic_input()
 
@@ -111,14 +111,14 @@ class TestProcess(TestCase):
                 pass
 
         with self.assertRaises(ValueError):
-            NoDynamic.run(inputs={'a': 5})
-        WithDynamic.run(inputs={'a': 5})
+            NoDynamic.run(a=5)
+        WithDynamic.run(a=5)
 
     def test_inputs(self):
         class Proc(Process):
             @classmethod
-            def _define(cls, spec):
-                super(Proc, cls)._define(spec)
+            def define(cls, spec):
+                super(Proc, cls).define(spec)
                 spec.input('a')
 
             def _run(self, a):
@@ -139,8 +139,8 @@ class TestProcess(TestCase):
     def test_inputs_default(self):
         class Proc(DummyProcess):
             @classmethod
-            def _define(cls, spec):
-                super(Proc, cls)._define(spec)
+            def define(cls, spec):
+                super(Proc, cls).define(spec)
                 spec.input("input", default=5, required=False)
 
         # Supply a value
@@ -295,8 +295,8 @@ class TestProcess(TestCase):
 
         class FastForwarding(Process):
             @classmethod
-            def _define(cls, spec):
-                super(FastForwarding, cls)._define(spec)
+            def define(cls, spec):
+                super(FastForwarding, cls).define(spec)
 
                 spec.input("a", required=True)
                 spec.output("out")
@@ -376,7 +376,6 @@ class TestProcess(TestCase):
         # TODO: Test giving a custom logger to see if it gets used
         p = LoggerTester.new_instance()
         p.run()
-
 
     def _check_process_against_snapshots(self, proc_class, snapshots):
         for i, info in zip(range(0, len(snapshots)), snapshots):

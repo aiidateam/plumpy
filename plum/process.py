@@ -136,11 +136,11 @@ class Process(object):
         except AttributeError:
             cls._spec = cls._spec_type()
             cls._called = False
-            cls._define(cls._spec)
+            cls.define(cls._spec)
             assert cls._called, \
-                "Process._define() was not called by {}\n" \
-                "Hint: Did you forget to call the superclass method in your _define? " \
-                "Try: super({}, cls)._define(spec)".format(cls, cls.__name__)
+                "Process.define() was not called by {}\n" \
+                "Hint: Did you forget to call the superclass method in your define? " \
+                "Try: super({}, cls).define(spec)".format(cls, cls.__name__)
             return cls._spec
 
     @classmethod
@@ -170,13 +170,13 @@ class Process(object):
         return "\n".join(desc)
 
     @classmethod
-    def run(cls, inputs=None):
-        p = cls.new_instance(inputs)
+    def run(cls, **kwargs):
+        p = cls.new_instance(kwargs)
         p.run_until_complete()
         return p.outputs
 
     @classmethod
-    def _define(cls, spec):
+    def define(cls, spec):
         cls._called = True
 
     @classmethod
@@ -735,7 +735,7 @@ class FunctionProcess(Process):
             spec.output(output_name)
 
         return type(func.__name__, (FunctionProcess,),
-                    {'_define': classmethod(_define),
+                    {Process.define.__name__: classmethod(_define),
                      '_func': func,
                      '_func_args': args,
                      '_output_name': output_name})
@@ -812,7 +812,9 @@ class _Director(object):
                 return True
             else:
                 unticked = True
-        except BaseException:
+        except BaseException as e:
+            # TODO: Log traceback
+            #self._proc.logger.error("Error occured ticking process:{}".format(traceback.print_exc()))
             MONITOR.process_failed(self._proc.pid)
             raise
 
