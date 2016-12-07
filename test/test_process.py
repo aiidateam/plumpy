@@ -117,7 +117,7 @@ class TestProcess(TestCase):
             p.raw_inputs.a
 
         # Check that we can access the inputs after creating
-        p.perform_create(0, {'a': 5})
+        p._perform_create(0, {'a': 5})
         self.assertEqual(p.raw_inputs.a, 5)
         with self.assertRaises(AttributeError):
             p.raw_inputs.b
