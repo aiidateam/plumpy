@@ -31,8 +31,8 @@ class DummyProcess(Process):
 
 class DummyProcessWithOutput(Process):
     @classmethod
-    def _define(cls, spec):
-        super(DummyProcessWithOutput, cls)._define(spec)
+    def define(cls, spec):
+        super(DummyProcessWithOutput, cls).define(spec)
 
         spec.dynamic_input()
         spec.dynamic_output()
@@ -139,8 +139,8 @@ class EventsTesterMixin(object):
 
 class ProcessEventsTester(EventsTesterMixin, WaitingProcess):
     @classmethod
-    def _define(cls, spec):
-        super(ProcessEventsTester, cls)._define(spec)
+    def define(cls, spec):
+        super(ProcessEventsTester, cls).define(spec)
         spec.dynamic_output()
 
     def __init__(self):

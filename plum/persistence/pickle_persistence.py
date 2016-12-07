@@ -1,4 +1,3 @@
-
 import glob
 import os
 import os.path as path
@@ -9,7 +8,6 @@ from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.util import override, protected
 from plum.persistence._base import LOGGER
-
 
 _RUNNING_DIRECTORY = path.join(tempfile.gettempdir(), "running")
 _FINISHED_DIRECTORY = path.join(_RUNNING_DIRECTORY, "finished")
@@ -99,8 +97,11 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         for f in glob.glob(path.join(self._running_directory, "*.pickle")):
             try:
                 checkpoints.append(self.load_checkpoint_from_file(f))
-            except EOFError:
-                pass
+            except BaseException as e:
+                LOGGER.warning(
+                    "Failed to load checkpoint {} because of exception\n"
+                    "{}".format(f, e.message))
+
         return checkpoints
 
     def load_checkpoint_from_file(self, filepath):
@@ -184,6 +185,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
                          "during on_finish message.".format(process.pid))
         except ValueError:
             pass
+
     ############################################################################
 
     # ProcessMonitorListener messages ##########################################
@@ -193,6 +195,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
             self._release_process(pid, self.failed_directory)
         except ValueError:
             pass
+
     ############################################################################
 
     @override
@@ -225,7 +228,3 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         else:
             raise ValueError(
                 "Cannot find pickle for process with pid '{}'".format(pid))
-
-
-
-
