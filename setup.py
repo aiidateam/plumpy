@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import os
 
 __license__ = "GPLv3 and MIT, see LICENSE file"
 __version__ = "0.7.1"
@@ -14,8 +13,19 @@ root_folder = os.path.split(os.path.abspath(__file__))[0]
 bin_folder = os.path.join(root_folder, 'scripts')
 setup(
     name="plum",
-    license=__license__,
     version=__version__,
+    description='A python workflow library',
+    long_description=open('README.md').read(),
+    url='https://bitbucket.org/aiida_team/plum',
+    author='Martin Uhrin',
+    author_email='Martin Uhrin <martin.uhrin@epfl.ch>',
+    license=__license__,
+    classifiers=[
+        'License :: OSI Approved :: MIT License',
+        'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+    ],
     # Abstract dependencies.  Concrete versions are listed in
     # requirements.txt
     # See https://caremad.io/2013/07/setup-vs-requirement/ for an explanation
@@ -29,7 +39,5 @@ setup(
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['futures'],
     },
-    packages=find_packages(),
-    long_description=open(os.path.join(root_folder, 'README.md')).read(),
+    packages=['plum'],
 )
-
