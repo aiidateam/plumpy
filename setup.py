@@ -40,4 +40,5 @@ setup(
         ':python_version<"3.2"': ['futures'],
     },
     packages=['plum'],
+    test_suite='test'
 )
