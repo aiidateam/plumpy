@@ -22,7 +22,13 @@ setup(
     # of the difference and
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
-    install_requires=['enum34', 'futures', 'frozendict'],
+    install_requires=[
+        'frozendict',
+    ],
+    extras_require={
+        ':python_version<"3.4"': ['enum34'],
+        ':python_version<"3.2"': ['futures'],
+    },
     packages=find_packages(),
     long_description=open(os.path.join(root_folder, 'README.md')).read(),
 )
