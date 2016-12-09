@@ -3,7 +3,7 @@
 from setuptools import setup
 
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__version__ = "0.7.3"
+__version__ = "0.7.4"
 __contributors__ = "Martin Uhrin"
 
 setup(
@@ -34,6 +34,6 @@ setup(
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['futures'],
     },
-    packages=['plum'],
+    packages=['plum', 'plum.persistence', 'plum.engine'],
     test_suite='test'
 )
