@@ -676,24 +676,10 @@ class Process(object):
         return ins
 
     def _check_inputs(self, inputs):
-        if inputs is None:
-            inputs = {}
-
         # Check the inputs meet the requirements
-        if not self.spec().has_dynamic_input():
-            unexpected = set(inputs.iterkeys()) - set(self.spec().inputs.iterkeys())
-            if unexpected:
-                raise ValueError(
-                    "Unexpected inputs found: {}.  If you want to allow dynamic"
-                    " inputs add dynamic_input() to the spec definition.".
-                    format(unexpected))
-
-        for name, port in self.spec().inputs.iteritems():
-            valid, msg = port.validate(inputs.get(name, None))
-            if not valid:
-                raise TypeError(
-                    "Cannot run process '{}' because {}".
-                    format(self.get_name(), msg))
+        valid, msg = self.spec().validate(inputs)
+        if not valid:
+            raise ValueError(msg)
 
     ###########################################################################
 

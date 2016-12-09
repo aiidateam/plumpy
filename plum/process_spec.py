@@ -20,6 +20,7 @@ class ProcessSpec(object):
         self._inputs = {}
         self._outputs = {}
         self._deterministic = None
+        self._validator = None
         self._sealed = False
 
     def seal(self):
@@ -39,6 +40,12 @@ class ProcessSpec(object):
         return self._sealed
 
     def get_description(self):
+        """
+        Get a text description of this process specification.
+
+        :return: A text description
+        :rtype: str
+        """
         desc = []
         if self.inputs:
             desc.append("Inputs")
@@ -57,6 +64,12 @@ class ProcessSpec(object):
     # Inputs ##################################################################
     @property
     def inputs(self):
+        """
+        Get the inputs of the process specification
+
+        :return: The inputs
+        :rtype: dict
+        """
         return self._inputs
 
     def get_input(self, name):
@@ -178,3 +191,53 @@ class ProcessSpec(object):
                         "deterministic.")
 
         self._deterministic = to
+
+    def validator(self, fn):
+        """
+        Supply a validator function.  This should be a function that takes two
+        arguments: spec and inputs where spec will be this specification and
+        inputs will be a dictionary of inputs to be validated.  It should
+        return a tuple of bool, str|None where the bool indicates if the inputs
+        are valid and the str can optionally be used to provide a message with
+        a description of the problems(s) or it can be None.
+
+        :param fn: The validation function
+        :return: valid or not, error string|None
+        :rtype: tuple(bool, str|None)
+        """
+        self._validator = fn
+
+    def validate(self, inputs=None):
+        """
+        This will validate a dictionary of inputs to make sure they are valid
+        according to this specification.
+
+        :param inputs: The inputs dictionary
+        :type inputs: dict
+        :return: A tuple indicating if the input is valid or not and an
+            optional error message
+        :rtype: tuple(bool, str|None)
+        """
+        if inputs is None:
+            inputs = {}
+
+        # Check the inputs meet the requirements
+        if not self.has_dynamic_input():
+            unexpected = set(inputs.iterkeys()) - set(self.inputs.iterkeys())
+            if unexpected:
+                return False, \
+                       "Unexpected inputs found: {}.  If you want to allow " \
+                       "dynamic inputs add dynamic_input() to the spec " \
+                       "definition."
+
+        for name, port in self.inputs.iteritems():
+            valid, msg = port.validate(inputs.get(name, None))
+            if not valid:
+                return False, msg
+
+        if self._validator is not None:
+            valid, msg = self._validator(self, inputs)
+            if not valid:
+                return False, msg
+
+        return True, None
