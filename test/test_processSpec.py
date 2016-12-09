@@ -48,4 +48,28 @@ class TestProcessSpec(unittest.TestCase):
         desc = spec.get_description()
         self.assertNotEqual(desc, "")
 
+    def test_validate(self):
+        """
+        Test the global spec validator functionality.
+        """
+        def is_valid(spec, inputs):
+            if ('a' in inputs) ^ ('b' in inputs):
+                return True, None
+            else:
+                return False, "Must have a OR b in inputs"
 
+        self.spec.input("a", required=False)
+        self.spec.input("b", required=False)
+        self.spec.validator(is_valid)
+
+        valid, msg = self.spec.validate(inputs={})
+        self.assertFalse(valid, msg)
+
+        valid, msg = self.spec.validate(inputs={'a': 'a', 'b': 'b'})
+        self.assertFalse(valid, msg)
+
+        valid, msg = self.spec.validate(inputs={'a': 'a'})
+        self.assertTrue(valid, msg)
+
+        valid, msg = self.spec.validate(inputs={'b': 'b'})
+        self.assertTrue(valid, msg)
