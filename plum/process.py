@@ -4,6 +4,7 @@ import uuid
 from enum import Enum
 from abc import ABCMeta, abstractmethod
 import threading
+from collections import namedtuple
 
 import plum.knowledge_provider as knowledge_provider
 import plum.error as error
@@ -13,6 +14,7 @@ from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.util import protected
 import plum.util as util
+from plum.wait import WaitOn
 from plum._base import LOGGER
 
 
@@ -21,11 +23,13 @@ class ProcessState(Enum):
     The possible states that a :class:`Process` can be in.
     """
     CREATED = 0
-    STARTED = 1
-    RUNNING = 2
-    FINISHED = 3
-    STOPPED = 4
-    DESTROYED = 5
+    RUNNING = 1
+    WAITING = 2
+    STOPPED = 3
+    FAILED = 4
+
+
+Wait = namedtuple('Wait', ['on', 'callback'])
 
 
 class Process(object):
@@ -35,19 +39,23 @@ class Process(object):
     A process can be in one of the following states:
 
     * CREATED
-    * STARTED
     * RUNNING
-    * FINISHED
+    * WAITING
     * STOPPED
-    * DESTROYED
+    * FAILED
 
     as defined in the :class:`ProcessState` enum.
 
     The possible transitions between states are::
 
-        CREATED -- STARTED -- RUNNING -- FINISHED -- STOPPED -- DESTROYED
-           \           \_________|____________________/            /
-            \_____________________________________________________/
+        CREATED---on_start,on_run-->RUNNING---on_finish,on_stop-->STOPPED
+                                    |     ^               |         ^
+                               on_wait  on_resume,on_run  |   on_abort,on_stop
+                                    v     |               |         |
+                                    WAITING----------------     [any state]
+
+        [any state]---on_fail-->FAILED
+
     ::
 
     When a Process enters a state is always gets a corresponding message, e.g.
@@ -64,12 +72,19 @@ class Process(object):
         """
         String keys used by the process to save its state in the state bundle.
 
-        See create_from, on_save_instance_state and _load_instance_state.
+        See :func:`create_from`, :func:`save_instance_state` and :func:`load_instance_state`.
         """
         CLASS_NAME = 'class_name'
         INPUTS = 'inputs'
         OUTPUTS = 'outputs'
         PID = 'pid'
+        WAITING_ON = 'waiting_on'
+        WAIT_ON_CALLBACK = 'wait_on_callback'
+        STATE = 'state'
+        FINISHED = 'finished'
+        ABORTED = 'aborted'
+        EXCEPTION = 'exception'
+        NEXT_TRANSITION = 'next_transition'
 
     @staticmethod
     def instantiate(ProcClass, logger=None):
@@ -79,6 +94,20 @@ class Process(object):
         else:
             p.set_logger(LOGGER)
         return p
+
+    @staticmethod
+    def _is_wait_retval(retval):
+        """
+        Determine if the value provided is a valid Wait retval which consists
+        of a 2-tuple of a WaitOn and a callback function (or None) to be called
+        after the wait on is ready
+
+        :param retval: The return value from a step to check
+        :return: True if it is a valid wait object, False otherwise
+        """
+        return (isinstance(retval, tuple) and
+                len(retval) == 2 and
+                isinstance(retval[0], WaitOn))
 
     @classmethod
     def new_instance(cls, inputs=None, pid=None, logger=None):
@@ -104,12 +133,13 @@ class Process(object):
 
         :param saved_instance_state: The saved state
         :type saved_instance_state: Bundle
+        :param logger: The logger for this process to use
         :return: An instance of this process with its state loaded from the save state.
         :rtype: :class:`Process`
         """
         # Get the class using the class loader and instantiate it
         class_name = saved_instance_state[cls.BundleKeys.CLASS_NAME.value]
-        ProcClass =\
+        ProcClass = \
             saved_instance_state.get_class_loader().load_class(class_name)
         proc = Process.instantiate(ProcClass, logger)
         # Get it to create itself
@@ -176,19 +206,25 @@ class Process(object):
         self._logger = None
 
         # State stuff
-        self._state = None
         self._pid = None
+        self._state = None
         self._finished = False
-        self._state_transition_lock = threading.Lock()
-
-        self._aborting = False
         self._aborted = False
-        self._abort_lock = threading.Lock()
+        self._exception = None
+        self._wait = None
+        self._next_transition = None
 
         # Input/output
         self._raw_inputs = None
         self._parsed_inputs = None
         self._outputs = {}
+
+        # Stuff below here doesn't need to be saved in the instance state
+        self._pausing = False
+        self._aborting = False
+        self._wait_on_ready = False
+        self._waiter = threading.Event()
+        self._executing = False
 
         # Events and running
         self.__event_helper = util.EventHelper(ProcessListener)
@@ -237,58 +273,111 @@ class Process(object):
         """
         return self._logger
 
+    def is_executing(self):
+        """
+        Is the process currently executing (i.e. in the start() method).
+
+        :return: True if executing, False otherwise
+        :rtype: bool
+        """
+        return self._executing
+
     def has_finished(self):
+        """
+        Has the process finished i.e. completed running normally, without abort
+        or an exception.
+
+        :return: True if finished, False otherwise
+        :rtype: bool
+        """
         return self._finished
+
+    def has_failed(self):
+        """
+        Has the process failed i.e. an exception was raised
+
+        :return: True if an unhandled exception was raised, False otherwise
+        :rtype: bool
+        """
+        return self._exception is not None
+
+    def has_terminated(self):
+        """
+        Has the process terminated
+
+        :return: True if has_finished() or has_failed(), False otherwise
+        :rtype: bool
+        """
+        return self.has_finished() or self.has_failed()
+
+    def get_waiting_on(self):
+        """
+        Get the WaitOn this process is waiting on, or None.
+
+        :return: The WaitOn or None
+        :rtype: :class:`plum.wait.WaitOn`
+        """
+        try:
+            return self._wait.on
+        except AttributeError:
+            return None
 
     def save_instance_state(self, bundle):
         bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
+        bundle[self.BundleKeys.STATE.value] = self.state
         bundle[self.BundleKeys.PID.value] = self.pid
+        bundle[self.BundleKeys.FINISHED.value] = self._finished
+        bundle[self.BundleKeys.ABORTED.value] = self._aborted
+        bundle[self.BundleKeys.EXCEPTION.value] = self._exception
+        if self._next_transition is not None:
+            bundle[self.BundleKeys.NEXT_TRANSITION.value] = \
+                self._next_transition.__name__
 
-        # Save inputs
-        inputs = None
-        if self._raw_inputs is not None:
-            inputs = Bundle(self._raw_inputs)
-        bundle[self.BundleKeys.INPUTS.value] = inputs
+        # Save inputs and outputs
+        if self.raw_inputs is not None:
+            bundle[self.BundleKeys.INPUTS.value] = Bundle(self.raw_inputs)
         bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
+
+        if self._wait is not None:
+            b = Bundle()
+            self.get_waiting_on().save_instance_state(b)
+            bundle[self.BundleKeys.WAITING_ON.value] = b
+            bundle[self.BundleKeys.WAIT_ON_CALLBACK.value] = \
+                self._wait.callback.__name__
 
     def start(self):
         """
-        Start running the process.  The process should be in the CREATED state.
+        Start running the process.
         """
-        assert self.state is ProcessState.CREATED
+        assert not self._executing
 
-        # Keep going until we run out of tasks
-        while True:
-            # Acquite the lock, it's up to the function to release it
-            self._state_transition_lock.acquire()
+        try:
+            MONITOR.register_process(self)
+            self._executing = True
+            self._pausing = False
+            self._aborting = False
+
+            # Keep going until we run out of tasks
             fn = self._next()
-            if fn is None:
-                self._state_transition_lock.release()
-                break
-            else:
+            while fn is not None:
                 try:
+                    self._next_transition = None
                     fn()
                 except BaseException as e:
                     self._perform_fail(e)
-                    MONITOR.process_failed(self.pid)
                     raise
+                fn = self._next()
+        finally:
+            self._executing = False
+            MONITOR.deregister_process(self)
+
+    def pause(self):
+        self._interrupt()
+        self._pausing = True
 
     def abort(self):
-        # By acquiring this lock once and then not releasing it we guarantee
-        # that abort is only called once
-        if self._abort_lock.acquire(False):
-            with self._state_transition_lock:
-                # Now we know that the state won't change
-                if self.state in [ProcessState.CREATED, ProcessState.STARTED]:
-                    self._aborting = True
-                elif self.state is ProcessState.RUNNING:
-                    try:
-                        self.interrupt()
-                        self._aborting = True
-                    except NotImplementedError:
-                        pass
-
-        return self._aborting
+        self._interrupt()
+        self._aborting = True
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -316,13 +405,24 @@ class Process(object):
         """
         # In this case there is no message fired because no one could have
         # registered themselves as a listener by this point in the lifecycle.
+        if saved_instance_state is not None:
+            self.load_instance_state(saved_instance_state)
+        else:
+            if pid is None:
+                pid = uuid.uuid1()
+            self._pid = pid
+            self._check_inputs(inputs)
+            if inputs is not None:
+                self._raw_inputs = util.AttributesFrozendict(inputs)
+            self._parsed_inputs = \
+                util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
         self._called = True
 
     @protected
     def on_start(self):
         """
-        Called when the process is about to start for the first time.
+        Called when the process is about to run for the first time.
 
 
         Any class overriding this method should make sure to call the super
@@ -344,7 +444,18 @@ class Process(object):
         method, usually at the end of the function.
 
         """
+        self._wait = None
         self.__event_helper.fire_event(ProcessListener.on_process_run, self)
+        self._called = True
+
+    @protected
+    def on_wait(self):
+        self.__event_helper.fire_event(ProcessListener.on_process_wait, self)
+        self._called = True
+
+    @protected
+    def on_resume(self):
+        self.__event_helper.fire_event(ProcessListener.on_process_resume, self)
         self._called = True
 
     @protected
@@ -362,6 +473,7 @@ class Process(object):
         checks
         """
         self._check_outputs()
+        self._finished = True
         self.__event_helper.fire_event(ProcessListener.on_process_finish, self)
         self._called = True
 
@@ -371,21 +483,11 @@ class Process(object):
         self._called = True
 
     @protected
-    def on_destroy(self):
-        """
-        Called after the process has stopped.  This event should be used to
-        clean up any final resource, etc., still being held.
-        """
-        self.__event_helper.fire_event(ProcessListener.on_process_destroy, self)
-        self._called = True
-
-    @protected
-    def on_fail(self, exception):
+    def on_fail(self):
         """
         Called if the process raised an exception.
-        :param exception: The exception that was raised
-        :type exception: :class:`BaseException`
         """
+        self.__event_helper.fire_event(ProcessListener.on_process_fail, self)
         self._called = True
 
     def _on_output_emitted(self, output_port, value, dynamic):
@@ -399,20 +501,7 @@ class Process(object):
         try:
             return self.fast_forward()
         except error.FastForwardError:
-            return self._run(**self._parsed_inputs)
-
-    @protected
-    def interrupt(self):
-        """
-        Called when the process has been asked to abort itself.  This could be
-        by an external entity in which case the call will come from a different
-        thread or it could be from the process itself, in which case it will
-        be from the process thread.
-
-        In either case the process has opportunity to stop what it's doing and
-        return from the run method.  The next state change will be to STOPPED.
-        """
-        raise NotImplementedError("This process cannot be interrupted")
+            return self._run(**(self.inputs if self.inputs is not None else {}))
 
     @protected
     def out(self, output_port, value):
@@ -429,14 +518,14 @@ class Process(object):
                 raise TypeError(
                     "Process trying to output on unknown output port {}, "
                     "and does not have a dynamic output port in spec.".
-                    format(output_port))
+                        format(output_port))
 
             if port.valid_type is not None and \
                     not isinstance(value, port.valid_type):
                 raise TypeError(
                     "Process returned output '{}' of wrong type."
                     "Expected '{}', got '{}'".
-                    format(output_port, port.valid_type, type(value)))
+                        format(output_port, port.valid_type, type(value)))
 
         self._outputs[output_port] = value
         self._on_output_emitted(output_port, value, dynamic)
@@ -472,12 +561,55 @@ class Process(object):
     @protected
     def load_instance_state(self, bundle):
         self._pid = bundle[self.BundleKeys.PID.value]
+        self._state = bundle[self.BundleKeys.STATE.value]
+        self._finished = bundle[self.BundleKeys.FINISHED.value]
+        self._aborted = bundle[self.BundleKeys.ABORTED.value]
+        self._exception = bundle[self.BundleKeys.EXCEPTION.value]
+        try:
+            self._next_transition = self.__getattribute__(
+                bundle[self.BundleKeys.NEXT_TRANSITION.value])
+        except KeyError:
+            pass
 
+        try:
+            b = bundle[self.BundleKeys.WAITING_ON.value]
+            wait_on = WaitOn.create_from(b)
+        except KeyError:
+            pass  # There's no wait_on
+        else:
+            callback = self._get_wait_on_callback_fn(bundle)
+            self._set_wait(wait_on, callback)
+
+        # Get the inputs and outputs
         inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
         if inputs is not None:
             self._raw_inputs = util.AttributesFrozendict(inputs)
-
+        self._parsed_inputs = \
+            util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
         self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
+
+    def _get_wait_on_callback_fn(self, bundle):
+        """
+        Get the callback function that should be called when the wait on has
+        finished from the saved bundle.
+
+        :param bundle: The bundle to get the function from
+        :return: The function or None if it is not stored in the bundle
+        """
+        callback = None
+        try:
+            name = bundle[self.BundleKeys.WAIT_ON_CALLBACK.value]
+        except KeyError:
+            pass
+        else:
+            try:
+                callback = self.__getattribute__(name)
+            except AttributeError:
+                raise ValueError(
+                    "This process does not have a function with "
+                    "the name '{}' as expected from the wait on".
+                        format(name))
+        return callback
 
     # Inputs ##################################################################
     @protected
@@ -504,8 +636,9 @@ class Process(object):
                     ins[name] = port.default
                 elif port.required:
                     raise ValueError(
-                        "Value not supplied for required inputs port {}".format(
-                            name))
+                        "Value not supplied for required inputs port {}".
+                            format(name)
+                    )
 
         return ins
 
@@ -515,67 +648,47 @@ class Process(object):
         Method to get the next method to run as part of the Process lifecycle.
 
         :return: A callable that only takes the self process as argument.
-          May be None if the process has been destroyed.
+          May be None if the process should not continue.
         """
         # Use this while figuring out which state to go to next.  Methods
         # from other threads can also use this lock if they want to make sure
         # no state related changes will be made as they executed
-        if self.state is ProcessState.CREATED:
-            if self._aborting:
-                return self._perform_destroy
-            else:
-                return self._perform_start
-        elif self.state is ProcessState.STARTED:
-            if self._aborting:
-                return self._perform_stop
-            else:
-                return self._perform_run
-        elif self.state is ProcessState.RUNNING:
-            if self._aborting:
-                return self._perform_stop
-            else:
-                return self._perform_finish
-        elif self.state is ProcessState.FINISHED:
-            return self._perform_stop
-        elif self.state is ProcessState.STOPPED:
-            return self._perform_destroy
-        elif self.state is ProcessState.DESTROYED:
+        if self.has_terminated():
             return None
+        elif self._pausing:
+            return None
+        elif self._aborting:
+            return self._perform_abort
         else:
-            raise RuntimeError(
-                "Process is in unknown state '{}'.".format(self.state))
+            return self._next_transition
 
     def _perform_create(self, pid=None, inputs=None, saved_instance_state=None):
-        if saved_instance_state is not None:
-            self.load_instance_state(saved_instance_state)
-        else:
-            if pid is None:
-                pid = uuid.uuid1()
-            self._pid = pid
-            self._check_inputs(inputs)
-            if inputs is not None:
-                self._raw_inputs = util.AttributesFrozendict(inputs)
+        """
 
-        self._parsed_inputs =\
-            util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
-
+        :param pid: The process ID to use, can be None in which case one will
+            be generated
+        :param inputs: The process inputs
+        :type inputs: dict
+        :param saved_instance_state: An optional saved state to recreate from
+        :type saved_instance_state: `class`:plum.persistence.bundle.Bundle`
+        """
+        self._state = ProcessState.CREATED
         self._called = False
         self.on_create(pid, inputs, saved_instance_state)
         assert self._called, \
             "on_create was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-        self._state = ProcessState.CREATED
+        self._next_transition = self._perform_start
 
     def _perform_start(self):
         """
-        Perform the state transition from CREATED -> STARTED.
+        Perform the state transition from CREATED -> RUNNING.
         Messages issued:
          - on_start
+         - on_run
         """
         assert self.state is ProcessState.CREATED
-
-        MONITOR.process_starting(self)
 
         self._called = False
         self.on_start()
@@ -583,27 +696,76 @@ class Process(object):
             "on_run was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-        self._state = ProcessState.STARTED
-        self._state_transition_lock.release()
+        self._to_running()
 
-    def _perform_run(self):
+        # Run the thing
+        self._return_value = self.do_run()
+        # Figure out what to do next
+        if self._is_wait_retval(self._return_value):
+            self._set_wait(self._return_value[0], self._return_value[1])
+            self._next_transition = self._perform_wait
+        else:
+            self._next_transition = self._perform_finish
+
+    def _perform_wait(self):
+        """
+        Messages issued (if not already waiting):
+         - on_wait
+        """
+        # This could get called when the process was already in the waiting
+        # state just because it could be resuming from being paused or from
+        # a saved state
+        if self.state is not ProcessState.WAITING:
+            assert self.state is ProcessState.RUNNING
+
+            self._state = ProcessState.WAITING
+            self._called = False
+            self.on_wait()
+            assert self._called, \
+                "on_wait was not called\n" \
+                "Hint: Did you forget to call the superclass method?"
+
+        self._waiter.wait()
+        if self._wait_on_ready:
+            if self._wait.callback is None:
+                self._next_transition = self._perform_finish
+            else:
+                self._next_transition = self._perform_resume
+        else:
+            self._next_transition = self._perform_wait
+
+    def _perform_resume(self):
         """
         Messages issued:
+         - on_resume
          - on_run
         """
-        assert self.state in [ProcessState.STARTED]
+        assert self.state is ProcessState.WAITING
 
         self._called = False
-        self.on_run()
+        self.on_resume()
         assert self._called, \
             "on_run was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-        self._state = ProcessState.RUNNING
-        self._state_transition_lock.release()
-        self._return_value = self.do_run()
+        w = self._wait
+        self._wait = None
+        self._to_running()
+        self._return_value = w.callback(w.on)
+
+        # Figure out what to do next
+        if self._is_wait_retval(self._return_value):
+            self._set_wait(self._return_value[0], self._return_value[1])
+            self._next_transition = self._perform_wait
+        else:
+            self._next_transition = self._perform_finish
 
     def _perform_finish(self):
+        """
+        Messages issued:
+         - on_finish
+         - on_stop
+        """
         assert self.state is ProcessState.RUNNING
 
         self._called = False
@@ -612,63 +774,73 @@ class Process(object):
             "on_finish was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-        self._finished = True
-        self._state = ProcessState.FINISHED
-        self._state_transition_lock.release()
+        self._to_stopped()
 
-    def _perform_stop(self):
-        assert self.state in [ProcessState.STARTED, ProcessState.RUNNING,
-                              ProcessState.FINISHED]
+    def _perform_abort(self):
+        """
+        Messages issued:
+         - on_abort
+        """
+        self._called = False
+        self.on_abort()
+        assert self._called, \
+            "on_abort was not called\n" \
+            "Hint: Did you forget to call the superclass method?"
 
-        if self._aborting and not self._aborted:
+        self._to_stopped()
+        self._aborting = False
+
+    def _perform_fail(self, exception):
+        """
+        Messages issued:
+         - on_fail
+        :param exception: The exception that caused the failure
+        :type exception: :class:`BaseException`
+        """
+        self._state = ProcessState.FAILED
+        self._exception = exception
+        try:
             self._called = False
-            self.on_abort()
+            self.on_fail()
+        except BaseException as e:
+            # TODO: Log here that there was an exception raised while informing
+            # the process that it had failed
+            pass
+        else:
             assert self._called, \
-                "on_abort was not called\n" \
+                "on_fail was not called\n" \
                 "Hint: Did you forget to call the superclass method?"
 
+    def _to_running(self):
+        self._state = ProcessState.RUNNING
+        self._called = False
+        self.on_run()
+        assert self._called, \
+            "on_run was not called\n" \
+            "Hint: Did you forget to call the superclass method?"
+
+    def _to_stopped(self):
+        self._state = ProcessState.STOPPED
         self._called = False
         self.on_stop()
         assert self._called, \
             "on_stop was not called\n" \
             "Hint: Did you forget to call the superclass method?"
 
-        self._state = ProcessState.STOPPED
-        self._state_transition_lock.release()
+    def _set_wait(self, wait_on, callback):
+        self._wait = Wait(wait_on, callback)
+        self._waiter.clear()
+        self.get_waiting_on().add_done_callback(self._done_waiting)
 
-        self.__event_helper.fire_event(
-            ProcessListener.on_process_stopped, self)
+    def _done_waiting(self, wait_on):
+        self._wait_on_ready = True
+        self._waiter.set()
 
-    def _perform_destroy(self):
-        assert self.state in [ProcessState.CREATED, ProcessState.STOPPED]
-
-        if self._aborting and not self._aborted:
-            self._called = False
-            self.on_abort()
-            assert self._called, \
-                "on_abort was not called\n" \
-                "Hint: Did you forget to call the superclass method?"
-
-        self._called = False
-        self.on_destroy()
-        assert self._called, \
-            "on_destroy was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
-
-        self._state = ProcessState.DESTROYED
-        self._state_transition_lock.release()
-
-    def _perform_fail(self, exception):
-        self._called = False
+    def _interrupt(self):
         try:
-            self.on_fail(exception)
-        except BaseException as e:
-            # TODO: Log here that there was an exception raised while informing
-            # the process that it had failed
+            self._waiter.set()
+        except AttributeError:
             pass
-        assert self._called, \
-            "on_fail was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
 
     ###########################################################################
 
@@ -732,4 +904,3 @@ class FunctionProcess(Process):
             args.append(kwargs.pop(arg))
 
         self.out(self._output_name, self._func(*args))
-

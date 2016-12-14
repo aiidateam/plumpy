@@ -1,10 +1,9 @@
 from unittest import TestCase
 
-import threading
 from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.process_monitor import MONITOR
-from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpointProcess, \
+from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpoint, \
     DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, check_process_against_snapshots
 from plum.test_utils import ProcessListenerTester
 from plum.util import override
@@ -28,7 +27,7 @@ class ForgetToCallParent(Process):
         pass
 
     @override
-    def on_fail(self, exception):
+    def on_fail(self):
         pass
 
     @override
@@ -39,18 +38,18 @@ class ForgetToCallParent(Process):
     def on_stop(self):
         pass
 
-    @override
-    def on_destroy(self):
-        pass
-
 
 class TestProcess(TestCase):
     def setUp(self):
+        self.assertEqual(len(MONITOR.get_pids()), 0)
+
         self.events_tester = ProcessListenerTester()
         self.proc = DummyProcessWithOutput()
         self.proc.add_process_listener(self.events_tester)
 
     def tearDown(self):
+        self.assertEqual(len(MONITOR.get_pids()), 0)
+
         self.proc.remove_process_listener(self.events_tester)
 
     def test_spec(self):
@@ -142,7 +141,7 @@ class TestProcess(TestCase):
         p.start()
 
         self.assertTrue(p.has_finished())
-        self.assertEqual(p.state, ProcessState.DESTROYED)
+        self.assertEqual(p.state, ProcessState.STOPPED)
         self.assertEqual(p.outputs, {'default': 5})
 
     def test_run_from_class(self):
@@ -160,16 +159,7 @@ class TestProcess(TestCase):
             p._perform_start()
 
         with self.assertRaises(AssertionError):
-            p._perform_run()
-
-        with self.assertRaises(AssertionError):
             p._perform_finish()
-
-        with self.assertRaises(AssertionError):
-            p._perform_stop()
-
-        with self.assertRaises(AssertionError):
-            p._perform_destroy()
 
     def test_pid(self):
         # Test auto generation of pid
@@ -188,7 +178,7 @@ class TestProcess(TestCase):
         proc = ExceptionProcess.new_instance()
         with self.assertRaises(BaseException):
             proc.start()
-        self.assertEqual(proc.state, ProcessState.RUNNING)
+        self.assertEqual(proc.state, ProcessState.FAILED)
         del proc
 
     def test_get_description(self):
@@ -239,7 +229,7 @@ class TestProcess(TestCase):
             saver = ProcessSaver(proc)
             proc.start()
 
-            self.assertEqual(proc.state, ProcessState.DESTROYED)
+            self.assertEqual(proc.state, ProcessState.STOPPED)
             self.assertTrue(check_process_against_snapshots(ProcClass, saver.snapshots))
 
     def test_saving_each_step_interleaved(self):
@@ -263,13 +253,14 @@ class TestProcess(TestCase):
         p.start()
 
     def test_abort(self):
-        # Can't abort a process that hasn't been started
+        # Abort a process before it gets started, this will get ignored and the
+        # process will run normally
         proc = DummyProcess.new_instance()
-        self.assertTrue(proc.abort())
+        proc.abort()
         proc.start()
 
-        self.assertTrue(proc.aborted)
-        self.assertEqual(proc.state, ProcessState.DESTROYED)
+        self.assertFalse(proc.aborted)
+        self.assertEqual(proc.state, ProcessState.STOPPED)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)

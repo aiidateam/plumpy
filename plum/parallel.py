@@ -71,7 +71,7 @@ class MultithreadedEngine(ProcessMonitorListener):
 
     # From ProcessMonitorListener #############################################
     @override
-    def on_monitored_process_destroying(self, process):
+    def on_monitored_process_stopped(self, process):
         if process.pid in self._processes:
             del self._processes[process.pid]
 

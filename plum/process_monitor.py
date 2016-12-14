@@ -14,10 +14,10 @@ class ProcessMonitorListener(object):
     def on_monitored_process_created(self, process):
         pass
 
-    def on_monitored_process_destroying(self, process):
+    def on_monitored_process_stopped(self, process):
         pass
 
-    def on_monitored_process_failed(self, pid):
+    def on_monitored_process_failed(self, process):
         pass
 
 
@@ -55,7 +55,14 @@ class ProcessMonitor(ProcessListener):
         """
         return self._processes.keys()
 
-    def process_starting(self, process):
+    def register_process(self, process):
+        """
+        Called by the :class:`~plum.process.Process` to inform the monitor
+        about this process.
+
+        :param process: The process that is being registered
+        :type process: :class:`~plum.process.Process`
+        """
         assert process.pid not in self._processes, \
                "A process with the same PID cannot be registered twice!"
 
@@ -64,10 +71,9 @@ class ProcessMonitor(ProcessListener):
         self.__event_helper.fire_event(
             ProcessMonitorListener.on_monitored_process_created, process)
 
-    def process_failed(self, pid):
-        self.__event_helper.fire_event(
-            ProcessMonitorListener.on_monitored_process_failed, pid)
-        del self._processes[pid]
+    def deregister_process(self, process):
+        process.remove_process_listener(self)
+        del self._processes[process.pid]
 
     def add_monitor_listener(self, listener):
         self.__event_helper.add_listener(listener)
@@ -77,12 +83,15 @@ class ProcessMonitor(ProcessListener):
 
     # From ProcessListener #####################################################
     @override
-    def on_process_stopped(self, process):
+    def on_process_stop(self, process):
         self.__event_helper.fire_event(
-            ProcessMonitorListener.on_monitored_process_destroying, process)
+            ProcessMonitorListener.on_monitored_process_stopped, process)
 
-        process.remove_process_listener(self)
-        del self._processes[process.pid]
+    @override
+    def on_process_fail(self, process):
+        self.__event_helper.fire_event(
+            ProcessMonitorListener.on_monitored_process_failed, process)
+
     ############################################################################
 
     def _reset(self):

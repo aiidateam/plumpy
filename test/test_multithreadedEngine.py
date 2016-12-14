@@ -12,7 +12,12 @@ from plum.process_monitor import ProcessMonitorListener, MONITOR
 class TestMultithreadedEngine(TestCase):
     @override
     def setUp(self):
+        self.assertEqual(len(MONITOR.get_pids()), 0)
         self.engine = MultithreadedEngine()
+
+    @override
+    def tearDown(self):
+        self.assertEqual(len(MONITOR.get_pids()), 0)
 
     def test_run(self):
         proc = WaitForSignalProcess.new_instance()
@@ -20,30 +25,29 @@ class TestMultithreadedEngine(TestCase):
 
         t0 = time()
         while time() - t0 < 10.:
-            if proc.is_waiting():
+            if proc.state is ProcessState.WAITING:
                 break
-        self.assertEquals(proc.state, ProcessState.RUNNING)
 
         # Now it's waiting so signal that it can continue and wait for the
         # engine to make it happen
         proc.signal()
         t0 = time()
         while time() - t0 < 10.:
-            if proc.state is ProcessState.DESTROYED:
+            if proc.has_terminated():
                 break
-        self.assertEquals(proc.state, ProcessState.DESTROYED)
+        self.assertEquals(proc.state, ProcessState.STOPPED)
 
     def test_submit_simple(self):
         self.engine.submit(common.ProcessEventsTester).result()
         self._test_engine_events(
             common.ProcessEventsTester.called_events,
-            ['create', 'wait', 'continue', 'exception'])
+            ['create', 'wait', 'resume', 'exception'])
 
 
     def test_submit_with_checkpoint(self):
-        self.engine.submit(common.TwoCheckpointProcess).result()
+        self.engine.submit(common.TwoCheckpoint).result()
         self._test_engine_events(
-            common.TwoCheckpointProcess.called_events,
+            common.TwoCheckpoint.called_events,
             ['create', 'exception'])
 
 
@@ -52,16 +56,16 @@ class TestMultithreadedEngine(TestCase):
         self.assertIsInstance(e, BaseException)
         self._test_engine_events(
             common.ExceptionProcess.called_events,
-            ['finish', 'wait', 'continue', 'stop', 'destroy'])
+            ['finish', 'wait', 'resume', 'stop'])
 
 
     def test_submit_checkpoint_then_exception(self):
-        e = self.engine.submit(common.TwoCheckpointThenExceptionProcess). \
+        e = self.engine.submit(common.TwoCheckpointThenException). \
             exception()
         self.assertIsInstance(e, RuntimeError)
         self._test_engine_events(
-            common.TwoCheckpointThenExceptionProcess.called_events,
-            ['stop', 'finish', 'destroy'])
+            common.TwoCheckpointThenException.called_events,
+            ['stop', 'finish'])
 
     def test_exception_monitor_notification(self):
         """
@@ -72,28 +76,26 @@ class TestMultithreadedEngine(TestCase):
         class MonitorListener(ProcessMonitorListener):
             def __init__(self):
                 MONITOR.add_monitor_listener(self)
-                self.registered_called = False
+                self.created_called = False
                 self.failed_called = False
 
             @override
             def on_monitored_process_created(self, process):
-                self.registered_called = True
+                self.created_called = True
 
             @override
             def on_monitored_process_failed(self, pid):
                 self.failed_called = True
 
         l = MonitorListener()
-        self.engine.submit(common.TwoCheckpointThenExceptionProcess).exception()
-        self.assertTrue(l.registered_called)
+        self.engine.submit(common.TwoCheckpointThenException).exception()
+        self.assertTrue(l.created_called)
         self.assertTrue(l.failed_called)
-
 
     def test_future_ready(self):
         f = self.engine.submit(common.DummyProcess)
         f.result()
         self.assertTrue(f.done())
-
 
     # Not sure how to do this test because normally I expect the
     # KeyboardInterrupt exception on the main thread...
@@ -109,6 +111,7 @@ class TestMultithreadedEngine(TestCase):
         f = self.engine.start(dp)
         self.assertEqual(f.pid, dp.pid)
         f.process.abort()
+        f.result()
 
     def _test_engine_events(self, outs, exclude_events):
         """

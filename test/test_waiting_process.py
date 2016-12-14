@@ -4,12 +4,12 @@ import threading
 from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.process_monitor import MONITOR
-from plum.test_utils import TwoCheckpointProcess, \
+from plum.test_utils import TwoCheckpoint, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plum.test_utils import ProcessListenerTester, check_process_against_snapshots
 from plum.util import override
-from plum.test_utils import WaitSaver, ProcessWaitSaver
-from plum.wait_ons import wait_until_destroyed, wait_until_state
+from plum.test_utils import ProcessSaver
+from plum.wait_ons import wait_until_stopped, wait_until_state
 
 
 class TestWaitingProcess(TestCase):
@@ -22,8 +22,8 @@ class TestWaitingProcess(TestCase):
         self.proc.remove_process_listener(self.events_tester)
 
     def test_instance_state(self):
-        proc = TwoCheckpointProcess.new_instance()
-        wl = WaitSaver(proc)
+        proc = TwoCheckpoint.new_instance()
+        wl = ProcessSaver(proc)
         proc.start()
 
         for snapshot, outputs in zip(wl.snapshots, wl.outputs):
@@ -34,7 +34,7 @@ class TestWaitingProcess(TestCase):
     def test_saving_each_step(self):
         for ProcClass in TEST_WAITING_PROCESSES:
             proc = ProcClass.new_instance()
-            saver = ProcessWaitSaver(proc)
+            saver = ProcessSaver(proc)
             try:
                 proc.start()
             except BaseException:
@@ -49,16 +49,16 @@ class TestWaitingProcess(TestCase):
         # Start the process
         t.start()
 
-        # Wait until it is running
-        wait_until_state(p, ProcessState.RUNNING)
-        self.assertEqual(p.state, ProcessState.RUNNING)
+        # Wait until it is waiting
+        wait_until_state(p, ProcessState.WAITING)
+        self.assertEqual(p.state, ProcessState.WAITING)
 
         # Abort it
-        self.assertTrue(p.abort())
+        p.abort()
 
         # Wait until it's completely finished
-        wait_until_destroyed(p)
-        self.assertEqual(p.state, ProcessState.DESTROYED)
+        wait_until_stopped(p)
+        self.assertEqual(p.state, ProcessState.STOPPED)
         self.assertTrue(p.aborted)
 
         t.join()

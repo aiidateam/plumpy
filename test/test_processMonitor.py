@@ -6,7 +6,7 @@ from plum.process import ProcessState
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.util import override
 from plum.test_utils import DummyProcess, ExceptionProcess, WaitForSignalProcess
-from plum.wait_ons import wait_until_destroyed, WaitOnState
+from plum.wait_ons import wait_until_stopped, WaitOnState
 
 
 class EventTracker(ProcessMonitorListener):
@@ -14,15 +14,15 @@ class EventTracker(ProcessMonitorListener):
         MONITOR.add_monitor_listener(self)
         self.created_called = False
         self.failed_called = False
-        self.destroyed_called = False
+        self.stopped_called = False
 
     @override
     def on_monitored_process_created(self, process):
         self.created_called = True
 
     @override
-    def on_monitored_process_destroying(self, process):
-        self.destroyed_called = True
+    def on_monitored_process_stopped(self, process):
+        self.stopped_called = True
 
     @override
     def on_monitored_process_failed(self, pid):
@@ -31,7 +31,7 @@ class EventTracker(ProcessMonitorListener):
     def reset(self):
         self.created_called = False
         self.failed_called = False
-        self.destroyed_called = False
+        self.stopped_called = False
 
 
 class TestProcessMonitor(TestCase):
@@ -41,17 +41,17 @@ class TestProcessMonitor(TestCase):
     def tearDown(self):
         self.assertEqual(len(MONITOR.get_pids()), 0)
 
-    def test_create_destroy(self):
+    def test_create_stop(self):
         l = EventTracker()
 
         self.assertFalse(l.created_called)
-        self.assertFalse(l.destroyed_called)
+        self.assertFalse(l.stopped_called)
         self.assertFalse(l.failed_called)
 
         DummyProcess.run()
 
         self.assertTrue(l.created_called)
-        self.assertTrue(l.destroyed_called)
+        self.assertTrue(l.stopped_called)
         self.assertFalse(l.failed_called)
 
         del l
@@ -60,44 +60,18 @@ class TestProcessMonitor(TestCase):
         l = EventTracker()
 
         self.assertFalse(l.created_called)
-        self.assertFalse(l.destroyed_called)
+        self.assertFalse(l.stopped_called)
         self.assertFalse(l.failed_called)
 
         try:
             ExceptionProcess.run()
-        except:
+        except RuntimeError:
             pass
+        except BaseException as e:
+            print(e.message)
 
         self.assertTrue(l.created_called)
-        self.assertFalse(l.destroyed_called)
+        self.assertFalse(l.stopped_called)
         self.assertTrue(l.failed_called)
 
         del l
-
-    # def test_run_through(self):
-    #     p = WaitForSignalProcess.new_instance()
-    #     pid = p.pid
-    #
-    #     # Start the process
-    #     t = threading.Thread(target=p.start)
-    #     t.start()
-    #
-    #     # Wait until it is running
-    #     WaitOnState(p, ProcessState.RUNNING).wait()
-    #
-    #     # Check that the process monitor knows about it
-    #     self.assertIsNotNone(MONITOR.get_process(pid))
-    #     self.assertEqual(pid, MONITOR.get_pids()[0])
-    #
-    #     # Tell the process to continue
-    #     p.signal()
-    #     wait_until_destroyed(p)
-    #     self.assertEqual(p.state, ProcessState.DESTROYED)
-    #
-    #     t.join()
-    #
-    #     # Check that the process monitor knows it's done
-    #     with self.assertRaises(ValueError):
-    #         MONITOR.get_process(pid)
-    #     self.assertEqual(len(MONITOR.get_pids()), 0)
-

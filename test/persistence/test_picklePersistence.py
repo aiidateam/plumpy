@@ -1,10 +1,8 @@
 
 from unittest import TestCase
-from plum.process import ProcessState
 from plum.persistence.pickle_persistence import PicklePersistence
-from plum.persistence.bundle import Bundle
 from plum.process_monitor import MONITOR
-from plum.test_utils import ProcessWithCheckpoint, TEST_PROCESSES, WaitForSignalProcess
+from plum.test_utils import ProcessWithCheckpoint, WaitForSignalProcess
 import os.path
 import threading
 
@@ -79,25 +77,6 @@ class TestPicklePersistence(TestCase):
         running_path = self.pickle_persistence.get_running_path(proc.pid)
         self.pickle_persistence.save(proc)
         self.assertTrue(os.path.isfile(running_path))
-
-    def test_save_and_load(self):
-        for ProcClass in TEST_PROCESSES:
-            proc = ProcClass.new_instance()
-            while proc.state is not ProcessState.DESTROYED:
-                # Create a bundle manually
-                b = Bundle()
-                proc.save_instance_state(b)
-
-                self.pickle_persistence.save(proc)
-                b2 = self.pickle_persistence.load_checkpoint(proc.pid)
-
-                self.assertEqual(b, b2, "Bundle not the same after loading from pickle")
-
-                # The process may crash, so catch it here
-                try:
-                    proc.tick()
-                except BaseException:
-                    break
 
     def _empty_directory(self):
         import shutil

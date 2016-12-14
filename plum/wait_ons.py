@@ -110,18 +110,13 @@ class WaitOnState(WaitOn, ProcessListener):
     WAIT_ON_STATE = 'state'
 
     @override
-    def on_process_start(self, proc):
-        if self._state is ProcessState.STARTED:
-            self._signal_done(proc)
-
-    @override
     def on_process_run(self, proc):
         if self._state is ProcessState.RUNNING:
             self._signal_done(proc)
 
     @override
-    def on_process_finish(self, proc):
-        if self._state is ProcessState.FINISHED:
+    def on_process_wait(self, proc):
+        if self._state is ProcessState.WAITING:
             self._signal_done(proc)
 
     @override
@@ -130,8 +125,8 @@ class WaitOnState(WaitOn, ProcessListener):
             self._signal_done(proc)
 
     @override
-    def on_process_destroy(self, proc):
-        if self._state is ProcessState.DESTROYED:
+    def on_process_fail(self, proc):
+        if self._state is ProcessState.FAILED:
             self._signal_done(proc)
 
     @override
@@ -192,7 +187,7 @@ def wait_until_state(p, state, timeout=None):
 class WaitOnProcess(WaitOnState):
     @override
     def init(self, proc):
-        super(WaitOnProcess, self).init(proc, ProcessState.DESTROYED)
+        super(WaitOnProcess, self).init(proc, ProcessState.STOPPED)
 
 
 class WaitOnProcessOutput(WaitOn, ProcessListener):
@@ -235,5 +230,5 @@ class WaitOnProcessOutput(WaitOn, ProcessListener):
             proc.add_process_listener(self)
 
 
-def wait_until_destroyed(proc, timeout=None):
+def wait_until_stopped(proc, timeout=None):
     WaitOnProcess(proc).wait(timeout)

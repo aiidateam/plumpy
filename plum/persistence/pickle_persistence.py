@@ -168,7 +168,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
                          "during on_run message.".format(process.pid))
 
     @override
-    def on_process_wait(self, process, wait_on):
+    def on_process_wait(self, process):
         try:
             self.save(process)
         except pickle.PicklingError:
