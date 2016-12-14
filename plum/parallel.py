@@ -1,15 +1,14 @@
 import multiprocessing
 
 import concurrent.futures
-import plum.engine.execution_engine as execution_engine
 from plum.process import Process
 from plum.process_monitor import ProcessMonitorListener
 from concurrent.futures import ThreadPoolExecutor
 from plum.util import override
 
 
-class MultithreadedEngine(execution_engine.ExecutionEngine, ProcessMonitorListener):
-    class Future(concurrent.futures.Future, execution_engine.Future):
+class MultithreadedEngine(ProcessMonitorListener):
+    class Future(concurrent.futures.Future):
         def __init__(self, process, future):
             self._process = process
             self._future = future
@@ -21,14 +20,6 @@ class MultithreadedEngine(execution_engine.ExecutionEngine, ProcessMonitorListen
         @property
         def process(self):
             return self._process
-
-        @override
-        def cancel(self):
-            return self._future.cancel()
-
-        @override
-        def cancelled(self):
-            return self._future.cancelled()
 
         @override
         def running(self):
@@ -56,24 +47,31 @@ class MultithreadedEngine(execution_engine.ExecutionEngine, ProcessMonitorListen
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._processes = {}
 
-    @override
-    def run(self, process):
-        f = self._executor.submit(Process.run_until_complete, process)
+    def submit(self, ProcClass, inputs=None):
+        return self.start(ProcClass.new_instance(inputs))
+
+    def start(self, process):
+        """
+        Start running a process instance in a new thread.
+
+        :param process: The process instance to start
+        :return: A future repersenting the execution of the process
+        :rtype: :class:`MultithreadedEngine.Future`
+        """
+        f = self._executor.submit(Process.start, process)
         self._processes[process.pid] = f
         return self.Future(process, f)
 
-    @override
-    def stop(self, pid):
-        self._processes[pid].process.stop()
+    def abort(self, pid):
+        self._processes[pid].process.abort()
 
-    @override
     def shutdown(self):
         for pid in self._processes:
-            self.stop(pid)
+            self.abort(pid)
 
     # From ProcessMonitorListener #############################################
     @override
-    def on_monitored_process_destroying(self, process):
+    def on_monitored_process_stopped(self, process):
         if process.pid in self._processes:
             del self._processes[process.pid]
 
@@ -81,4 +79,4 @@ class MultithreadedEngine(execution_engine.ExecutionEngine, ProcessMonitorListen
     def on_monitored_process_failed(self, pid):
         if pid in self._processes:
             del self._processes[pid]
-            ###########################################################################
+    ###########################################################################
