@@ -1,4 +1,3 @@
-
 import collections
 import copy
 import functools
@@ -12,8 +11,7 @@ class Bundle(collections.MutableMapping):
     # Some common keys
     CLASS = 'class'
 
-
-    def __init__(self, *args, ** kwargs):
+    def __init__(self, *args, **kwargs):
         self.__dict = dict(*args, **kwargs)
         self.__hash = None
         self._class_loader = ClassLoader()
@@ -29,6 +27,18 @@ class Bundle(collections.MutableMapping):
 
     def get_dict_deepcopy(self):
         return copy.deepcopy(self.__dict)
+
+    def set_if_not_none(self, key, value):
+        """
+        Set a key to a value in this bundle if the value is not None, otherwise
+        do nothing.
+
+        :param key: The key
+        :type key: str
+        :param value: The value to set
+        """
+        if value is not None:
+            self[key] = value
 
     # From MutableMapping
     @override

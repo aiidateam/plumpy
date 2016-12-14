@@ -59,8 +59,8 @@ class Process(object):
     ::
 
     When a Process enters a state is always gets a corresponding message, e.g.
-    on entering FINISHED it will receive the on_finish message.  These are
-    always called immediately before that state is entered.
+    on entering RUNNING it will receive the on_run message.  These are
+    always called immediately after that state is entered.
 
     """
     __metaclass__ = ABCMeta
@@ -83,6 +83,7 @@ class Process(object):
         STATE = 'state'
         FINISHED = 'finished'
         ABORTED = 'aborted'
+        ABORT_MSG = 'abort_msg'
         EXCEPTION = 'exception'
         NEXT_TRANSITION = 'next_transition'
 
@@ -213,6 +214,7 @@ class Process(object):
         self._exception = None
         self._wait = None
         self._next_transition = None
+        self._abort_msg = None
 
         # Input/output
         self._raw_inputs = None
@@ -328,14 +330,15 @@ class Process(object):
         bundle[self.BundleKeys.PID.value] = self.pid
         bundle[self.BundleKeys.FINISHED.value] = self._finished
         bundle[self.BundleKeys.ABORTED.value] = self._aborted
-        bundle[self.BundleKeys.EXCEPTION.value] = self._exception
+        bundle.set_if_not_none(self.BundleKeys.EXCEPTION.value, self._exception)
         if self._next_transition is not None:
             bundle[self.BundleKeys.NEXT_TRANSITION.value] = \
                 self._next_transition.__name__
 
+        bundle.set_if_not_none(self.BundleKeys.ABORT_MSG.value, self._abort_msg)
+
         # Save inputs and outputs
-        if self.raw_inputs is not None:
-            bundle[self.BundleKeys.INPUTS.value] = Bundle(self.raw_inputs)
+        bundle.set_if_not_none(self.BundleKeys.INPUTS.value, self.raw_inputs)
         bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
 
         if self._wait is not None:
@@ -375,9 +378,17 @@ class Process(object):
         self._interrupt()
         self._pausing = True
 
-    def abort(self):
+    def abort(self, msg=None):
+        """
+        Abort an executing process.  Can optionally provide a message with
+        the abort.
+
+        :param msg: The abort message
+        :type msg: str
+        """
         self._interrupt()
         self._aborting = True
+        self._abort_msg = msg
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -564,10 +575,20 @@ class Process(object):
         self._state = bundle[self.BundleKeys.STATE.value]
         self._finished = bundle[self.BundleKeys.FINISHED.value]
         self._aborted = bundle[self.BundleKeys.ABORTED.value]
-        self._exception = bundle[self.BundleKeys.EXCEPTION.value]
+
+        try:
+            self._exception = bundle[self.BundleKeys.EXCEPTION.value]
+        except KeyError:
+            pass
+
         try:
             self._next_transition = self.__getattribute__(
                 bundle[self.BundleKeys.NEXT_TRANSITION.value])
+        except KeyError:
+            pass
+
+        try:
+            self._abort_msg = bundle[self.BundleKeys.ABORT_MSG.value]
         except KeyError:
             pass
 
