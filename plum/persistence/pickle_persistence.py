@@ -199,7 +199,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
     ############################################################################
 
     @override
-    def on_monitored_process_created(self, process):
+    def on_monitored_process_registered(self, process):
         if self._auto_persist:
             self.persist_process(process)
 

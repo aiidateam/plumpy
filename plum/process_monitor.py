@@ -11,7 +11,10 @@ class ProcessMonitorListener(object):
     """
     __metaclass__ = ABCMeta
 
-    def on_monitored_process_created(self, process):
+    def on_monitored_process_registered(self, process):
+        pass
+
+    def on_monitored_process_finish(self, process):
         pass
 
     def on_monitored_process_stopped(self, process):
@@ -69,7 +72,7 @@ class ProcessMonitor(ProcessListener):
         self._processes[process.pid] = process
         process.add_process_listener(self)
         self.__event_helper.fire_event(
-            ProcessMonitorListener.on_monitored_process_created, process)
+            ProcessMonitorListener.on_monitored_process_registered, process)
 
     def deregister_process(self, process):
         process.remove_process_listener(self)
@@ -83,6 +86,11 @@ class ProcessMonitor(ProcessListener):
 
     # From ProcessListener #####################################################
     @override
+    def on_process_finish(self, process):
+        self.__event_helper.fire_event(
+            ProcessMonitorListener.on_monitored_process_finish, process)
+
+    @override
     def on_process_stop(self, process):
         self.__event_helper.fire_event(
             ProcessMonitorListener.on_monitored_process_stopped, process)
@@ -91,7 +99,6 @@ class ProcessMonitor(ProcessListener):
     def on_process_fail(self, process):
         self.__event_helper.fire_event(
             ProcessMonitorListener.on_monitored_process_failed, process)
-
     ############################################################################
 
     def _reset(self):

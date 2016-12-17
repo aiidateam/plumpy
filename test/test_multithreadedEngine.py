@@ -80,7 +80,7 @@ class TestMultithreadedEngine(TestCase):
                 self.failed_called = False
 
             @override
-            def on_monitored_process_created(self, process):
+            def on_monitored_process_registered(self, process):
                 self.created_called = True
 
             @override
