@@ -6,7 +6,20 @@ from plum.util import fullname, protected
 from plum.persistence.bundle import Bundle
 
 
+class Interrupted(Exception):
+    pass
+
+
 class WaitOn(object):
+    """
+    An object that represents something that is being waited on.
+
+    .. warning:: This object has the following behaviour if used by multiple
+        threads.  If two threads call wait() and then a call to interrupt() is
+        received then they are both interrupted.  If this is not the desired
+        behaviour (i.e. interruption being per thread) then make a copy in each
+        thread.
+    """
     __metaclass__ = ABCMeta
 
     CLASS_NAME = "class_name"
@@ -23,9 +36,11 @@ class WaitOn(object):
         return WaitOnClass(bundle)
 
     def __init__(self, *args, **kwargs):
-        self._done = threading.Event()
         self._outcome = None
-        self._done_callbacks = list()
+
+        # Variables below this don't need to be saved in the instance state
+        self._done = threading.Event()
+        self._interrupted = False
 
         if self._is_saved_state(args):
             self.load_instance_state(args[0])
@@ -52,20 +67,36 @@ class WaitOn(object):
         """
         return self._outcome
 
-    def add_done_callback(self, fn):
-        self._done_callbacks.append(fn)
-        if self.is_done():
-            fn(self)
-
-    def remove_done_callback(self, fn):
-        del self._done_callbacks[fn]
-
     def save_instance_state(self, out_state):
         out_state[self.CLASS_NAME] = fullname(self)
         out_state[self.OUTCOME] = self._outcome
 
     def wait(self, timeout=None):
-        self._done.wait(timeout)
+        """
+        Block until this wait on to completes.  If a timeout is supplied it is
+        interpreted to be a float in second (or fractions thereof).  If the
+        timeout is reached without the wait on being done this method will
+        return False.
+
+        :param timeout: An optional timeout after which this method will
+            return with the value False.
+        :type timeout: float
+        :raise: :class:`Interrupted` if :func:`interrupt` is called before the
+            wait on is done
+        :return: True if the wait on has completed, False otherwise.
+        """
+        # The threading Event returns False if it timed out
+        if not self._done.wait(timeout):
+            return False
+        if self._interrupted:
+            self._interrupted = False
+            raise Interrupted()
+
+        return True
+
+    def interrupt(self):
+        threading.local()._interrupted = True
+        self._done.set()
 
     @protected
     def init(self, *args, **kwargs):
@@ -93,5 +124,3 @@ class WaitOn(object):
 
         self._outcome = success, msg
         self._done.set()
-        for fn in self._done_callbacks:
-            fn(self)

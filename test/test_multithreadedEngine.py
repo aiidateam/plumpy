@@ -1,4 +1,3 @@
-from time import time
 from unittest import TestCase
 
 from plum.parallel import MultithreadedEngine
@@ -7,6 +6,7 @@ from plum.test_utils import WaitForSignalProcess
 from plum.util import override
 import plum.test_utils as common
 from plum.process_monitor import ProcessMonitorListener, MONITOR
+from plum.wait_ons import wait_until, wait_until_stopped
 
 
 class TestMultithreadedEngine(TestCase):
@@ -23,18 +23,12 @@ class TestMultithreadedEngine(TestCase):
         proc = WaitForSignalProcess.new_instance()
         fut = self.engine.start(proc)
 
-        t0 = time()
-        while time() - t0 < 10.:
-            if proc.state is ProcessState.WAITING:
-                break
+        wait_until(proc, ProcessState.WAITING, 1)
 
         # Now it's waiting so signal that it can continue and wait for the
         # engine to make it happen
         proc.signal()
-        t0 = time()
-        while time() - t0 < 10.:
-            if proc.has_terminated():
-                break
+        wait_until_stopped(proc, 1)
         self.assertEquals(proc.state, ProcessState.STOPPED)
 
     def test_submit_simple(self):

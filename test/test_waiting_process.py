@@ -9,7 +9,7 @@ from plum.test_utils import TwoCheckpoint, \
 from plum.test_utils import ProcessListenerTester, check_process_against_snapshots
 from plum.util import override
 from plum.test_utils import ProcessSaver
-from plum.wait_ons import wait_until_stopped, wait_until_state
+from plum.wait_ons import wait_until_stopped, wait_until
 
 
 class TestWaitingProcess(TestCase):
@@ -50,7 +50,7 @@ class TestWaitingProcess(TestCase):
         t.start()
 
         # Wait until it is waiting
-        wait_until_state(p, ProcessState.WAITING)
+        wait_until(p, ProcessState.WAITING)
         self.assertEqual(p.state, ProcessState.WAITING)
 
         # Abort it

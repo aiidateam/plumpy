@@ -3,11 +3,11 @@
 import uuid
 from enum import Enum
 from abc import ABCMeta, abstractmethod
-import threading
 from collections import namedtuple
 
 import plum.knowledge_provider as knowledge_provider
 import plum.error as error
+from plum.wait import Interrupted
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
@@ -224,8 +224,6 @@ class Process(object):
         # Stuff below here doesn't need to be saved in the instance state
         self._pausing = False
         self._aborting = False
-        self._wait_on_ready = False
-        self._waiter = threading.Event()
         self._executing = False
 
         # Events and running
@@ -748,13 +746,13 @@ class Process(object):
             self._state = ProcessState.WAITING
             self._call_with_super_check(self.on_wait)
 
-        self._waiter.wait()
-        if self._wait_on_ready:
+        try:
+            self._wait.on.wait()
             if self._wait.callback is None:
                 self._next_transition = self._perform_finish
             else:
                 self._next_transition = self._perform_resume
-        else:
+        except Interrupted:
             self._next_transition = self._perform_wait
 
     def _perform_resume(self):
@@ -832,16 +830,10 @@ class Process(object):
 
     def _set_wait(self, wait_on, callback):
         self._wait = Wait(wait_on, callback)
-        self._waiter.clear()
-        self.get_waiting_on().add_done_callback(self._done_waiting)
-
-    def _done_waiting(self, wait_on):
-        self._wait_on_ready = True
-        self._waiter.set()
 
     def _interrupt(self):
         try:
-            self._waiter.set()
+            self._wait.on.interrupt()
         except AttributeError:
             pass
 

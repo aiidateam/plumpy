@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta, abstractmethod
-import plum.knowledge_provider as process_database
+import time
 from plum.persistence.bundle import Bundle
 from plum.wait import WaitOn
 from plum.util import override
@@ -54,55 +54,47 @@ class WaitOnAll(_CompoundWaitOn):
     @override
     def init(self, wait_list):
         super(WaitOnAll, self).init(wait_list)
-        self._set_up()
 
     @override
     def load_instance_state(self, bundle):
         super(WaitOnAll, self).load_instance_state(bundle)
-        self._set_up()
 
-    def _set_up(self):
-        self._num_done = 0
-        if not self.is_done():
-            for w in self._wait_list:
-                if not w.is_done():
-                    w.add_done_callback(self._child_wait_done)
-                else:
-                    self._child_wait_done(w)
+    @override
+    def wait(self, timeout=None):
+        t0 = time.time()
+        for w in self._wait_list:
+            if not w.wait(time.time() - t0 - timeout
+                          if timeout is not None else None):
+                # We timedout
+                return False
 
-    def _child_wait_done(self, wait_on):
-        self._num_done += 1
-        success, msg = wait_on.get_outcome()
-
-        # If one fails then so does this wait on
-        if not success:
-            self.done(False, msg)
-        elif self._num_done == len(self._wait_list):
-            self.done(True)
+        self.done(True)
+        return True
 
 
 class WaitOnAny(_CompoundWaitOn):
     @override
     def init(self, wait_list):
         super(WaitOnAny, self).init(wait_list)
-        self._set_up()
 
     @override
     def load_instance_state(self, bundle):
         super(WaitOnAny, self).load_instance_state(bundle)
-        self._set_up()
 
-    def _set_up(self):
-        if not self.is_done():
-            if any(w.is_done() for w in self._wait_list):
-                self.done(True)
-            else:
-                for w in self._wait_list:
-                    w.add_done_callback(self._child_wait_done)
+    @override
+    def wait(self, timeout=None):
+        t0 = time.time()
+        while not self.is_done():
+            if time.time() - t0 >= timeout:
+                return False
 
-    def _child_wait_done(self, wait_on):
-        success, msg = wait_on.get_outcome()
-        self.done(success, msg)
+            # Check if anyone is finished
+            for w in self._wait_list:
+                if w.wait(0):
+                    self.done(True)
+                    break
+
+        return True
 
 
 class WaitOnState(WaitOn, ProcessListener):
@@ -180,7 +172,15 @@ class WaitOnState(WaitOn, ProcessListener):
             pass
 
 
-def wait_until_state(p, state, timeout=None):
+def wait_until(p, state, timeout=None):
+    """
+    Wait until a process reaches a certain staet.
+
+    :param proc: The process to wait for
+    :type proc: :class:`plum.process.Process`
+    :param state: The state to wait for
+    :param timeout: The optional timeout
+    """
     WaitOnState(p, state).wait(timeout)
 
 
@@ -232,3 +232,4 @@ class WaitOnProcessOutput(WaitOn, ProcessListener):
 
 def wait_until_stopped(proc, timeout=None):
     WaitOnProcess(proc).wait(timeout)
+
