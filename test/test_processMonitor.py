@@ -11,13 +11,12 @@ from plum.wait_ons import wait_until_stopped, WaitOnState
 
 class EventTracker(ProcessMonitorListener):
     def __init__(self):
-        MONITOR.add_monitor_listener(self)
         self.created_called = False
         self.failed_called = False
         self.stopped_called = False
 
     @override
-    def on_monitored_process_created(self, process):
+    def on_monitored_process_registered(self, process):
         self.created_called = True
 
     @override
@@ -43,35 +42,33 @@ class TestProcessMonitor(TestCase):
 
     def test_create_stop(self):
         l = EventTracker()
+        with MONITOR.listen(l):
+            self.assertFalse(l.created_called)
+            self.assertFalse(l.stopped_called)
+            self.assertFalse(l.failed_called)
 
-        self.assertFalse(l.created_called)
-        self.assertFalse(l.stopped_called)
-        self.assertFalse(l.failed_called)
+            DummyProcess.run()
 
-        DummyProcess.run()
+            self.assertTrue(l.created_called)
+            self.assertTrue(l.stopped_called)
+            self.assertFalse(l.failed_called)
 
-        self.assertTrue(l.created_called)
-        self.assertTrue(l.stopped_called)
-        self.assertFalse(l.failed_called)
-
-        del l
 
     def test_create_fail(self):
         l = EventTracker()
+        with MONITOR.listen(l):
+            self.assertFalse(l.created_called)
+            self.assertFalse(l.stopped_called)
+            self.assertFalse(l.failed_called)
 
-        self.assertFalse(l.created_called)
-        self.assertFalse(l.stopped_called)
-        self.assertFalse(l.failed_called)
+            try:
+                ExceptionProcess.run()
+            except RuntimeError:
+                pass
+            except BaseException as e:
+                print(e.message)
 
-        try:
-            ExceptionProcess.run()
-        except RuntimeError:
-            pass
-        except BaseException as e:
-            print(e.message)
+            self.assertTrue(l.created_called)
+            self.assertFalse(l.stopped_called)
+            self.assertTrue(l.failed_called)
 
-        self.assertTrue(l.created_called)
-        self.assertFalse(l.stopped_called)
-        self.assertTrue(l.failed_called)
-
-        del l

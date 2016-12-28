@@ -3,11 +3,11 @@
 import uuid
 from enum import Enum
 from abc import ABCMeta, abstractmethod
-import threading
 from collections import namedtuple
 
 import plum.knowledge_provider as knowledge_provider
 import plum.error as error
+from plum.wait import Interrupted
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
@@ -210,10 +210,11 @@ class Process(object):
         self._pid = None
         self._state = None
         self._finished = False
-        self._aborted = False
         self._exception = None
         self._wait = None
         self._next_transition = None
+
+        self._aborted = False
         self._abort_msg = None
 
         # Input/output
@@ -224,8 +225,6 @@ class Process(object):
         # Stuff below here doesn't need to be saved in the instance state
         self._pausing = False
         self._aborting = False
-        self._wait_on_ready = False
-        self._waiter = threading.Event()
         self._executing = False
 
         # Events and running
@@ -324,6 +323,9 @@ class Process(object):
         except AttributeError:
             return None
 
+    def get_exception(self):
+        return self._exception
+
     def save_instance_state(self, bundle):
         bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
         bundle[self.BundleKeys.STATE.value] = self.state
@@ -352,13 +354,12 @@ class Process(object):
         """
         Start running the process.
         """
-        assert not self._executing
+        assert not self._executing, \
+            "Cannot execute a process twice simultaneously"
 
         try:
             MONITOR.register_process(self)
-            self._executing = True
-            self._pausing = False
-            self._aborting = False
+            self._call_with_super_check(self.on_executing)
 
             # Keep going until we run out of tasks
             fn = self._next()
@@ -371,8 +372,10 @@ class Process(object):
                     raise
                 fn = self._next()
         finally:
-            self._executing = False
             MONITOR.deregister_process(self)
+            self._call_with_super_check(self.on_done_executing)
+
+        return self._outputs
 
     def pause(self):
         self._interrupt()
@@ -402,8 +405,21 @@ class Process(object):
         self._logger = logger
 
     # Process messages #####################################################
-    # These should only be called by an execution engine (or tests)
     # Make sure to call the superclass method if your override any of these
+    @protected
+    def on_executing(self):
+        self._executing = True
+        self._pausing = False
+        self._aborting = False
+
+        self._called = True
+
+    @protected
+    def on_done_executing(self):
+        self._executing = False
+
+        self._called = True
+
     @protected
     def on_create(self, pid, inputs, saved_instance_state):
         """
@@ -671,9 +687,6 @@ class Process(object):
         :return: A callable that only takes the self process as argument.
           May be None if the process should not continue.
         """
-        # Use this while figuring out which state to go to next.  Methods
-        # from other threads can also use this lock if they want to make sure
-        # no state related changes will be made as they executed
         if self.has_terminated():
             return None
         elif self._pausing:
@@ -694,12 +707,7 @@ class Process(object):
         :type saved_instance_state: `class`:plum.persistence.bundle.Bundle`
         """
         self._state = ProcessState.CREATED
-        self._called = False
-        self.on_create(pid, inputs, saved_instance_state)
-        assert self._called, \
-            "on_create was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
-
+        self._call_with_super_check(self.on_create, pid, inputs, saved_instance_state)
         self._next_transition = self._perform_start
 
     def _perform_start(self):
@@ -711,12 +719,7 @@ class Process(object):
         """
         assert self.state is ProcessState.CREATED
 
-        self._called = False
-        self.on_start()
-        assert self._called, \
-            "on_run was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
-
+        self._call_with_super_check(self.on_start)
         self._to_running()
 
         # Run the thing
@@ -740,19 +743,15 @@ class Process(object):
             assert self.state is ProcessState.RUNNING
 
             self._state = ProcessState.WAITING
-            self._called = False
-            self.on_wait()
-            assert self._called, \
-                "on_wait was not called\n" \
-                "Hint: Did you forget to call the superclass method?"
+            self._call_with_super_check(self.on_wait)
 
-        self._waiter.wait()
-        if self._wait_on_ready:
+        try:
+            self._wait.on.wait()
             if self._wait.callback is None:
                 self._next_transition = self._perform_finish
             else:
                 self._next_transition = self._perform_resume
-        else:
+        except Interrupted:
             self._next_transition = self._perform_wait
 
     def _perform_resume(self):
@@ -763,11 +762,7 @@ class Process(object):
         """
         assert self.state is ProcessState.WAITING
 
-        self._called = False
-        self.on_resume()
-        assert self._called, \
-            "on_run was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
+        self._call_with_super_check(self.on_resume)
 
         w = self._wait
         self._wait = None
@@ -789,12 +784,7 @@ class Process(object):
         """
         assert self.state is ProcessState.RUNNING
 
-        self._called = False
-        self.on_finish()
-        assert self._called, \
-            "on_finish was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
-
+        self._call_with_super_check(self.on_finish)
         self._to_stopped()
 
     def _perform_abort(self):
@@ -802,11 +792,7 @@ class Process(object):
         Messages issued:
          - on_abort
         """
-        self._called = False
-        self.on_abort()
-        assert self._called, \
-            "on_abort was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
+        self._call_with_super_check(self.on_abort)
 
         self._to_stopped()
         self._aborting = False
@@ -824,9 +810,10 @@ class Process(object):
             self._called = False
             self.on_fail()
         except BaseException as e:
-            # TODO: Log here that there was an exception raised while informing
-            # the process that it had failed
-            pass
+            self._logger.warn(
+                "There was an exception raised when calling on_fail "
+                "to inform the process that an exception had been "
+                "raised during execution.  Msg: {}".format(e.message))
         else:
             assert self._called, \
                 "on_fail was not called\n" \
@@ -834,34 +821,27 @@ class Process(object):
 
     def _to_running(self):
         self._state = ProcessState.RUNNING
-        self._called = False
-        self.on_run()
-        assert self._called, \
-            "on_run was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
+        self._call_with_super_check(self.on_run)
 
     def _to_stopped(self):
         self._state = ProcessState.STOPPED
-        self._called = False
-        self.on_stop()
-        assert self._called, \
-            "on_stop was not called\n" \
-            "Hint: Did you forget to call the superclass method?"
+        self._call_with_super_check(self.on_stop)
 
     def _set_wait(self, wait_on, callback):
         self._wait = Wait(wait_on, callback)
-        self._waiter.clear()
-        self.get_waiting_on().add_done_callback(self._done_waiting)
-
-    def _done_waiting(self, wait_on):
-        self._wait_on_ready = True
-        self._waiter.set()
 
     def _interrupt(self):
         try:
-            self._waiter.set()
+            self._wait.on.interrupt()
         except AttributeError:
             pass
+
+    def _call_with_super_check(self, fn, *args, **kwargs):
+        self._called = False
+        fn(*args, **kwargs)
+        assert self._called, \
+            "{} was not called\n" \
+            "Hint: Did you forget to call the superclass method?".format(fn.__name__)
 
     ###########################################################################
 
@@ -871,9 +851,6 @@ class Process(object):
         if not valid:
             raise ValueError(msg)
 
-    ###########################################################################
-
-    # Outputs #################################################################
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
         for name, port in self.spec().outputs.iteritems():
@@ -881,8 +858,6 @@ class Process(object):
             if not valid:
                 raise RuntimeError("Process {} failed because {}".
                                    format(self.get_name(), msg))
-
-    ############################################################################
 
     @abstractmethod
     def _run(self, **kwargs):

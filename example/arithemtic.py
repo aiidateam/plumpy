@@ -1,4 +1,3 @@
-from plum.parallel import MultithreadedEngine
 from plum.process import Process, FunctionProcess
 from plum.workflow import Workflow
 
@@ -45,6 +44,8 @@ class TestDynamicOutput(Workflow):
 class Add(Process):
     @classmethod
     def define(cls, spec):
+        super(Add, cls).define(spec)
+
         spec.input('a', default=0)
         spec.input('b', default=0)
         spec.output('value')
@@ -56,6 +57,8 @@ class Add(Process):
 class Mul(Process):
     @classmethod
     def define(cls, spec):
+        super(Add, cls).define(spec)
+
         spec.input('a', default=1)
         spec.input('b', default=1)
         spec.output('value')
@@ -67,6 +70,8 @@ class Mul(Process):
 class MulAdd(Workflow):
     @classmethod
     def define(cls, spec):
+        super(MulAdd, cls).define(spec)
+
         spec.process(Mul)
         spec.process(Add)
         spec.exposed_inputs("Add")
@@ -100,12 +105,5 @@ if __name__ == '__main__':
     print(mul_add.run_and_block({'a': 2, 'b': 3, 'c': 4}))
 
     mul_add(a=2, b=3, c=4)
-
-    exec_engine = MultithreadedEngine()
-    exec_engine.submit(mul_add, {'a': 2, 'b': 3, 'c': 4})
-
-    future = exec_engine.submit(mul_add, {'a': 2, 'b': 3, 'c': 4})
-    print(future.result())
-
-    TestDynamicOutput.new_instance().run_until_complete()
+    TestDynamicOutput.new_instance().start()
 
