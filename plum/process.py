@@ -210,10 +210,11 @@ class Process(object):
         self._pid = None
         self._state = None
         self._finished = False
-        self._aborted = False
         self._exception = None
         self._wait = None
         self._next_transition = None
+
+        self._aborted = False
         self._abort_msg = None
 
         # Input/output
@@ -353,7 +354,8 @@ class Process(object):
         """
         Start running the process.
         """
-        assert not self._executing
+        assert not self._executing, \
+            "Cannot execute a process twice simultaneously"
 
         try:
             MONITOR.register_process(self)
@@ -685,9 +687,6 @@ class Process(object):
         :return: A callable that only takes the self process as argument.
           May be None if the process should not continue.
         """
-        # Use this while figuring out which state to go to next.  Methods
-        # from other threads can also use this lock if they want to make sure
-        # no state related changes will be made as they executed
         if self.has_terminated():
             return None
         elif self._pausing:
@@ -852,9 +851,6 @@ class Process(object):
         if not valid:
             raise ValueError(msg)
 
-    ###########################################################################
-
-    # Outputs #################################################################
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
         for name, port in self.spec().outputs.iteritems():
@@ -862,8 +858,6 @@ class Process(object):
             if not valid:
                 raise RuntimeError("Process {} failed because {}".
                                    format(self.get_name(), msg))
-
-    ############################################################################
 
     @abstractmethod
     def _run(self, **kwargs):

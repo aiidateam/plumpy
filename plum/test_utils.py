@@ -57,7 +57,7 @@ class WaitForSignal(WaitOn):
     def __init__(self):
         super(WaitForSignal, self).__init__()
 
-    def signal(self):
+    def continue_(self):
         self.done(True)
 
 
@@ -70,8 +70,8 @@ class WaitForSignalProcess(Process):
     def finish(self, wait_on):
         pass
 
-    def signal(self):
-        self._signal.signal()
+    def continue_(self):
+        self._signal.continue_()
 
 
 class EventsTesterMixin(object):

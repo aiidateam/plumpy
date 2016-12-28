@@ -2,6 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 import time
+from collections import Sequence
 from plum.persistence.bundle import Bundle
 from plum.wait import WaitOn
 from plum.util import override
@@ -172,16 +173,20 @@ class WaitOnState(WaitOn, ProcessListener):
             pass
 
 
-def wait_until(p, state, timeout=None):
+def wait_until(proc, state, timeout=None):
     """
-    Wait until a process reaches a certain staet.
+    Wait until a process or processes reaches a certain state.  `proc` can be
+    a single process or a sequence of processes.
 
-    :param proc: The process to wait for
-    :type proc: :class:`plum.process.Process`
+    :param proc: The process or sequence of processes to wait for
+    :type proc: :class:`plum.process.Process` or :class:`Sequence`
     :param state: The state to wait for
     :param timeout: The optional timeout
     """
-    WaitOnState(p, state).wait(timeout)
+    if isinstance(proc, Sequence):
+        WaitOnAll([WaitOnState(p, state) for p in proc]).wait(timeout)
+    else:
+        WaitOnState(proc, state).wait(timeout)
 
 
 class WaitOnProcess(WaitOnState):
@@ -231,5 +236,17 @@ class WaitOnProcessOutput(WaitOn, ProcessListener):
 
 
 def wait_until_stopped(proc, timeout=None):
-    WaitOnProcess(proc).wait(timeout)
+    """
+    Wait until a process or processes reach the STOPPED state.  `proc` can be
+    a single process or a sequence of processes.
+
+    :param proc: The process or sequence of processes to wait for
+    :type proc: :class:`~plum.process.Process` or :class:`Sequence`
+    :param state: The state to wait for
+    :param timeout: The optional timeout
+    """
+    if isinstance(proc, Sequence):
+        WaitOnAll([WaitOnProcess(p) for p in proc]).wait(timeout)
+    else:
+        WaitOnProcess(proc).wait(timeout)
 

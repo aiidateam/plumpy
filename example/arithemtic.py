@@ -1,4 +1,3 @@
-from plum.parallel import MultithreadedEngine
 from plum.process import Process, FunctionProcess
 from plum.workflow import Workflow
 
@@ -106,12 +105,5 @@ if __name__ == '__main__':
     print(mul_add.run_and_block({'a': 2, 'b': 3, 'c': 4}))
 
     mul_add(a=2, b=3, c=4)
-
-    exec_engine = MultithreadedEngine()
-    exec_engine.submit(mul_add, {'a': 2, 'b': 3, 'c': 4})
-
-    future = exec_engine.submit(mul_add, {'a': 2, 'b': 3, 'c': 4})
-    print(future.result())
-
-    TestDynamicOutput.new_instance().run_until_complete()
+    TestDynamicOutput.new_instance().start()
 

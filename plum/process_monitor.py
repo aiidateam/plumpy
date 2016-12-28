@@ -33,6 +33,22 @@ class ProcessMonitor(ProcessListener):
     Clients can listen for messages to indicate when a new process is registered
     and when processes terminate because of finishing or failing.
     """
+    class Listen():
+        """
+        A context manager for listening to the monitor.  This way it is
+        guaranteed that the listener will be deregisterd when needed.
+        """
+        def __init__(self, monitor, listener):
+            self._monitor = monitor
+            self._listener = listener
+
+        def __enter__(self):
+            self._monitor.add_monitor_listener(self._listener)
+            return self
+
+        def __exit__(self, exc_type, exc_value, exc_traceback):
+            self._monitor.remove_monitor_listener(self._listener)
+
     def __init__(self):
         self._processes = {}
         self.__event_helper = EventHelper(ProcessMonitorListener)
@@ -78,11 +94,17 @@ class ProcessMonitor(ProcessListener):
         process.remove_process_listener(self)
         del self._processes[process.pid]
 
+    def listen(self, listener):
+        return self.Listen(self, listener)
+
     def add_monitor_listener(self, listener):
         self.__event_helper.add_listener(listener)
 
     def remove_monitor_listener(self, listener):
         self.__event_helper.remove_listener(listener)
+
+    def get_num_listeners(self):
+        return len(self.__event_helper.listeners)
 
     # From ProcessListener #####################################################
     @override

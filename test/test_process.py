@@ -1,12 +1,15 @@
 from unittest import TestCase
 
+import threading
 from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.process_monitor import MONITOR
 from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpoint, \
-    DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, check_process_against_snapshots
+    DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, check_process_against_snapshots, \
+    WaitForSignalProcess
 from plum.test_utils import ProcessListenerTester
 from plum.util import override
+from plum.wait_ons import wait_until
 
 
 class ForgetToCallParent(Process):
@@ -261,6 +264,56 @@ class TestProcess(TestCase):
 
         self.assertFalse(proc.aborted)
         self.assertEqual(proc.state, ProcessState.STOPPED)
+
+    def test_wait_continue(self):
+        p = WaitForSignalProcess.new_instance()
+        t = threading.Thread(target=p.start)
+        t.start()
+        wait_until(p, ProcessState.WAITING, 1)
+        self.assertEqual(p.state, ProcessState.WAITING)
+
+        self.assertTrue(p.is_executing())
+        p.continue_()
+
+        wait_until(p, ProcessState.STOPPED, 1)
+
+        self.assertEqual(p.state, ProcessState.STOPPED)
+
+    def test_wait_pause_continue_play(self):
+        p = WaitForSignalProcess.new_instance()
+        t = threading.Thread(target=p.start)
+        t.start()
+        wait_until(p, ProcessState.WAITING, 1)
+        self.assertEqual(p.state, ProcessState.WAITING)
+
+        self.assertTrue(p.is_executing())
+        p.pause()
+        t.join(1)
+        self.assertFalse(p.is_executing())
+
+        p.continue_()
+        p.start()
+
+        self.assertEqual(p.state, ProcessState.STOPPED)
+
+    def test_wait_pause_play_continue(self):
+        p = WaitForSignalProcess.new_instance()
+
+        t = threading.Thread(target=p.start)
+        t.start()
+        wait_until(p, ProcessState.WAITING, 1)
+
+        self.assertTrue(p.is_executing())
+        p.pause()
+        t.join(1)
+        self.assertFalse(p.is_executing())
+
+        t = threading.Thread(target=p.start)
+        t.start()
+        self.assertEqual(p.state, ProcessState.WAITING)
+        p.continue_()
+
+        wait_until(p, ProcessState.STOPPED)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
