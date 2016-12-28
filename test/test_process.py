@@ -1,4 +1,3 @@
-from unittest import TestCase
 
 import threading
 from plum.persistence.bundle import Bundle
@@ -10,6 +9,7 @@ from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpoint, \
 from plum.test_utils import ProcessListenerTester
 from plum.util import override
 from plum.wait_ons import wait_until
+from util import TestCase
 
 
 class ForgetToCallParent(Process):
@@ -44,14 +44,14 @@ class ForgetToCallParent(Process):
 
 class TestProcess(TestCase):
     def setUp(self):
-        self.assertEqual(len(MONITOR.get_pids()), 0)
+        super(TestProcess, self).setUp()
 
         self.events_tester = ProcessListenerTester()
         self.proc = DummyProcessWithOutput()
         self.proc.add_process_listener(self.events_tester)
 
     def tearDown(self):
-        self.assertEqual(len(MONITOR.get_pids()), 0)
+        super(TestProcess, self).tearDown()
 
         self.proc.remove_process_listener(self.events_tester)
 
@@ -288,7 +288,7 @@ class TestProcess(TestCase):
 
         self.assertTrue(p.is_executing())
         p.pause()
-        t.join(1)
+        self.safe_join(t)
         self.assertFalse(p.is_executing())
 
         p.continue_()
@@ -305,7 +305,7 @@ class TestProcess(TestCase):
 
         self.assertTrue(p.is_executing())
         p.pause()
-        t.join(1)
+        self.safe_join(t)
         self.assertFalse(p.is_executing())
 
         t = threading.Thread(target=p.start)
@@ -314,6 +314,7 @@ class TestProcess(TestCase):
         p.continue_()
 
         wait_until(p, ProcessState.STOPPED)
+        self.safe_join(t)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)

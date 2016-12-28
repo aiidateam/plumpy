@@ -31,6 +31,10 @@ class ProcessManager(ProcessListener):
             self._play(info.proc)
 
     def pause_all(self):
+        """
+        Pause all processes.  This is a blocking call and will wait until they
+        are all paused before returning.
+        """
         for info in self._processes.itervalues():
             self._pause(info.proc)
 

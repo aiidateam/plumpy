@@ -1,4 +1,3 @@
-from unittest import TestCase
 
 import threading
 from plum.persistence.bundle import Bundle
@@ -10,15 +9,20 @@ from plum.test_utils import ProcessListenerTester, check_process_against_snapsho
 from plum.util import override
 from plum.test_utils import ProcessSaver
 from plum.wait_ons import wait_until_stopped, wait_until
+from util import TestCase
 
 
 class TestWaitingProcess(TestCase):
     def setUp(self):
+        super(TestWaitingProcess, self).setUp()
+
         self.events_tester = ProcessListenerTester()
         self.proc = DummyProcessWithOutput()
         self.proc.add_process_listener(self.events_tester)
 
     def tearDown(self):
+        super(TestWaitingProcess, self).tearDown()
+
         self.proc.remove_process_listener(self.events_tester)
 
     def test_instance_state(self):
@@ -61,7 +65,7 @@ class TestWaitingProcess(TestCase):
         self.assertEqual(p.state, ProcessState.STOPPED)
         self.assertTrue(p.aborted)
 
-        t.join()
+        self.safe_join(t)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
