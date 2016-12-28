@@ -45,6 +45,8 @@ class TestDynamicOutput(Workflow):
 class Add(Process):
     @classmethod
     def define(cls, spec):
+        super(Add, cls).define(spec)
+
         spec.input('a', default=0)
         spec.input('b', default=0)
         spec.output('value')
@@ -56,6 +58,8 @@ class Add(Process):
 class Mul(Process):
     @classmethod
     def define(cls, spec):
+        super(Add, cls).define(spec)
+
         spec.input('a', default=1)
         spec.input('b', default=1)
         spec.output('value')
@@ -67,6 +71,8 @@ class Mul(Process):
 class MulAdd(Workflow):
     @classmethod
     def define(cls, spec):
+        super(MulAdd, cls).define(spec)
+
         spec.process(Mul)
         spec.process(Add)
         spec.exposed_inputs("Add")

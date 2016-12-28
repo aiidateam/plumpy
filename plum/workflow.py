@@ -213,9 +213,8 @@ class Workflow(Process, ProcessListener):
 
     ###########################################
 
-    def __init__(self, process_factory):
+    def __init__(self):
         super(Workflow, self).__init__()
-        self._process_factory = process_factory
         self._workflow_evt_helper = util.EventHelper(WorkflowListener)
         self._process_instances = {}
         self._input_buffer = {}
@@ -224,7 +223,7 @@ class Workflow(Process, ProcessListener):
 
         # Create all our subprocess classes
         for name, proc_class in self.spec().processes.iteritems():
-            proc = process_factory.new_instance(proc_class)
+            proc = proc_class.new_instance()
             proc.add_process_listener(self)
             self._process_instances[name] = proc
 
