@@ -63,7 +63,7 @@ class TestWaitingProcess(TestCase):
         # Wait until it's completely finished
         wait_until_stopped(p)
         self.assertEqual(p.state, ProcessState.STOPPED)
-        self.assertTrue(p.aborted)
+        self.assertTrue(p.has_aborted())
 
         self.safe_join(t)
 

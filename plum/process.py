@@ -261,10 +261,6 @@ class Process(object):
         return self._state
 
     @property
-    def aborted(self):
-        return self._aborted
-
-    @property
     def logger(self):
         """
         Get the logger for this class.  Can be None.
@@ -310,6 +306,9 @@ class Process(object):
         :rtype: bool
         """
         return self.has_finished() or self.has_failed()
+
+    def has_aborted(self):
+        return self._aborted
 
     def get_waiting_on(self):
         """

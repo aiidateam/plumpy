@@ -26,9 +26,24 @@ class ProcessManager(ProcessListener):
         self._play(proc)
         return proc.pid
 
+    def get_processes(self):
+        return [info.proc for info in self._processes]
+
+    def play(self, pid):
+        try:
+            self._play(self._processes[pid].proc)
+        except KeyError:
+            raise ValueError("Unknown pid")
+
     def play_all(self):
         for info in self._processes.itervalues():
             self._play(info.proc)
+
+    def pause(self, pid):
+        try:
+            self._pause(self._processes[pid].proc)
+        except KeyError:
+            raise ValueError("Unknown pid")
 
     def pause_all(self):
         """
@@ -38,9 +53,15 @@ class ProcessManager(ProcessListener):
         for info in self._processes.itervalues():
             self._pause(info.proc)
 
+    def abort(self, pid, msg=None):
+        try:
+            self._abort(self._processes[pid].proc, msg)
+        except KeyError:
+            raise ValueError("Unknown pid")
+
     def abort_all(self, msg=None):
         for info in self._processes.itervalues():
-            info.proc.abort(msg)
+            self._abort(info.proc)
 
     def get_num_processes(self):
         return len(self._processes)
@@ -75,6 +96,11 @@ class ProcessManager(ProcessListener):
         if info.thread is not None:
             info.thread.join()
             info.thread = None
+
+    def _abort(self, proc, msg):
+        info = self._processes[proc.pid]
+        # This will cause a stop message and the process will be deleted
+        info.proc.abort(msg)
 
     def _delete_process(self, proc):
         info = self._processes.pop(proc.pid)

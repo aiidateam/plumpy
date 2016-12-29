@@ -262,7 +262,7 @@ class TestProcess(TestCase):
         proc.abort()
         proc.start()
 
-        self.assertFalse(proc.aborted)
+        self.assertFalse(proc.has_aborted())
         self.assertEqual(proc.state, ProcessState.STOPPED)
 
     def test_wait_continue(self):

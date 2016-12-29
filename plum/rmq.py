@@ -1,46 +1,200 @@
 
-
 import pika
 import json
+import uuid
 from collections import namedtuple
 from plum.process import ProcessListener
 from plum.process_manager import ProcessManager
 from plum.util import load_class, fullname
 
 
-ProcessTask = namedtuple("ProcessTask", ['proc_class', 'inputs'])
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
 
 
-def json_encode(task):
-    """
-    Take a task and convert it to a JSON string.
+class Defaults(object):
+    TASK_QUEUE = 'plum.task_queue'
+    TASK_CONTROL_EXCHANGE = 'plum.task_control'
+    STATUS_EXCHANGE = 'plum.status_updates'
 
-    :param task: The task to encode
-    :type task: :class:`ProcessTask`
-    :return: The encoded task as a JSON string
-    :rtype: str
+
+class ProcessStatusPublisher(ProcessListener):
     """
-    d = {'proc_class': fullname(task.proc_class),
-         'inputs': task.inputs}
+    This class publishes status updates from processes based on receiving event
+    messages.
+    """
+    def __init__(self, connection, exchange=Defaults.STATUS_EXCHANGE,
+                 encoder=json.dumps):
+        self._exchange = exchange
+        self._encode = encoder
+        self._processes = []
+
+        self._channel = connection.channel()
+        self._channel.exchange_declare(
+            exchange=self._exchange, type='topic')
+
+    def add_process(self, process):
+        """
+        Add a process to have its status updates be published
+
+        :param process: The process to publish updates for
+        :type process: :class:`plum.process.Process`
+        """
+        self._processes.append(process)
+        process.add_process_listener(self)
+
+    def remove_process(self, process):
+        """
+        Remove a process from having its status updates be published
+
+        :param process: The process to stop publishing updates for
+        :type process: :class:`plum.process.Process`
+        """
+        process.remove_process_listener(self)
+        self._processes.remove(process)
+
+    def reset(self):
+        """
+        Stop listening to all processes.
+        """
+        for p in self._processes:
+            p.remove_process_listener(self)
+        self._processes = []
+
+    # From ProcessListener ####################################################
+    def on_process_start(self, process):
+        key = "{}.start".format(process.pid)
+        d = {'type': fullname(process)}
+        self._channel.basic_publish(
+            self._exchange, key, body=self._encode(d))
+
+    def on_process_run(self, process):
+        key = "{}.run".format(process.pid)
+        self._channel.basic_publish(
+            self._exchange, key, body="")
+
+    def on_process_wait(self, process):
+        key = "{}.wait".format(process.pid)
+        self._channel.basic_publish(
+            self._exchange, key, body="")
+
+    def on_process_resume(self, process):
+        key = "{}.resume".format(process.pid)
+        self._channel.basic_publish(
+            self._exchange, key, body="")
+
+    def on_process_finish(self, process):
+        key = "{}.finish".format(process.pid)
+        self._channel.basic_publish(
+            self._exchange, key, body="")
+
+    def on_process_stop(self, process):
+        key = "{}.stop".format(process.pid)
+        self._channel.basic_publish(
+            self._exchange, key, body="")
+        self.remove_process(process)
+
+    def on_process_fail(self, process):
+        key = "{}.fail".format(process.pid)
+        exception = process.get_exception()
+        d = {'exception_type': fullname(exception),
+             'exception_msg': exception.message}
+        self._channel.basic_publish(
+            self._exchange, key, body=self._encode(d))
+        self.remove_process(process)
+
+    def on_output_emitted(self, process, output_port, value, dynamic):
+        key = "{}.emitted".format(process.pid)
+        # Don't send the value, it could be large and/or unserialisable
+        d = {'port': output_port,
+             'dynamic': dynamic}
+        self._channel.basic_publish(
+            self._exchange, key, body=self._encode(d))
+    ###########################################################################
+
+
+class Action(object):
+    PLAY = 'play'
+    PAUSE = 'pause'
+    ABORT = 'abort'
+
+
+def action_decode(msg):
+    d = json.loads(msg)
+    try:
+        d['pid'] = uuid.UUID(d['pid'])
+    except ValueError:
+        pass
+    return d
+
+
+def action_encode(msg):
+    d = msg.copy()
+    if isinstance(d['pid'], uuid.UUID):
+        d['pid'] = str(d['pid'])
     return json.dumps(d)
 
 
-def json_decode(msg):
-    """
-    Decodes a JSON dictionary which as the format:
-    {
-        'proc_class': [class_string]
-        'inputs': [None or a dictionary of inputs]
-    }
+class ProcessController():
+    def __init__(self, connection, exchange=Defaults.TASK_CONTROL_EXCHANGE,
+                 decoder=action_decode, process_manager=None):
+        """
+        Create the process controller.
 
+        :param connection:
+        :param exchange:
+        :param decoder:
+        :param process_manager: The process manager running the processes
+            that are being controlled.
+        :type process_manager: :class:`plum.process_manager.ProcessManager`
+        """
+        self._decode = decoder
+        self._manager = process_manager
+        self._stopping = False
 
-    :param msg: The message to decode
-    :return: The task in the format of a ProcessTask tuple
-    :rtype: :class:`ProcessTask`
-    """
-    d = json.loads(msg)
-    return ProcessTask(load_class(d['proc_class']), d['inputs'])
+        # Set up communications
+        self._channel = connection.channel()
+        self._channel.exchange_declare(exchange=exchange ,type='fanout')
+        result = self._channel.queue_declare(exclusive=True)
+        self._queue_name = result.method.queue
+        self._channel.queue_bind(exchange=exchange, queue=self._queue_name)
+        self._channel.basic_consume(
+            self._control_msg, queue=self._queue_name)
+
+    def start(self):
+        while self._channel._consumer_infos:
+            self.poll()
+            if self._stopping:
+                self._channel.stop_consuming()
+                self._stopping = False
+
+    def poll(self, time_limit=0.2):
+        self._channel.connection.process_data_events(time_limit=time_limit)
+
+    def stop(self):
+        self._stopping = True
+
+    def set_process_manager(self, manager):
+        self._manager = manager
+
+    def _control_msg(self, ch, method, properties, body):
+        if self._manager is None:
+            return
+
+        d = self._decode(body)
+        try:
+            intent = d['intent']
+            if intent == Action.PLAY:
+                self._manager.play(d['pid'])
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+            elif intent == Action.PAUSE:
+                self._manager.pause(d['pid'])
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+            elif intent == Action.ABORT:
+                self._manager.abort(d['pid'])
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+        except ValueError:
+            # The PID isn't known to the process manager
+            pass
 
 
 class TaskRunner(ProcessListener):
@@ -52,8 +206,8 @@ class TaskRunner(ProcessListener):
         as the start method is called.
     """
 
-    def __init__(self, connection, queue='task_queue', decoder=json_decode,
-                 manager=None):
+    def __init__(self, connection, queue=Defaults.TASK_QUEUE,
+                 decoder=json.loads, manager=None, controller=None):
         """
 
         :param connection: The pika RabbitMQ connection
@@ -68,30 +222,54 @@ class TaskRunner(ProcessListener):
             self._manager = ProcessManager()
         else:
             self._manager = manager
+
+        if controller is None:
+            self._controller = ProcessController(connection)
+        else:
+            self._controller = controller
+        self._controller.set_process_manager(self._manager)
+
         self._decode = decoder
         self._running_processes = {}
         self._stopping = False
 
+        self._status_publisher = ProcessStatusPublisher(connection)
+
+        # Set up communications
         self._channel = connection.channel()
         self._channel.basic_qos(prefetch_count=1)
+        self._channel.queue_declare(queue=queue, durable=True)
         self._channel.basic_consume(self._new_task, queue=queue)
 
     def start(self):
+        """
+        Start polling for tasks.  Will block until stop() is called.
+
+        .. warning:: Must be called from the same threads where the connection
+            that was passed into the constructor was created.
+        """
         while self._channel._consumer_infos:
-            self._channel.connection.process_data_events(time_limit=0.2)
+            self.poll()
             if self._stopping:
                 self._channel.stop_consuming()
                 self._stopping = False
 
+    def poll(self, time_limit=0.2):
+        self._channel.connection.process_data_events(time_limit=time_limit)
+        self._controller.poll(time_limit)
+
     def stop(self):
         self._stopping = True
         self._manager.pause_all()
+        self._status_publisher.reset()
 
     def _new_task(self, ch, method, properties, body):
         task = self._decode(body)
+        ProcClass = load_class(task['proc_class'])
 
-        p = task.proc_class.new_instance(inputs=task.inputs)
+        p = ProcClass.new_instance(inputs=task['inputs'])
         p.add_process_listener(self)
+        self._status_publisher.add_process(p)
 
         self._running_processes[p.pid] = \
             _RunningTaskInfo(p.pid, ch, method.delivery_tag)
@@ -115,10 +293,10 @@ class TaskRunner(ProcessListener):
         info.ch.basic_ack(delivery_tag=info.delivery_tag)
 
 
-class TaskSender(object):
+class TaskController(object):
 
-    def __init__(self, connection, queue='task_queue',
-                 encoder=json_encode):
+    def __init__(self, connection, queue=Defaults.TASK_QUEUE,
+                 encoder=json.dumps):
         self._queue = queue
         self._encode = encoder
 
@@ -129,10 +307,11 @@ class TaskSender(object):
         """
         Send a Process task to be executed by a runner.
 
-        :param proc_class: The Process class to rurn
+        :param proc_class: The Process class to run
         :param inputs: The inputs to supply
         """
-        task = ProcessTask(proc_class, inputs)
+        task = {'proc_class': fullname(proc_class),
+                'inputs': inputs}
         self._channel.basic_publish(
             exchange='', routing_key=self._queue, body=self._encode(task),
             properties=pika.BasicProperties(delivery_mode=2) # Persist
