@@ -50,7 +50,7 @@ class TestProcessManager(TestCase):
             procs.append(WaitForSignalProcess.new_instance())
             self.manager.start(procs[-1])
 
-        wait_until(procs, ProcessState.WAITING, timeout=1)
+        self.assertTrue(wait_until(procs, ProcessState.WAITING, timeout=5))
 
         # Check they are all in state we expect
         for p in procs:
@@ -76,7 +76,7 @@ class TestProcessManager(TestCase):
 
         # Check they are all in state we expect
         for p in procs:
-            self.assertTrue(p.is_executing())
+            self.assertTrue(p.is_executing(), "state '{}'".format(p.state))
 
         # Now try and pause them all
         self.manager.pause_all()
@@ -95,3 +95,12 @@ class TestProcessManager(TestCase):
         for p in procs:
             self.assertEqual(p.state, ProcessState.STOPPED)
             self.assertFalse(p.is_executing())
+
+    def test_play_pause_abort(self):
+        procs = []
+        for i in range(0, 10):
+            procs.append(WaitForSignalProcess.new_instance())
+            self.manager.start(procs[-1])
+        self.assertTrue(wait_until(procs, ProcessState.WAITING))
+        self.assertTrue(self.manager.pause_all(timeout=2))
+        self.assertTrue(self.manager.abort_all(timeout=2))

@@ -1,20 +1,17 @@
-
-import pika
 import json
+import threading
 import uuid
 from collections import namedtuple
+
+import pika
+
+from plum._rmq import Defaults, Subscriber
+from plum._rmq.status import StatusProvider
 from plum.process import ProcessListener
 from plum.process_manager import ProcessManager
-from plum.util import load_class, fullname
-
+from plum.util import load_class, fullname, override
 
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
-
-
-class Defaults(object):
-    TASK_QUEUE = 'plum.task_queue'
-    TASK_CONTROL_EXCHANGE = 'plum.task_control'
-    STATUS_EXCHANGE = 'plum.status_updates'
 
 
 class ProcessStatusPublisher(ProcessListener):
@@ -22,6 +19,7 @@ class ProcessStatusPublisher(ProcessListener):
     This class publishes status updates from processes based on receiving event
     messages.
     """
+
     def __init__(self, connection, exchange=Defaults.STATUS_EXCHANGE,
                  encoder=json.dumps):
         self._exchange = exchange
@@ -109,7 +107,35 @@ class ProcessStatusPublisher(ProcessListener):
              'dynamic': dynamic}
         self._channel.basic_publish(
             self._exchange, key, body=self._encode(d))
-    ###########################################################################
+        ###########################################################################
+
+
+class SubscriberThread(threading.Thread):
+    def __init__(self, subscriber_class, connection_parameters=None, **kwargs):
+        assert issubclass(subscriber_class, Subscriber)
+        super(SubscriberThread, self).__init__()
+
+        self._rmq_class = subscriber_class
+        self._connection_params = connection_parameters
+        self._started = threading.Event()
+        self._kwargs = kwargs
+        self._rmq_instance = None
+
+    @override
+    def run(self):
+        connection = pika.BlockingConnection(self._connection_params)
+        self._rmq_instance = self._rmq_class(
+            connection=connection, **self._kwargs)
+
+        self._started.set()
+        self._rmq_instance.start()
+        connection.close()
+
+    def stop(self):
+        self._rmq_instance.stop()
+
+    def wait_till_started(self, timeout=None):
+        self._started.wait(timeout)
 
 
 class Action(object):
@@ -134,7 +160,7 @@ def action_encode(msg):
     return json.dumps(d)
 
 
-class ProcessController():
+class ProcessController(Subscriber):
     def __init__(self, connection, exchange=Defaults.TASK_CONTROL_EXCHANGE,
                  decoder=action_decode, process_manager=None):
         """
@@ -153,13 +179,14 @@ class ProcessController():
 
         # Set up communications
         self._channel = connection.channel()
-        self._channel.exchange_declare(exchange=exchange ,type='fanout')
+        self._channel.exchange_declare(exchange=exchange, type='fanout')
         result = self._channel.queue_declare(exclusive=True)
         self._queue_name = result.method.queue
         self._channel.queue_bind(exchange=exchange, queue=self._queue_name)
         self._channel.basic_consume(
-            self._control_msg, queue=self._queue_name)
+            self._on_control, queue=self._queue_name)
 
+    @override
     def start(self):
         while self._channel._consumer_infos:
             self.poll()
@@ -167,16 +194,18 @@ class ProcessController():
                 self._channel.stop_consuming()
                 self._stopping = False
 
+    @override
     def poll(self, time_limit=0.2):
         self._channel.connection.process_data_events(time_limit=time_limit)
 
+    @override
     def stop(self):
         self._stopping = True
 
     def set_process_manager(self, manager):
         self._manager = manager
 
-    def _control_msg(self, ch, method, properties, body):
+    def _on_control(self, ch, method, properties, body):
         if self._manager is None:
             return
 
@@ -190,14 +219,14 @@ class ProcessController():
                 self._manager.pause(d['pid'])
                 ch.basic_ack(delivery_tag=method.delivery_tag)
             elif intent == Action.ABORT:
-                self._manager.abort(d['pid'])
+                self._manager.abort(d['pid'], timeout=0)
                 ch.basic_ack(delivery_tag=method.delivery_tag)
         except ValueError:
             # The PID isn't known to the process manager
             pass
 
 
-class TaskRunner(ProcessListener):
+class TaskRunner(Subscriber, ProcessListener):
     """
     Run tasks as they come form the RabbitMQ queue and sent by the TaskSender
 
@@ -207,7 +236,8 @@ class TaskRunner(ProcessListener):
     """
 
     def __init__(self, connection, queue=Defaults.TASK_QUEUE,
-                 decoder=json.loads, manager=None, controller=None):
+                 decoder=json.loads, manager=None, controller=None,
+                 status_provider=None):
         """
 
         :param connection: The pika RabbitMQ connection
@@ -229,9 +259,16 @@ class TaskRunner(ProcessListener):
             self._controller = controller
         self._controller.set_process_manager(self._manager)
 
+        if status_provider is None:
+            self._status_provider = StatusProvider(connection)
+        else:
+            self._status_provider = status_provider
+        self._status_provider.set_process_manager(self._manager)
+
         self._decode = decoder
         self._running_processes = {}
         self._stopping = False
+        self._num_processes = 0
 
         self._status_publisher = ProcessStatusPublisher(connection)
 
@@ -239,7 +276,7 @@ class TaskRunner(ProcessListener):
         self._channel = connection.channel()
         self._channel.basic_qos(prefetch_count=1)
         self._channel.queue_declare(queue=queue, durable=True)
-        self._channel.basic_consume(self._new_task, queue=queue)
+        self._channel.basic_consume(self._on_launch, queue=queue)
 
     def start(self):
         """
@@ -254,16 +291,21 @@ class TaskRunner(ProcessListener):
                 self._channel.stop_consuming()
                 self._stopping = False
 
-    def poll(self, time_limit=0.2):
-        self._channel.connection.process_data_events(time_limit=time_limit)
-        self._controller.poll(time_limit)
+    def poll(self, timeout=1):
+        self._num_processes = 0
+        self._channel.connection.process_data_events(time_limit=timeout)
+        self._controller.poll(timeout)
+        self._status_provider.poll(timeout)
+        return self._num_processes
 
     def stop(self):
         self._stopping = True
         self._manager.pause_all()
         self._status_publisher.reset()
 
-    def _new_task(self, ch, method, properties, body):
+    def _on_launch(self, ch, method, properties, body):
+        self._num_processes += 1
+
         task = self._decode(body)
         ProcClass = load_class(task['proc_class'])
 
@@ -294,7 +336,6 @@ class TaskRunner(ProcessListener):
 
 
 class TaskController(object):
-
     def __init__(self, connection, queue=Defaults.TASK_QUEUE,
                  encoder=json.dumps):
         self._queue = queue
@@ -314,5 +355,5 @@ class TaskController(object):
                 'inputs': inputs}
         self._channel.basic_publish(
             exchange='', routing_key=self._queue, body=self._encode(task),
-            properties=pika.BasicProperties(delivery_mode=2) # Persist
+            properties=pika.BasicProperties(delivery_mode=2)  # Persist
         )

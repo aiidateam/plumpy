@@ -39,7 +39,6 @@ class WaitOn(object):
         # Variables below this don't need to be saved in the instance state
         self._waiting = threading.Event()
         self._interrupt_lock = threading.Lock()
-        self._interrupted = False
 
         if self._is_saved_state(args):
             self.load_instance_state(args[0])
@@ -90,24 +89,18 @@ class WaitOn(object):
                 return True
             # Going to have to wait
             self._waiting.clear()
-            self._interrupted = False
 
         if not self._waiting.wait(timeout):
             # The threading Event returns False if it timed out
             return False
-
-        with self._interrupt_lock:
-            if self.is_done():
-                return True
-            elif self._interrupted:
-                self._interrupted = False
-                raise Interrupted()
+        elif self.is_done():
+            return True
+        else:
+            # Must have been interrupted
+            raise Interrupted()
 
     def interrupt(self):
         with self._interrupt_lock:
-            if self.is_done():
-                return
-            self._interrupted = True
             self._waiting.set()
 
     @protected

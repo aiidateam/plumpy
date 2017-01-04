@@ -66,6 +66,9 @@ class ProcessMonitor(ProcessListener):
         except KeyError:
             raise ValueError("Unknown pid '{}'".format(pid))
 
+    def get_processes(self):
+        return self._processes.values()
+
     def get_pids(self):
         """
         Get the pids of all currently running processes.

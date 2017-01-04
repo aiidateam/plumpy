@@ -64,9 +64,9 @@ class WaitOnAll(_CompoundWaitOn):
     def wait(self, timeout=None):
         t0 = time.time()
         for w in self._wait_list:
-            if not w.wait(time.time() - t0 - timeout
+            if not w.wait(timeout - (time.time() - t0)
                           if timeout is not None else None):
-                # We timedout
+                # We timed out
                 return False
 
         self.done(True)
@@ -184,9 +184,9 @@ def wait_until(proc, state, timeout=None):
     :param timeout: The optional timeout
     """
     if isinstance(proc, Sequence):
-        WaitOnAll([WaitOnState(p, state) for p in proc]).wait(timeout)
+        return WaitOnAll([WaitOnState(p, state) for p in proc]).wait(timeout)
     else:
-        WaitOnState(proc, state).wait(timeout)
+        return WaitOnState(proc, state).wait(timeout)
 
 
 class WaitOnProcess(WaitOnState):
@@ -246,7 +246,7 @@ def wait_until_stopped(proc, timeout=None):
     :param timeout: The optional timeout
     """
     if isinstance(proc, Sequence):
-        WaitOnAll([WaitOnProcess(p) for p in proc]).wait(timeout)
+        return WaitOnAll([WaitOnProcess(p) for p in proc]).wait(timeout)
     else:
-        WaitOnProcess(proc).wait(timeout)
+        return WaitOnProcess(proc).wait(timeout)
 

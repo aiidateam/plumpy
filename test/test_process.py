@@ -269,13 +269,13 @@ class TestProcess(TestCase):
         p = WaitForSignalProcess.new_instance()
         t = threading.Thread(target=p.start)
         t.start()
-        wait_until(p, ProcessState.WAITING, 1)
+        self.assertTrue(wait_until(p, ProcessState.WAITING, 5))
         self.assertEqual(p.state, ProcessState.WAITING)
 
         self.assertTrue(p.is_executing())
         p.continue_()
 
-        wait_until(p, ProcessState.STOPPED, 1)
+        self.assertTrue(wait_until(p, ProcessState.STOPPED, 5))
 
         self.assertEqual(p.state, ProcessState.STOPPED)
 
@@ -283,8 +283,7 @@ class TestProcess(TestCase):
         p = WaitForSignalProcess.new_instance()
         t = threading.Thread(target=p.start)
         t.start()
-        wait_until(p, ProcessState.WAITING, 1)
-        self.assertEqual(p.state, ProcessState.WAITING)
+        self.assertTrue(wait_until(p, ProcessState.WAITING, 5))
 
         self.assertTrue(p.is_executing())
         p.pause()
@@ -301,7 +300,7 @@ class TestProcess(TestCase):
 
         t = threading.Thread(target=p.start)
         t.start()
-        wait_until(p, ProcessState.WAITING, 1)
+        self.assertTrue(wait_until(p, ProcessState.WAITING, 5))
 
         self.assertTrue(p.is_executing())
         p.pause()
@@ -313,8 +312,9 @@ class TestProcess(TestCase):
         self.assertEqual(p.state, ProcessState.WAITING)
         p.continue_()
 
-        wait_until(p, ProcessState.STOPPED)
-        self.safe_join(t)
+        self.assertTrue(wait_until(p, ProcessState.STOPPED), 5)
+        self.safe_join(t, 5)
+        self.assertFalse(t.is_alive())
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)

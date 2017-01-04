@@ -4,6 +4,7 @@ import uuid
 from enum import Enum
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
+import threading
 
 import plum.knowledge_provider as knowledge_provider
 import plum.error as error
@@ -30,6 +31,20 @@ class ProcessState(Enum):
 
 
 Wait = namedtuple('Wait', ['on', 'callback'])
+
+
+class _Unlock(object):
+    def __init__(self, lock):
+        """
+        :param lock: :class:`threading.Lock`
+        """
+        self._lock = lock
+
+    def __enter__(self):
+        self._lock.release()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._lock.acquire()
 
 
 class Process(object):
@@ -206,14 +221,13 @@ class Process(object):
 
         self._logger = None
 
-        # State stuff
         self._pid = None
+        # State stuff
         self._state = None
         self._finished = False
         self._exception = None
         self._wait = None
         self._next_transition = None
-
         self._aborted = False
         self._abort_msg = None
 
@@ -223,9 +237,12 @@ class Process(object):
         self._outputs = {}
 
         # Stuff below here doesn't need to be saved in the instance state
-        self._pausing = False
-        self._aborting = False
+        # Reads/writes of variables with 'protect' suffix should be guarded by
+        # the state lock
+        self._pausing_protect = False
+        self._aborting_protect = False
         self._executing = False
+        self._state_lock = threading.Lock()
 
         # Events and running
         self.__event_helper = util.EventHelper(ProcessListener)
@@ -358,18 +375,21 @@ class Process(object):
 
         try:
             MONITOR.register_process(self)
-            self._call_with_super_check(self.on_executing)
+            with self._state_lock:
+                self._call_with_super_check(self.on_executing)
 
             # Keep going until we run out of tasks
             fn = self._next()
             while fn is not None:
                 try:
-                    self._next_transition = None
-                    fn()
+                    with self._state_lock:
+                        self._next_transition = None
+                        fn()
                 except BaseException as e:
                     self._perform_fail(e)
                     raise
                 fn = self._next()
+
         finally:
             MONITOR.deregister_process(self)
             self._call_with_super_check(self.on_done_executing)
@@ -377,20 +397,25 @@ class Process(object):
         return self._outputs
 
     def pause(self):
-        self._interrupt()
-        self._pausing = True
+        """
+        Pause an playing process.  This can be called from another thread.
+        """
+        with self._state_lock:
+            self._pausing_protect = True
+            self._interrupt()
 
     def abort(self, msg=None):
         """
         Abort an executing process.  Can optionally provide a message with
-        the abort.
+        the abort.  Thi can be called from another thread.
 
         :param msg: The abort message
         :type msg: str
         """
-        self._interrupt()
-        self._aborting = True
-        self._abort_msg = msg
+        with self._state_lock:
+            self._aborting_protect = True
+            self._abort_msg = msg
+            self._interrupt()
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -408,8 +433,8 @@ class Process(object):
     @protected
     def on_executing(self):
         self._executing = True
-        self._pausing = False
-        self._aborting = False
+        self._pausing_protect = False
+        self._aborting_protect = False
 
         self._called = True
 
@@ -686,14 +711,15 @@ class Process(object):
         :return: A callable that only takes the self process as argument.
           May be None if the process should not continue.
         """
-        if self.has_terminated():
-            return None
-        elif self._pausing:
-            return None
-        elif self._aborting:
-            return self._perform_abort
-        else:
-            return self._next_transition
+        with self._state_lock:
+            if self.has_terminated():
+                return None
+            elif self._pausing_protect:
+                return None
+            elif self._aborting_protect:
+                return self._perform_abort
+            else:
+                return self._next_transition
 
     def _perform_create(self, pid=None, inputs=None, saved_instance_state=None):
         """
@@ -722,7 +748,8 @@ class Process(object):
         self._to_running()
 
         # Run the thing
-        self._return_value = self.do_run()
+        with _Unlock(self._state_lock):
+            self._return_value = self.do_run()
         # Figure out what to do next
         if self._is_wait_retval(self._return_value):
             self._set_wait(self._return_value[0], self._return_value[1])
@@ -745,7 +772,8 @@ class Process(object):
             self._call_with_super_check(self.on_wait)
 
         try:
-            self._wait.on.wait()
+            with _Unlock(self._state_lock):
+                self._wait.on.wait()
             if self._wait.callback is None:
                 self._next_transition = self._perform_finish
             else:
@@ -766,7 +794,8 @@ class Process(object):
         w = self._wait
         self._wait = None
         self._to_running()
-        self._return_value = w.callback(w.on)
+        with _Unlock(self._state_lock):
+            self._return_value = w.callback(w.on)
 
         # Figure out what to do next
         if self._is_wait_retval(self._return_value):
@@ -794,7 +823,7 @@ class Process(object):
         self._call_with_super_check(self.on_abort)
 
         self._to_stopped()
-        self._aborting = False
+        self._aborting_protect = False
 
     def _perform_fail(self, exception):
         """
@@ -805,6 +834,7 @@ class Process(object):
         """
         self._state = ProcessState.FAILED
         self._exception = exception
+        self._next_transition = None
         try:
             self._called = False
             self.on_fail()
@@ -825,6 +855,7 @@ class Process(object):
     def _to_stopped(self):
         self._state = ProcessState.STOPPED
         self._call_with_super_check(self.on_stop)
+        self._next_transition = None
 
     def _set_wait(self, wait_on, callback):
         self._wait = Wait(wait_on, callback)
