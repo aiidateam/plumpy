@@ -40,7 +40,8 @@ class MultithreadedEngine(execution_engine.ExecutionEngine, ProcessMonitorListen
 
         @override
         def result(self, timeout=None):
-            return self._future.result(timeout)
+            self._future.result(timeout)
+            return self._process.outputs
 
         @override
         def exception(self, timeout=None):
