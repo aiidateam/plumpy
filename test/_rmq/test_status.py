@@ -125,7 +125,6 @@ class TestStatusProvider(TestCase):
             "Couldn't abort all processes in timeout")
 
         response = self._send_and_get()
-        # TODO: Fix this below
         self.assertIsNone(response)
 
     def _send_and_get(self):

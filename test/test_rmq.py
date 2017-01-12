@@ -132,12 +132,13 @@ class TestProcessController(TestCase):
         self.manager.shutdown()
 
 
-# class TestRmqThread(TestCase):
-#     def test_start_stop(self):
-#         for c in [ProcessController, StatusProvider, TaskRunner]:
-#             t = SubscriberThread(c)
-#             t.start()
-#             t.wait_till_started()
-#             t.stop()
-#             t.join(5)
-#             self.assertFalse(t.is_alive())
+class TestRmqThread(TestCase):
+    def test_start_stop(self):
+        for c in [ProcessController, StatusProvider, TaskRunner]:
+            t = SubscriberThread(c)
+            t.set_poll_time(0.0)
+            t.start()
+            t.wait_till_started()
+            t.stop()
+            t.join(2)
+            self.assertFalse(t.is_alive())

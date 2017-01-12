@@ -117,6 +117,7 @@ class SubscriberThread(threading.Thread):
 
         self._rmq_class = subscriber_class
         self._connection_params = connection_parameters
+        self._poll_time = None
         self._started = threading.Event()
         self._kwargs = kwargs
         self._rmq_instance = None
@@ -127,9 +128,13 @@ class SubscriberThread(threading.Thread):
         self._rmq_instance = self._rmq_class(
             connection=connection, **self._kwargs)
 
+        args = {} if self._poll_time is None else {'poll_time': self._poll_time}
         self._started.set()
-        self._rmq_instance.start()
+        self._rmq_instance.start(**args)
         connection.close()
+
+    def set_poll_time(self, poll_time):
+        self._poll_time = poll_time
 
     def stop(self):
         self._rmq_instance.stop()
@@ -187,9 +192,9 @@ class ProcessController(Subscriber):
             self._on_control, queue=self._queue_name)
 
     @override
-    def start(self):
+    def start(self, poll_time=0.2):
         while self._channel._consumer_infos:
-            self.poll()
+            self.poll(poll_time)
             if self._stopping:
                 self._channel.stop_consuming()
                 self._stopping = False
@@ -278,7 +283,8 @@ class TaskRunner(Subscriber, ProcessListener):
         self._channel.queue_declare(queue=queue, durable=True)
         self._channel.basic_consume(self._on_launch, queue=queue)
 
-    def start(self):
+    @override
+    def start(self, poll_time=1.0):
         """
         Start polling for tasks.  Will block until stop() is called.
 
@@ -286,18 +292,20 @@ class TaskRunner(Subscriber, ProcessListener):
             that was passed into the constructor was created.
         """
         while self._channel._consumer_infos:
-            self.poll()
+            self.poll(poll_time)
             if self._stopping:
                 self._channel.stop_consuming()
                 self._stopping = False
 
-    def poll(self, timeout=1):
+    @override
+    def poll(self, timeout=1.0):
         self._num_processes = 0
         self._channel.connection.process_data_events(time_limit=timeout)
         self._controller.poll(timeout)
         self._status_provider.poll(timeout)
         return self._num_processes
 
+    @override
     def stop(self):
         self._stopping = True
         self._manager.pause_all()

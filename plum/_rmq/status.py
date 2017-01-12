@@ -110,14 +110,14 @@ class StatusProvider(Subscriber):
     def set_process_manager(self, manager):
         self._manager = manager
 
-    def start(self):
+    def start(self, poll_time=1.0):
         while self._channel._consumer_infos:
-            self.poll()
+            self.poll(poll_time)
             if self._stopping:
                 self._channel.stop_consuming()
                 self._stopping = False
 
-    def poll(self, time_limit=1):
+    def poll(self, time_limit=1.0):
         self._channel.connection.process_data_events(time_limit=time_limit)
 
     def stop(self):
