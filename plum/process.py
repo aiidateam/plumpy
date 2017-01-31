@@ -532,6 +532,10 @@ class Process(object):
     @protected
     def on_stop(self):
         self.__event_helper.fire_event(ProcessListener.on_process_stop, self)
+        # There will be no more messages so remove the listeners.  Otherwise we
+        # may continue to hold references to them and stop them being garbage
+        # collected
+        self.__event_helper.remove_all_listeners()
         self.__called = True
 
     @protected
@@ -540,6 +544,10 @@ class Process(object):
         Called if the process raised an exception.
         """
         self.__event_helper.fire_event(ProcessListener.on_process_fail, self)
+        # There will be no more messages so remove the listeners.  Otherwise we
+        # may continue to hold references to them and stop them being garbage
+        # collected
+        self.__event_helper.remove_all_listeners()
         self.__called = True
 
     def _on_output_emitted(self, output_port, value, dynamic):

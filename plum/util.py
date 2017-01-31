@@ -27,6 +27,9 @@ class EventHelper(object):
     def remove_listener(self, listener):
         self._listeners.discard(listener)
 
+    def remove_all_listeners(self):
+        self._listeners.clear()
+
     @property
     def listeners(self):
         return self._listeners

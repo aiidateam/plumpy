@@ -104,3 +104,24 @@ class TestProcessManager(TestCase):
         self.assertTrue(wait_until(procs, ProcessState.WAITING))
         self.assertTrue(self.manager.pause_all(timeout=2))
         self.assertTrue(self.manager.abort_all(timeout=2))
+
+    def test_future_pid(self):
+        p = DummyProcess.new_instance()
+        future = self.manager.start(p)
+        self.assertEqual(future.pid, p.pid)
+
+    def test_future_abort(self):
+        p = WaitForSignalProcess.new_instance()
+        future = self.manager.start(p)
+        self.assertTrue(p.is_executing())
+        self.assertTrue(future.abort(timeout=1))
+        self.assertTrue(p.has_aborted())
+
+    def test_future_pause_play(self):
+        p = WaitForSignalProcess.new_instance()
+        future = self.manager.start(p)
+        self.assertTrue(p.is_executing())
+        self.assertTrue(future.pause(timeout=1))
+        self.assertFalse(p.is_executing())
+        future.play()
+        self.assertTrue(p.is_executing())

@@ -10,6 +10,49 @@ class _ProcInfo(object):
         self.thread = thread
 
 
+class Future(object):
+    def __init__(self, procman, process):
+        """
+        The process manager creates instances of futures that can be used by the
+        user.
+
+        :param procman: The process manager that the process belongs to
+        :type procman: :class:`ProcessManager`
+        :param pid: The pid of the process
+        """
+        self._procman = procman
+        self._process = process
+
+    @property
+    def pid(self):
+        """
+        Contains the pid of the process
+
+        :return: The pid
+        """
+        return self._process.pid
+
+    @property
+    def outputs(self):
+        """
+        Contains the current outputs of the process.  If it is still running
+        these may grow (but not change) over time.
+
+        :return: A mapping of {output_port: value} outputs
+        :rtype: dict
+        """
+        return self._process.outputs
+
+    def abort(self, msg=None, timeout=None):
+        return self._procman.abort(self.pid, msg, timeout)
+
+    def play(self):
+        return self._procman.play(self.pid)
+
+    def pause(self, timeout):
+        return self._procman.pause(self.pid, timeout)
+
+
 class ProcessManager(ProcessListener):
     """
     Used to launch processes on multiple threads and monitor their progress
@@ -20,13 +63,31 @@ class ProcessManager(ProcessListener):
         self._finished_threads = []
 
     def launch(self, proc_class, inputs=None, pid=None, logger=None):
+        """
+        Create a process and start it.
+
+        :param proc_class: The process class
+        :param inputs: The inputs to the process
+        :param pid: The (optional) pid for the process
+        :param logger: The (optional) logger for the process to use
+        :return: A :class:`Future` representing the execution of the process
+        :rtype: :class:`Future`
+        """
         return self.start(proc_class.new_instance(inputs, pid, logger))
 
     def start(self, proc):
+        """
+        Start an existing process.
+
+        :param proc: The process to start
+        :type proc: :class:`plum.process.Process`
+        :return: A :class:`Future` representing the execution of the process
+        :rtype: :class:`Future`
+        """
         self._processes[proc.pid] = _ProcInfo(proc, None)
         proc.add_process_listener(self)
         self._play(proc)
-        return proc.pid
+        return Future(self, proc)
 
     def get_processes(self):
         return [info.proc for info in self._processes.itervalues()]
