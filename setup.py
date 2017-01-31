@@ -34,6 +34,6 @@ setup(
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['futures'],
     },
-    packages=['plum', 'plum.persistence', 'plum.engine'],
+    packages=['plum', 'plum.persistence'],
     test_suite='test'
 )
