@@ -27,6 +27,7 @@ class _CompoundWaitOn(WaitOn):
     WAIT_LIST = 'wait_list'
 
     def init(self, wait_list):
+        super(_CompoundWaitOn, self).init()
         self._wait_list = wait_list
 
     @override

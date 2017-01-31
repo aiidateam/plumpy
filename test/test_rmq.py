@@ -1,5 +1,6 @@
 
 import pika
+import pika.exceptions
 import threading
 import uuid
 import json
@@ -23,7 +24,11 @@ class TestTaskControllerAndRunner(TestCase):
     def setUp(self):
         super(TestTaskControllerAndRunner, self).setUp()
 
-        connection = pika.BlockingConnection()
+        try:
+            connection = pika.BlockingConnection()
+        except pika.exceptions.ConnectionClosed:
+            self.fail("Couldn't open connection.  Make sure rmq server is running")
+
         queue = "{}.{}.tasks".format(self.__class__, uuid.uuid4())
         self.sender = TaskController(connection, queue=queue)
         self.runner = TaskRunner(connection, queue=queue)
@@ -54,7 +59,10 @@ class TestTaskControllerAndRunner(TestCase):
 class TestProcessController(TestCase):
     def setUp(self):
         super(TestProcessController, self).setUp()
-        self._connection = pika.BlockingConnection()
+        try:
+            self._connection = pika.BlockingConnection()
+        except pika.exceptions.ConnectionClosed:
+            self.fail("Couldn't open connection.  Make sure rmq server is running")
 
         self.exchange = '{}.{}.task_control'.format(
             self.__class__, uuid.uuid4())
@@ -138,7 +146,7 @@ class TestRmqThread(TestCase):
             t = SubscriberThread(c)
             t.set_poll_time(0.0)
             t.start()
-            t.wait_till_started()
+            self.assertTrue(t.wait_till_started(1), "Subscriber thread failed to start")
             t.stop()
             t.join(2)
             self.assertFalse(t.is_alive())

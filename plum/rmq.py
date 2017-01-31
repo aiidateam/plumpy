@@ -140,7 +140,7 @@ class SubscriberThread(threading.Thread):
         self._rmq_instance.stop()
 
     def wait_till_started(self, timeout=None):
-        self._started.wait(timeout)
+        return self._started.wait(timeout)
 
 
 class Action(object):

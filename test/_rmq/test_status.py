@@ -2,6 +2,7 @@
 
 from test.util import TestCase
 import pika
+import pika.exceptions
 import json
 import uuid
 from plum._rmq.status import StatusProvider, StatusRequester, status_decode
@@ -18,7 +19,11 @@ class TestStatusRequesterAndProvider(TestCase):
         self.response = None
 
         # Set up communications
-        self._connection = pika.BlockingConnection()
+        try:
+            self._connection = pika.BlockingConnection()
+        except pika.exceptions.ConnectionClosed:
+            self.fail("Couldn't open connection.  Make sure rmq server is running")
+
         exchange = "{}.{}.status_request".format(self.__class__, uuid.uuid4())
         self.requester = StatusRequester(self._connection, exchange=exchange)
         self.manager = ProcessManager()
@@ -73,7 +78,11 @@ class TestStatusProvider(TestCase):
         self._response = None
         self._corr_id = None
 
-        self._connection = pika.BlockingConnection()
+        try:
+            self._connection = pika.BlockingConnection()
+        except pika.exceptions.ConnectionClosed:
+            self.fail("Couldn't open connection.  Make sure rmq server is running")
+
         self.channel = self._connection.channel()
 
         # Set up the request exchange

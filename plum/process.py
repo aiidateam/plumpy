@@ -169,9 +169,9 @@ class Process(object):
             return cls.__getattribute__(cls, '_spec')
         except AttributeError:
             cls._spec = cls._spec_type()
-            cls._called = False
+            cls.__called = False
             cls.define(cls._spec)
-            assert cls._called, \
+            assert cls.__called, \
                 "Process.define() was not called by {}\n" \
                 "Hint: Did you forget to call the superclass method in your define? " \
                 "Try: super({}, cls).define(spec)".format(cls, cls.__name__)
@@ -211,7 +211,7 @@ class Process(object):
 
     @classmethod
     def define(cls, spec):
-        cls._called = True
+        cls.__called = True
 
     ############################################
 
@@ -236,6 +236,7 @@ class Process(object):
         self._parsed_inputs = None
         self._outputs = {}
 
+        # RUNTIME STATE ##
         # Stuff below here doesn't need to be saved in the instance state
         # Reads/writes of variables with 'protect' suffix should be guarded by
         # the state lock
@@ -248,7 +249,7 @@ class Process(object):
         self.__event_helper = util.EventHelper(ProcessListener)
 
         # Flag to make sure all the necessary event methods were called
-        self._called = False
+        self.__called = False
 
     @property
     def pid(self):
@@ -436,13 +437,13 @@ class Process(object):
         self._pausing_protect = False
         self._aborting_protect = False
 
-        self._called = True
+        self.__called = True
 
     @protected
     def on_done_executing(self):
         self._executing = False
 
-        self._called = True
+        self.__called = True
 
     @protected
     def on_create(self, pid, inputs, saved_instance_state):
@@ -468,7 +469,7 @@ class Process(object):
             self._parsed_inputs = \
                 util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
-        self._called = True
+        self.__called = True
 
     @protected
     def on_start(self):
@@ -481,7 +482,7 @@ class Process(object):
 
         """
         self.__event_helper.fire_event(ProcessListener.on_process_start, self)
-        self._called = True
+        self.__called = True
 
     @protected
     def on_run(self):
@@ -497,17 +498,17 @@ class Process(object):
         """
         self._wait = None
         self.__event_helper.fire_event(ProcessListener.on_process_run, self)
-        self._called = True
+        self.__called = True
 
     @protected
     def on_wait(self):
         self.__event_helper.fire_event(ProcessListener.on_process_wait, self)
-        self._called = True
+        self.__called = True
 
     @protected
     def on_resume(self):
         self.__event_helper.fire_event(ProcessListener.on_process_resume, self)
-        self._called = True
+        self.__called = True
 
     @protected
     def on_abort(self):
@@ -515,7 +516,7 @@ class Process(object):
         Called when the process has been asked to abort itself.
         """
         self._aborted = True
-        self._called = True
+        self.__called = True
 
     @protected
     def on_finish(self):
@@ -526,12 +527,12 @@ class Process(object):
         self._check_outputs()
         self._finished = True
         self.__event_helper.fire_event(ProcessListener.on_process_finish, self)
-        self._called = True
+        self.__called = True
 
     @protected
     def on_stop(self):
         self.__event_helper.fire_event(ProcessListener.on_process_stop, self)
-        self._called = True
+        self.__called = True
 
     @protected
     def on_fail(self):
@@ -539,7 +540,7 @@ class Process(object):
         Called if the process raised an exception.
         """
         self.__event_helper.fire_event(ProcessListener.on_process_fail, self)
-        self._called = True
+        self.__called = True
 
     def _on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
@@ -836,7 +837,7 @@ class Process(object):
         self._exception = exception
         self._next_transition = None
         try:
-            self._called = False
+            self.__called = False
             self.on_fail()
         except BaseException as e:
             self._logger.warn(
@@ -844,7 +845,7 @@ class Process(object):
                 "to inform the process that an exception had been "
                 "raised during execution.  Msg: {}".format(e.message))
         else:
-            assert self._called, \
+            assert self.__called, \
                 "on_fail was not called\n" \
                 "Hint: Did you forget to call the superclass method?"
 
@@ -867,9 +868,9 @@ class Process(object):
             pass
 
     def _call_with_super_check(self, fn, *args, **kwargs):
-        self._called = False
+        self.__called = False
         fn(*args, **kwargs)
-        assert self._called, \
+        assert self.__called, \
             "{} was not called\n" \
             "Hint: Did you forget to call the superclass method?".format(fn.__name__)
 
