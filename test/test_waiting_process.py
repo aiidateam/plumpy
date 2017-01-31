@@ -28,7 +28,7 @@ class TestWaitingProcess(TestCase):
     def test_instance_state(self):
         proc = TwoCheckpoint.new_instance()
         wl = ProcessSaver(proc)
-        proc.start()
+        proc.play()
 
         for snapshot, outputs in zip(wl.snapshots, wl.outputs):
             state, bundle = snapshot
@@ -40,7 +40,7 @@ class TestWaitingProcess(TestCase):
             proc = ProcClass.new_instance()
             saver = ProcessSaver(proc)
             try:
-                proc.start()
+                proc.play()
             except BaseException:
                 pass
 
@@ -48,7 +48,7 @@ class TestWaitingProcess(TestCase):
 
     def test_abort(self):
         p = WaitForSignalProcess.new_instance()
-        t = threading.Thread(target=p.start)
+        t = threading.Thread(target=p.play)
 
         # Start the process
         t.start()

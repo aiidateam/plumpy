@@ -54,7 +54,7 @@ class TestProcessManager(TestCase):
 
         # Check they are all in state we expect
         for p in procs:
-            self.assertTrue(p.is_executing())
+            self.assertTrue(p.is_playing())
 
         # Now try and pause them all
         self.manager.pause_all()
@@ -62,7 +62,7 @@ class TestProcessManager(TestCase):
         # Check they are all in state we expect
         for p in procs:
             self.assertEqual(p.state, ProcessState.WAITING)
-            self.assertFalse(p.is_executing())
+            self.assertFalse(p.is_playing())
 
     def test_play_all(self):
         procs = []
@@ -76,7 +76,7 @@ class TestProcessManager(TestCase):
 
         # Check they are all in state we expect
         for p in procs:
-            self.assertTrue(p.is_executing(), "state '{}'".format(p.state))
+            self.assertTrue(p.is_playing(), "state '{}'".format(p.state))
 
         # Now try and pause them all
         self.manager.pause_all()
@@ -84,7 +84,7 @@ class TestProcessManager(TestCase):
         # Check they are all in state we expect
         for p in procs:
             self.assertEqual(p.state, ProcessState.WAITING)
-            self.assertFalse(p.is_executing())
+            self.assertFalse(p.is_playing())
 
         self.manager.play_all()
 
@@ -94,7 +94,7 @@ class TestProcessManager(TestCase):
 
         for p in procs:
             self.assertEqual(p.state, ProcessState.STOPPED)
-            self.assertFalse(p.is_executing())
+            self.assertFalse(p.is_playing())
 
     def test_play_pause_abort(self):
         procs = []
@@ -113,15 +113,15 @@ class TestProcessManager(TestCase):
     def test_future_abort(self):
         p = WaitForSignalProcess.new_instance()
         future = self.manager.start(p)
-        self.assertTrue(p.is_executing())
+        self.assertTrue(p.is_playing())
         self.assertTrue(future.abort(timeout=1))
         self.assertTrue(p.has_aborted())
 
     def test_future_pause_play(self):
         p = WaitForSignalProcess.new_instance()
         future = self.manager.start(p)
-        self.assertTrue(p.is_executing())
+        self.assertTrue(p.is_playing())
         self.assertTrue(future.pause(timeout=1))
-        self.assertFalse(p.is_executing())
+        self.assertFalse(p.is_playing())
         future.play()
-        self.assertTrue(p.is_executing())
+        self.assertTrue(p.is_playing())

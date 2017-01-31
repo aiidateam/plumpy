@@ -105,5 +105,5 @@ if __name__ == '__main__':
     print(mul_add.run_and_block({'a': 2, 'b': 3, 'c': 4}))
 
     mul_add(a=2, b=3, c=4)
-    TestDynamicOutput.new_instance().start()
+    TestDynamicOutput.new_instance().play()
 

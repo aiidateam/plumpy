@@ -85,7 +85,7 @@ class TestProcessController(TestCase):
         p = WaitForSignalProcess.new_instance()
         self.manager.start(p)
         wait_until(p, ProcessState.WAITING)
-        self.assertTrue(p.is_executing())
+        self.assertTrue(p.is_playing())
 
         # Send a message asking the process to pause
         self.channel.basic_publish(
@@ -93,16 +93,16 @@ class TestProcessController(TestCase):
             body=action_encode({'pid': p.pid, 'intent': 'pause'}))
         self.controller.poll(time_limit=1)
 
-        self.assertFalse(p.is_executing())
+        self.assertFalse(p.is_playing())
         self.assertTrue(self.manager.abort(p.pid, timeout=10))
 
     def test_pause_play(self):
         def test_pause(self):
             # Create the process and wait until it is waiting
             p = WaitForSignalProcess.new_instance()
-            self.manager.start(p)
+            self.manager.play(p)
             self.assertTrue(wait_until(p, ProcessState.WAITING, 1))
-            self.assertTrue(p.is_executing())
+            self.assertTrue(p.is_playing())
 
             # Send a message asking the process to pause
             self.channel.basic_publish(
@@ -110,7 +110,7 @@ class TestProcessController(TestCase):
                 body=action_encode({'pid': p.pid, 'intent': 'pause'}))
             self.controller.poll_response(time_limit=1)
 
-            self.assertFalse(p.is_executing())
+            self.assertFalse(p.is_playing())
 
             # Now ask it to continue
             self.channel.basic_publish(
@@ -118,7 +118,7 @@ class TestProcessController(TestCase):
                 body=action_encode({'pid': p.pid, 'intent': 'play'}))
             self.controller.poll_response(time_limit=1)
 
-            self.assertTrue(p.is_executing())
+            self.assertTrue(p.is_playing())
             self.assertTrue(self.manager.abort(p.pid, timeout=10))
 
     def test_abort(self):
@@ -126,7 +126,7 @@ class TestProcessController(TestCase):
         p = WaitForSignalProcess.new_instance()
         self.manager.start(p)
         wait_until(p, ProcessState.WAITING)
-        self.assertTrue(p.is_executing())
+        self.assertTrue(p.is_playing())
 
         # Send a message asking the process to abort
         self.channel.basic_publish(

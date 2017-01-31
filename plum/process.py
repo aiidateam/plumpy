@@ -49,8 +49,14 @@ class _Unlock(object):
 
 class Process(object):
     """
-    The Process class is the base for any unit of work in the plum workflow
-    engine.
+    The Process class is the base for any unit of work in plum.
+
+    Once a process is created it may be started by calling play() at which
+    point it is said to be 'playing', like a tape.  It can then be paused by
+    calling pause() which will only be acted on at the next state transition
+    OR if the process is in the WAITING state in which case it will pause
+    immediately.  It can be resumed with a call to play().
+
     A process can be in one of the following states:
 
     * CREATED
@@ -206,7 +212,7 @@ class Process(object):
     @classmethod
     def run(cls, **kwargs):
         p = cls.new_instance(kwargs)
-        p.start()
+        p.play()
         return p.outputs
 
     @classmethod
@@ -240,10 +246,10 @@ class Process(object):
         # Stuff below here doesn't need to be saved in the instance state
         # Reads/writes of variables with 'protect' suffix should be guarded by
         # the state lock
-        self._pausing_protect = False
-        self._aborting_protect = False
-        self._executing = False
-        self._state_lock = threading.Lock()
+        self.__pausing_protect = False
+        self.__aborting_protect = False
+        self.__playing = False
+        self.__state_lock = threading.Lock()
 
         # Events and running
         self.__event_helper = util.EventHelper(ProcessListener)
@@ -288,14 +294,14 @@ class Process(object):
         """
         return self._logger
 
-    def is_executing(self):
+    def is_playing(self):
         """
-        Is the process currently executing (i.e. in the start() method).
+        Is the process currently playing.
 
-        :return: True if executing, False otherwise
+        :return: True if playing, False otherwise
         :rtype: bool
         """
-        return self._executing
+        return self.__playing
 
     def has_finished(self):
         """
@@ -367,23 +373,23 @@ class Process(object):
             bundle[self.BundleKeys.WAIT_ON_CALLBACK.value] = \
                 self._wait.callback.__name__
 
-    def start(self):
+    def play(self):
         """
-        Start running the process.
+        Play the process.
         """
-        assert not self._executing, \
+        assert not self.__playing, \
             "Cannot execute a process twice simultaneously"
 
         try:
             MONITOR.register_process(self)
-            with self._state_lock:
-                self._call_with_super_check(self.on_executing)
+            with self.__state_lock:
+                self._call_with_super_check(self.on_playing)
 
             # Keep going until we run out of tasks
             fn = self._next()
             while fn is not None:
                 try:
-                    with self._state_lock:
+                    with self.__state_lock:
                         self._next_transition = None
                         fn()
                 except BaseException as e:
@@ -393,7 +399,7 @@ class Process(object):
 
         finally:
             MONITOR.deregister_process(self)
-            self._call_with_super_check(self.on_done_executing)
+            self._call_with_super_check(self.on_done_playing)
 
         return self._outputs
 
@@ -401,20 +407,20 @@ class Process(object):
         """
         Pause an playing process.  This can be called from another thread.
         """
-        with self._state_lock:
-            self._pausing_protect = True
+        with self.__state_lock:
+            self.__pausing_protect = True
             self._interrupt()
 
     def abort(self, msg=None):
         """
-        Abort an executing process.  Can optionally provide a message with
-        the abort.  Thi can be called from another thread.
+        Abort a playing process.  Can optionally provide a message with
+        the abort.  This can be called from another thread.
 
         :param msg: The abort message
         :type msg: str
         """
-        with self._state_lock:
-            self._aborting_protect = True
+        with self.__state_lock:
+            self.__aborting_protect = True
             self._abort_msg = msg
             self._interrupt()
 
@@ -432,16 +438,16 @@ class Process(object):
     # Process messages #####################################################
     # Make sure to call the superclass method if your override any of these
     @protected
-    def on_executing(self):
-        self._executing = True
-        self._pausing_protect = False
-        self._aborting_protect = False
+    def on_playing(self):
+        self.__playing = True
+        self.__pausing_protect = False
+        self.__aborting_protect = False
 
         self.__called = True
 
     @protected
-    def on_done_executing(self):
-        self._executing = False
+    def on_done_playing(self):
+        self.__playing = False
 
         self.__called = True
 
@@ -720,12 +726,12 @@ class Process(object):
         :return: A callable that only takes the self process as argument.
           May be None if the process should not continue.
         """
-        with self._state_lock:
+        with self.__state_lock:
             if self.has_terminated():
                 return None
-            elif self._pausing_protect:
+            elif self.__pausing_protect:
                 return None
-            elif self._aborting_protect:
+            elif self.__aborting_protect:
                 return self._perform_abort
             else:
                 return self._next_transition
@@ -757,7 +763,7 @@ class Process(object):
         self._to_running()
 
         # Run the thing
-        with _Unlock(self._state_lock):
+        with _Unlock(self.__state_lock):
             self._return_value = self.do_run()
         # Figure out what to do next
         if self._is_wait_retval(self._return_value):
@@ -781,7 +787,7 @@ class Process(object):
             self._call_with_super_check(self.on_wait)
 
         try:
-            with _Unlock(self._state_lock):
+            with _Unlock(self.__state_lock):
                 self._wait.on.wait()
             if self._wait.callback is None:
                 self._next_transition = self._perform_finish
@@ -803,7 +809,7 @@ class Process(object):
         w = self._wait
         self._wait = None
         self._to_running()
-        with _Unlock(self._state_lock):
+        with _Unlock(self.__state_lock):
             self._return_value = w.callback(w.on)
 
         # Figure out what to do next
@@ -832,7 +838,7 @@ class Process(object):
         self._call_with_super_check(self.on_abort)
 
         self._to_stopped()
-        self._aborting_protect = False
+        self.__aborting_protect = False
 
     def _perform_fail(self, exception):
         """

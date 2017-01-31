@@ -303,7 +303,7 @@ def check_process_against_snapshots(proc_class, snapshots):
         loaded = proc_class.create_from(info[1])
         ps = ProcessSaver(loaded)
         try:
-            loaded.start()
+            loaded.play()
         except BaseException:
             pass
 

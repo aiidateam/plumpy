@@ -141,7 +141,7 @@ class TestProcess(TestCase):
 
     def test_run(self):
         p = DummyProcessWithOutput.new_instance()
-        p.start()
+        p.play()
 
         self.assertTrue(p.has_finished())
         self.assertEqual(p.state, ProcessState.STOPPED)
@@ -180,7 +180,7 @@ class TestProcess(TestCase):
     def test_exception(self):
         proc = ExceptionProcess.new_instance()
         with self.assertRaises(BaseException):
-            proc.start()
+            proc.play()
         self.assertEqual(proc.state, ProcessState.FAILED)
         del proc
 
@@ -211,7 +211,7 @@ class TestProcess(TestCase):
         proc = DummyProcessWithOutput.new_instance()
 
         saver = ProcessSaver(proc)
-        proc.start()
+        proc.play()
 
         for info, outputs in zip(saver.snapshots, saver.outputs):
             state, bundle = info
@@ -230,7 +230,7 @@ class TestProcess(TestCase):
             proc = ProcClass.new_instance()
 
             saver = ProcessSaver(proc)
-            proc.start()
+            proc.play()
 
             self.assertEqual(proc.state, ProcessState.STOPPED)
             self.assertTrue(check_process_against_snapshots(ProcClass, saver.snapshots))
@@ -240,7 +240,7 @@ class TestProcess(TestCase):
             proc = ProcClass.new_instance()
             ps = ProcessSaver(proc)
             try:
-                proc.start()
+                proc.play()
             except BaseException:
                 pass
 
@@ -253,26 +253,26 @@ class TestProcess(TestCase):
 
         # TODO: Test giving a custom logger to see if it gets used
         p = LoggerTester.new_instance()
-        p.start()
+        p.play()
 
     def test_abort(self):
         # Abort a process before it gets started, this will get ignored and the
         # process will run normally
         proc = DummyProcess.new_instance()
         proc.abort()
-        proc.start()
+        proc.play()
 
         self.assertFalse(proc.has_aborted())
         self.assertEqual(proc.state, ProcessState.STOPPED)
 
     def test_wait_continue(self):
         p = WaitForSignalProcess.new_instance()
-        t = threading.Thread(target=p.start)
+        t = threading.Thread(target=p.play)
         t.start()
         self.assertTrue(wait_until(p, ProcessState.WAITING, 5))
         self.assertEqual(p.state, ProcessState.WAITING)
 
-        self.assertTrue(p.is_executing())
+        self.assertTrue(p.is_playing())
         p.continue_()
 
         self.assertTrue(wait_until(p, ProcessState.STOPPED, 5))
@@ -281,33 +281,33 @@ class TestProcess(TestCase):
 
     def test_wait_pause_continue_play(self):
         p = WaitForSignalProcess.new_instance()
-        t = threading.Thread(target=p.start)
+        t = threading.Thread(target=p.play)
         t.start()
         self.assertTrue(wait_until(p, ProcessState.WAITING, 5))
 
-        self.assertTrue(p.is_executing())
+        self.assertTrue(p.is_playing())
         p.pause()
         self.safe_join(t)
-        self.assertFalse(p.is_executing())
+        self.assertFalse(p.is_playing())
 
         p.continue_()
-        p.start()
+        p.play()
 
         self.assertEqual(p.state, ProcessState.STOPPED)
 
     def test_wait_pause_play_continue(self):
         p = WaitForSignalProcess.new_instance()
 
-        t = threading.Thread(target=p.start)
+        t = threading.Thread(target=p.play)
         t.start()
         self.assertTrue(wait_until(p, ProcessState.WAITING, 5))
 
-        self.assertTrue(p.is_executing())
+        self.assertTrue(p.is_playing())
         p.pause()
         self.safe_join(t)
-        self.assertFalse(p.is_executing())
+        self.assertFalse(p.is_playing())
 
-        t = threading.Thread(target=p.start)
+        t = threading.Thread(target=p.play)
         t.start()
         self.assertEqual(p.state, ProcessState.WAITING)
         p.continue_()

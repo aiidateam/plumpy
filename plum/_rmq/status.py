@@ -142,5 +142,5 @@ class StatusProvider(Subscriber):
     def _get_status(self, process):
         return {
             'state': process.state,
-            'playing': process.is_executing()
+            'playing': process.is_playing()
         }

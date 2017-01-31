@@ -36,7 +36,7 @@ class TestPicklePersistence(TestCase):
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
-        t = threading.Thread(target=proc.start)
+        t = threading.Thread(target=proc.play)
         t.start()
 
         # Check the file exists
@@ -52,7 +52,7 @@ class TestPicklePersistence(TestCase):
         running_path = self.pickle_persistence.get_running_path(proc.pid)
 
         self.assertTrue(os.path.isfile(running_path))
-        proc.start()
+        proc.play()
         self.assertFalse(os.path.isfile(running_path))
         finished_path =\
             os.path.join(self.store_dir,

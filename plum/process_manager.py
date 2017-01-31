@@ -155,7 +155,7 @@ class ProcessManager(ProcessListener):
         info = self._processes[proc.pid]
         # Is it playing already?
         if info.thread is None:
-            info.thread = threading.Thread(target=proc.start)
+            info.thread = threading.Thread(target=proc.play)
             info.thread.start()
 
     def _pause(self, proc, timeout=None):
