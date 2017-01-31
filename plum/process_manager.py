@@ -90,7 +90,7 @@ class ProcessManager(ProcessListener):
         return Future(self, proc)
 
     def get_processes(self):
-        return [info.proc for info in self._processes.itervalues()]
+        return [info.proc for info in self._processes.values()]
 
     def play(self, pid):
         try:
@@ -114,7 +114,7 @@ class ProcessManager(ProcessListener):
         are all paused before returning.
         """
         result = True
-        for info in self._processes.itervalues():
+        for info in self._processes.values():
             result &= self._pause(info.proc, timeout=timeout)
         return result
 
@@ -153,6 +153,7 @@ class ProcessManager(ProcessListener):
 
     def _play(self, proc):
         info = self._processes[proc.pid]
+
         # Is it playing already?
         if info.thread is None:
             info.thread = threading.Thread(target=proc.play)
@@ -161,6 +162,7 @@ class ProcessManager(ProcessListener):
     def _pause(self, proc, timeout=None):
         info = self._processes[proc.pid]
         info.proc.pause()
+
         # Is is paused or finished already?
         thread = info.thread
         if thread is not None:

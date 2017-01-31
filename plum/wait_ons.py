@@ -4,11 +4,12 @@ from abc import ABCMeta, abstractmethod
 import time
 from collections import Sequence
 from plum.persistence.bundle import Bundle
-from plum.wait import WaitOn
+from plum.wait import WaitOn, Unsupported
 from plum.util import override
 from plum.process_listener import ProcessListener
 from plum.process import ProcessState
 from plum.process_monitor import MONITOR
+from plum.exceptions import TimeoutError
 
 
 class Checkpoint(WaitOn):
@@ -16,8 +17,8 @@ class Checkpoint(WaitOn):
     This WaitOn doesn't actually wait, it's just a way to ask the engine to
     create a checkpoint at this point in the execution of a Process.
     """
-    def init(self):
-        super(Checkpoint, self).init()
+    def __init__(self):
+        super(Checkpoint, self).__init__()
         self.done(True)
 
 
@@ -104,6 +105,25 @@ class WaitOnState(WaitOn, ProcessListener):
     WAIT_ON_STATE = 'state'
 
     @override
+    def __init__(self, proc, state):
+        """
+        Create the WaitOnState.
+
+        :param proc: The process to wait on
+        :type proc: :class:`plum.process.Process`
+        :param state: The state it needs to reach before being ready
+        :type state: :class:`plum.process.ProcessState`
+        """
+        assert state in ProcessState
+        super(WaitOnState, self).__init__()
+
+        self._state = state
+        if proc.state is self._state:
+            self.done()
+        else:
+            proc.add_process_listener(self)
+
+    @override
     def on_process_run(self, proc):
         if self._state is ProcessState.RUNNING:
             self._signal_done(proc)
@@ -125,50 +145,15 @@ class WaitOnState(WaitOn, ProcessListener):
 
     @override
     def save_instance_state(self, out_state):
-        super(WaitOnState, self).save_instance_state(out_state)
-
-        out_state[self.WAIT_ON_PID] = self._proc_pid
-        out_state[self.WAIT_ON_STATE] = self._state
-
-    @override
-    def init(self, proc, state):
-        """
-        Create the WaitOnState.
-
-        :param proc: The process to wait on
-        :type proc: :class:`plum.process.Process`
-        :param state: The state it needs to reach before being ready
-        :type state: :class:`plum.process.ProcessState`
-        """
-        assert state in ProcessState
-        super(WaitOnState, self).init()
-
-        self._proc_pid = proc.pid
-        self._state = state
-        self._init_process(proc)
+        raise Unsupported()
 
     @override
     def load_instance_state(self, bundle):
-        super(WaitOnState, self).load_instance_state(bundle)
-
-        self._proc_pid = bundle[self.WAIT_ON_PID]
-        self._state = bundle[self.WAIT_ON_STATE]
-        if not self.is_done():
-            try:
-                proc = MONITOR.get_process(self._proc_pid)
-                self._init_process(proc)
-            except ValueError:
-                raise RuntimeError("The process that was being waited on is "
-                                   "no longer running.")
-
-    def _init_process(self, proc):
-        proc.add_process_listener(self)
-        if proc.state is self._state:
-            self._signal_done(proc)
+        raise Unsupported()
 
     def _signal_done(self, proc):
         try:
-            self.done(True)
+            self.done()
             proc.remove_process_listener(self)
         except RuntimeError:
             pass
@@ -190,50 +175,72 @@ def wait_until(proc, state, timeout=None):
         return WaitOnState(proc, state).wait(timeout)
 
 
-class WaitOnProcess(WaitOnState):
+class WaitOnProcess(WaitOn, ProcessListener):
+    def __init__(self, proc):
+        """
+        Wait for a process to terminate.
+
+        :param proc: The process
+        :type proc: :class:`plum.process.Process`
+        """
+        super(WaitOnProcess, self).__init__()
+        if proc.has_terminated():
+            self.done()
+        else:
+            proc.add_process_listener(self)
+
     @override
-    def init(self, proc):
-        super(WaitOnProcess, self).init(proc, ProcessState.STOPPED)
+    def save_instance_state(self, out_state):
+        raise Unsupported(
+            "Cannot save this WaitOn because when it is reloaded there is no "
+            "way to know if the process is done.")
+
+    @override
+    def load_instance_state(self, bundle):
+        raise Unsupported(
+            "Cannot load this WaitOn because when it is reloaded there is no "
+            "way to know if the process is done.")
+
+    @override
+    def on_process_fail(self, process):
+        self.done()
+
+    @override
+    def on_process_stop(self, process):
+        self.done()
 
 
 class WaitOnProcessOutput(WaitOn, ProcessListener):
     WAIT_ON_PID = 'pid'
     OUTPUT_PORT = 'output_port'
 
-    def init(self, proc, output_port):
-        self._proc_pid = proc.pid
+    def __init__(self, proc, output_port):
+        super(WaitOnProcessOutput, self).__init__()
         self._output_port = output_port
 
-        self._init_process(proc)
+        # Check if process has emitted, otherwise listen
+        if self._output_port in proc.get_outputs():
+            self.done()
+        else:
+            proc.add_process_listener(self)
 
     @override
     def save_instance_state(self, out_state):
-        super(WaitOnProcessOutput, self).save_instance_state(out_state)
-
-        out_state[self.WAIT_ON_PID] = self._proc_pid
-        out_state[self.OUTPUT_PORT] = self._output_port
+        raise Unsupported(
+            "Cannot save this WaitOn because when it is reloaded there is no "
+            "way to know if the process is done.")
 
     @override
     def load_instance_state(self, bundle):
-        super(WaitOnProcessOutput, self).load_instance_state(bundle)
+        raise Unsupported(
+            "Cannot load this WaitOn because when it is reloaded there is no "
+            "way to know if the process is done.")
 
-        self._proc_pid = bundle[self.WAIT_ON_PID]
-        self._output_port = bundle[self.OUTPUT_PORT]
-        if not self.is_done():
-            try:
-                proc = MONITOR.get_process(self._proc_pid)
-                self._init_process(proc)
-            except ValueError:
-                raise RuntimeError("The process that was being waited on is "
-                                   "no longer running.")
-
-    def _init_process(self, proc):
-        # If the process is in that state then we're done and don't need to
-        # listen for anything else
-        if self._output_port in proc.get_outputs():
-            self.done(True)
-        else:
-            proc.add_process_listener(self)
+    @override
+    def on_output_emitted(self, process, output_port, value, dynamic):
+        if output_port == self._output_port:
+            self.done()
+            process.remove_process_listener(self)
 
 
 def wait_until_stopped(proc, timeout=None):
@@ -250,4 +257,22 @@ def wait_until_stopped(proc, timeout=None):
         return WaitOnAll([WaitOnProcess(p) for p in proc]).wait(timeout)
     else:
         return WaitOnProcess(proc).wait(timeout)
+
+
+class WaitRegion(object):
+    """
+    A WaitRegion is a context that will not exit until the wait on has finished
+    or the (optional) timeout has been reached in which case an TimeoutError is
+    raised.
+    """
+    def __init__(self, wait_on, timeout=None):
+        self._wait_on = wait_on
+        self._timeout = timeout
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self._wait_on.wait(self._timeout):
+            raise TimeoutError()
 

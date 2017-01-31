@@ -71,7 +71,7 @@ class Process(object):
 
         CREATED---on_start,on_run-->RUNNING---on_finish,on_stop-->STOPPED
                                     |     ^               |         ^
-                               on_wait  on_resume,on_run  |   on_abort,on_stop
+                               on_wait on_resume,on_run   |   on_abort,on_stop
                                     v     |               |         |
                                     WAITING----------------     [any state]
 
@@ -349,6 +349,9 @@ class Process(object):
     def get_exception(self):
         return self._exception
 
+    def get_abort_msg(self):
+        return self._abort_msg
+
     def save_instance_state(self, bundle):
         bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
         bundle[self.BundleKeys.STATE.value] = self.state
@@ -367,11 +370,21 @@ class Process(object):
         bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
 
         if self._wait is not None:
-            b = Bundle()
-            self.get_waiting_on().save_instance_state(b)
-            bundle[self.BundleKeys.WAITING_ON.value] = b
+            bundle[self.BundleKeys.WAITING_ON.value] = self.save_wait_on_state()
             bundle[self.BundleKeys.WAIT_ON_CALLBACK.value] = \
                 self._wait.callback.__name__
+
+    def save_wait_on_state(self):
+        """
+        Create a saved instance state for the WaitOn the process is currently
+        waiting for.
+
+        :return: The saved instance state of the wait on
+        :rtype: :class:`plum.persistence.bundle.Bundle`
+        """
+        b = Bundle()
+        self.get_waiting_on().save_instance_state(b)
+        return b
 
     def play(self):
         """
@@ -637,8 +650,8 @@ class Process(object):
             pass
 
         try:
-            self._next_transition = self.__getattribute__(
-                bundle[self.BundleKeys.NEXT_TRANSITION.value])
+            self._next_transition = getattr(
+                self, bundle[self.BundleKeys.NEXT_TRANSITION.value])
         except KeyError:
             pass
 
@@ -648,8 +661,7 @@ class Process(object):
             pass
 
         try:
-            b = bundle[self.BundleKeys.WAITING_ON.value]
-            wait_on = WaitOn.create_from(b)
+            wait_on = self.create_wait_on(bundle[self.BundleKeys.WAITING_ON.value])
         except KeyError:
             pass  # There's no wait_on
         else:
@@ -663,6 +675,10 @@ class Process(object):
         self._parsed_inputs = \
             util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
         self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
+
+    @protected
+    def create_wait_on(self, bundle):
+        return WaitOn.create_from(bundle)
 
     def _get_wait_on_callback_fn(self, bundle):
         """
@@ -679,7 +695,7 @@ class Process(object):
             pass
         else:
             try:
-                callback = self.__getattribute__(name)
+                callback = getattr(self, name)
             except AttributeError:
                 raise ValueError(
                     "This process does not have a function with "

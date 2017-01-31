@@ -1,12 +1,8 @@
 
 from unittest import TestCase
-import threading
-import time
-from plum.process import ProcessState
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.util import override
-from plum.test_utils import DummyProcess, ExceptionProcess, WaitForSignalProcess
-from plum.wait_ons import wait_until_stopped, WaitOnState
+from plum.test_utils import DummyProcess, ExceptionProcess
 
 
 class EventTracker(ProcessMonitorListener):

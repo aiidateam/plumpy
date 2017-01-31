@@ -4,7 +4,7 @@ from plum.process import ProcessState
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.process_manager import ProcessManager
 from plum.test_utils import DummyProcess, WaitForSignalProcess
-from plum.wait_ons import wait_until, wait_until_stopped
+from plum.wait_ons import wait_until, wait_until_stopped, WaitOnState, WaitRegion
 
 
 class TestProcessManager(TestCase):
@@ -112,16 +112,27 @@ class TestProcessManager(TestCase):
 
     def test_future_abort(self):
         p = WaitForSignalProcess.new_instance()
-        future = self.manager.start(p)
+
+        with WaitRegion(WaitOnState(p, ProcessState.RUNNING), timeout=2):
+            future = self.manager.start(p)
+
         self.assertTrue(p.is_playing())
-        self.assertTrue(future.abort(timeout=1))
+        self.assertTrue(future.abort(timeout=2))
         self.assertTrue(p.has_aborted())
 
     def test_future_pause_play(self):
         p = WaitForSignalProcess.new_instance()
-        future = self.manager.start(p)
+
+        # Run the process
+        with WaitRegion(WaitOnState(p, ProcessState.WAITING), timeout=2):
+            future = self.manager.start(p)
         self.assertTrue(p.is_playing())
-        self.assertTrue(future.pause(timeout=1))
+
+        # Pause it
+        self.assertTrue(future.pause(timeout=2))
         self.assertFalse(p.is_playing())
-        future.play()
+
+        # Play it
+        with WaitRegion(WaitOnState(p, ProcessState.WAITING), timeout=2):
+            future.play()
         self.assertTrue(p.is_playing())

@@ -155,7 +155,7 @@ class WaitOn(object):
         self.__super_called = True
 
     @protected
-    def done(self, success, msg=None):
+    def done(self, success=True, msg=None):
         """
         Implementing classes should call this when they are done waiting.  As
         well as indicating success or failure they can provide an optional
