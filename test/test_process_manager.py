@@ -1,5 +1,6 @@
 
 from unittest import TestCase
+import time
 from plum.process import ProcessState
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.process_manager import ProcessManager
@@ -133,6 +134,6 @@ class TestProcessManager(TestCase):
         self.assertFalse(p.is_playing())
 
         # Play it
-        with WaitRegion(WaitOnState(p, ProcessState.WAITING), timeout=2):
-            future.play()
+        future.play()
+        time.sleep(1)
         self.assertTrue(p.is_playing())

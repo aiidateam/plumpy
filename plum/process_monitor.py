@@ -33,7 +33,7 @@ class ProcessMonitor(ProcessListener):
     Clients can listen for messages to indicate when a new process is registered
     and when processes terminate because of finishing or failing.
     """
-    class Listen():
+    class Listen(object):
         """
         A context manager for listening to the monitor.  This way it is
         guaranteed that the listener will be deregisterd when needed.

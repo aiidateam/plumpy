@@ -48,17 +48,13 @@ def override(check=False):
             raise RuntimeError(
                 "Can only use the override decorator on member functions")
 
-        # We can only perform checks if the interpreter is capable of giving
-        # us the stack i.e. currentframe() produces a valid object
         if check:
             @functools.wraps(func)
             def wrapped_fn(self, *args, **kwargs):
                 try:
                     getattr(super(self.__class__, self), func.__name__)
                 except AttributeError:
-                    raise RuntimeError(
-                        "Function {} does not override a superclass method".
-                        format(func))
+                    raise RuntimeError("Function {} does not override a superclass method".format(func))
 
                 return func(self, *args, **kwargs)
         else:
@@ -67,7 +63,3 @@ def override(check=False):
         return wrapped_fn
 
     return wrap
-
-
-def call_super(func):
-    pass

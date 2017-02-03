@@ -2,7 +2,8 @@
 
 from plum.process import Process
 from plum.util import override
-from plum.wait import WaitOn, Unsupported
+from plum.wait import WaitOn
+from plum.exceptions import Unsupported
 from plum.wait_ons import WaitOnAll, WaitOnProcess
 from plum.persistence.bundle import Bundle
 

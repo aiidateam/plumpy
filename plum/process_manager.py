@@ -1,7 +1,8 @@
 
 import threading
 from plum.process import ProcessListener
-from plum.util import override
+from plum.util import override, protected
+from plum.exceptions import TimeoutError
 
 
 class _ProcInfo(object):
@@ -10,7 +11,7 @@ class _ProcInfo(object):
         self.thread = thread
 
 
-class Future(object):
+class Future(ProcessListener):
     def __init__(self, procman, process):
         """
         The process manager creates instances of futures that can be used by the
@@ -18,10 +19,15 @@ class Future(object):
 
         :param procman: The process manager that the process belongs to
         :type procman: :class:`ProcessManager`
-        :param pid: The pid of the process
+        :param process: The process this is a future for
+        :type process: :class:`plum.process.Process`
         """
         self._procman = procman
         self._process = process
+        self._terminated = threading.Event()
+        self._process.add_process_listener(self)
+        if self._process.has_terminated():
+            self._terminated.set()
 
     @property
     def pid(self):
@@ -43,6 +49,26 @@ class Future(object):
         """
         return self._process.outputs
 
+    def result(self, timeout=None):
+        """
+        This method will block until the process has finished producing outputs
+        and then return the final dictionary of outputs.
+
+        If a timeout is given and the process has not finished in that time
+        a :class:`TiemoutError` will be raised.
+
+        :param timeout: (optional) maximum time to wait for process to finish
+        :return: The final outputs
+        """
+        if self._terminated.wait(timeout):
+            if self._process.has_failed():
+                # TODO: Get the original traceback, requires it to be stored in process
+                raise self._process.get_exception()
+            else:
+                return self.outputs
+        else:
+            raise TimeoutError()
+
     def abort(self, msg=None, timeout=None):
         return self._procman.abort(self.pid, msg, timeout)
 
@@ -51,6 +77,14 @@ class Future(object):
 
     def pause(self, timeout):
         return self._procman.pause(self.pid, timeout)
+
+    @protected
+    def on_process_finish(self, process):
+        self._terminated.set()
+
+    @protected
+    def on_process_fail(self, process):
+        self._terminated.set()
 
 
 class ProcessManager(ProcessListener):

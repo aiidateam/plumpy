@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta
 import threading
-from plum.util import fullname, protected
+from abc import ABCMeta
+
 from plum.persistence.bundle import Bundle
+from plum.util import fullname, protected, override
+from plum.exceptions import Unsupported
 
 
 class Interrupted(Exception):
-    pass
-
-
-class Unsupported(Exception):
     pass
 
 
@@ -26,6 +24,7 @@ class WaitOn(object):
 
     CLASS_NAME = "class_name"
     OUTCOME = "outcome"
+    RECREATE_FROM_KEY = 'recreate_from'
 
     @staticmethod
     def _is_saved_state(args):
@@ -41,8 +40,8 @@ class WaitOn(object):
         :rtype: :class:`WaitOn`
         """
         class_name = bundle[WaitOn.CLASS_NAME]
-        WaitOnClass = bundle.get_class_loader().load_class(class_name)
-        return WaitOnClass(bundle)
+        wait_on_class = bundle.get_class_loader().load_class(class_name)
+        return wait_on_class(recreate_from=bundle)
 
     def __init__(self, *args, **kwargs):
         self._outcome = None
@@ -52,8 +51,13 @@ class WaitOn(object):
         self._interrupt_lock = threading.Lock()
         self.__super_called = False
 
-        if self._is_saved_state(args):
-            self.load_instance_state(args[0])
+        if kwargs and kwargs.get(self.RECREATE_FROM_KEY, False):
+            bundle = kwargs.pop(self.RECREATE_FROM_KEY)
+            assert isinstance(bundle, Bundle), \
+                "'{}' must be of type {}".format(self.RECREATE_FROM_KEY, Bundle.__class__)
+            assert args is None and not kwargs, \
+                "If '{}' is supplied cannot have another parameters".format(self.RECREATE_FROM_KEY)
+            self.load_instance_state(bundle, *args, **kwargs)
         else:
             self.init(*args, **kwargs)
 
@@ -143,7 +147,7 @@ class WaitOn(object):
         self.__super_called = True
 
     @protected
-    def load_instance_state(self, bundle):
+    def load_instance_state(self, bundle, *args, **kwargs):
         """
         Load the state of a wait on from a saved instance state.  All
         subclasses implementing this should call the superclass method
@@ -171,3 +175,16 @@ class WaitOn(object):
         with self._interrupt_lock:
             self._outcome = success, msg
             self._waiting.set()
+
+
+class Unsavable(object):
+    """
+    A mixin used to make a wait on unable to be saved or loaded
+    """
+    @override
+    def save_instance_state(self, out_state):
+        raise Unsupported("This WaitOn cannot be saved")
+
+    @override
+    def load_instance_state(self, bundle):
+        raise Unsupported("This WaitOn cannot be loaded")

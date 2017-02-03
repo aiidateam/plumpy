@@ -4,12 +4,11 @@ from abc import ABCMeta, abstractmethod
 import time
 from collections import Sequence
 from plum.persistence.bundle import Bundle
-from plum.wait import WaitOn, Unsupported
+from plum.wait import WaitOn, Unsavable
 from plum.util import override
 from plum.process_listener import ProcessListener
 from plum.process import ProcessState
-from plum.process_monitor import MONITOR
-from plum.exceptions import TimeoutError
+from plum.exceptions import TimeoutError, Unsupported
 
 
 class Checkpoint(WaitOn):
@@ -42,6 +41,7 @@ class _CompoundWaitOn(WaitOn):
             waits.append(b)
         out_state[self.WAIT_LIST] = waits
 
+    @override
     def load_instance_state(self, bundle):
         super(_CompoundWaitOn, self).load_instance_state(bundle)
 
@@ -100,7 +100,7 @@ class WaitOnAny(_CompoundWaitOn):
         return True
 
 
-class WaitOnState(WaitOn, ProcessListener):
+class WaitOnState(WaitOn, Unsavable, ProcessListener):
     WAIT_ON_PID = 'pid'
     WAIT_ON_STATE = 'state'
 
@@ -143,14 +143,6 @@ class WaitOnState(WaitOn, ProcessListener):
         if self._state is ProcessState.FAILED:
             self._signal_done(proc)
 
-    @override
-    def save_instance_state(self, out_state):
-        raise Unsupported()
-
-    @override
-    def load_instance_state(self, bundle):
-        raise Unsupported()
-
     def _signal_done(self, proc):
         try:
             self.done()
@@ -175,7 +167,7 @@ def wait_until(proc, state, timeout=None):
         return WaitOnState(proc, state).wait(timeout)
 
 
-class WaitOnProcess(WaitOn, ProcessListener):
+class WaitOnProcess(WaitOn, Unsavable, ProcessListener):
     def __init__(self, proc):
         """
         Wait for a process to terminate.
@@ -190,18 +182,6 @@ class WaitOnProcess(WaitOn, ProcessListener):
             proc.add_process_listener(self)
 
     @override
-    def save_instance_state(self, out_state):
-        raise Unsupported(
-            "Cannot save this WaitOn because when it is reloaded there is no "
-            "way to know if the process is done.")
-
-    @override
-    def load_instance_state(self, bundle):
-        raise Unsupported(
-            "Cannot load this WaitOn because when it is reloaded there is no "
-            "way to know if the process is done.")
-
-    @override
     def on_process_fail(self, process):
         self.done()
 
@@ -210,7 +190,7 @@ class WaitOnProcess(WaitOn, ProcessListener):
         self.done()
 
 
-class WaitOnProcessOutput(WaitOn, ProcessListener):
+class WaitOnProcessOutput(WaitOn, Unsavable, ProcessListener):
     WAIT_ON_PID = 'pid'
     OUTPUT_PORT = 'output_port'
 
@@ -223,18 +203,6 @@ class WaitOnProcessOutput(WaitOn, ProcessListener):
             self.done()
         else:
             proc.add_process_listener(self)
-
-    @override
-    def save_instance_state(self, out_state):
-        raise Unsupported(
-            "Cannot save this WaitOn because when it is reloaded there is no "
-            "way to know if the process is done.")
-
-    @override
-    def load_instance_state(self, bundle):
-        raise Unsupported(
-            "Cannot load this WaitOn because when it is reloaded there is no "
-            "way to know if the process is done.")
 
     @override
     def on_output_emitted(self, process, output_port, value, dynamic):

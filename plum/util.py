@@ -19,9 +19,7 @@ class EventHelper(object):
         self._listeners = set()
 
     def add_listener(self, listener):
-        assert(isinstance(listener, self._listener_type))
-        assert listener not in self._listeners, \
-               "Cannot add the same listener more than once"
+        assert isinstance(listener, self._listener_type)
         self._listeners.add(listener)
 
     def remove_listener(self, listener):
@@ -92,11 +90,20 @@ def load_class(classstring):
 
 
 class AttributesFrozendict(frozendict.frozendict):
+    def __init__(self, *args, **kwargs):
+        super(AttributesFrozendict, self).__init__(*args, **kwargs)
+        self._initialised = True
+
     def __getattr__(self, attr):
         """
         Read a key as an attribute. Raise AttributeError on missing key.
         Called only for attributes that do not exist.
         """
+        # This attribute is looked for by pickle when deserialising.  At this point
+        # the object is not yet constructed and so accessing any members is
+        # dangerous and often causes infinite recursion so I have to guard like this.
+        if attr == "__setstate__":
+            raise AttributeError()
         try:
             return self[attr]
         except KeyError:

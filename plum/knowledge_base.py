@@ -1,7 +1,6 @@
-
-
 from plum.knowledge_provider import KnowledgeProvider, NotKnown
 from plum.util import override
+
 
 class KnowledgeBase(KnowledgeProvider):
     def __init__(self):
@@ -31,45 +30,45 @@ class KnowledgeBase(KnowledgeProvider):
         for p in self._providers:
             try:
                 return p.get_input(pid, port_name)
-            except NotKnown:
+            except ValueError:
                 pass
-        raise NotKnown()
+        raise ValueError()
 
     @override
     def get_inputs(self, pid):
         for p in self._providers:
             try:
                 return p.get_inputs(pid)
-            except NotKnown:
+            except ValueError:
                 pass
-        raise NotKnown()
+        raise ValueError()
 
     @override
     def get_output(self, pid, port_name):
         for p in self._providers:
             try:
                 return p.get_output(pid, port_name)
-            except NotKnown:
+            except ValueError:
                 pass
-        raise NotKnown()
+        raise ValueError()
 
     @override
     def get_outputs(self, pid):
         for p in self._providers:
             try:
                 return p.get_outputs(pid)
-            except NotKnown:
+            except ValueError:
                 pass
-        raise NotKnown()
+        raise ValueError()
 
     @override
     def has_finished(self, pid):
         for p in self._providers:
             try:
                 return p.has_finished(pid)
-            except NotKnown:
+            except ValueError:
                 pass
-        raise NotKnown()
+        raise ValueError()
 
     @override
     def get_pids_from_classname(self, classname):
@@ -77,11 +76,10 @@ class KnowledgeBase(KnowledgeProvider):
         for p in self._providers:
             try:
                 all_pids.extend(p.get_pids_from_classname(classname))
-            except NotKnown:
+            except ValueError:
                 pass
 
         if all_pids:
             return all_pids
         else:
-            raise NotKnown()
-
+            raise ValueError()

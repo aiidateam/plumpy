@@ -6,7 +6,6 @@ from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 import threading
 
-import plum.knowledge_provider as knowledge_provider
 import plum.error as error
 from plum.wait import Interrupted
 from plum.persistence.bundle import Bundle
@@ -154,7 +153,7 @@ class Process(object):
         Create a process from a saved instance state.
 
         :param saved_instance_state: The saved state
-        :type saved_instance_state: Bundle
+        :type saved_instance_state: :class:`plum.persistence.bundle.Bundle`
         :param logger: The logger for this process to use
         :return: An instance of this process with its state loaded from the save state.
         :rtype: :class:`Process`
@@ -386,6 +385,9 @@ class Process(object):
         self.get_waiting_on().save_instance_state(b)
         return b
 
+    def start(self):
+        return self.play()
+
     def play(self):
         """
         Play the process.
@@ -493,12 +495,11 @@ class Process(object):
     @protected
     def on_start(self):
         """
-        Called when the process is about to run for the first time.
+        Called when this process is about to run for the first time.
 
 
         Any class overriding this method should make sure to call the super
         method, usually at the end of the function.
-
         """
         self.__event_helper.fire_event(ProcessListener.on_process_start, self)
         self.__called = True
@@ -569,7 +570,7 @@ class Process(object):
         self.__event_helper.remove_all_listeners()
         self.__called = True
 
-    def _on_output_emitted(self, output_port, value, dynamic):
+    def on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
 
@@ -607,7 +608,7 @@ class Process(object):
                         format(output_port, port.valid_type, type(value)))
 
         self._outputs[output_port] = value
-        self._on_output_emitted(output_port, value, dynamic)
+        self.on_output_emitted(output_port, value, dynamic)
 
     @protected
     def fast_forward(self):
@@ -615,7 +616,8 @@ class Process(object):
             raise error.FastForwardError("Cannot fast-forward a process that "
                                          "is not deterministic")
 
-        kp = knowledge_provider.get_global_provider()
+        #kp = knowledge_provider.get_global_provider()
+        kp = None
         if kp is None:
             raise error.FastForwardError("Cannot fast-forward because a global"
                                          "knowledge provider is not available")
@@ -623,7 +625,7 @@ class Process(object):
         # Try and find out if anyone else has had the same inputs
         try:
             pids = kp.get_pids_from_classname(util.fullname(self))
-        except knowledge_provider.NotKnown:
+        except ValueError:
             pass
         else:
             for pid in pids:
@@ -632,7 +634,7 @@ class Process(object):
                         for name, value in kp.get_outputs(pid).iteritems():
                             self.out(name, value)
                         return
-                except knowledge_provider.NotKnown:
+                except ValueError:
                     pass
 
         raise error.FastForwardError("Cannot fast forward")
@@ -700,7 +702,7 @@ class Process(object):
                 raise ValueError(
                     "This process does not have a function with "
                     "the name '{}' as expected from the wait on".
-                        format(name))
+                    format(name))
         return callback
 
     # Inputs ##################################################################
@@ -729,7 +731,7 @@ class Process(object):
                 elif port.required:
                     raise ValueError(
                         "Value not supplied for required inputs port {}".
-                            format(name)
+                        format(name)
                     )
 
         return ins

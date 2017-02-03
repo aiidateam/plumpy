@@ -6,3 +6,7 @@ class ClassNotFoundException(Exception):
 
 class TimeoutError(Exception):
     pass
+
+
+class Unsupported(Exception):
+    pass

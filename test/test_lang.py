@@ -1,5 +1,5 @@
 from unittest import TestCase
-from plum.lang import call_super, protected, override
+from plum.lang import protected, override
 
 
 class A(object):
@@ -122,6 +122,7 @@ class TestOverride(TestCase):
                 @property
                 def test(self):
                     return None
+
 #
 #
 # class A(object):
@@ -189,4 +190,3 @@ class TestOverride(TestCase):
 #         self.assertTrue(c_prime.b_prime_called)
 #         self.assertFalse(c_prime.a_called)
 #
-
