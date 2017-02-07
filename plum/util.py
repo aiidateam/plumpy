@@ -40,6 +40,34 @@ class EventHelper(object):
             getattr(l, event_function.__name__)(*args, **kwargs)
 
 
+class ListenContext(object):
+    """
+    A context manager for listening to producer that can generate messages.
+    The requirements for the producer are that it has methods:
+    * start_listening(..), and,
+    * stop_listening(..)
+    and that these methods take zero or more arguments that identify the
+    listener and perhaps what it wants to listen to if this make sense for
+    the producer/listener combination.
+
+    A typical usage would be:
+    with ListenContext(producer, listener):
+        # Producer generates messages that the listener gets
+        pass
+    """
+    def __init__(self, producer, *args, **kwargs):
+        self._producer = producer
+        self._args = args
+        self._kwargs = kwargs
+
+    def __enter__(self):
+        self._producer.start_listening(*self._args, **self._kwargs)
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self._producer.stop_listening(*self._args, **self._kwargs)
+
+
 class ThreadSafeCounter(object):
     def __init__(self):
         self.lock = threading.Lock()

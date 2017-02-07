@@ -80,7 +80,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         self._failed_directory = failed_directory
         self._auto_persist = auto_persist
 
-        MONITOR.add_monitor_listener(self)
+        MONITOR.start_listening(self)
 
     def load_checkpoint(self, pid):
         for check_dir in [self._running_directory, self._failed_directory,

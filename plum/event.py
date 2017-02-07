@@ -41,8 +41,11 @@ class EventEmitter(object):
         :type event: str or unicode
         """
         if event is None:
+            # This means remove ALL messages for this listener
             for e, ls, in self._specific_listeners.items():
                 self._remove_specific_listener(listener, e)
+            for e, ls in self._wildcard_listeners.items():
+                self._remove_wildcard_listener(listener, e)
         else:
             if self._contains_wildcard(event):
                 try:
@@ -59,7 +62,15 @@ class EventEmitter(object):
         self._specific_listeners = {}
         self._wildcard_listeners = {}
 
-    def num_listeners(self):
+    def num_listening(self):
+        """
+        Get the number of events that are being listening for.  This
+        corresponds exactly to the number of .start_listening() calls made
+        this this emitter.
+
+        :return: The number of events listened for
+        :rtype: int
+        """
         total = 0
         for e, ls in self._specific_listeners.iteritems():
             total += len(ls)
@@ -92,6 +103,14 @@ class EventEmitter(object):
     def deliver_msg(self, listener, event):
         listener(self, event)
 
+    @protected
+    def get_specific_listeners(self):
+        return self._specific_listeners
+
+    @protected
+    def get_wildcard_listeners(self):
+        return self._wildcard_listeners
+
     @staticmethod
     def _contains_wildcard(event):
         """
@@ -114,11 +133,18 @@ class EventEmitter(object):
         if event in self._wildcard_listeners:
             self._wildcard_listeners[event].add(listener)
         else:
-            self._wildcard_listeners[event] = [listener]
+            self._wildcard_listeners[event] = {listener}
             regex = event.replace('.', '\.').replace('*', '.*').replace('#', '.+')
             self._wildcard_regexs[event] = re.compile(regex)
 
-    def _remove_wildcard_listener(self, listener, event=None):
+    def _remove_wildcard_listener(self, listener, event):
+        """
+        Remove a wildcard listener.
+        Precondition: listener in self._wildcard_listeners[event]
+
+        :param listener: The listener to remove
+        :param event: The event to stop listening for
+        """
         self._wildcard_listeners[event].discard(listener)
         if len(self._wildcard_listeners[event]) == 0:
             del self._wildcard_listeners[event]
@@ -128,6 +154,13 @@ class EventEmitter(object):
         self._specific_listeners.setdefault(event, set()).add(listener)
 
     def _remove_specific_listener(self, listener, event):
+        """
+        Remove a specific listener.
+        Precondition: listener in self._specific_listeners[event]
+
+        :param listener: The listener to remove
+        :param event: The event to stop listening for
+        """
         self._specific_listeners[event].discard(listener)
         if len(self._specific_listeners[event]) == 0:
             del self._specific_listeners[event]
@@ -152,11 +185,18 @@ class EmitterAggregator(EventEmitter):
 
     @override
     def stop_listening(self, listener, event=None):
-        # Tell our children to stop firing events
-        for t in self._children:
-            t.stop_listening(listener, event)
+        specific = set(self.get_specific_listeners().viewkeys())
+        wildcard = set(self.get_wildcard_listeners().viewkeys())
         # Now stop firing myself
         super(EmitterAggregator, self).stop_listening(listener, event)
+
+        # Check the different in events being listen to to see if we now are no
+        # longer listening to some events
+        specific -= set(self.get_specific_listeners().viewkeys())
+        wildcard -= set(self.get_wildcard_listeners().viewkeys())
+        for event in specific | wildcard:
+            for child in self._children:
+                child.stop_listening(self._event_passthrough, event)
 
     @override
     def clear_all_listeners(self):
@@ -217,14 +257,14 @@ class ProcessMonitorEmitter(ProcessEventEmitter, ProcessMonitorListener):
     @override
     def start_listening(self, listener, event='*'):
         super(ProcessMonitorEmitter, self).start_listening(listener, event)
-        if self.num_listeners() > 0:
-            MONITOR.add_monitor_listener(self)
+        if self.num_listening() > 0:
+            MONITOR.start_listening(self)
 
     @override
     def stop_listening(self, listener, event=None):
         super(ProcessMonitorEmitter, self).stop_listening(listener, event)
-        if self.num_listeners() == 0:
-            MONITOR.remove_monitor_listener(self)
+        if self.num_listening() == 0:
+            MONITOR.stop_listening(self)
 
     @override
     def on_monitored_process_finish(self, process):
@@ -259,7 +299,7 @@ class WaitOnEvent(WaitOn, Unsavable):
 class WaitOnProcessEvent(WaitOnEvent):
     """
     Wait for an event(s) from a process(es).  You can wait for a specific or
-    wildcard event from a specifc or wildcard process id.
+    wildcard event from a specific or wildcard process id.
     """
 
     def __init__(self, emitter, pid='*', event='*'):

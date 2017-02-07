@@ -78,6 +78,14 @@ class Future(ProcessListener):
     def pause(self, timeout):
         return self._procman.pause(self.pid, timeout)
 
+    def wait(self, timeout=None):
+        try:
+            return self._procman.wait_for(self.pid, timeout)
+        except ValueError:
+            # The process manager doesn't know about the process anymore
+            # because it is finished
+            return True
+
     @protected
     def on_process_finish(self, process):
         self._terminated.set()
@@ -163,6 +171,14 @@ class ProcessManager(ProcessListener):
         for info in self._processes.values():
             result &= self._abort(info.proc, msg, timeout)
         return result
+
+    def wait_for(self, pid, timeout=None):
+        try:
+            thread = self._processes[pid].thread
+            thread.join(timeout)
+            return not thread.is_alive()
+        except KeyError:
+            raise ValueError("Unknown pid")
 
     def get_num_processes(self):
         return len(self._processes)
