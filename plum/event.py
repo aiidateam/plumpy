@@ -1,7 +1,8 @@
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 import re
+import threading
 from plum.process_monitor import ProcessMonitorListener, MONITOR
-from plum.util import override, protected
+from plum.util import override, protected, ListenContext
 from plum.wait import WaitOn, Unsavable
 
 
@@ -10,6 +11,17 @@ class EventEmitter(object):
     A class to send general events to listeners
     """
     __metaclass__ = ABCMeta
+
+    @staticmethod
+    def contains_wildcard(eventstring):
+        """
+        Does the event string contain a wildcard.
+
+        :param eventstring: The event string
+        :type eventstring: str or unicode
+        :return: True if it does, False otherwise
+        """
+        return eventstring.find('*') != -1 or eventstring.find('#') != -1
 
     def __init__(self):
         self._specific_listeners = {}
@@ -26,7 +38,7 @@ class EventEmitter(object):
         :type event: str or unicode
         """
         self._check_listener(listener)
-        if self._contains_wildcard(event):
+        if self.contains_wildcard(event):
             self._add_wildcard_listener(listener, event)
         else:
             self._add_specific_listener(listener, event)
@@ -47,7 +59,7 @@ class EventEmitter(object):
             for e, ls in self._wildcard_listeners.items():
                 self._remove_wildcard_listener(listener, e)
         else:
-            if self._contains_wildcard(event):
+            if self.contains_wildcard(event):
                 try:
                     self._remove_wildcard_listener(listener, event)
                 except KeyError:
@@ -57,6 +69,9 @@ class EventEmitter(object):
                     self._remove_specific_listener(listener, event)
                 except KeyError:
                     pass
+
+    def listen_scope(self, listener, event=None):
+        return ListenContext(self, listener, event)
 
     def clear_all_listeners(self):
         self._specific_listeners = {}
@@ -78,12 +93,15 @@ class EventEmitter(object):
             total += len(ls)
         return total
 
-    def event_occurred(self, event):
+    def event_occurred(self, event, body=None):
+        # These loops need to use copies because, e.g., the recipient may
+        # add or remove listeners during the delivery
+
         # Deal with the wildcard listeners
-        for e, ls in self._wildcard_listeners.iteritems():
+        for e, ls in self._wildcard_listeners.items():
             if self._wildcard_match(e, event):
-                for l in ls:
-                    self.deliver_msg(l, event)
+                for l in ls.copy():
+                    self.deliver_msg(l, event, body)
 
         # And now with the specific listeners
         try:
@@ -93,15 +111,15 @@ class EventEmitter(object):
         else:
             for l in ls:
                 try:
-                    self.deliver_msg(l, event)
+                    self.deliver_msg(l, event, body)
                 except TypeError:
                     raise RuntimeError(
                         "Failed to deliver message to '{}', check the it"
                         " takes three arguments".format(l))
 
     @protected
-    def deliver_msg(self, listener, event):
-        listener(self, event)
+    def deliver_msg(self, listener, event, body):
+        listener(self, event, body)
 
     @protected
     def get_specific_listeners(self):
@@ -110,17 +128,6 @@ class EventEmitter(object):
     @protected
     def get_wildcard_listeners(self):
         return self._wildcard_listeners
-
-    @staticmethod
-    def _contains_wildcard(event):
-        """
-        Does the event string contain a wildcard.
-
-        :param event: The event string
-        :type event: str or unicode
-        :return: True if it does, False otherwise
-        """
-        return event.find('*') != -1 or event.find('#') != -1
 
     @staticmethod
     def _check_listener(listener):
@@ -134,6 +141,7 @@ class EventEmitter(object):
             self._wildcard_listeners[event].add(listener)
         else:
             self._wildcard_listeners[event] = {listener}
+            # Build the regular expression
             regex = event.replace('.', '\.').replace('*', '.*').replace('#', '.+')
             self._wildcard_regexs[event] = re.compile(regex)
 
@@ -148,7 +156,7 @@ class EventEmitter(object):
         self._wildcard_listeners[event].discard(listener)
         if len(self._wildcard_listeners[event]) == 0:
             del self._wildcard_listeners[event]
-        del self._wildcard_regexs[event]
+            del self._wildcard_regexs[event]
 
     def _add_specific_listener(self, listener, event):
         self._specific_listeners.setdefault(event, set()).add(listener)
@@ -236,17 +244,21 @@ class EmitterAggregator(EventEmitter):
         child.stop_listening(self.event_occurred)
         self._children.remove(child)
 
-    def _event_passthrough(self, emitter, event):
-        self.event_occurred(event)
+    def _event_passthrough(self, emitter, event, body):
+        self.event_occurred(event, body)
 
 
-class ProcessEventEmitter(EventEmitter):
+class WithProcessEvents(object):
+    """
+    A mixin to add a commonly used proxy function that removes the need for
+    boilerplate event message code for processes.
+    """
     @protected
-    def process_event_occurred(self, pid, event):
-        self.event_occurred("process.{}.{}".format(pid, event))
+    def process_event_occurred(self, pid, event, body=None):
+        self.event_occurred("process.{}.{}".format(pid, event), body)
 
 
-class ProcessMonitorEmitter(ProcessEventEmitter, ProcessMonitorListener):
+class ProcessMonitorEmitter(EventEmitter, WithProcessEvents, ProcessMonitorListener):
     """
     Emit events as gathered from the process monitor
     """
@@ -256,6 +268,8 @@ class ProcessMonitorEmitter(ProcessEventEmitter, ProcessMonitorListener):
 
     @override
     def start_listening(self, listener, event='*'):
+        if not event.startswith("process."):
+            raise ValueError("This emitter only knows about process.[pid[.event]] events")
         super(ProcessMonitorEmitter, self).start_listening(listener, event)
         if self.num_listening() > 0:
             MONITOR.start_listening(self)
@@ -279,6 +293,80 @@ class ProcessMonitorEmitter(ProcessEventEmitter, ProcessMonitorListener):
         self.process_event_occurred(process.pid, "failed")
 
 
+class PollingEmitter(EventEmitter):
+    __metaclass__ = ABCMeta
+
+    def __init__(self, poll_interval):
+        """
+        :param poll_interval: A poll interval specified as a float representing
+            the number of seconds between polls
+        """
+        super(PollingEmitter, self).__init__()
+        self._poll_interval = poll_interval
+        self._stop = False
+        self._polling = False
+        self._timer = None
+        # Any internal reads/writes of state should use this lock
+        # need to use an rlock 'cause poll may call, e.g., stop_listening()
+        # which will reacquire the lock
+        self._state_lock = threading.RLock()
+
+    def is_polling(self):
+        return self._polling
+
+    @override
+    def start_listening(self, listener, event='*'):
+        with self._state_lock:
+            super(PollingEmitter, self).start_listening(listener, event)
+            if not self._polling:
+                self._start_polling()
+
+    @override
+    def stop_listening(self, listener, event=None):
+        with self._state_lock:
+            super(PollingEmitter, self).stop_listening(listener, event)
+            if self.num_listening() == 0:
+                self._stop_polling()
+
+    @override
+    def clear_all_listeners(self):
+        with self._state_lock:
+            super(PollingEmitter, self).clear_all_listeners()
+            if self.num_listening() == 0:
+                self._stop_polling()
+
+    @abstractmethod
+    def poll(self):
+        """
+        The subclass should implement this to perform the actions it wants
+        to do every time it is polled.
+        """
+        pass
+
+    def _start_polling(self):
+        self._stop = False
+        self._polling = True
+        self._timer = threading.Timer(0, self._poll)
+        self._timer.start()
+
+    def _stop_polling(self):
+        if self._polling:
+            self._stop = True
+            self._polling = False
+            self._timer.cancel()
+            self._timer = None
+
+    def _poll(self):
+        with self._state_lock:
+            if not self._stop:
+                # The reason it's done this way is that the poll() call may take some
+                # time during which a user may have called stop() so we check again
+                self.poll()
+                if not self._stop:
+                    self._timer = threading.Timer(self._poll_interval, self._poll)
+                    self._timer.start()
+
+
 class WaitOnEvent(WaitOn, Unsavable):
     def __init__(self, emitter, event):
         """
@@ -289,11 +377,21 @@ class WaitOnEvent(WaitOn, Unsavable):
         """
         super(WaitOnEvent, self).__init__()
         self._event = event
+        self._received_event = None
         emitter.start_listening(self.event_occurred, event)
 
-    def event_occurred(self, emitter, event):
+    def event_occurred(self, emitter, event, body):
+        self._received_event = event, body
         emitter.stop_listening(self._event)
         self.done()
+
+    def get_received_event(self):
+        """
+        Returns a tuple containing the event string itself and the body
+        (if any) of the event that was received.
+        :return:
+        """
+        return self._received_event
 
 
 class WaitOnProcessEvent(WaitOnEvent):

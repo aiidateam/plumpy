@@ -95,6 +95,7 @@ class TestProcessManager(TestCase):
 
         for p in procs:
             self.assertEqual(p.state, ProcessState.STOPPED)
+            self.manager.shutdown()
             self.assertFalse(p.is_playing())
 
     def test_play_pause_abort(self):

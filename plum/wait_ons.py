@@ -244,3 +244,10 @@ class WaitRegion(object):
         if not self._wait_on.wait(self._timeout):
             raise TimeoutError()
 
+
+class WaitForSignal(WaitOn):
+    def __init__(self):
+        super(WaitForSignal, self).__init__()
+
+    def continue_(self):
+        self.done(True)

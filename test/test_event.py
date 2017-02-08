@@ -11,8 +11,8 @@ class _EventSaver(object):
         if emitter is not None:
             emitter.start_listening(self.event_ocurred)
 
-    def event_ocurred(self, emitter, event):
-        self.events.append(event)
+    def event_ocurred(self, emitter, evt, body):
+        self.events.append(evt)
 
 
 class TestProcessMonitorEmitter(TestCase):
@@ -127,8 +127,8 @@ class TestEventEmitter(TestCase):
         self.emitter.emit("goodbye")
         self.assertIsNone(self.last)
 
-    def _receive(self, emitter, evt):
-        self.last = emitter, evt
+    def _receive(self, emitter, evt, body):
+        self.last = emitter, evt, body
 
     def test_listen_wildcard(self):
         self.emitter.start_listening(self._receive, "martin.*")
@@ -209,8 +209,8 @@ class TestEmitterAggregator(TestCase):
         self.assertEqual(e1.num_listening(), 0)
         self.assertEqual(e2.num_listening(), 0)
 
-    def _receive(self, emitter, evt):
-        self.last = emitter, evt
+    def _receive(self, emitter, evt, body):
+        self.last = emitter, evt, body
 
 
 

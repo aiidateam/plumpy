@@ -1,11 +1,10 @@
 from collections import namedtuple
 
 from plum.persistence.bundle import Bundle
-from plum.process import Process, ProcessState
+from plum.process import Process
 from plum.process_listener import ProcessListener
 from plum.util import override
-from plum.wait import WaitOn
-from plum.wait_ons import Checkpoint
+from plum.wait_ons import Checkpoint, WaitForSignal
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -51,14 +50,6 @@ class ProcessWithCheckpoint(Process):
 
     def finish(self, wait_on):
         pass
-
-
-class WaitForSignal(WaitOn):
-    def __init__(self):
-        super(WaitForSignal, self).__init__()
-
-    def continue_(self):
-        self.done(True)
 
 
 class WaitForSignalProcess(Process):

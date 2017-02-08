@@ -5,6 +5,8 @@ from enum import Enum
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 import threading
+import sys
+import traceback
 
 import plum.error as error
 from plum.wait import Interrupted
@@ -408,6 +410,7 @@ class Process(object):
                         self._next_transition = None
                         fn()
                 except BaseException as e:
+                    exc_type, value, tb = sys.exc_info()
                     self._perform_fail(e)
                     raise
                 fn = self._next()
