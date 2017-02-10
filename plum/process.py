@@ -375,10 +375,14 @@ class Process(object):
             bundle[self.BundleKeys.WAIT_ON_CALLBACK.value] = \
                 self._wait.callback.__name__
 
+    # region Wait on stuff
+    @protected
     def save_wait_on_state(self):
         """
         Create a saved instance state for the WaitOn the process is currently
-        waiting for.
+        waiting for.  If the wait on is :class:`plum.wait.Unsavable` then
+        the process should override this and save some information that allows
+        it to recreate it.
 
         :return: The saved instance state of the wait on
         :rtype: :class:`plum.persistence.bundle.Bundle`
@@ -386,6 +390,11 @@ class Process(object):
         b = Bundle()
         self.get_waiting_on().save_instance_state(b)
         return b
+
+    @protected
+    def create_wait_on(self, bundle):
+        return WaitOn.create_from(bundle)
+    # endregion
 
     def start(self):
         return self.play()
@@ -453,7 +462,7 @@ class Process(object):
     def set_logger(self, logger):
         self._logger = logger
 
-    # Process messages #####################################################
+    # region Process messages
     # Make sure to call the superclass method if your override any of these
     @protected
     def on_playing(self):
@@ -576,8 +585,7 @@ class Process(object):
     def on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
-
-    #####################################################################
+    # endregion
 
     @protected
     def do_run(self):
@@ -649,14 +657,21 @@ class Process(object):
         self._finished = bundle[self.BundleKeys.FINISHED.value]
         self._aborted = bundle[self.BundleKeys.ABORTED.value]
 
+        # Get the inputs and outputs
+        inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
+        if inputs is not None:
+            self._raw_inputs = util.AttributesFrozendict(inputs)
+        self._parsed_inputs = \
+            util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
+
         try:
             self._exception = bundle[self.BundleKeys.EXCEPTION.value]
         except KeyError:
             pass
 
         try:
-            self._next_transition = getattr(
-                self, bundle[self.BundleKeys.NEXT_TRANSITION.value])
+            self._next_transition = getattr(self, bundle[self.BundleKeys.NEXT_TRANSITION.value])
         except KeyError:
             pass
 
@@ -667,23 +682,10 @@ class Process(object):
 
         try:
             wait_on = self.create_wait_on(bundle[self.BundleKeys.WAITING_ON.value])
-        except KeyError:
-            pass  # There's no wait_on
-        else:
             callback = self._get_wait_on_callback_fn(bundle)
             self._set_wait(wait_on, callback)
-
-        # Get the inputs and outputs
-        inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
-        if inputs is not None:
-            self._raw_inputs = util.AttributesFrozendict(inputs)
-        self._parsed_inputs = \
-            util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
-        self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
-
-    @protected
-    def create_wait_on(self, bundle):
-        return WaitOn.create_from(bundle)
+        except KeyError:
+            pass  # There's no wait_on
 
     def _get_wait_on_callback_fn(self, bundle):
         """
@@ -739,7 +741,7 @@ class Process(object):
 
         return ins
 
-    # State transition methods ################################################
+    # region State transition methods
     def _next(self):
         """
         Method to get the next method to run as part of the Process lifecycle.
@@ -909,7 +911,7 @@ class Process(object):
             "{} was not called\n" \
             "Hint: Did you forget to call the superclass method?".format(fn.__name__)
 
-    ###########################################################################
+    # endregion
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements

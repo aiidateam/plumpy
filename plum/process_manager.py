@@ -26,6 +26,7 @@ class Future(ProcessListener):
         self._process = process
         self._terminated = threading.Event()
         self._process.add_process_listener(self)
+        self._callbacks = []
         if self._process.has_terminated():
             self._terminated.set()
 
@@ -86,13 +87,29 @@ class Future(ProcessListener):
             # because it is finished
             return True
 
+    def add_done_callback(self, fn):
+        if self._terminated.is_set():
+            fn(self)
+        else:
+            self._callbacks.append(fn)
+
     @protected
     def on_process_finish(self, process):
-        self._terminated.set()
+        self._terminate()
 
     @protected
     def on_process_fail(self, process):
+        self._terminate()
+
+    def _terminate(self):
         self._terminated.set()
+        for fn in self._callbacks:
+            fn(self)
+
+
+def wait_for_all(futures):
+    for future in futures:
+        future.wait()
 
 
 class ProcessManager(ProcessListener):
@@ -206,7 +223,8 @@ class ProcessManager(ProcessListener):
 
         # Is it playing already?
         if info.thread is None:
-            info.thread = threading.Thread(target=proc.play)
+            info.thread = threading.Thread(
+                target=proc.play, name="process.{}".format(proc.pid))
             info.thread.start()
 
     def _pause(self, proc, timeout=None):

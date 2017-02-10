@@ -376,22 +376,26 @@ class WaitOnEvent(WaitOn, Unsavable):
         :type event: str or unicode
         """
         super(WaitOnEvent, self).__init__()
+        self._emitter = emitter
         self._event = event
-        self._received_event = None
-        emitter.start_listening(self.event_occurred, event)
+        self._received = None
+        emitter.start_listening(self._event_occurred, event)
 
-    def event_occurred(self, emitter, event, body):
-        self._received_event = event, body
-        emitter.stop_listening(self._event)
+    def get_event(self):
+        return self._received[0]
+
+    def get_body(self):
+        return self._received[1]
+
+    @override
+    def interrupt(self):
+        self._emitter.stop_listening(self._event_occurred)
+        super(WaitOnEvent, self).interrupt()
+
+    def _event_occurred(self, emitter, event, body):
+        self._received = event, body
+        emitter.stop_listening(self._event_occurred)
         self.done()
-
-    def get_received_event(self):
-        """
-        Returns a tuple containing the event string itself and the body
-        (if any) of the event that was received.
-        :return:
-        """
-        return self._received_event
 
 
 class WaitOnProcessEvent(WaitOnEvent):
