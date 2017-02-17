@@ -147,10 +147,10 @@ class WaitOn(object):
         self.__super_called = True
 
     @protected
-    def load_instance_state(self, bundle, *args, **kwargs):
+    def load_instance_state(self, bundle):
         """
         Load the state of a wait on from a saved instance state.  All
-        subclasses implementing this should call the superclass method
+        subclasses implementing this should call the superclass method.
 
         :param bundle: :class:`Bundle` The save instance state
         """

@@ -106,20 +106,19 @@ class EventEmitter(object):
         # And now with the specific listeners
         try:
             ls = self._specific_listeners[event].copy()
+            for l in ls:
+                self.deliver_msg(l, event, body)
         except KeyError:
             pass
-        else:
-            for l in ls:
-                try:
-                    self.deliver_msg(l, event, body)
-                except TypeError:
-                    raise RuntimeError(
-                        "Failed to deliver message to '{}', check the it"
-                        " takes three arguments".format(l))
 
     @protected
     def deliver_msg(self, listener, event, body):
-        listener(self, event, body)
+        try:
+            listener(self, event, body)
+        except TypeError:
+            raise RuntimeError(
+                "Failed to deliver message to '{}', check that it "
+                "takes three arguments".format(listener))
 
     @protected
     def get_specific_listeners(self):
@@ -185,11 +184,16 @@ class EmitterAggregator(EventEmitter):
     @override
     def start_listening(self, listener, event='*'):
         super(EmitterAggregator, self).start_listening(listener, event)
+        started_listening = False
         for t in self._children:
             try:
                 t.start_listening(self._event_passthrough, event)
+                started_listening = True
             except ValueError:
                 pass
+        if not started_listening:
+            raise ValueError(
+                "There are no emitters that emit messages of type '{}'".format(event))
 
     @override
     def stop_listening(self, listener, event=None):
@@ -303,7 +307,6 @@ class PollingEmitter(EventEmitter):
         """
         super(PollingEmitter, self).__init__()
         self._poll_interval = poll_interval
-        self._stop = False
         self._polling = False
         self._timer = None
         # Any internal reads/writes of state should use this lock
@@ -344,25 +347,23 @@ class PollingEmitter(EventEmitter):
         pass
 
     def _start_polling(self):
-        self._stop = False
         self._polling = True
         self._timer = threading.Timer(0, self._poll)
         self._timer.start()
 
     def _stop_polling(self):
         if self._polling:
-            self._stop = True
             self._polling = False
             self._timer.cancel()
             self._timer = None
 
     def _poll(self):
         with self._state_lock:
-            if not self._stop:
+            if self._polling:
                 # The reason it's done this way is that the poll() call may take some
                 # time during which a user may have called stop() so we check again
                 self.poll()
-                if not self._stop:
+                if self._polling:
                     self._timer = threading.Timer(self._poll_interval, self._poll)
                     self._timer.start()
 

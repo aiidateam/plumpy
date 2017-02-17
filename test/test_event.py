@@ -24,7 +24,7 @@ class TestProcessMonitorEmitter(TestCase):
         saver = _EventSaver()
         self.emitter.start_listening(saver.event_ocurred, "process.*")
 
-        p = DummyProcess.new_instance()
+        p = DummyProcess.new()
         preamble = "process.{}.".format(p.pid)
         p.play()
 
@@ -34,12 +34,10 @@ class TestProcessMonitorEmitter(TestCase):
         saver = _EventSaver()
         self.emitter.start_listening(saver.event_ocurred, "process.*")
 
-        p = ExceptionProcess.new_instance()
+        p = ExceptionProcess.new()
         preamble = "process.{}".format(p.pid)
-
-        with self.assertRaises(RuntimeError):
-            p.play()
-
+        p.play()
+        self.assertIsInstance(p.get_exception(), RuntimeError)
         self.assertEqual(saver.events, [preamble + '.failed'])
 
 
@@ -49,22 +47,22 @@ class TestWaitOnProcessEvent(TestCase):
         self.emitter = ProcessMonitorEmitter()
 
     def test_finished(self):
-        p = DummyProcess.new_instance()
+        p = DummyProcess.new()
         w = WaitOnProcessEvent(self.emitter, p.pid, "finished")
         p.play()
         self.assertTrue(w.is_done())
 
     def test_stopped(self):
-        p = DummyProcess.new_instance()
+        p = DummyProcess.new()
         w = WaitOnProcessEvent(self.emitter, p.pid, "stopped")
         p.play()
         self.assertTrue(w.is_done())
 
     def test_failed(self):
-        p = ExceptionProcess.new_instance()
+        p = ExceptionProcess.new()
         w = WaitOnProcessEvent(self.emitter, p.pid, "failed")
-        with self.assertRaises(RuntimeError):
-            p.play()
+        p.play()
+        self.assertIsInstance(p.get_exception(), RuntimeError)
         self.assertTrue(w.is_done())
 
 

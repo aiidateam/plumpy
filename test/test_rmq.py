@@ -82,7 +82,7 @@ class TestProcessController(TestCase):
 
     def test_pause(self):
         # Create the process and wait until it is waiting
-        p = WaitForSignalProcess.new_instance()
+        p = WaitForSignalProcess.new()
         self.manager.start(p)
         wait_until(p, ProcessState.WAITING)
         self.assertTrue(p.is_playing())
@@ -99,7 +99,7 @@ class TestProcessController(TestCase):
     def test_pause_play(self):
         def test_pause(self):
             # Create the process and wait until it is waiting
-            p = WaitForSignalProcess.new_instance()
+            p = WaitForSignalProcess.new()
             self.manager.play(p)
             self.assertTrue(wait_until(p, ProcessState.WAITING, 1))
             self.assertTrue(p.is_playing())
@@ -123,7 +123,7 @@ class TestProcessController(TestCase):
 
     def test_abort(self):
         # Create the process and wait until it is waiting
-        p = WaitForSignalProcess.new_instance()
+        p = WaitForSignalProcess.new()
         self.manager.start(p)
         wait_until(p, ProcessState.WAITING)
         self.assertTrue(p.is_playing())

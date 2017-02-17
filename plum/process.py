@@ -110,15 +110,6 @@ class Process(object):
         NEXT_TRANSITION = 'next_transition'
 
     @staticmethod
-    def instantiate(ProcClass, logger=None):
-        p = ProcClass()
-        if logger:
-            p.set_logger(logger)
-        else:
-            p.set_logger(LOGGER)
-        return p
-
-    @staticmethod
     def _is_wait_retval(retval):
         """
         Determine if the value provided is a valid Wait retval which consists
@@ -133,7 +124,7 @@ class Process(object):
                 isinstance(retval[0], WaitOn))
 
     @classmethod
-    def new_instance(cls, inputs=None, pid=None, logger=None):
+    def new(cls, inputs=None, pid=None, logger=None):
         """
         Create a new instance of this Process class with the given inputs and
         pid.
@@ -145,29 +136,34 @@ class Process(object):
         :type logger: :class:`logging.Logger`
         :return: An instance of this :class:`Process`.
         """
-        proc = Process.instantiate(cls, logger)
-        proc._perform_create(pid, inputs)
+        proc = Process.__new__(cls, inputs, pid, logger)
+        proc.__create_guard = True
+        proc.__init__(inputs, pid, logger)
+        proc._perform_create()
         return proc
 
-    @classmethod
-    def create_from(cls, saved_instance_state, logger=None):
+    @staticmethod
+    def load(bundle, logger=None):
         """
         Create a process from a saved instance state.
 
-        :param saved_instance_state: The saved state
-        :type saved_instance_state: :class:`plum.persistence.bundle.Bundle`
+        :param bundle: The saved state
+        :type bundle: :class:`plum.persistence.bundle.Bundle`
         :param logger: The logger for this process to use
         :return: An instance of this process with its state loaded from the save state.
         :rtype: :class:`Process`
         """
         # Get the class using the class loader and instantiate it
-        class_name = saved_instance_state[cls.BundleKeys.CLASS_NAME.value]
-        ProcClass = \
-            saved_instance_state.get_class_loader().load_class(class_name)
-        proc = Process.instantiate(ProcClass, logger)
-        # Get it to create itself
-        proc._perform_create(saved_instance_state=saved_instance_state)
+        class_name = bundle[Process.BundleKeys.CLASS_NAME.value]
+        proc_class = bundle.get_class_loader().load_class(class_name)
 
+        inputs = bundle.get(Process.BundleKeys.INPUTS.value, None)
+        pid = bundle[Process.BundleKeys.PID.value]
+
+        proc = Process.__new__(proc_class, inputs, pid, logger)
+        proc.__create_guard = True
+        proc.__init__(inputs, pid, logger)
+        proc._perform_create(bundle)
         return proc
 
     @classmethod
@@ -212,7 +208,7 @@ class Process(object):
 
     @classmethod
     def run(cls, **kwargs):
-        p = cls.new_instance(kwargs)
+        p = cls.new(inputs=kwargs)
         p.play()
         return p.outputs
 
@@ -220,15 +216,43 @@ class Process(object):
     def define(cls, spec):
         cls.__called = True
 
-    ############################################
+    @staticmethod
+    def __new__(cls, inputs, pid, logger=None):
+        obj = super(Process, cls).__new__(cls)
+        obj.__create_guard = False
+        return obj
 
-    def __init__(self):
+    def __init__(self, inputs, pid, logger=None):
+        """
+        The signature of the constructor should not be changed by subclassing
+        processes.
+
+        :param inputs: A dictionary of the process inputs
+        :type inputs: dict
+        :param pid: The process ID, if not a unique pid will be chosen
+        :param logger: An optional logger for the process to use
+        :type logger: :class:`logging.Logger`
+        """
+        assert self.__create_guard, \
+            "You can only create this class using either .new() or .load() and " \
+            "not by directly instantiating."
+
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        self._logger = None
+        # Input/output
+        self._check_inputs(inputs)
+        self._raw_inputs = None if inputs is None else util.AttributesFrozendict(inputs)
+        self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        self._outputs = {}
 
-        self._pid = None
+        # Set up a process ID
+        if pid is None:
+            pid = uuid.uuid1()
+        self._pid = pid
+
+        self._logger = logger
+
         # State stuff
         self._state = None
         self._finished = False
@@ -237,11 +261,6 @@ class Process(object):
         self._next_transition = None
         self._aborted = False
         self._abort_msg = None
-
-        # Input/output
-        self._raw_inputs = None
-        self._parsed_inputs = None
-        self._outputs = {}
 
         # RUNTIME STATE ##
         # Stuff below here doesn't need to be saved in the instance state
@@ -354,6 +373,12 @@ class Process(object):
         return self._abort_msg
 
     def save_instance_state(self, bundle):
+        """
+        As the process to save its current instance state.
+
+        :param bundle: A bundle to save the state to
+        :type bundle: :class:`plum.persistence.Bundle`
+        """
         bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
         bundle[self.BundleKeys.STATE.value] = self.state
         bundle[self.BundleKeys.PID.value] = self.pid
@@ -394,6 +419,7 @@ class Process(object):
     @protected
     def create_wait_on(self, bundle):
         return WaitOn.create_from(bundle)
+
     # endregion
 
     def start(self):
@@ -407,26 +433,31 @@ class Process(object):
             "Cannot execute a process twice simultaneously"
 
         try:
-            MONITOR.register_process(self)
-            with self.__state_lock:
-                self._call_with_super_check(self.on_playing)
+            try:
+                MONITOR.register_process(self)
+                with self.__state_lock:
+                    self._call_with_super_check(self.on_playing)
 
-            # Keep going until we run out of tasks
-            fn = self._next()
-            while fn is not None:
-                try:
+                # Keep going until we run out of tasks
+                fn = self._next()
+                while fn is not None:
                     with self.__state_lock:
                         self._next_transition = None
                         fn()
-                except BaseException as e:
-                    exc_type, value, tb = sys.exc_info()
-                    self._perform_fail(e)
-                    raise
-                fn = self._next()
+                    fn = self._next()
 
+            except BaseException as e:
+                exc_type, value, tb = sys.exc_info()
+                self._perform_fail_noraise(e)
+                return
         finally:
-            MONITOR.deregister_process(self)
-            self._call_with_super_check(self.on_done_playing)
+            try:
+                MONITOR.deregister_process(self)
+                self._call_with_super_check(self.on_done_playing)
+            except BaseException as e:
+                if self.state != ProcessState.FAILED:
+                    exc_type, value, tb = sys.exc_info()
+                    self._perform_fail_noraise(e)
 
         return self._outputs
 
@@ -479,28 +510,21 @@ class Process(object):
         self.__called = True
 
     @protected
-    def on_create(self, pid, inputs, saved_instance_state):
+    def on_create(self, bundle):
         """
         Called when the process is created.  If a checkpoint is supplied the
         process should reinstate its state at the time the checkpoint was taken
         and if the checkpoint has a wait_on the process will continue from the
         corresponding callback function.
 
-        :param inputs: The inputs the process should run using.
+        :param bundle: The saved instance state this process is being loaded from
         """
         # In this case there is no message fired because no one could have
         # registered themselves as a listener by this point in the lifecycle.
-        if saved_instance_state is not None:
-            self.load_instance_state(saved_instance_state)
-        else:
-            if pid is None:
-                pid = uuid.uuid1()
-            self._pid = pid
-            self._check_inputs(inputs)
-            if inputs is not None:
-                self._raw_inputs = util.AttributesFrozendict(inputs)
-            self._parsed_inputs = \
-                util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        # In this case there is no message fired because no one could have
+        # registered themselves as a listener by this point in the lifecycle.
+        if bundle is not None:
+            self.load_instance_state(bundle)
 
         self.__called = True
 
@@ -585,6 +609,7 @@ class Process(object):
     def on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
+
     # endregion
 
     @protected
@@ -627,7 +652,7 @@ class Process(object):
             raise error.FastForwardError("Cannot fast-forward a process that "
                                          "is not deterministic")
 
-        #kp = knowledge_provider.get_global_provider()
+        # kp = knowledge_provider.get_global_provider()
         kp = None
         if kp is None:
             raise error.FastForwardError("Cannot fast-forward because a global"
@@ -652,17 +677,9 @@ class Process(object):
 
     @protected
     def load_instance_state(self, bundle):
-        self._pid = bundle[self.BundleKeys.PID.value]
         self._state = bundle[self.BundleKeys.STATE.value]
         self._finished = bundle[self.BundleKeys.FINISHED.value]
         self._aborted = bundle[self.BundleKeys.ABORTED.value]
-
-        # Get the inputs and outputs
-        inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
-        if inputs is not None:
-            self._raw_inputs = util.AttributesFrozendict(inputs)
-        self._parsed_inputs = \
-            util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
         self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
 
         try:
@@ -707,7 +724,7 @@ class Process(object):
                 raise ValueError(
                     "This process does not have a function with "
                     "the name '{}' as expected from the wait on".
-                    format(name))
+                        format(name))
         return callback
 
     # Inputs ##################################################################
@@ -735,8 +752,7 @@ class Process(object):
                     ins[name] = port.default
                 elif port.required:
                     raise ValueError(
-                        "Value not supplied for required inputs port {}".
-                        format(name)
+                        "Value not supplied for required inputs port {}".format(name)
                     )
 
         return ins
@@ -759,18 +775,18 @@ class Process(object):
             else:
                 return self._next_transition
 
-    def _perform_create(self, pid=None, inputs=None, saved_instance_state=None):
+    def _perform_create(self, bundle=None):
         """
 
         :param pid: The process ID to use, can be None in which case one will
             be generated
         :param inputs: The process inputs
         :type inputs: dict
-        :param saved_instance_state: An optional saved state to recreate from
-        :type saved_instance_state: `class`:plum.persistence.bundle.Bundle`
+        :param bundle: An optional saved state to recreate from
+        :type bundle: `class`:plum.persistence.bundle.Bundle`
         """
         self._state = ProcessState.CREATED
-        self._call_with_super_check(self.on_create, pid, inputs, saved_instance_state)
+        self._call_with_super_check(self.on_create, bundle)
         self._next_transition = self._perform_start
 
     def _perform_start(self):
@@ -863,10 +879,13 @@ class Process(object):
         self._to_stopped()
         self.__aborting_protect = False
 
-    def _perform_fail(self, exception):
+    def _perform_fail_noraise(self, exception):
         """
         Messages issued:
          - on_fail
+
+        This messages tries not to let any further exceptions bubble up.
+
         :param exception: The exception that caused the failure
         :type exception: :class:`BaseException`
         """
@@ -876,15 +895,17 @@ class Process(object):
         try:
             self.__called = False
             self.on_fail()
-        except BaseException as e:
-            self._logger.warn(
-                "There was an exception raised when calling on_fail "
+        except BaseException:
+            exc = traceback.format_exc()
+            self.logger.warning(
+                "There was an exception raised when calling {} "
                 "to inform the process that an exception had been "
-                "raised during execution.  Msg: {}".format(e.message))
+                "raised during execution:\n{}".format(self.on_fail.__name__, exc))
         else:
-            assert self.__called, \
-                "on_fail was not called\n" \
-                "Hint: Did you forget to call the superclass method?"
+            if not self.__called:
+                self.logger.error(
+                    "on_fail was not called\n"
+                    "Hint: Did you forget to call the superclass method?")
 
     def _to_running(self):
         self._state = ProcessState.RUNNING

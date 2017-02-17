@@ -317,7 +317,7 @@ class TaskRunner(Subscriber, ProcessListener):
         task = self._decode(body)
         ProcClass = load_class(task['proc_class'])
 
-        p = ProcClass.new_instance(inputs=task['inputs'])
+        p = ProcClass.new(inputs=task['inputs'])
         p.add_process_listener(self)
         self._status_publisher.add_process(p)
 

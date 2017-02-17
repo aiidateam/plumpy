@@ -17,7 +17,7 @@ class TestWaitingProcess(TestCase):
         super(TestWaitingProcess, self).setUp()
 
         self.events_tester = ProcessListenerTester()
-        self.proc = DummyProcessWithOutput()
+        self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
 
     def tearDown(self):
@@ -26,7 +26,7 @@ class TestWaitingProcess(TestCase):
         self.proc.remove_process_listener(self.events_tester)
 
     def test_instance_state(self):
-        proc = TwoCheckpoint.new_instance()
+        proc = TwoCheckpoint.new()
         wl = ProcessSaver(proc)
         proc.play()
 
@@ -37,7 +37,7 @@ class TestWaitingProcess(TestCase):
 
     def test_saving_each_step(self):
         for ProcClass in TEST_WAITING_PROCESSES:
-            proc = ProcClass.new_instance()
+            proc = ProcClass.new()
             saver = ProcessSaver(proc)
             try:
                 proc.play()
@@ -47,7 +47,7 @@ class TestWaitingProcess(TestCase):
             self.assertTrue(check_process_against_snapshots(ProcClass, saver.snapshots))
 
     def test_abort(self):
-        p = WaitForSignalProcess.new_instance()
+        p = WaitForSignalProcess.new()
         t = threading.Thread(target=p.play)
 
         # Start the process

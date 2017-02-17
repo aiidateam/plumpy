@@ -117,11 +117,17 @@ class WaitOnState(WaitOn, Unsavable, ProcessListener):
         assert state in ProcessState
         super(WaitOnState, self).__init__()
 
+        self._proc = proc
         self._state = state
-        if proc.state is self._state:
+        if self._proc.state is self._state:
             self.done()
         else:
-            proc.add_process_listener(self)
+            self._proc.add_process_listener(self)
+
+    @override
+    def interrupt(self):
+        super(WaitOnState, self).interrupt()
+        self._proc.remove_process_listener(self)
 
     @override
     def on_process_run(self, proc):

@@ -51,7 +51,7 @@ class TestStatusRequesterAndProvider(TestCase):
     def test_request(self):
         procs = []
         for i in range(0, 10):
-            procs.append(WaitForSignalProcess.new_instance())
+            procs.append(WaitForSignalProcess.new())
             self.manager.start(procs[-1])
 
         response = self._send_request_poll_response(0.2)
@@ -113,7 +113,7 @@ class TestStatusProvider(TestCase):
     def test_status(self):
         procs = []
         for i in range(0, 20):
-            procs.append(WaitForSignalProcess.new_instance())
+            procs.append(WaitForSignalProcess.new())
         for p in procs:
             self.manager.start(p)
         wait_until(procs, ProcessState.WAITING)

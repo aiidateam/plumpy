@@ -223,7 +223,7 @@ class Workflow(Process, ProcessListener):
 
         # Create all our subprocess classes
         for name, proc_class in self.spec().processes.iteritems():
-            proc = proc_class.new_instance()
+            proc = proc_class.new()
             proc.add_process_listener(self)
             self._process_instances[name] = proc
 

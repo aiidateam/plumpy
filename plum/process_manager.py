@@ -132,7 +132,7 @@ class ProcessManager(ProcessListener):
         :return: A :class:`Future` representing the execution of the process
         :rtype: :class:`Future`
         """
-        return self.start(proc_class.new_instance(inputs, pid, logger))
+        return self.start(proc_class.new(inputs, pid, logger))
 
     def start(self, proc):
         """

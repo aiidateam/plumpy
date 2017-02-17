@@ -75,7 +75,7 @@ class ProcessWithChildren(Process):
 
         for child_state in bundle[self.CHILDREN]:
             self.add_child(
-                Process.create_from(child_state, logger=self.logger)
+                Process.load(child_state, logger=self.logger)
             )
 
     @override

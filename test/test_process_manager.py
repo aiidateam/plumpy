@@ -37,7 +37,7 @@ class TestProcessManager(TestCase):
             self.assertIs(t.proc_class, DummyProcess)
 
     def test_start(self):
-        p = DummyProcess.new_instance()
+        p = DummyProcess.new()
         self.assertFalse(p.has_finished())
         self.manager.start(p)
         wait_until_stopped(p, 1)
@@ -48,7 +48,7 @@ class TestProcessManager(TestCase):
 
         # Launch a bunch of processes
         for i in range(0, 9):
-            procs.append(WaitForSignalProcess.new_instance())
+            procs.append(WaitForSignalProcess.new())
             self.manager.start(procs[-1])
 
         self.assertTrue(wait_until(procs, ProcessState.WAITING, timeout=5))
@@ -70,7 +70,7 @@ class TestProcessManager(TestCase):
 
         # Launch a bunch of processes
         for i in range(0, 9):
-            procs.append(WaitForSignalProcess.new_instance())
+            procs.append(WaitForSignalProcess.new())
             self.manager.start(procs[-1])
 
         wait_until(procs, ProcessState.WAITING, timeout=1)
@@ -101,19 +101,19 @@ class TestProcessManager(TestCase):
     def test_play_pause_abort(self):
         procs = []
         for i in range(0, 10):
-            procs.append(WaitForSignalProcess.new_instance())
+            procs.append(WaitForSignalProcess.new())
             self.manager.start(procs[-1])
         self.assertTrue(wait_until(procs, ProcessState.WAITING))
         self.assertTrue(self.manager.pause_all(timeout=2))
         self.assertTrue(self.manager.abort_all(timeout=2))
 
     def test_future_pid(self):
-        p = DummyProcess.new_instance()
+        p = DummyProcess.new()
         future = self.manager.start(p)
         self.assertEqual(future.pid, p.pid)
 
     def test_future_abort(self):
-        p = WaitForSignalProcess.new_instance()
+        p = WaitForSignalProcess.new()
 
         with WaitRegion(WaitOnState(p, ProcessState.RUNNING), timeout=2):
             future = self.manager.start(p)
@@ -123,7 +123,7 @@ class TestProcessManager(TestCase):
         self.assertTrue(p.has_aborted())
 
     def test_future_pause_play(self):
-        p = WaitForSignalProcess.new_instance()
+        p = WaitForSignalProcess.new()
 
         # Run the process
         with WaitRegion(WaitOnState(p, ProcessState.WAITING), timeout=2):
