@@ -3,6 +3,7 @@
 import collections
 import uuid
 from enum import Enum
+import logging
 import time
 import plum.util as util
 from abc import ABCMeta, abstractmethod
@@ -15,7 +16,8 @@ from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.util import protected
 from plum.wait import WaitOn
-from plum._base import LOGGER
+
+_DEFAULT_LOGGER = logging.getLogger(__name__)
 
 
 class ProcessState(Enum):
@@ -83,8 +85,6 @@ class Process(object):
         p = ProcClass()
         if logger:
             p.set_logger(logger)
-        else:
-            p.set_logger(LOGGER)
         return p
 
     @classmethod
@@ -116,7 +116,7 @@ class Process(object):
         """
         # Get the class using the class loader and instantiate it
         class_name = saved_instance_state[cls.BundleKeys.CLASS_NAME.value]
-        ProcClass =\
+        ProcClass = \
             saved_instance_state.get_class_loader().load_class(class_name)
         proc = Process.instantiate(ProcClass, logger)
         # Get it to create itself
@@ -250,7 +250,10 @@ class Process(object):
         :return: The logger.
         :rtype: :class:`logging.Logger`
         """
-        return self._logger
+        if self._logger is None:
+            return _DEFAULT_LOGGER
+        else:
+            return self._logger
 
     def has_finished(self):
         return self._finished
@@ -350,7 +353,7 @@ class Process(object):
             if inputs is not None:
                 self._raw_inputs = util.AttributesFrozendict(inputs)
 
-        self._parsed_inputs =\
+        self._parsed_inputs = \
             util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
         self._called = False
@@ -584,14 +587,14 @@ class Process(object):
                 raise TypeError(
                     "Process trying to output on unknown output port {}, "
                     "and does not have a dynamic output port in spec.".
-                    format(output_port))
+                        format(output_port))
 
             if port.valid_type is not None and \
                     not isinstance(value, port.valid_type):
                 raise TypeError(
                     "Process returned output '{}' of wrong type."
                     "Expected '{}', got '{}'".
-                    format(output_port, port.valid_type, type(value)))
+                        format(output_port, port.valid_type, type(value)))
 
         self._outputs[output_port] = value
         self._on_output_emitted(output_port, value, dynamic)
@@ -744,6 +747,7 @@ class _Director(object):
     This class is used internally to orchestrate the running of a process i.e.
     step it through the states.
     """
+
     def __init__(self, process):
         self._proc = process
         self._stop = False
@@ -800,7 +804,7 @@ class _Director(object):
                 unticked = True
         except BaseException as e:
             # TODO: Log traceback
-            #self._proc.logger.error("Error occured ticking process:{}".format(traceback.print_exc()))
+            # self._proc.logger.error("Error occured ticking process:{}".format(traceback.print_exc()))
             MONITOR.process_failed(self._proc.pid)
             raise
 
