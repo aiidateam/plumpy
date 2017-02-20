@@ -76,6 +76,7 @@ class TestProcessController(TestCase):
             process_manager=self.manager)
 
     def tearDown(self):
+        self.manager.shutdown()
         super(TestProcessController, self).tearDown()
         self.channel.close()
         self._connection.close()

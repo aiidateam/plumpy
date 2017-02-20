@@ -1,5 +1,6 @@
-
 import threading
+from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 from plum.process import ProcessListener
 from plum.util import override, protected
 from plum.exceptions import TimeoutError
@@ -8,7 +9,7 @@ from plum.exceptions import TimeoutError
 class _ProcInfo(object):
     def __init__(self, proc, thread):
         self.proc = proc
-        self.thread = thread
+        self.executor_future = None
 
 
 class Future(ProcessListener):
@@ -117,9 +118,9 @@ class ProcessManager(ProcessListener):
     Used to launch processes on multiple threads and monitor their progress
     """
 
-    def __init__(self):
+    def __init__(self, max_threads=1024):
         self._processes = {}
-        self._finished_threads = []
+        self._executor = ThreadPoolExecutor(max_workers=max_threads)
 
     def launch(self, proc_class, inputs=None, pid=None, logger=None):
         """
@@ -191,11 +192,13 @@ class ProcessManager(ProcessListener):
 
     def wait_for(self, pid, timeout=None):
         try:
-            thread = self._processes[pid].thread
-            thread.join(timeout)
-            return not thread.is_alive()
+            self._processes[pid].executor_future.result(timeout)
         except KeyError:
             raise ValueError("Unknown pid")
+        except concurrent.futures.TimeoutError:
+            return False
+
+        return True
 
     def get_num_processes(self):
         return len(self._processes)
@@ -203,10 +206,9 @@ class ProcessManager(ProcessListener):
     def shutdown(self):
         self.pause_all()
         self._processes = {}
-        for t in self._finished_threads:
-            t.join()
+        self._executor.shutdown(True)
 
-    # From ProcessListener ##################################
+    # region From ProcessListener
     @override
     def on_process_stop(self, process):
         super(ProcessManager, self).on_process_stop(process)
@@ -216,40 +218,33 @@ class ProcessManager(ProcessListener):
     def on_process_fail(self, process):
         super(ProcessManager, self).on_process_fail(process)
         self._delete_process(process)
-    #########################################################
+
+    # endregion
 
     def _play(self, proc):
-        info = self._processes[proc.pid]
-
-        # Is it playing already?
-        if info.thread is None:
-            info.thread = threading.Thread(
-                target=proc.play, name="process.{}".format(proc.pid))
-            info.thread.start()
+        if not proc.is_playing():
+            info = self._processes[proc.pid]
+            info.executor_future = self._executor.submit(proc.play)
 
     def _pause(self, proc, timeout=None):
-        info = self._processes[proc.pid]
-        info.proc.pause()
-
-        # Is is paused or finished already?
-        thread = info.thread
-        if thread is not None:
-            thread.join(timeout)
-            info.thread = None
-            if thread.is_alive():
-                self._finished_threads.append(thread)
+        if proc.is_playing():
+            info = self._processes[proc.pid]
+            proc.pause()
+            try:
+                info.executor_future.result(timeout)
+            except concurrent.futures.TimeoutError:
                 return False
-            else:
-                return True
+
         return True
 
     def _abort(self, proc, msg=None, timeout=None):
         info = self._processes[proc.pid]
-        # This will cause a stop message and the process will be deleted
-        info.proc.abort(msg)
-        if info.thread is not None and timeout != 0.0:
-            info.thread.join(timeout)
-            return not info.thread.is_alive()
+        if proc.is_playing():
+            info.proc.abort(msg)
+            try:
+                info.executor_future.result(timeout)
+            except concurrent.futures.TimeoutError:
+                return False
         return True
 
     def _delete_process(self, proc):
@@ -259,5 +254,4 @@ class ProcessManager(ProcessListener):
         # Get rid of the info but save the thread so we can join later
         # on shutdown
         proc.remove_process_listener(self)
-        thread = self._processes.pop(proc.pid).thread
-        self._finished_threads.append(thread)
+        del self._processes[proc.pid]

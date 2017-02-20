@@ -31,6 +31,7 @@ class TestStatusRequesterAndProvider(TestCase):
             self._connection, process_manager=self.manager, exchange=exchange)
 
     def tearDown(self):
+        self.manager.shutdown()
         super(TestStatusRequesterAndProvider, self).tearDown()
         self._connection.close()
 
@@ -102,6 +103,7 @@ class TestStatusProvider(TestCase):
             process_manager=self.manager)
 
     def tearDown(self):
+        self.manager.shutdown()
         super(TestStatusProvider, self).tearDown()
         self.channel.close()
         self._connection.close()
