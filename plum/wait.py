@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta
 import threading
-from plum.util import fullname, protected
+from abc import ABCMeta
+
 from plum.persistence.bundle import Bundle
+from plum.util import fullname, protected, override
+from plum.exceptions import Unsupported
 
 
 class Interrupted(Exception):
@@ -22,6 +24,7 @@ class WaitOn(object):
 
     CLASS_NAME = "class_name"
     OUTCOME = "outcome"
+    RECREATE_FROM_KEY = 'recreate_from'
 
     @staticmethod
     def _is_saved_state(args):
@@ -29,9 +32,16 @@ class WaitOn(object):
 
     @staticmethod
     def create_from(bundle):
+        """
+        Create the wait on from a save instance state.
+
+        :param bundle: The saved instance state
+        :return: The wait on with its state as it was when it was saved
+        :rtype: :class:`WaitOn`
+        """
         class_name = bundle[WaitOn.CLASS_NAME]
-        WaitOnClass = bundle.get_class_loader().load_class(class_name)
-        return WaitOnClass(bundle)
+        wait_on_class = bundle.get_class_loader().load_class(class_name)
+        return wait_on_class(recreate_from=bundle)
 
     def __init__(self, *args, **kwargs):
         self._outcome = None
@@ -39,12 +49,22 @@ class WaitOn(object):
         # Variables below this don't need to be saved in the instance state
         self._waiting = threading.Event()
         self._interrupt_lock = threading.Lock()
-        self._interrupted = False
+        self.__super_called = False
 
-        if self._is_saved_state(args):
-            self.load_instance_state(args[0])
+        if kwargs and kwargs.get(self.RECREATE_FROM_KEY, False):
+            bundle = kwargs.pop(self.RECREATE_FROM_KEY)
+            assert isinstance(bundle, Bundle), \
+                "'{}' must be of type {}".format(self.RECREATE_FROM_KEY, Bundle.__class__)
+            assert args is None and not kwargs, \
+                "If '{}' is supplied cannot have another parameters".format(self.RECREATE_FROM_KEY)
+            self.load_instance_state(bundle, *args, **kwargs)
         else:
             self.init(*args, **kwargs)
+
+        assert self.__super_called, \
+            "Base method was not called\n" \
+            "Hint: Try adding super({}, self).[method_name](bundle) " \
+            "as the first line of your method".format(self.__class__.__name__)
 
     def is_done(self):
         """
@@ -67,6 +87,16 @@ class WaitOn(object):
         return self._outcome
 
     def save_instance_state(self, out_state):
+        """
+        Save the current state of this wait on.  Subclassing methods should
+        call the superclass method.
+
+        If a subclassing wait on is unable to save state because, for example,
+        it depends on something that is only available at runtime then it
+        should raise a :class:`Unsupported` error
+
+        :param out_state: The bundle to save the state into
+        """
         out_state[self.CLASS_NAME] = fullname(self)
         out_state[self.OUTCOME] = self._outcome
 
@@ -90,41 +120,50 @@ class WaitOn(object):
                 return True
             # Going to have to wait
             self._waiting.clear()
-            self._interrupted = False
 
         if not self._waiting.wait(timeout):
             # The threading Event returns False if it timed out
             return False
-
-        with self._interrupt_lock:
-            if self.is_done():
-                return True
-            elif self._interrupted:
-                self._interrupted = False
-                raise Interrupted()
+        elif self.is_done():
+            return True
+        else:
+            # Must have been interrupted
+            raise Interrupted()
 
     def interrupt(self):
         with self._interrupt_lock:
-            if self.is_done():
-                return
-            self._interrupted = True
             self._waiting.set()
 
     @protected
     def init(self, *args, **kwargs):
-        pass
+        """
+        This should be used as the constructor rather than __init__ so that
+        wait ons can be created either by passing a saved instance state
+        or the expected construction parameters.
+
+        :param args: Any positional arguments
+        :param kwargs: Any keyword arguments
+        """
+        self.__super_called = True
 
     @protected
     def load_instance_state(self, bundle):
+        """
+        Load the state of a wait on from a saved instance state.  All
+        subclasses implementing this should call the superclass method.
+
+        :param bundle: :class:`Bundle` The save instance state
+        """
         outcome = bundle[self.OUTCOME]
         self.done(outcome[0], outcome[1])
+        self.__super_called = True
 
     @protected
-    def done(self, success, msg=None):
+    def done(self, success=True, msg=None):
         """
         Implementing classes should call this when they are done waiting.  As
-        well as indicating success or failure they can provide an outcome
-        message.
+        well as indicating success or failure they can provide an optional
+        outcome message.
 
         :param success: True if finished waiting successfully, False otherwise.
         :type success: bool
@@ -132,6 +171,20 @@ class WaitOn(object):
         :type msg: str
         """
         assert self._outcome is None, "Cannot call done more than once"
+
         with self._interrupt_lock:
             self._outcome = success, msg
             self._waiting.set()
+
+
+class Unsavable(object):
+    """
+    A mixin used to make a wait on unable to be saved or loaded
+    """
+    @override
+    def save_instance_state(self, out_state):
+        raise Unsupported("This WaitOn cannot be saved")
+
+    @override
+    def load_instance_state(self, bundle):
+        raise Unsupported("This WaitOn cannot be loaded")

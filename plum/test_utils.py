@@ -1,11 +1,10 @@
 from collections import namedtuple
 
 from plum.persistence.bundle import Bundle
-from plum.process import Process, ProcessState
+from plum.process import Process
 from plum.process_listener import ProcessListener
 from plum.util import override
-from plum.wait import WaitOn
-from plum.wait_ons import Checkpoint
+from plum.wait_ons import Checkpoint, WaitForSignal
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -53,14 +52,6 @@ class ProcessWithCheckpoint(Process):
         pass
 
 
-class WaitForSignal(WaitOn):
-    def __init__(self):
-        super(WaitForSignal, self).__init__()
-
-    def continue_(self):
-        self.done(True)
-
-
 class WaitForSignalProcess(Process):
     @override
     def _run(self):
@@ -85,16 +76,15 @@ class EventsTesterMixin(object):
         assert event in cls.EVENTS
         cls.called_events.append(event)
 
-    def __init__(self):
+    def __init__(self, inputs=None, pid=None, logger=None):
         assert isinstance(self, Process), \
             "Mixin has to be used with a type derived from a Process"
-        super(EventsTesterMixin, self).__init__()
+        super(EventsTesterMixin, self).__init__(inputs, pid, logger)
         self.__class__.called_events = []
 
     @override
-    def on_create(self, pid, inputs, saved_instance_state):
-        super(EventsTesterMixin, self).on_create(
-            pid, inputs, saved_instance_state)
+    def on_create(self, bundle):
+        super(EventsTesterMixin, self).on_create(bundle)
         self.called('create')
 
     @override
@@ -135,19 +125,14 @@ class ProcessEventsTester(EventsTesterMixin, Process):
         super(ProcessEventsTester, cls).define(spec)
         spec.dynamic_output()
 
-    def __init__(self):
-        super(ProcessEventsTester, self).__init__()
-
     @override
     def _run(self):
         self.out("test", 5)
 
 
 class TwoCheckpoint(ProcessEventsTester):
-    @override
-    def on_create(self, pid, inputs, saved_instance_state):
-        super(TwoCheckpoint, self).on_create(
-            pid, inputs, saved_instance_state)
+    def __init__(self, inputs=None, pid=None, logger=None):
+        super(TwoCheckpoint, self).__init__(inputs, pid, logger)
         self._last_checkpoint = None
 
     @override
@@ -300,10 +285,10 @@ def check_process_against_snapshots(proc_class, snapshots):
     :rtype: bool
     """
     for i, info in zip(range(0, len(snapshots)), snapshots):
-        loaded = proc_class.create_from(info[1])
+        loaded = proc_class.load(info[1])
         ps = ProcessSaver(loaded)
         try:
-            loaded.start()
+            loaded.play()
         except BaseException:
             pass
 

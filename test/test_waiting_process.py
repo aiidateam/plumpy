@@ -1,4 +1,3 @@
-from unittest import TestCase
 
 import threading
 from plum.persistence.bundle import Bundle
@@ -10,21 +9,26 @@ from plum.test_utils import ProcessListenerTester, check_process_against_snapsho
 from plum.util import override
 from plum.test_utils import ProcessSaver
 from plum.wait_ons import wait_until_stopped, wait_until
+from util import TestCase
 
 
 class TestWaitingProcess(TestCase):
     def setUp(self):
+        super(TestWaitingProcess, self).setUp()
+
         self.events_tester = ProcessListenerTester()
-        self.proc = DummyProcessWithOutput()
+        self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
 
     def tearDown(self):
+        super(TestWaitingProcess, self).tearDown()
+
         self.proc.remove_process_listener(self.events_tester)
 
     def test_instance_state(self):
-        proc = TwoCheckpoint.new_instance()
+        proc = TwoCheckpoint.new()
         wl = ProcessSaver(proc)
-        proc.start()
+        proc.play()
 
         for snapshot, outputs in zip(wl.snapshots, wl.outputs):
             state, bundle = snapshot
@@ -33,18 +37,18 @@ class TestWaitingProcess(TestCase):
 
     def test_saving_each_step(self):
         for ProcClass in TEST_WAITING_PROCESSES:
-            proc = ProcClass.new_instance()
+            proc = ProcClass.new()
             saver = ProcessSaver(proc)
             try:
-                proc.start()
+                proc.play()
             except BaseException:
                 pass
 
             self.assertTrue(check_process_against_snapshots(ProcClass, saver.snapshots))
 
     def test_abort(self):
-        p = WaitForSignalProcess.new_instance()
-        t = threading.Thread(target=p.start)
+        p = WaitForSignalProcess.new()
+        t = threading.Thread(target=p.play)
 
         # Start the process
         t.start()
@@ -59,9 +63,9 @@ class TestWaitingProcess(TestCase):
         # Wait until it's completely finished
         wait_until_stopped(p)
         self.assertEqual(p.state, ProcessState.STOPPED)
-        self.assertTrue(p.aborted)
+        self.assertTrue(p.has_aborted())
 
-        t.join()
+        self.safe_join(t)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)

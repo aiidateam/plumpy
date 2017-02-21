@@ -216,7 +216,7 @@ class ProcessSpec(object):
         :type inputs: dict
         :return: A tuple indicating if the input is valid or not and an
             optional error message
-        :rtype: tuple(bool, str|None)
+        :rtype: tuple(bool, str or None)
         """
         if inputs is None:
             inputs = {}

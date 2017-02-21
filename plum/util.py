@@ -19,13 +19,14 @@ class EventHelper(object):
         self._listeners = set()
 
     def add_listener(self, listener):
-        assert(isinstance(listener, self._listener_type))
-        assert listener not in self._listeners, \
-               "Cannot add the same listener more than once"
+        assert isinstance(listener, self._listener_type)
         self._listeners.add(listener)
 
     def remove_listener(self, listener):
         self._listeners.discard(listener)
+
+    def remove_all_listeners(self):
+        self._listeners.clear()
 
     @property
     def listeners(self):
@@ -37,6 +38,34 @@ class EventHelper(object):
         # remove themselves during the message
         for l in list(self.listeners):
             getattr(l, event_function.__name__)(*args, **kwargs)
+
+
+class ListenContext(object):
+    """
+    A context manager for listening to producer that can generate messages.
+    The requirements for the producer are that it has methods:
+    * start_listening(..), and,
+    * stop_listening(..)
+    and that these methods take zero or more arguments that identify the
+    listener and perhaps what it wants to listen to if this make sense for
+    the producer/listener combination.
+
+    A typical usage would be:
+    with ListenContext(producer, listener):
+        # Producer generates messages that the listener gets
+        pass
+    """
+    def __init__(self, producer, *args, **kwargs):
+        self._producer = producer
+        self._args = args
+        self._kwargs = kwargs
+
+    def __enter__(self):
+        self._producer.start_listening(*self._args, **self._kwargs)
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self._producer.stop_listening(*self._args, **self._kwargs)
 
 
 class ThreadSafeCounter(object):
@@ -89,11 +118,20 @@ def load_class(classstring):
 
 
 class AttributesFrozendict(frozendict.frozendict):
+    def __init__(self, *args, **kwargs):
+        super(AttributesFrozendict, self).__init__(*args, **kwargs)
+        self._initialised = True
+
     def __getattr__(self, attr):
         """
         Read a key as an attribute. Raise AttributeError on missing key.
         Called only for attributes that do not exist.
         """
+        # This attribute is looked for by pickle when deserialising.  At this point
+        # the object is not yet constructed and so accessing any members is
+        # dangerous and often causes infinite recursion so I have to guard like this.
+        if attr == "__setstate__":
+            raise AttributeError()
         try:
             return self[attr]
         except KeyError:
