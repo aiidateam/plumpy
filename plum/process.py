@@ -500,12 +500,14 @@ class Process(object):
         self.__playing = True
         self.__pausing_protect = False
         self.__aborting_protect = False
+        self.__event_helper.fire_event(ProcessListener.on_process_playing, self)
 
         self.__called = True
 
     @protected
     def on_done_playing(self):
         self.__playing = False
+        self.__event_helper.fire_event(ProcessListener.on_process_done_playing, self)
 
         self.__called = True
 
