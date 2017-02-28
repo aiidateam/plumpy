@@ -3,11 +3,11 @@
 from setuptools import setup
 
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 __contributors__ = "Martin Uhrin"
 
 setup(
-    name="plum",
+    name="plumpy",
     version=__version__,
     description='A python workflow library',
     long_description=open('README.md').read(),
@@ -21,6 +21,7 @@ setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
     ],
+    keywords='workflow multithreaded rabbitmq',
     # Abstract dependencies.  Concrete versions are listed in
     # requirements.txt
     # See https://caremad.io/2013/07/setup-vs-requirement/ for an explanation
