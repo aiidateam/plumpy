@@ -1,4 +1,3 @@
-
 from util import TestCase
 from plum.process import ProcessState
 from plum.wait_ons import WaitOnState
@@ -24,17 +23,19 @@ class TestWaitOnState(TestCase):
         for wait in waits.itervalues():
             self.assertFalse(wait.is_done())
 
-        self.manager.start(p)
+        future = self.manager.start(p)
         self.assertTrue(waits[ProcessState.RUNNING].wait(1))
         self.assertTrue(waits[ProcessState.WAITING].wait(1))
         self.assertFalse(waits[ProcessState.STOPPED].wait(1))
         p.continue_()
         self.assertTrue(waits[ProcessState.STOPPED].wait(1))
+        assert future.wait(1.)
 
     def test_interrupt(self):
         p = DummyProcess.new()
         w = WaitOnState(p, ProcessState.STOPPED)
         self.assertFalse(w.wait(0.2))
         w.interrupt()
-        self.manager.start(p)
+        future = self.manager.start(p)
         self.assertFalse(w.wait(0.2))
+        assert future.wait(1.)

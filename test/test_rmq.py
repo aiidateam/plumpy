@@ -1,13 +1,16 @@
-
-import pika
-import pika.exceptions
+try:
+    import pika
+    import pika.exceptions
+    from plum.rmq import TaskRunner, TaskController, ProcessController, \
+        StatusProvider, SubscriberThread, action_decode, action_encode
+    _HAS_PIKA = True
+except ImportError:
+    _HAS_PIKA = False
 import threading
 import uuid
-import json
+import unittest
 from plum.process_manager import ProcessManager
 from plum.process_monitor import MONITOR, ProcessMonitorListener
-from plum.rmq import TaskRunner, TaskController, ProcessController, \
-    StatusProvider, SubscriberThread, action_decode, action_encode
 from plum.test_utils import TEST_PROCESSES, DummyProcess, WaitForSignalProcess
 from plum.wait_ons import wait_until
 from plum.process import ProcessState
@@ -20,6 +23,7 @@ class Out(object):
         self.is_set = threading.Event()
 
 
+@unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
 class TestTaskControllerAndRunner(TestCase):
     def setUp(self):
         super(TestTaskControllerAndRunner, self).setUp()
@@ -56,6 +60,7 @@ class TestTaskControllerAndRunner(TestCase):
         self.assertListEqual(TEST_PROCESSES, l.ran)
 
 
+@unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
 class TestProcessController(TestCase):
     def setUp(self):
         super(TestProcessController, self).setUp()
@@ -95,7 +100,9 @@ class TestProcessController(TestCase):
         self.controller.poll(time_limit=1)
 
         self.assertFalse(p.is_playing())
-        self.assertTrue(self.manager.abort(p.pid, timeout=10))
+        with self.assertRaises(AssertionError):
+            self.assertTrue(self.manager.abort(p.pid, timeout=1))
+            # Ok, it's done
 
     def test_pause_play(self):
         def test_pause(self):
@@ -141,6 +148,7 @@ class TestProcessController(TestCase):
         self.manager.shutdown()
 
 
+@unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
 class TestRmqThread(TestCase):
     def test_start_stop(self):
         for c in [ProcessController, StatusProvider, TaskRunner]:

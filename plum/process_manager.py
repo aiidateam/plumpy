@@ -187,7 +187,11 @@ class ProcessManager(ProcessListener):
     def abort_all(self, msg=None, timeout=None):
         result = True
         for info in self._processes.values():
-            result &= self._abort(info.proc, msg, timeout)
+            try:
+                result &= self._abort(info.proc, msg, timeout)
+            except AssertionError:
+                # This happens if the process is not playing
+                pass
         return result
 
     def wait_for(self, pid, timeout=None):
@@ -205,7 +209,8 @@ class ProcessManager(ProcessListener):
 
     def shutdown(self):
         self.pause_all()
-        self._processes = {}
+        for p in self._processes.values():
+            self._delete_process(p.proc)
         self._executor.shutdown(True)
 
     # region From ProcessListener
@@ -239,12 +244,15 @@ class ProcessManager(ProcessListener):
 
     def _abort(self, proc, msg=None, timeout=None):
         info = self._processes[proc.pid]
-        if proc.is_playing():
-            info.proc.abort(msg)
+
+        info.proc.abort(msg)
+
+        if timeout is not None:
             try:
                 info.executor_future.result(timeout)
             except concurrent.futures.TimeoutError:
                 return False
+
         return True
 
     def _delete_process(self, proc):

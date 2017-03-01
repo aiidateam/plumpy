@@ -225,8 +225,7 @@ class Saver(object):
 
 class ProcessSaver(ProcessListener, Saver):
     """
-    Save the instance state of a process each time it is about to enter a new
-    state
+    Save the instance state of a process each time it is about to enter a new state
     """
 
     def __init__(self, p):
