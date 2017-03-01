@@ -312,7 +312,10 @@ class Process(object):
         :return: The logger.
         :rtype: :class:`logging.Logger`
         """
-        return self._logger
+        if self._logger is not None:
+            return self._logger
+        else:
+            return LOGGER
 
     def is_playing(self):
         """
@@ -444,6 +447,8 @@ class Process(object):
                     with self.__state_lock:
                         self._next_transition = None
                         fn()
+                    # Allow a gap here so others waiting for a state lock can
+                    # intervene
                     fn = self._next()
 
             except BaseException as e:
@@ -478,6 +483,7 @@ class Process(object):
         :type msg: str
         """
         with self.__state_lock:
+            assert self.is_playing(), "Cannot abort a process that is not playing"
             self.__aborting_protect = True
             self._abort_msg = msg
             self._interrupt()
@@ -500,12 +506,14 @@ class Process(object):
         self.__playing = True
         self.__pausing_protect = False
         self.__aborting_protect = False
+        self.__event_helper.fire_event(ProcessListener.on_process_playing, self)
 
         self.__called = True
 
     @protected
     def on_done_playing(self):
         self.__playing = False
+        self.__event_helper.fire_event(ProcessListener.on_process_done_playing, self)
 
         self.__called = True
 

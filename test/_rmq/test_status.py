@@ -1,17 +1,23 @@
-
-
+import unittest
 from test.util import TestCase
-import pika
-import pika.exceptions
+
+try:
+    import pika
+    import pika.exceptions
+    from plum._rmq.status import StatusProvider, StatusRequester, status_decode
+
+    _HAS_PIKA = True
+except ImportError:
+    _HAS_PIKA = False
 import json
 import uuid
-from plum._rmq.status import StatusProvider, StatusRequester, status_decode
 from plum.process_manager import ProcessManager
 from plum.test_utils import WaitForSignalProcess
 from plum.process import ProcessState
 from plum.wait_ons import wait_until
 
 
+@unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
 class TestStatusRequesterAndProvider(TestCase):
     def setUp(self):
         super(TestStatusRequesterAndProvider, self).setUp()
@@ -73,6 +79,7 @@ class TestStatusRequesterAndProvider(TestCase):
         return self.requester.poll_response(timeout=timeout)
 
 
+@unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
 class TestStatusProvider(TestCase):
     def setUp(self):
         super(TestStatusProvider, self).setUp()

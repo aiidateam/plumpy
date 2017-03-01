@@ -10,3 +10,7 @@ class TimeoutError(Exception):
 
 class Unsupported(Exception):
     pass
+
+
+class LockError(Exception):
+    pass

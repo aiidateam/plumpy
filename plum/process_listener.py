@@ -4,6 +4,24 @@ from abc import ABCMeta
 class ProcessListener(object):
     __metaclass__ = ABCMeta
 
+    def on_process_playing(self, process):
+        """
+        Called when the process starts to be played i.e. it is executing
+
+        :param process: The process
+        :type process: :class:`plum.process.Process`
+        """
+        pass
+
+    def on_process_done_playing(self, process):
+        """
+        Called when the process starts to be played i.e. it is executing
+
+        :param process: The process
+        :type process: :class:`plum.process.Process`
+        """
+        pass
+
     def on_process_start(self, process):
         """
         Called when the process has been started

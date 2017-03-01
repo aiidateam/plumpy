@@ -29,7 +29,7 @@ setup(
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
     install_requires=[
-        'frozendict',
+        'frozendict','portalocker'
     ],
     extras_require={
         ':python_version<"3.4"': ['enum34'],

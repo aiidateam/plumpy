@@ -4,6 +4,7 @@ import threading
 import inspect
 import importlib
 import frozendict
+import logging
 from plum.settings import check_protected, check_override
 from plum.exceptions import ClassNotFoundException
 import plum.lang
@@ -11,11 +12,14 @@ import plum.lang
 protected = plum.lang.protected(check=check_protected)
 override = plum.lang.override(check=check_override)
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class EventHelper(object):
-    def __init__(self, listener_type):
-        assert(listener_type is not None)
+    def __init__(self, listener_type, raise_exceptions=False):
+        assert (listener_type is not None)
         self._listener_type = listener_type
+        self._raise_exceptions = raise_exceptions
         self._listeners = set()
 
     def add_listener(self, listener):
@@ -37,7 +41,16 @@ class EventHelper(object):
         # We have to use a copy here because the listener may
         # remove themselves during the message
         for l in list(self.listeners):
-            getattr(l, event_function.__name__)(*args, **kwargs)
+            try:
+                getattr(l, event_function.__name__)(*args, **kwargs)
+            except BaseException as e:
+                _LOGGER.error(
+                    "The listener '{}' produced as exception while receiving "
+                    "the message '{}':\n{}".format(
+                        l, event_function.__name__, e.message)
+                )
+                if self._raise_exceptions:
+                    raise
 
 
 class ListenContext(object):
@@ -55,6 +68,7 @@ class ListenContext(object):
         # Producer generates messages that the listener gets
         pass
     """
+
     def __init__(self, producer, *args, **kwargs):
         self._producer = producer
         self._args = args

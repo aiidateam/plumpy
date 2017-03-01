@@ -224,13 +224,9 @@ def wait_until_stopped(proc, timeout=None):
 
     :param proc: The process or sequence of processes to wait for
     :type proc: :class:`~plum.process.Process` or :class:`Sequence`
-    :param state: The state to wait for
     :param timeout: The optional timeout
     """
-    if isinstance(proc, Sequence):
-        return WaitOnAll([WaitOnProcess(p) for p in proc]).wait(timeout)
-    else:
-        return WaitOnProcess(proc).wait(timeout)
+    return wait_until(proc, ProcessState.STOPPED, timeout)
 
 
 class WaitRegion(object):

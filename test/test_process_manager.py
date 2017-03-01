@@ -104,8 +104,8 @@ class TestProcessManager(TestCase):
             procs.append(WaitForSignalProcess.new())
             self.manager.start(procs[-1])
         self.assertTrue(wait_until(procs, ProcessState.WAITING))
-        self.assertTrue(self.manager.pause_all(timeout=2))
-        self.assertTrue(self.manager.abort_all(timeout=2))
+        self.assertTrue(self.manager.pause_all(timeout=5))
+        self.assertTrue(self.manager.abort_all(timeout=5))
 
     def test_future_pid(self):
         p = DummyProcess.new()

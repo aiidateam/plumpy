@@ -246,7 +246,10 @@ class TestProcess(TestCase):
         # Abort a process before it gets started, this will get ignored and the
         # process will run normally
         proc = DummyProcess.new()
-        proc.abort()
+        try:
+            proc.abort()
+        except AssertionError:
+            pass
         proc.play()
 
         self.assertFalse(proc.has_aborted())
@@ -256,14 +259,13 @@ class TestProcess(TestCase):
         p = WaitForSignalProcess.new()
         t = threading.Thread(target=p.play)
         t.start()
-        self.assertTrue(wait_until(p, ProcessState.WAITING, 5))
+        self.assertTrue(wait_until(p, ProcessState.WAITING, 1.))
         self.assertEqual(p.state, ProcessState.WAITING)
 
         self.assertTrue(p.is_playing())
         p.continue_()
 
-        self.assertTrue(wait_until(p, ProcessState.STOPPED, 5))
-
+        self.assertTrue(wait_until(p, ProcessState.STOPPED, 1.))
         self.assertEqual(p.state, ProcessState.STOPPED)
 
     def test_wait_pause_continue_play(self):

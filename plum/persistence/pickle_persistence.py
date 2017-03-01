@@ -1,17 +1,57 @@
 import glob
 import os
 import os.path as path
+import portalocker
+import portalocker.utils
+from shutil import copyfile
 import tempfile
 import pickle
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.util import override, protected
+from plum.exceptions import LockError
 from plum.persistence._base import LOGGER
 
 _RUNNING_DIRECTORY = path.join(tempfile.gettempdir(), "running")
 _FINISHED_DIRECTORY = path.join(_RUNNING_DIRECTORY, "finished")
 _FAILED_DIRECTORY = path.join(_RUNNING_DIRECTORY, "failed")
+
+
+# If portalocker accepts my pull request to have this incorporated into the
+# library then this can be removed. https://github.com/WoLpH/portalocker/pull/34
+class RLock(portalocker.Lock):
+    """
+    A reentrant lock, functions in a similar way to threading.RLock in that it
+    can be acquired multiple times.  When the corresponding number of release()
+    calls are made the lock will finally release the underlying file lock.
+    """
+    def __init__(
+            self, filename, mode='a', timeout=portalocker.utils.DEFAULT_TIMEOUT,
+            check_interval=portalocker.utils.DEFAULT_CHECK_INTERVAL, fail_when_locked=False,
+            flags=portalocker.utils.LOCK_METHOD):
+        super(RLock, self).__init__(filename, mode, timeout, check_interval,
+                                    fail_when_locked, flags)
+        self._acquire_count = 0
+
+    def acquire(
+            self, timeout=None, check_interval=None, fail_when_locked=None):
+        if self._acquire_count >= 1:
+            fh = self.fh
+        else:
+            fh = super(RLock, self).acquire(timeout, check_interval,
+                                            fail_when_locked)
+        self._acquire_count += 1
+        return fh
+
+    def release(self):
+        if self._acquire_count == 0:
+            raise portalocker.LockException(
+                "Cannot release more times than acquired")
+
+        if self._acquire_count == 1:
+            super(RLock, self).release()
+        self._acquire_count -= 1
 
 
 class PicklePersistence(ProcessListener, ProcessMonitorListener):
@@ -23,6 +63,11 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
     @staticmethod
     def pickle_filename(pid):
         return "{}.pickle".format(pid)
+
+    @staticmethod
+    def load_checkpoint_from_file(filepath):
+        with open(filepath, 'rb') as f:
+            return pickle.load(f)
 
     @classmethod
     def create_from_basedir(cls, basedir, **kwargs):
@@ -79,6 +124,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         self._finished_directory = finished_directory
         self._failed_directory = failed_directory
         self._auto_persist = auto_persist
+        self._filelocks = {}
 
         MONITOR.start_listening(self)
 
@@ -104,10 +150,6 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
 
         return checkpoints
 
-    def load_checkpoint_from_file(self, filepath):
-        with open(filepath, 'rb') as file:
-            return pickle.load(file)
-
     @property
     def store_directory(self):
         return self._running_directory
@@ -121,87 +163,111 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         return self._finished_directory
 
     def persist_process(self, process):
-        # If the process doesn't have a persisted state then persist it now
-        if not path.isfile(self.get_running_path(process.pid)):
-            try:
-                self.save(process)
-            except pickle.PicklingError as e:
-                LOGGER.error(
-                    "exception raised trying to pickle process (pid={}).\n"
-                    "{}".format(process.pid, e.message))
+        if process.pid in self._filelocks:
+            # Already persisted
+            return None
+
+        save_file = self.get_running_path(process.pid)
+        self._ensure_directory(self._running_directory)
+
+        # Create a lock for the pickle
+        try:
+            lock = RLock(save_file, 'wb', timeout=0)
+            lock.acquire()
+            self._filelocks[process.pid] = lock
+        except portalocker.LockException:
+            raise LockError(
+                "Unable to lock pickle '{}' someone else must have locked it.".format(save_file))
+
+        self._save_noraise(process)
 
         try:
+            # Listen to the process - state transitions will trigger pickling
             process.add_process_listener(self)
         except AssertionError:
             # Happens if we're already listening
             pass
 
+    def clear_all_persisted(self):
+        for pid in self._filelocks.keys():
+            self._release_process(pid)
+
     def get_running_path(self, pid):
         """
         Get the path where the pickle for a process with pid will be stored
         while it's running.
+
         :param pid: The process pid
         :return: A string to the absolute path of where the pickle is stored.
+        :rtype: str
         """
         return path.join(self._running_directory, self.pickle_filename(pid))
 
     def save(self, process):
-        checkpoint = self.create_bundle(process)
         self._ensure_directory(self._running_directory)
         filename = self.get_running_path(process.pid)
-        try:
-            with open(filename, 'wb') as f:
-                pickle.dump(checkpoint, f)
-        except pickle.PickleError:
-            # Don't leave a half-baked pickle around
-            if path.isfile(filename):
-                os.remove(filename)
-            raise
+        lock = self._filelocks.get(
+            process.pid, RLock(filename, 'wb', timeout=0))
 
-    # ProcessListener messages #################################################
+        with lock as f:
+            checkpoint = self.create_bundle(process)
+            try:
+                pickle.dump(checkpoint, f)
+            except pickle.PickleError:
+                # Don't leave a half-baked pickle around
+                if path.isfile(filename):
+                    os.remove(filename)
+                raise
+            f.flush()
+
+    # region ProcessListener messages
+    @override
+    def on_process_playing(self, process):
+        try:
+            self._filelocks[process.pid].acquire()
+        except portalocker.LockException:
+            LOGGER.warning(
+                "Couldn't acquire file lock for '{}', not persisting.".format(
+                    self.get_running_path(process.pid)))
+            del self._filelocks[process.pid]
+
     @override
     def on_process_run(self, process):
-        try:
-            self.save(process)
-        except pickle.PicklingError:
-            LOGGER.error("exception raised trying to pickle process (pid={}) "
-                         "during on_run message.".format(process.pid))
+        self._save_noraise(process)
 
     @override
     def on_process_wait(self, process):
-        try:
-            self.save(process)
-        except pickle.PicklingError:
-            LOGGER.error("exception raised trying to pickle process (pid={}) "
-                         "during on_wait message.".format(process.pid))
+        self._save_noraise(process)
 
     @override
     def on_process_finish(self, process):
+        self._save_noraise(process)
         try:
-            self.save(process)
             self._release_process(process.pid, self.finished_directory)
-        except pickle.PicklingError:
-            LOGGER.error("exception raised trying to pickle process (pid={}) "
-                         "during on_finish message.".format(process.pid))
         except ValueError:
             pass
 
-    ############################################################################
-
-    # ProcessMonitorListener messages ##########################################
     @override
-    def on_monitored_process_failed(self, pid):
+    def on_process_fail(self, process):
+        self._save_noraise(process)
         try:
-            self._release_process(pid, self.failed_directory)
+            self._release_process(process.pid, self.finished_directory)
         except ValueError:
             pass
 
-    ############################################################################
+    @override
+    def on_process_done_playing(self, process):
+        self._filelocks.pop(process.pid).release()
 
+    # endregion
+
+    # region ProcessMonitorListener messages
     @override
     def on_monitored_process_registered(self, process):
         if self._auto_persist:
             self.persist_process(process)
+
+    # endregion
 
     @protected
     def create_bundle(self, process):
@@ -214,17 +280,36 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         if not path.isdir(dir_path):
             os.makedirs(dir_path)
 
-    def _release_process(self, pid, save_path):
+    def _release_process(self, pid, save_dir=None):
+        """
+        Move a running process pickle to the given save directory, this is
+        typically used if the process has finished or failed.
+
+        :param pid: The process ID
+        :param save_dir: The directory to move to pickle to, can be None
+            indicating that the pickle should be deleted.
+        :type save_dir: str or None
+        """
         # Get the current location of the pickle
         pickle_path = self.get_running_path(pid)
+        lock = self._filelocks.pop(pid)
 
-        if path.isfile(pickle_path):
-            if save_path is not None:
-                self._ensure_directory(save_path)
-                to = path.join(save_path, self.pickle_filename(pid))
-                os.rename(pickle_path, to)
-            else:
+        try:
+            if path.isfile(pickle_path):
+                if save_dir is not None:
+                    self._ensure_directory(save_dir)
+                    to = path.join(save_dir, self.pickle_filename(pid))
+                    copyfile(pickle_path, to)
                 os.remove(pickle_path)
-        else:
-            raise ValueError(
-                "Cannot find pickle for process with pid '{}'".format(pid))
+            else:
+                raise ValueError(
+                    "Cannot find pickle for process with pid '{}'".format(pid))
+        finally:
+            lock.release()
+
+    def _save_noraise(self, process):
+        try:
+            self.save(process)
+        except pickle.PicklingError:
+            LOGGER.error("Exception raised trying to pickle process (pid={})".format(process.pid))
+
