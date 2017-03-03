@@ -210,6 +210,8 @@ class Process(object):
     def run(cls, **kwargs):
         p = cls.new(inputs=kwargs)
         p.play()
+        if p.get_exception() is not None:
+            raise p.get_exception(), None, p._traceback
         return p.outputs
 
     @classmethod
@@ -257,6 +259,7 @@ class Process(object):
         self._state = None
         self._finished = False
         self._exception = None
+        self._traceback = None
         self._wait = None
         self._next_transition = None
         self._aborted = False
@@ -453,6 +456,7 @@ class Process(object):
 
             except BaseException as e:
                 exc_type, value, tb = sys.exc_info()
+                self._traceback = tb
                 self._perform_fail_noraise(e)
                 return
         finally:
