@@ -1,4 +1,3 @@
-
 from util import TestCase
 from plum.event import ProcessMonitorEmitter, WaitOnProcessEvent, EmitterAggregator, EventEmitter
 from plum.test_utils import DummyProcess, ExceptionProcess
@@ -36,8 +35,8 @@ class TestProcessMonitorEmitter(TestCase):
 
         p = ExceptionProcess.new()
         preamble = "process.{}".format(p.pid)
-        p.play()
-        self.assertIsInstance(p.get_exception(), RuntimeError)
+        with self.assertRaises(RuntimeError):
+            p.play()
         self.assertEqual(saver.events, [preamble + '.failed'])
 
 
@@ -61,8 +60,8 @@ class TestWaitOnProcessEvent(TestCase):
     def test_failed(self):
         p = ExceptionProcess.new()
         w = WaitOnProcessEvent(self.emitter, p.pid, "failed")
-        p.play()
-        self.assertIsInstance(p.get_exception(), RuntimeError)
+        with self.assertRaises(RuntimeError):
+            p.play()
         self.assertTrue(w.is_done())
 
 
@@ -70,6 +69,7 @@ class _EmitterTester(EventEmitter):
     """
     A simple emitter that just passes on messages
     """
+
     def emit(self, event):
         self.event_occurred(event)
 
@@ -209,8 +209,3 @@ class TestEmitterAggregator(TestCase):
 
     def _receive(self, emitter, evt, body):
         self.last = emitter, evt, body
-
-
-
-
-

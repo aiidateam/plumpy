@@ -106,7 +106,7 @@ class Process(object):
         FINISHED = 'finished'
         ABORTED = 'aborted'
         ABORT_MSG = 'abort_msg'
-        EXCEPTION = 'exception'
+        EXC_INFO = 'exc_info'
         NEXT_TRANSITION = 'next_transition'
 
     @staticmethod
@@ -210,8 +210,6 @@ class Process(object):
     def run(cls, **kwargs):
         p = cls.new(inputs=kwargs)
         p.play()
-        if p.get_exception() is not None:
-            raise p.get_exception(), None, p._traceback
         return p.outputs
 
     @classmethod
@@ -258,8 +256,7 @@ class Process(object):
         # State stuff
         self._state = None
         self._finished = False
-        self._exception = None
-        self._traceback = None
+        self._exc_info = None
         self._wait = None
         self._next_transition = None
         self._aborted = False
@@ -346,7 +343,7 @@ class Process(object):
         :return: True if an unhandled exception was raised, False otherwise
         :rtype: bool
         """
-        return self._exception is not None
+        return self._exc_info is not None
 
     def has_terminated(self):
         """
@@ -373,7 +370,18 @@ class Process(object):
             return None
 
     def get_exception(self):
-        return self._exception
+        return self._exc_info[1]
+
+    def get_exc_info(self):
+        """
+        If this process produced an exception that caused it to fail during its
+        execution then it will have store the execution information as obtained
+        from sys.exc_info(), this method returns it.  If there was no exception
+        then None is returned.
+
+        :return: The exception info if process failed, None otherwise
+        """
+        return self._exc_info
 
     def get_abort_msg(self):
         return self._abort_msg
@@ -390,7 +398,10 @@ class Process(object):
         bundle[self.BundleKeys.PID.value] = self.pid
         bundle[self.BundleKeys.FINISHED.value] = self._finished
         bundle[self.BundleKeys.ABORTED.value] = self._aborted
-        bundle.set_if_not_none(self.BundleKeys.EXCEPTION.value, self._exception)
+        # Saving traceback can be problematic so don't bother, just store None
+        if self.get_exc_info() is not None:
+            exc_info = self.get_exc_info()
+            bundle[self.BundleKeys.EXC_INFO.value] = (exc_info[0], exc_info[1], None)
         if self._next_transition is not None:
             bundle[self.BundleKeys.NEXT_TRANSITION.value] = \
                 self._next_transition.__name__
@@ -454,19 +465,17 @@ class Process(object):
                     # intervene
                     fn = self._next()
 
-            except BaseException as e:
-                exc_type, value, tb = sys.exc_info()
-                self._traceback = tb
-                self._perform_fail_noraise(e)
-                return
+            except BaseException:
+                self._perform_fail(sys.exc_info())
+                raise
         finally:
             try:
                 MONITOR.deregister_process(self)
                 self._call_with_super_check(self.on_done_playing)
-            except BaseException as e:
+            except BaseException:
                 if self.state != ProcessState.FAILED:
-                    exc_type, value, tb = sys.exc_info()
-                    self._perform_fail_noraise(e)
+                    self._perform_fail(sys.exc_info())
+                    raise
 
         return self._outputs
 
@@ -695,7 +704,7 @@ class Process(object):
         self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
 
         try:
-            self._exception = bundle[self.BundleKeys.EXCEPTION.value]
+            self._exc_info = bundle[self.BundleKeys.EXC_INFO.value]
         except KeyError:
             pass
 
@@ -891,18 +900,19 @@ class Process(object):
         self._to_stopped()
         self.__aborting_protect = False
 
-    def _perform_fail_noraise(self, exception):
+    def _perform_fail(self, exc_info):
         """
         Messages issued:
          - on_fail
 
-        This messages tries not to let any further exceptions bubble up.
+        After setting the process state this method will raise with the
+        exception info provided.
 
-        :param exception: The exception that caused the failure
-        :type exception: :class:`BaseException`
+        :param exc_info: The exception information from sys.exc_info()
+        :type exc_info: tuple
         """
         self._state = ProcessState.FAILED
-        self._exception = exception
+        self._exc_info = exc_info
         self._next_transition = None
         try:
             self.__called = False

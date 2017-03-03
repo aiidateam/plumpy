@@ -167,8 +167,8 @@ class TestProcess(TestCase):
 
     def test_exception(self):
         proc = ExceptionProcess.new()
-        proc.play()
-        self.assertIsInstance(proc.get_exception(), BaseException)
+        with self.assertRaises(RuntimeError):
+            proc.play()
         self.assertEqual(proc.state, ProcessState.FAILED)
 
     def test_get_description(self):
@@ -305,14 +305,25 @@ class TestProcess(TestCase):
         self.safe_join(t, 5)
         self.assertFalse(t.is_alive())
 
+    def test_exc_info(self):
+        p = ExceptionProcess.new()
+        try:
+            p.start()
+        except BaseException:
+            import sys
+            exc_info = sys.exc_info()
+            p_exc_info = p.get_exc_info()
+            self.assertEqual(p_exc_info[0], exc_info[0])
+            self.assertEqual(p_exc_info[1], exc_info[1])
+
     def test_exception_in_on_playing(self):
         class P(DummyProcess):
             def on_playing(self):
                 raise RuntimeError("Cope with this")
 
         p = P.new()
-        p.play()
-        self.assertIsInstance(p.get_exception(), RuntimeError)
+        with self.assertRaises(RuntimeError):
+            p.play()
 
     def test_exception_in_done_playing(self):
         class P(DummyProcess):
@@ -320,8 +331,8 @@ class TestProcess(TestCase):
                 raise RuntimeError("Cope with this")
 
         p = P.new()
-        p.play()
-        self.assertIsInstance(p.get_exception(), RuntimeError)
+        with self.assertRaises(RuntimeError):
+            p.play()
 
     def test_direct_instantiate(self):
         with self.assertRaises(AssertionError):
