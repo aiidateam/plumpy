@@ -53,16 +53,18 @@ class ProcessWithCheckpoint(Process):
 
 
 class WaitForSignalProcess(Process):
+    def __init__(self, inputs, pid, logger=None):
+        super(WaitForSignalProcess, self).__init__(inputs, pid, logger)
+
     @override
     def _run(self):
-        self._signal = WaitForSignal()
-        return self._signal, self.finish
+        return WaitForSignal(), self.finish
 
     def finish(self, wait_on):
         pass
 
     def continue_(self):
-        self._signal.continue_()
+        self.get_waiting_on().continue_()
 
 
 class EventsTesterMixin(object):

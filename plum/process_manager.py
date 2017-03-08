@@ -72,7 +72,7 @@ class Future(ProcessListener):
             raise TimeoutError()
 
     def abort(self, msg=None, timeout=None):
-        return self._procman.abort(self.pid, msg, timeout)
+        return self._process.abort(msg, timeout)
 
     def play(self):
         return self._procman.play(self.pid)
@@ -244,14 +244,12 @@ class ProcessManager(ProcessListener):
 
     def _abort(self, proc, msg=None, timeout=None):
         info = self._processes[proc.pid]
-
         info.proc.abort(msg)
 
-        if timeout is not None:
-            try:
-                info.executor_future.result(timeout)
-            except concurrent.futures.TimeoutError:
-                return False
+        try:
+            info.executor_future.result(timeout)
+        except concurrent.futures.TimeoutError:
+            return False
 
         return True
 

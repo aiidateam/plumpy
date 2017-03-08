@@ -44,11 +44,11 @@ class TestPicklePersistence(TestCase):
         self.assertTrue(os.path.isfile(save_path))
 
         try:
-            self.assertTrue(self.proess_manager.abort(proc.pid, timeout=1.))
+            self.assertTrue(self.proess_manager.abort(proc.pid, timeout=2.))
         except AssertionError:
             # Already finished
             pass
-        self.assertTrue(future.wait(timeout=2.))
+        self.assertTrue(future.wait(timeout=5.))
 
     def test_on_finishing_process(self):
         proc = ProcessWithCheckpoint.new()

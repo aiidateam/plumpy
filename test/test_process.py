@@ -2,11 +2,13 @@ import threading
 from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.process_monitor import MONITOR
+from plum.process_manager import ProcessManager
 from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpoint, \
     DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, check_process_against_snapshots, \
-    WaitForSignalProcess
+    WaitForSignalProcess, WaitForSignal
 from plum.test_utils import ProcessListenerTester
 from plum.util import override
+from plum.persistence.util import save_on_next_transition
 from plum.wait_ons import wait_until
 from util import TestCase
 
@@ -45,10 +47,13 @@ class TestProcess(TestCase):
         self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
 
+        self.procman = ProcessManager()
+
     def tearDown(self):
         super(TestProcess, self).tearDown()
 
         self.proc.remove_process_listener(self.events_tester)
+        self.procman.shutdown()
 
     def test_spec(self):
         """
@@ -338,6 +343,20 @@ class TestProcess(TestCase):
         with self.assertRaises(AssertionError):
             DummyProcess(inputs={}, pid=None)
 
+    def test_restart(self):
+        p = _RestartProcess.new()
+
+        future = self.procman.start(p)
+        wait_until(p, ProcessState.WAITING)
+        bundle = Bundle()
+        p.save_instance_state(bundle)
+        self.assertTrue(future.abort(1.))
+
+        p = _RestartProcess.load_from(bundle)
+        future = self.procman.start(p)
+        p.continue_()
+        self.assertEqual(future.result(1.0), {'finished': True})
+
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
@@ -354,3 +373,13 @@ class TestProcess(TestCase):
                          "Snapshot:\n{}\n"
                          "Loaded:\n{}".format(
                              proc.__class__, snapshot.outputs, proc.outputs))
+
+
+class _RestartProcess(WaitForSignalProcess):
+    @classmethod
+    def define(cls, spec):
+        super(_RestartProcess, cls).define(spec)
+        spec.dynamic_output()
+
+    def finish(self, wait_on):
+        self.out("finished", True)

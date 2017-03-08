@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 
-import threading
-import inspect
-import importlib
 import frozendict
+import importlib
+import inspect
 import logging
-from plum.settings import check_protected, check_override
-from plum.exceptions import ClassNotFoundException
 import plum.lang
+import threading
+from plum.exceptions import ClassNotFoundException
+from plum.process_listener import ProcessListener
+from plum.settings import check_protected, check_override
 
 protected = plum.lang.protected(check=check_protected)
 override = plum.lang.override(check=check_override)

@@ -119,7 +119,10 @@ class TestProcessManager(TestCase):
             future = self.manager.start(p)
 
         self.assertTrue(p.is_playing())
-        self.assertTrue(future.abort(timeout=2))
+        # if not future.abort(timeout=2.):
+        #     print "Got here"
+
+        self.assertTrue(future.abort(timeout=5))
         self.assertTrue(p.has_aborted())
 
     def test_future_pause_play(self):
@@ -138,3 +141,22 @@ class TestProcessManager(TestCase):
         future.play()
         time.sleep(1)
         self.assertTrue(p.is_playing())
+
+    def test_abort(self):
+        self.assertEqual(self.manager.get_num_processes(), 0)
+        proc = WaitForSignalProcess.new()
+        future = self.manager.start(proc)
+        wait_until(proc, ProcessState.WAITING)
+        self.assertTrue(future.abort(1.))
+        self.assertEqual(self.manager.get_num_processes(), 0)
+
+    def test_double_abort(self):
+        p = WaitForSignalProcess.new()
+        with WaitRegion(WaitOnState(p, ProcessState.RUNNING), timeout=2):
+            future = self.manager.start(p)
+        self.assertTrue(p.is_playing())
+        self.assertTrue(future.abort(timeout=2.))
+
+        with self.assertRaises(AssertionError):
+            self.assertTrue(future.abort())
+

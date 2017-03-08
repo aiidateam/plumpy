@@ -55,7 +55,7 @@ class WaitOn(object):
             bundle = kwargs.pop(self.RECREATE_FROM_KEY)
             assert isinstance(bundle, Bundle), \
                 "'{}' must be of type {}".format(self.RECREATE_FROM_KEY, Bundle.__class__)
-            assert args is None and not kwargs, \
+            assert not args and not kwargs, \
                 "If '{}' is supplied cannot have another parameters".format(self.RECREATE_FROM_KEY)
             self.load_instance_state(bundle, *args, **kwargs)
         else:
@@ -155,7 +155,8 @@ class WaitOn(object):
         :param bundle: :class:`Bundle` The save instance state
         """
         outcome = bundle[self.OUTCOME]
-        self.done(outcome[0], outcome[1])
+        if outcome is not None:
+            self.done(outcome[0], outcome[1])
         self.__super_called = True
 
     @protected

@@ -248,8 +248,5 @@ class WaitRegion(object):
 
 
 class WaitForSignal(WaitOn):
-    def __init__(self):
-        super(WaitForSignal, self).__init__()
-
     def continue_(self):
         self.done(True)
