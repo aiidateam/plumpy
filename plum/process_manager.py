@@ -115,7 +115,7 @@ def wait_for_all(futures):
 
 class ProcessManager(ProcessListener):
     """
-    Used to launch processes on multiple threads and monitor their progress
+    Used to launch processes on separate threads and monitor their progress
     """
 
     def __init__(self, max_threads=1024):

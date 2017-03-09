@@ -58,7 +58,7 @@ class ProcessStatusPublisher(ProcessListener):
             p.remove_process_listener(self)
         self._processes = []
 
-    # From ProcessListener ####################################################
+    # region From ProcessListener
     def on_process_start(self, process):
         key = "{}.start".format(process.pid)
         d = {'type': fullname(process)}
@@ -107,13 +107,17 @@ class ProcessStatusPublisher(ProcessListener):
              'dynamic': dynamic}
         self._channel.basic_publish(
             self._exchange, key, body=self._encode(d))
-        ###########################################################################
+    # endregion
 
 
 class SubscriberThread(threading.Thread):
+    """
+    A helper class to run a subscriber in a separate thread
+    """
     def __init__(self, subscriber_class, connection_parameters=None, **kwargs):
         assert issubclass(subscriber_class, Subscriber)
         super(SubscriberThread, self).__init__()
+        self.daemon = True
 
         self._rmq_class = subscriber_class
         self._connection_params = connection_parameters
@@ -125,13 +129,15 @@ class SubscriberThread(threading.Thread):
     @override
     def run(self):
         connection = pika.BlockingConnection(self._connection_params)
-        self._rmq_instance = self._rmq_class(
-            connection=connection, **self._kwargs)
+        self._rmq_instance = self._rmq_class(connection=connection, **self._kwargs)
 
         args = {} if self._poll_time is None else {'poll_time': self._poll_time}
         self._started.set()
         self._rmq_instance.start(**args)
         connection.close()
+
+    def get_subscriber(self):
+        return self._rmq_instance
 
     def set_poll_time(self, poll_time):
         self._poll_time = poll_time
@@ -171,8 +177,8 @@ class ProcessController(Subscriber):
         """
         Create the process controller.
 
-        :param connection:
-        :param exchange:
+        :param connection: The RMQ connection object
+        :param exchange: The name of the exchange to use
         :param decoder:
         :param process_manager: The process manager running the processes
             that are being controlled.
@@ -233,7 +239,7 @@ class ProcessController(Subscriber):
 
 class TaskRunner(Subscriber, ProcessListener):
     """
-    Run tasks as they come form the RabbitMQ queue and sent by the TaskSender
+    Run tasks as they come form the RabbitMQ task queue and sent by the TaskSender
 
     .. warning:: the pika library used is not thread safe and as such the
         connection passed to the constructor must be created on the same thread
@@ -249,8 +255,7 @@ class TaskRunner(Subscriber, ProcessListener):
         :type connection: :class:`pika.Connection`
         :param queue: The queue name to use
         :param decoder: A function to deserialise incoming messages
-        :param manager: The process manager to use, one will be created if None
-            is passed
+        :param manager: The process manager to use, one will be created if None is passed
         :type manager: :class:`plum.process_manger.ProcessManager`
         """
         if manager is None:
@@ -325,13 +330,13 @@ class TaskRunner(Subscriber, ProcessListener):
             _RunningTaskInfo(p.pid, ch, method.delivery_tag)
         self._manager.start(p)
 
-    # From ProcessListener #################################
+    # region From ProcessListener
     def on_process_stop(self, process):
         self._process_terminated(process)
 
     def on_process_fail(self, process):
         self._process_terminated(process)
-    ########################################################
+    # endregion
 
     def _process_terminated(self, process):
         """
