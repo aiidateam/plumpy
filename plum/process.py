@@ -572,6 +572,11 @@ class Process(object):
     def on_done_playing(self):
         self.__idle.set()
         self.__event_helper.fire_event(ProcessListener.on_process_done_playing, self)
+        if self.has_terminated():
+            # There will be no more messages so remove the listeners.  Otherwise we
+            # may continue to hold references to them and stop them being garbage
+            # collected
+            self.__event_helper.remove_all_listeners()
 
         self.__called = True
 
@@ -654,10 +659,6 @@ class Process(object):
     @protected
     def on_stop(self):
         self.__event_helper.fire_event(ProcessListener.on_process_stop, self)
-        # There will be no more messages so remove the listeners.  Otherwise we
-        # may continue to hold references to them and stop them being garbage
-        # collected
-        self.__event_helper.remove_all_listeners()
         self.__called = True
 
     @protected

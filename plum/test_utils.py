@@ -174,13 +174,24 @@ class TwoCheckpointThenException(TwoCheckpoint):
 
 class ProcessListenerTester(ProcessListener):
     def __init__(self):
-        self.create = False
+        self.play = False
+        self.start = False
         self.run = False
         self.continue_ = False
-        self.finish = False
         self.emitted = False
+        self.finish = False
         self.stop = False
-        self.stopped = False
+        self.done_playing = False
+
+    @override
+    def on_process_playing(self, process):
+        assert isinstance(process, Process)
+        self.play = True
+
+    @override
+    def on_process_start(self, process):
+        assert isinstance(process, Process)
+        self.start = True
 
     @override
     def on_process_run(self, process):
@@ -211,6 +222,11 @@ class ProcessListenerTester(ProcessListener):
     def on_process_stop(self, process):
         assert isinstance(process, Process)
         self.stop = True
+
+    @override
+    def on_process_done_playing(self, process):
+        assert isinstance(process, Process)
+        self.done_playing = True
 
 
 class Saver(object):

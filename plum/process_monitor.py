@@ -93,7 +93,7 @@ class ProcessMonitor(ProcessListener):
     def get_num_listeners(self):
         return len(self.__event_helper.listeners)
 
-    # From ProcessListener #####################################################
+    # region From ProcessListener
     @override
     def on_process_finish(self, process):
         self.__event_helper.fire_event(
@@ -108,7 +108,7 @@ class ProcessMonitor(ProcessListener):
     def on_process_fail(self, process):
         self.__event_helper.fire_event(
             ProcessMonitorListener.on_monitored_process_failed, process)
-    ############################################################################
+    # endregion
 
     def _reset(self):
         """

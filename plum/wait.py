@@ -66,6 +66,9 @@ class WaitOn(object):
             "Hint: Try adding super({}, self).[method_name](bundle) " \
             "as the first line of your method".format(self.__class__.__name__)
 
+    def __str__(self):
+        return self.__class__.__name__
+
     def is_done(self):
         """
         Indicate if finished waiting or not.

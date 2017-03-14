@@ -4,7 +4,8 @@ from test.util import TestCase
 try:
     import pika
     import pika.exceptions
-    from plum._rmq.status import StatusProvider, StatusRequester, status_decode
+    import plum.rmq.status as status
+    from plum.rmq.status import StatusSubscriber, StatusRequester, status_decode
 
     _HAS_PIKA = True
 except ImportError:
@@ -28,12 +29,12 @@ class TestStatusRequesterAndProvider(TestCase):
         try:
             self._connection = pika.BlockingConnection()
         except pika.exceptions.ConnectionClosed:
-            self.fail("Couldn't open connection.  Make sure rmq server is running")
+            self.fail("Couldn't open connection.  Make sure _rmq server is running")
 
-        exchange = "{}.{}.status_request".format(self.__class__, uuid.uuid4())
+        exchange = "{}.{}.status_request".format(self.__class__.__name__, uuid.uuid4())
         self.requester = StatusRequester(self._connection, exchange=exchange)
         self.manager = ProcessManager()
-        self.provider = StatusProvider(
+        self.provider = StatusSubscriber(
             self._connection, process_manager=self.manager, exchange=exchange)
 
     def tearDown(self):
@@ -41,37 +42,26 @@ class TestStatusRequesterAndProvider(TestCase):
         super(TestStatusRequesterAndProvider, self).tearDown()
         self._connection.close()
 
-    def test_status_decode(self):
-        pid = uuid.uuid4()
-        status = {
-            str(pid): {
-                'state': str(ProcessState.WAITING),
-                'playing': True
-            }
-        }
-        decoded = status_decode(json.dumps(status))
-        self.assertEqual(len(decoded), 1)
-        self.assertIn(pid, decoded)
-        self.assertEqual(decoded[pid]['state'], str(ProcessState.WAITING))
-        self.assertEqual(decoded[pid]['playing'], True)
-
     def test_request(self):
         procs = []
         for i in range(0, 10):
             procs.append(WaitForSignalProcess.new())
             self.manager.start(procs[-1])
 
-        response = self._send_request_poll_response(0.2)
-        self.assertEqual(len(response), len(procs))
-        self.assertSetEqual(set(response.keys()), {p.pid for p in procs})
+        responses = self._send_request_poll_response(0.2)
+        self.assertEqual(len(responses), 1)
+        procs_info = responses[0][status.PROCS_KEY]
+        self.assertEqual(len(procs_info), len(procs))
+        self.assertSetEqual(set(procs_info.keys()), {p.pid for p in procs})
 
         self.assertTrue(
             self.manager.abort_all(timeout=10),
             "Failed to abort processes within timeout"
         )
 
-        response = self._send_request_poll_response(0.2)
-        self.assertIsNone(response)
+        responses = self._send_request_poll_response(0.2)
+        self.assertEqual(len(responses), 1)
+        self.assertEqual(len(responses[0][status.PROCS_KEY]), 0)
 
     def _send_request_poll_response(self, timeout):
         self.requester.send_request()
@@ -89,7 +79,7 @@ class TestStatusProvider(TestCase):
         try:
             self._connection = pika.BlockingConnection()
         except pika.exceptions.ConnectionClosed:
-            self.fail("Couldn't open connection.  Make sure rmq server is running")
+            self.fail("Couldn't open connection.  Make sure _rmq server is running")
 
         self.channel = self._connection.channel()
 
@@ -105,7 +95,7 @@ class TestStatusProvider(TestCase):
             self._on_response, no_ack=True, queue=self.response_queue)
 
         self.manager = ProcessManager()
-        self.provider = StatusProvider(
+        self.provider = StatusSubscriber(
             self._connection, exchange=self.request_exchange,
             process_manager=self.manager)
 
@@ -116,8 +106,8 @@ class TestStatusProvider(TestCase):
         self._connection.close()
 
     def test_no_processes(self):
-        response = self._send_and_get()
-        self.assertIsNone(response)
+        response = status_decode(self._send_and_get())
+        self.assertEqual(len(response[status.PROCS_KEY]), 0)
 
     def test_status(self):
         procs = []
@@ -127,23 +117,22 @@ class TestStatusProvider(TestCase):
             self.manager.start(p)
         wait_until(procs, ProcessState.WAITING)
 
-        response = self._send_and_get()
-        d = json.loads(response)
-        self.assertEqual(len(d), len(procs))
+        procs_dict = status_decode(self._send_and_get())[status.PROCS_KEY]
+        self.assertEqual(len(procs_dict), len(procs))
         self.assertSetEqual(
-            set([str(p.pid) for p in procs]),
-            set(d.keys())
+            set([p.pid for p in procs]),
+            set(procs_dict.keys())
         )
 
-        playing = set([entry['playing'] for entry in d.itervalues()])
+        playing = set([entry['playing'] for entry in procs_dict.itervalues()])
         self.assertSetEqual(playing, {True})
 
         self.assertTrue(
             self.manager.abort_all(timeout=10),
             "Couldn't abort all processes in timeout")
 
-        response = self._send_and_get()
-        self.assertIsNone(response)
+        response = status_decode(self._send_and_get())
+        self.assertEqual(len(response[status.PROCS_KEY]), 0)
 
     def _send_and_get(self):
         self._send_request()

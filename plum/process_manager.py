@@ -51,6 +51,9 @@ class Future(ProcessListener):
         """
         return self._process.outputs
 
+    def get_process(self):
+        return self._process
+
     def result(self, timeout=None):
         """
         This method will block until the process has finished producing outputs
@@ -151,6 +154,9 @@ class ProcessManager(ProcessListener):
 
     def get_processes(self):
         return [info.proc for info in self._processes.values()]
+
+    def has_process(self, pid):
+        return pid in self._processes
 
     def play(self, pid):
         try:

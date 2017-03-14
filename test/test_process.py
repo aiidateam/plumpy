@@ -50,10 +50,9 @@ class TestProcess(TestCase):
         self.procman = ProcessManager()
 
     def tearDown(self):
-        super(TestProcess, self).tearDown()
-
         self.proc.remove_process_listener(self.events_tester)
         self.procman.shutdown()
+        super(TestProcess, self).tearDown()
 
     def test_spec(self):
         """
@@ -70,18 +69,6 @@ class TestProcess(TestCase):
         self.assertIsNot(Proc.spec(), DummyProcess.spec())
         p = Proc.new()
         self.assertIs(p.spec(), Proc.spec())
-
-    def test_on_run(self):
-        self.proc.on_run()
-        self.assertTrue(self.events_tester.run)
-
-    def test_on_output_emitted(self):
-        self.proc._run()
-        self.assertTrue(self.events_tester.emitted)
-
-    def test_on_finished(self):
-        self.proc.on_finish()
-        self.assertTrue(self.events_tester.finish)
 
     def test_dynamic_inputs(self):
         class NoDynamic(Process):
@@ -373,6 +360,56 @@ class TestProcess(TestCase):
                          "Snapshot:\n{}\n"
                          "Loaded:\n{}".format(
                              proc.__class__, snapshot.outputs, proc.outputs))
+
+
+class TestProcessEvents(TestCase):
+    def setUp(self):
+        super(TestProcessEvents, self).setUp()
+
+        self.events_tester = ProcessListenerTester()
+        self.proc = DummyProcessWithOutput.new()
+        self.proc.add_process_listener(self.events_tester)
+
+        self.procman = ProcessManager()
+
+    def tearDown(self):
+        self.proc.remove_process_listener(self.events_tester)
+        self.procman.shutdown()
+        super(TestProcessEvents, self).tearDown()
+
+    def test_on_play(self):
+        self.proc.on_playing()
+        self.assertTrue(self.events_tester.play)
+
+    def test_on_start(self):
+        self.proc.on_start()
+        self.assertTrue(self.events_tester.start)
+
+    def test_on_run(self):
+        self.proc.on_run()
+        self.assertTrue(self.events_tester.run)
+
+    def test_on_output_emitted(self):
+        self.proc._run()
+        self.assertTrue(self.events_tester.emitted)
+
+    def test_on_finished(self):
+        self.proc.on_finish()
+        self.assertTrue(self.events_tester.finish)
+
+    def test_on_done_playing(self):
+        self.proc.on_done_playing()
+        self.assertTrue(self.events_tester.done_playing)
+
+    def test_events_run_through(self):
+        self.proc.start()
+        self.assertTrue(self.events_tester.play)
+        self.assertTrue(self.events_tester.start)
+        self.assertTrue(self.events_tester.run)
+        self.assertTrue(self.events_tester.emitted)
+        self.assertTrue(self.events_tester.finish)
+        self.assertTrue(self.events_tester.stop)
+        self.assertTrue(self.events_tester.done_playing)
 
 
 class _RestartProcess(WaitForSignalProcess):

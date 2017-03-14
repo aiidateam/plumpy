@@ -115,13 +115,10 @@ class TestProcessManager(TestCase):
     def test_future_abort(self):
         p = WaitForSignalProcess.new()
 
-        with WaitRegion(WaitOnState(p, ProcessState.RUNNING), timeout=2):
+        with WaitRegion(WaitOnState(p, ProcessState.WAITING), timeout=2):
             future = self.manager.start(p)
 
         self.assertTrue(p.is_playing())
-        # if not future.abort(timeout=2.):
-        #     print "Got here"
-
         self.assertTrue(future.abort(timeout=5))
         self.assertTrue(p.has_aborted())
 
@@ -159,4 +156,13 @@ class TestProcessManager(TestCase):
 
         with self.assertRaises(AssertionError):
             self.assertTrue(future.abort())
+
+    def test_get_processes(self):
+        p = WaitForSignalProcess.new()
+        with WaitRegion(WaitOnState(p, ProcessState.RUNNING), timeout=2):
+            self.manager.start(p)
+        procs = self.manager.get_processes()
+        self.assertEqual(len(procs), 1)
+        self.assertIs(procs[0], p)
+        p.abort()
 
