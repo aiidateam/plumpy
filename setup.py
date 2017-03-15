@@ -11,7 +11,7 @@ setup(
     version=__version__,
     description='A python workflow library',
     long_description=open('README.md').read(),
-    url='https://bitbucket.org/aiida_team/plum',
+    url='https://github.com/aiidateam/plumpy.git',
     author='Martin Uhrin',
     author_email='Martin Uhrin <martin.uhrin@epfl.ch>',
     license=__license__,
