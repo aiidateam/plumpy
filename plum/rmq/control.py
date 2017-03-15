@@ -47,6 +47,7 @@ class ProcessControlPublisher(object):
         # Set up comms
         self._connection = connection
         self._channel = connection.channel()
+        self._channel.confirm_delivery()
         self._channel.queue_declare(queue=self._queue)
         result = self._channel.queue_declare(exclusive=True)
         self._callback_queue = result.method.queue
@@ -64,13 +65,18 @@ class ProcessControlPublisher(object):
     def _send_msg(self, msg, timeout=None):
         self._response = None
         self._correlation_id = str(uuid.uuid4())
-        self._channel.basic_publish(
+
+        delivered = self._channel.basic_publish(
             exchange='', routing_key=self._queue,
             properties=pika.BasicProperties(
-                reply_to=self._callback_queue, correlation_id=self._correlation_id
+                reply_to=self._callback_queue, correlation_id=self._correlation_id,
+                delivery_mode=1, content_type='text/json'
             ),
-            body=action_encode(msg)
+            body=action_encode(msg),
         )
+
+        if not delivered:
+            return False
 
         deadline = time.time() + timeout if timeout is not None else None
         while self._response is None:
@@ -128,15 +134,16 @@ class ProcessControlSubscriber(Subscriber):
         self._manager = manager
 
     def _on_control(self, ch, method, props, body):
+        if self._manager is None:
+            ch.basic_reject(delivery_tag=method.delivery_tag, requeue=True)
+            return
+
         d = self._decode(body)
         pid = d['pid']
-        # if self._manager is None or not self._manager.has_process(pid):
-        #     ch.basic_reject(delivery_tag=method.delivery_tag)
-
+        intent = d['intent']
         result = 'OK'
         succeeded = True
         try:
-            intent = d['intent']
             if intent == Action.PLAY:
                 self._manager.play(pid)
             elif intent == Action.PAUSE:
@@ -149,14 +156,16 @@ class ProcessControlSubscriber(Subscriber):
             succeeded = False
             result = "{}: {}".format(e.__class__.__name__, e.message)
 
-        # Tell the subscriber that we acted on the message
-        ch.basic_publish(
-            exchange='', routing_key=props.reply_to,
-            properties=pika.BasicProperties(correlation_id=props.correlation_id),
-            body=result
-        )
         if succeeded:
             ch.basic_ack(delivery_tag=method.delivery_tag)
+            # Tell the subscriber that we acted on the message
+            ch.basic_publish(
+                exchange='', routing_key=props.reply_to,
+                properties=pika.BasicProperties(correlation_id=props.correlation_id),
+                body=result
+            )
         else:
             ch.basic_reject(delivery_tag=method.delivery_tag)
-            pass
+
+    def __del__(self):
+        self._channel.close()
