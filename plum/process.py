@@ -6,6 +6,7 @@ from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 import threading
 import sys
+import time
 import traceback
 
 import plum.error as error
@@ -29,6 +30,14 @@ class ProcessState(Enum):
     WAITING = 2
     STOPPED = 3
     FAILED = 4
+
+
+class _Interrupt(Enum):
+    """
+    Interrupt the playing of the process and instead do one of the following
+    """
+    PAUSE = 0
+    ABORT = 1
 
 
 Wait = namedtuple('Wait', ['on', 'callback'])
@@ -96,6 +105,7 @@ class Process(object):
 
         See :func:`create_from`, :func:`save_instance_state` and :func:`load_instance_state`.
         """
+        CREATION_TIME = 'creation_time'
         CLASS_NAME = 'class_name'
         INPUTS = 'inputs'
         OUTPUTS = 'outputs'
@@ -289,6 +299,7 @@ class Process(object):
         self._logger = logger
 
         # State stuff
+        self._CREATION_TIME = time.time()
         self._state = None
         self._finished = False
         self._exc_info = None
@@ -301,10 +312,10 @@ class Process(object):
         # Stuff below here doesn't need to be saved in the instance state
         # Reads/writes of variables with 'protect' suffix should be guarded by
         # the state lock
-        self.__pausing_protect = False
-        self.__aborting_protect = False
-        self.__idle = threading.Event()
-        self.__idle.set()
+        self.__break = False  # Break out of running through the state loop
+        self.__interrupt_action_protect = None
+        self.__paused = threading.Event()
+        self.__paused.set()
         self.__state_lock = threading.RLock()
 
         # Events and running
@@ -312,6 +323,15 @@ class Process(object):
 
         # Flag to make sure all the necessary event methods were called
         self.__called = False
+
+    @property
+    def creation_time(self):
+        """
+        The creation time of this Process as returned by time.time() when instantiated
+        :return: The creation time
+        :rtype: float
+        """
+        return self._CREATION_TIME
 
     @property
     def pid(self):
@@ -360,7 +380,7 @@ class Process(object):
         :return: True if playing, False otherwise
         :rtype: bool
         """
-        return not self.__idle.is_set()
+        return not self.__paused.is_set()
 
     def has_finished(self):
         """
@@ -432,6 +452,7 @@ class Process(object):
         # TODO: Add a timeout to this method, the user may not want to wait
         # indefinitely for the lock
         with self.__state_lock:
+            bundle[self.BundleKeys.CREATION_TIME.value] = self.creation_time
             bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
             bundle[self.BundleKeys.STATE.value] = self.state
             bundle[self.BundleKeys.PID.value] = self.pid
@@ -496,11 +517,11 @@ class Process(object):
 
                 # Keep going until we run out of tasks
                 fn = self._next()
-                while fn is not None:
+                while not self.__break:
                     with self.__state_lock:
                         fn()
-                    # Allow a gap here so others waiting for a state lock can
-                    # intervene
+                    # Allow a gap here in state lock so others waiting for
+                    # a state lock can intervene, _next will reacquire
                     fn = self._next()
 
             except BaseException:
@@ -522,8 +543,7 @@ class Process(object):
         Pause an playing process.  This can be called from another thread.
         """
         with self.__state_lock:
-            self.__pausing_protect = True
-            self._interrupt()
+            self._interrupt(_Interrupt.PAUSE)
 
     def abort(self, msg=None, timeout=None):
         """
@@ -539,11 +559,9 @@ class Process(object):
         """
         with self.__state_lock:
             assert self.is_playing(), "Cannot abort a process that is not playing"
-            self.__aborting_protect = True
-            self._abort_msg = msg
-            self._interrupt()
+            self._interrupt(_Interrupt.ABORT, msg)
 
-        self.__idle.wait(timeout)
+        self.__paused.wait(timeout)
         return self.has_aborted()
 
     def add_process_listener(self, listener):
@@ -561,16 +579,16 @@ class Process(object):
     # Make sure to call the superclass method if your override any of these
     @protected
     def on_playing(self):
-        self.__idle.clear()
-        self.__pausing_protect = False
-        self.__aborting_protect = False
+        self.__paused.clear()
+        self.__break = False
+        self.__interrupt_action_protect = None
         self.__event_helper.fire_event(ProcessListener.on_process_playing, self)
 
         self.__called = True
 
     @protected
     def on_done_playing(self):
-        self.__idle.set()
+        self.__paused.set()
         self.__event_helper.fire_event(ProcessListener.on_process_done_playing, self)
         if self.has_terminated():
             # There will be no more messages so remove the listeners.  Otherwise we
@@ -590,8 +608,6 @@ class Process(object):
 
         :param bundle: The saved instance state this process is being loaded from
         """
-        # In this case there is no message fired because no one could have
-        # registered themselves as a listener by this point in the lifecycle.
         # In this case there is no message fired because no one could have
         # registered themselves as a listener by this point in the lifecycle.
         if bundle is not None:
@@ -747,32 +763,33 @@ class Process(object):
         with self.__state_lock:
             assert not self.is_playing(), "Can't load an instance state while playing"
 
+            self._CREATION_TIME = bundle[self.BundleKeys.CREATION_TIME.value]
             self._state = bundle[self.BundleKeys.STATE.value]
             self._finished = bundle[self.BundleKeys.FINISHED.value]
             self._aborted = bundle[self.BundleKeys.ABORTED.value]
             self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
 
-        try:
-            self._exc_info = bundle[self.BundleKeys.EXC_INFO.value]
-        except KeyError:
-            pass
+            try:
+                self._exc_info = bundle[self.BundleKeys.EXC_INFO.value]
+            except KeyError:
+                pass
 
-        try:
-            self._next_transition = getattr(self, bundle[self.BundleKeys.NEXT_TRANSITION.value])
-        except KeyError:
-            pass
+            try:
+                self._next_transition = getattr(self, bundle[self.BundleKeys.NEXT_TRANSITION.value])
+            except KeyError:
+                pass
 
-        try:
-            self._abort_msg = bundle[self.BundleKeys.ABORT_MSG.value]
-        except KeyError:
-            pass
+            try:
+                self._abort_msg = bundle[self.BundleKeys.ABORT_MSG.value]
+            except KeyError:
+                pass
 
-        try:
-            wait_on = self.create_wait_on(bundle[self.BundleKeys.WAITING_ON.value])
-            callback = self._get_wait_on_callback_fn(bundle)
-            self._set_wait(wait_on, callback)
-        except KeyError:
-            pass  # There's no wait_on
+            try:
+                wait_on = self.create_wait_on(bundle[self.BundleKeys.WAITING_ON.value])
+                callback = self._get_wait_on_callback_fn(bundle)
+                self._set_wait(wait_on, callback)
+            except KeyError:
+                pass  # There's no wait_on
 
     def _get_wait_on_callback_fn(self, bundle):
         """
@@ -830,18 +847,13 @@ class Process(object):
     # region State transition methods
     def _next(self):
         """
-        Method to get the next method to run as part of the Process lifecycle.
+        Method to get the next method to run as part of the process lifecycle.
 
         :return: A callable that only takes the self process as argument.
-          May be None if the process should not continue.
         """
         with self.__state_lock:
-            if self.has_terminated():
-                return None
-            elif self.__pausing_protect:
-                return None
-            elif self.__aborting_protect:
-                return self._perform_abort
+            if self.__interrupt_action_protect is not None:
+                return self._perform_interrupt
             else:
                 return self._next_transition
 
@@ -906,6 +918,18 @@ class Process(object):
         except Interrupted:
             pass
 
+    def _perform_interrupt(self):
+        assert self.state not in [ProcessState.STOPPED, ProcessState.FAILED]
+
+        if self.__interrupt_action_protect is _Interrupt.PAUSE:
+            self.__break = True
+        elif self.__interrupt_action_protect is _Interrupt.ABORT:
+            self._perform_abort()
+        else:
+            raise RuntimeError(
+                "Unknown interrupt action '{}'".format(self.__interrupt_action_protect)
+            )
+
     def _perform_resume(self):
         """
         Messages issued:
@@ -948,7 +972,6 @@ class Process(object):
         self._call_with_super_check(self.on_abort)
 
         self._to_stopped()
-        self.__aborting_protect = False
 
     def _perform_fail(self, exc_info):
         """
@@ -979,6 +1002,8 @@ class Process(object):
                     "on_fail was not called\n"
                     "Hint: Did you forget to call the superclass method?")
 
+        self.__break = True
+
     def _to_running(self):
         self._state = ProcessState.RUNNING
         self._call_with_super_check(self.on_run)
@@ -987,11 +1012,20 @@ class Process(object):
         self._state = ProcessState.STOPPED
         self._call_with_super_check(self.on_stop)
         self._next_transition = None
+        self.__break = True
 
     def _set_wait(self, wait_on, callback):
         self._wait = Wait(wait_on, callback)
 
-    def _interrupt(self):
+    def _interrupt(self, action, msg=None):
+        self.__interrupt_action_protect = action
+        if action is _Interrupt.ABORT:
+            self._abort_msg = msg
+        elif msg is not None:
+            self.logger.warning(
+                "Interrupt message ignored because it is only used when aborting"
+            )
+
         try:
             self._wait.on.interrupt()
         except AttributeError:

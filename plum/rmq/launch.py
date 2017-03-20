@@ -13,9 +13,10 @@ from plum.util import override, load_class, fullname
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
 
 
+# TODO: Get rid of this class or change it - not needed
 class TaskRunner(Subscriber, ProcessListener):
     """
-    Run tasks as they come form the RabbitMQ task queue and sent by the TaskLauncher
+    Run tasks as they come form the RabbitMQ task queue as sent by the launcher
 
     .. warning:: the pika library used is not thread safe and as such the
         connection passed to the constructor must be created on the same thread
@@ -93,6 +94,10 @@ class TaskRunner(Subscriber, ProcessListener):
         self._stopping = True
         self._manager.pause_all()
         self._status_publisher.reset()
+
+    @override
+    def shutdown(self):
+        self._channel.close()
 
     def _on_launch(self, ch, method, properties, body):
         self._num_processes += 1
@@ -185,6 +190,10 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
         self._stopping = True
         self._manager.pause_all()
         self._status_publisher.reset()
+
+    @override
+    def shutdown(self):
+        self._channel.close()
 
     def _on_launch(self, ch, method, properties, body):
         self._num_processes += 1

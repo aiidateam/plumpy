@@ -75,6 +75,14 @@ class Future(ProcessListener):
             raise TimeoutError()
 
     def abort(self, msg=None, timeout=None):
+        """
+        Abort the process
+
+        :param msg: The abort message
+        :type msg: str
+        :param timeout: How long to wait for the process to abort itself
+        :type timeout: float
+        """
         return self._process.abort(msg, timeout)
 
     def play(self):
@@ -229,7 +237,6 @@ class ProcessManager(ProcessListener):
     def on_process_fail(self, process):
         super(ProcessManager, self).on_process_fail(process)
         self._delete_process(process)
-
     # endregion
 
     def _play(self, proc):

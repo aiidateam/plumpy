@@ -15,23 +15,24 @@ from test.util import TestCase
 
 
 @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
-class TestProcessControl(TestCase):
+class TestControl(TestCase):
     def setUp(self):
-        super(TestProcessControl, self).setUp()
+        super(TestControl, self).setUp()
 
         self._connection = self._create_connection()
         self.procman = ProcessManager()
-        self.queue = "{}.{}.control".format(self.__class__, uuid.uuid4())
-        self.publisher = ProcessControlPublisher(self._connection, queue=self.queue)
+        self.exchange = "{}.{}.control".format(self.__class__, uuid.uuid4())
+        self.publisher = ProcessControlPublisher(self._connection, exchange=self.exchange)
 
         self.subscriber_thread = SubscriberThread(
             self._create_connection, self._create_control_subscriber)
         self.subscriber_thread.set_poll_time(0.1)
         self.subscriber_thread.start()
+        self.subscriber_thread.wait_till_started()
 
     def tearDown(self):
         self.procman.shutdown()
-        super(TestProcessControl, self).tearDown()
+        super(TestControl, self).tearDown()
         self.subscriber_thread.stop()
         self.subscriber_thread.join()
         self._connection.close()
@@ -44,7 +45,7 @@ class TestProcessControl(TestCase):
         self.assertTrue(p.is_playing())
 
         # Send a message asking the process to pause
-        self.assertIsNotNone(self.publisher.pause(p.pid, timeout=2.))
+        self.assertIsNotNone(self.publisher.pause(p.pid, timeout=5.))
         self.assertFalse(p.is_playing())
 
     def test_pause_play(self):
@@ -55,11 +56,11 @@ class TestProcessControl(TestCase):
         self.assertTrue(p.is_playing())
 
         # Send a message asking the process to pause
-        self.assertIsNotNone(self.publisher.pause(p.pid, timeout=2.))
+        self.assertIsNotNone(self.publisher.pause(p.pid, timeout=5.))
         self.assertFalse(p.is_playing())
 
         # Now ask it to continue
-        self.assertIsNotNone(self.publisher.play(p.pid, timeout=2.))
+        self.assertIsNotNone(self.publisher.play(p.pid, timeout=5.))
         self.assertTrue(p.is_playing())
 
     def test_abort(self):
@@ -70,7 +71,7 @@ class TestProcessControl(TestCase):
         self.assertTrue(p.is_playing())
 
         # Send a message asking the process to abort
-        self.assertIsNotNone(self.publisher.abort(p.pid, timeout=2.))
+        self.assertIsNotNone(self.publisher.abort(p.pid, timeout=5.))
         self.assertFalse(p.is_playing())
         self.assertTrue(p.has_aborted())
 
@@ -78,4 +79,4 @@ class TestProcessControl(TestCase):
         return pika.BlockingConnection()
 
     def _create_control_subscriber(self, connection):
-        return ProcessControlSubscriber(connection, queue=self.queue, process_manager=self.procman)
+        return ProcessControlSubscriber(connection, exchange=self.exchange, process_manager=self.procman)

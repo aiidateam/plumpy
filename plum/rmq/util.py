@@ -1,6 +1,8 @@
-import pika
+import os
+import socket
 import threading
-from abc import ABCMeta
+
+from abc import ABCMeta, abstractmethod
 from collections import Sequence
 
 from plum.util import override
@@ -22,18 +24,25 @@ class SubscriberThread(threading.Thread):
     @override
     def run(self):
         connection = self._create_connection()
-        subscribers = self._create_subscriber(connection)
-        if isinstance(subscribers, Subscriber):
-            subscribers = [subscribers]
-        elif not isinstance(subscribers, Sequence):
-            raise ValueError("create_subscriber did not return either a Subscriber or a list of them")
+        subscribers = []
+        try:
+            subscribers = self._create_subscriber(connection)
+            if isinstance(subscribers, Subscriber):
+                subscribers = [subscribers]
+            elif not isinstance(subscribers, Sequence):
+                raise ValueError(
+                    "{} did not return either a Subscriber or a list of "
+                    "them".format(self._create_subscriber))
 
-        args = {} if self._poll_time is None else {'time_limit': self._poll_time}
-        self._started.set()
-        while not self._stop.is_set():
-            for subscriber in subscribers:
-                subscriber.poll(**args)
-        connection.close()
+            args = {} if self._poll_time is None else {'time_limit': self._poll_time}
+            self._started.set()
+            while not self._stop.is_set():
+                for subscriber in subscribers:
+                    subscriber.poll(**args)
+        finally:
+            for sub in subscribers:
+                sub.shutdown()
+            connection.close()
 
     def set_poll_time(self, poll_time):
         self._poll_time = poll_time
@@ -52,11 +61,32 @@ class Subscriber(object):
     """
     __metaclass__ = ABCMeta
 
+    @abstractmethod
     def start(self):
         pass
 
+    @abstractmethod
     def poll(self, time_limit=None):
         pass
 
+    @abstractmethod
     def stop(self):
         pass
+
+    @abstractmethod
+    def shutdown(self):
+        pass
+
+
+# The key used in messages to give information about the host that send a message
+HOST_KEY = 'host'
+
+
+def add_host_info(msg):
+    if HOST_KEY in msg:
+        raise ValueError("Host information key already exists in message")
+
+    msg[HOST_KEY] = {
+        'hostname': socket.gethostname(),
+        'pid': os.getpid()
+    }

@@ -1,17 +1,15 @@
 import json
 import uuid
-import time
-import socket
-import os
 
 import pika
-
+from plum.rmq.util import add_host_info
+import time
+from plum.process_listener import ProcessListener
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import Subscriber
-from plum.process_listener import ProcessListener
 from plum.util import fullname
+from plum.util import override
 
-HOST_KEY = 'host'
 PROCS_KEY = 'procs'
 
 
@@ -135,6 +133,7 @@ class StatusSubscriber(Subscriber):
     def set_process_manager(self, manager):
         self._manager = manager
 
+    @override
     def start(self, poll_time=1.0):
         while self._channel._consumer_infos:
             self.poll(poll_time)
@@ -142,11 +141,17 @@ class StatusSubscriber(Subscriber):
                 self._channel.stop_consuming()
                 self._stopping = False
 
+    @override
     def poll(self, time_limit=1.0):
         self._channel.connection.process_data_events(time_limit=time_limit)
 
+    @override
     def stop(self):
         self._stopping = True
+
+    @override
+    def shutdown(self):
+        self._channel.close()
 
     def _on_request(self, ch, method, props, body):
         # d = self._decode(body)
@@ -155,10 +160,8 @@ class StatusSubscriber(Subscriber):
         for p in self._manager.get_processes():
             proc_status[p.pid] = self._get_status(p)
 
-        response = {
-            HOST_KEY: self._get_host_info(),
-            PROCS_KEY: proc_status
-        }
+        response = {PROCS_KEY: proc_status}
+        add_host_info(response)
 
         if response:
             ch.basic_publish(
@@ -168,12 +171,6 @@ class StatusSubscriber(Subscriber):
             )
         # Always acknowledge
         ch.basic_ack(delivery_tag=method.delivery_tag)
-
-    def _get_host_info(self):
-        return {
-            'hostname': socket.gethostname(),
-            'pid': os.getpid()
-        }
 
     def _get_status(self, process):
         """
@@ -185,6 +182,7 @@ class StatusSubscriber(Subscriber):
         :rtype: dict
         """
         return {
+            'creation_time': process.creation_time,
             'state': process.state,
             'playing': process.is_playing(),
             'waiting_on': str(process.get_waiting_on())

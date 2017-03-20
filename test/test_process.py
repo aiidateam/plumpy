@@ -337,7 +337,7 @@ class TestProcess(TestCase):
         wait_until(p, ProcessState.WAITING)
         bundle = Bundle()
         p.save_instance_state(bundle)
-        self.assertTrue(future.abort(1.))
+        self.assertTrue(future.abort(timeout=10.))
 
         p = _RestartProcess.load_from(bundle)
         future = self.procman.start(p)
