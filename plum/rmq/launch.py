@@ -6,7 +6,6 @@ from collections import namedtuple
 from plum.process_listener import ProcessListener
 from plum.process_manager import ProcessManager
 from plum.rmq.defaults import Defaults
-from plum.rmq.status import ProcessStatusPublisher
 from plum.rmq.util import Subscriber
 from plum.util import override, load_class, fullname
 
@@ -48,8 +47,8 @@ class TaskRunner(Subscriber, ProcessListener):
         self._controller.set_process_manager(self._manager)
 
         if status_provider is None:
-            from plum.rmq.status import StatusSubscriber
-            self._status_provider = StatusSubscriber(connection)
+            from plum.rmq.status import ProcessStatusSubscriber
+            self._status_provider = ProcessStatusSubscriber(connection)
         else:
             self._status_provider = status_provider
         self._status_provider.set_process_manager(self._manager)
@@ -58,8 +57,6 @@ class TaskRunner(Subscriber, ProcessListener):
         self._running_processes = {}
         self._stopping = False
         self._num_processes = 0
-
-        self._status_publisher = ProcessStatusPublisher(connection)
 
         # Set up communications
         self._channel = connection.channel()
@@ -93,7 +90,6 @@ class TaskRunner(Subscriber, ProcessListener):
     def stop(self):
         self._stopping = True
         self._manager.pause_all()
-        self._status_publisher.reset()
 
     @override
     def shutdown(self):
@@ -107,7 +103,6 @@ class TaskRunner(Subscriber, ProcessListener):
 
         p = ProcClass.new(inputs=task['inputs'])
         p.add_process_listener(self)
-        self._status_publisher.add_process(p)
 
         self._running_processes[p.pid] = _RunningTaskInfo(p.pid, ch, method.delivery_tag)
         self._manager.start(p)
@@ -157,8 +152,6 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
         self._stopping = False
         self._num_processes = 0
 
-        self._status_publisher = ProcessStatusPublisher(connection)
-
         # Set up communications
         self._channel = connection.channel()
         self._channel.basic_qos(prefetch_count=1)
@@ -203,7 +196,6 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
 
         p = proc_class.new(inputs=task['inputs'])
         p.add_process_listener(self)
-        self._status_publisher.add_process(p)
 
         self._running_processes[p.pid] = _RunningTaskInfo(p.pid, ch, method.delivery_tag)
         self._manager.start(p)

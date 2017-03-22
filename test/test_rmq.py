@@ -3,7 +3,7 @@ try:
     import pika.exceptions
     from plum.rmq.launch import ProcessLaunchPublisher, ProcessLaunchSubscriber
     from plum.rmq.control import ProcessControlSubscriber
-    from plum.rmq.status import StatusSubscriber
+    from plum.rmq.status import ProcessStatusSubscriber
     from plum.rmq.util import SubscriberThread
 
     _HAS_PIKA = True
@@ -88,6 +88,6 @@ class TestRmqThread(TestCase):
 
     def _create_subscribers(self, connection):
         subscribers = []
-        for c in [ProcessControlSubscriber, StatusSubscriber, ProcessLaunchSubscriber]:
+        for c in [ProcessControlSubscriber, ProcessStatusSubscriber, ProcessLaunchSubscriber]:
             subscribers.append(c(connection))
         return subscribers

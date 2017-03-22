@@ -1,13 +1,12 @@
 import json
+import time
 import uuid
 
 import pika
-from plum.rmq.util import add_host_info
-import time
-from plum.process_listener import ProcessListener
+
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import Subscriber
-from plum.util import fullname
+from plum.rmq.util import add_host_info
 from plum.util import override
 
 PROCS_KEY = 'procs'
@@ -46,7 +45,7 @@ def status_request_decode(msg):
     return d
 
 
-class StatusRequester(object):
+class ProcessStatusRequester(object):
     """
     This class can be used to request the status of processes
     """
@@ -109,7 +108,7 @@ class StatusRequester(object):
             self._responses.append(response)
 
 
-class StatusSubscriber(Subscriber):
+class ProcessStatusSubscriber(Subscriber):
     """
     This class listens for messages asking for a status update on the processes
     currently being managed by a process manager and responds accordingly.
@@ -189,97 +188,3 @@ class StatusSubscriber(Subscriber):
         }
 
 
-class ProcessStatusPublisher(ProcessListener):
-    """
-    This class publishes status updates from processes based on receiving event
-    messages.
-    """
-
-    def __init__(self, connection, exchange=Defaults.STATUS_EXCHANGE,
-                 encoder=json.dumps):
-        self._exchange = exchange
-        self._encode = encoder
-        self._processes = []
-
-        self._channel = connection.channel()
-        self._channel.exchange_declare(
-            exchange=self._exchange, type='topic')
-
-    def add_process(self, process):
-        """
-        Add a process to have its status updates be published
-
-        :param process: The process to publish updates for
-        :type process: :class:`plum.process.Process`
-        """
-        self._processes.append(process)
-        process.add_process_listener(self)
-
-    def remove_process(self, process):
-        """
-        Remove a process from having its status updates be published
-
-        :param process: The process to stop publishing updates for
-        :type process: :class:`plum.process.Process`
-        """
-        process.remove_process_listener(self)
-        self._processes.remove(process)
-
-    def reset(self):
-        """
-        Stop listening to all processes.
-        """
-        for p in self._processes:
-            p.remove_process_listener(self)
-        self._processes = []
-
-    # region From ProcessListener
-    def on_process_start(self, process):
-        key = "{}.start".format(process.pid)
-        d = {'type': fullname(process)}
-        self._channel.basic_publish(
-            self._exchange, key, body=self._encode(d))
-
-    def on_process_run(self, process):
-        key = "{}.run".format(process.pid)
-        self._channel.basic_publish(
-            self._exchange, key, body="")
-
-    def on_process_wait(self, process):
-        key = "{}.wait".format(process.pid)
-        self._channel.basic_publish(
-            self._exchange, key, body="")
-
-    def on_process_resume(self, process):
-        key = "{}.resume".format(process.pid)
-        self._channel.basic_publish(
-            self._exchange, key, body="")
-
-    def on_process_finish(self, process):
-        key = "{}.finish".format(process.pid)
-        self._channel.basic_publish(
-            self._exchange, key, body="")
-
-    def on_process_stop(self, process):
-        key = "{}.stop".format(process.pid)
-        self._channel.basic_publish(
-            self._exchange, key, body="")
-        self.remove_process(process)
-
-    def on_process_fail(self, process):
-        key = "{}.fail".format(process.pid)
-        exception = process.get_exception()
-        d = {'exception_type': fullname(exception),
-             'exception_msg': exception.message}
-        self._channel.basic_publish(
-            self._exchange, key, body=self._encode(d))
-        self.remove_process(process)
-
-    def on_output_emitted(self, process, output_port, value, dynamic):
-        key = "{}.emitted".format(process.pid)
-        # Don't send the value, it could be large and/or unserialisable
-        d = {'port': output_port,
-             'dynamic': dynamic}
-        self._channel.basic_publish(
-            self._exchange, key, body=self._encode(d))
-        # endregion

@@ -5,7 +5,7 @@ try:
     import pika
     import pika.exceptions
     import plum.rmq.status as status
-    from plum.rmq.status import StatusSubscriber, StatusRequester, status_decode
+    from plum.rmq.status import ProcessStatusSubscriber, ProcessStatusRequester, status_decode
 
     _HAS_PIKA = True
 except ImportError:
@@ -32,9 +32,9 @@ class TestStatusRequesterAndProvider(TestCase):
             self.fail("Couldn't open connection.  Make sure _rmq server is running")
 
         exchange = "{}.{}.status_request".format(self.__class__.__name__, uuid.uuid4())
-        self.requester = StatusRequester(self._connection, exchange=exchange)
+        self.requester = ProcessStatusRequester(self._connection, exchange=exchange)
         self.manager = ProcessManager()
-        self.provider = StatusSubscriber(
+        self.provider = ProcessStatusSubscriber(
             self._connection, process_manager=self.manager, exchange=exchange)
 
     def tearDown(self):
@@ -95,7 +95,7 @@ class TestStatusProvider(TestCase):
             self._on_response, no_ack=True, queue=self.response_queue)
 
         self.manager = ProcessManager()
-        self.provider = StatusSubscriber(
+        self.provider = ProcessStatusSubscriber(
             self._connection, exchange=self.request_exchange,
             process_manager=self.manager)
 

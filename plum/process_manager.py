@@ -67,12 +67,22 @@ class Future(ProcessListener):
         """
         if self._terminated.wait(timeout):
             if self._process.has_failed():
-                # TODO: Get the original traceback, requires it to be stored in process
-                raise self._process.get_exception()
+                exc_info = self._process.get_exc_info()
+                raise exc_info[0], exc_info[1], exc_info[2]
             else:
                 return self.outputs
         else:
             raise TimeoutError()
+
+    def exception(self, timeout=None):
+        try:
+            self.result(timeout)
+        except TimeoutError:
+            raise
+        except BaseException as e:
+            return e
+
+        return None
 
     def abort(self, msg=None, timeout=None):
         """
@@ -106,7 +116,7 @@ class Future(ProcessListener):
             self._callbacks.append(fn)
 
     @protected
-    def on_process_finish(self, process):
+    def on_process_stop(self, process):
         self._terminate()
 
     @protected

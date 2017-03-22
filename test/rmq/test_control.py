@@ -71,9 +71,10 @@ class TestControl(TestCase):
         self.assertTrue(p.is_playing())
 
         # Send a message asking the process to abort
-        self.assertIsNotNone(self.publisher.abort(p.pid, timeout=5.))
+        self.assertIsNotNone(self.publisher.abort(p.pid, msg='Farewell', timeout=5.))
         self.assertFalse(p.is_playing())
         self.assertTrue(p.has_aborted())
+        self.assertEqual(p.get_abort_msg(), 'Farewell')
 
     def _create_connection(self):
         return pika.BlockingConnection()

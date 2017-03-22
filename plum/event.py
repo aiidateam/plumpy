@@ -382,6 +382,9 @@ class WaitOnEvent(WaitOn, Unsavable):
         self._received = None
         emitter.start_listening(self._event_occurred, event)
 
+    def __str__(self):
+        return "waiting on: {}".format(self._event)
+
     def get_event(self):
         return self._received[0]
 

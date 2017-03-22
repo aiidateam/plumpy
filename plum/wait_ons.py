@@ -16,8 +16,9 @@ class Checkpoint(WaitOn):
     This WaitOn doesn't actually wait, it's just a way to ask the engine to
     create a checkpoint at this point in the execution of a Process.
     """
-    def __init__(self):
-        super(Checkpoint, self).__init__()
+
+    def init(self):
+        super(Checkpoint, self).init()
         self.done(True)
 
 
@@ -235,6 +236,7 @@ class WaitRegion(object):
     or the (optional) timeout has been reached in which case an TimeoutError is
     raised.
     """
+
     def __init__(self, wait_on, timeout=None):
         self._wait_on = wait_on
         self._timeout = timeout

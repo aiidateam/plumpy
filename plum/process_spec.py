@@ -226,9 +226,9 @@ class ProcessSpec(object):
             unexpected = set(inputs.iterkeys()) - set(self.inputs.iterkeys())
             if unexpected:
                 return False, \
-                       "Unexpected inputs found: {}.  If you want to allow " \
+                       "Unexpected inputs found: '{}'.  If you want to allow " \
                        "dynamic inputs add dynamic_input() to the spec " \
-                       "definition."
+                       "definition.".format(unexpected)
 
         for name, port in self.inputs.iteritems():
             valid, msg = port.validate(inputs.get(name, None))

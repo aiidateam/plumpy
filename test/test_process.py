@@ -235,16 +235,9 @@ class TestProcess(TestCase):
         p.play()
 
     def test_abort(self):
-        # Abort a process before it gets started, this will get ignored and the
-        # process will run normally
         proc = DummyProcess.new()
-        try:
-            proc.abort()
-        except AssertionError:
-            pass
-        proc.play()
-
-        self.assertFalse(proc.has_aborted())
+        proc.abort()
+        self.assertTrue(proc.has_aborted())
         self.assertEqual(proc.state, ProcessState.STOPPED)
 
     def test_wait_continue(self):
@@ -339,7 +332,8 @@ class TestProcess(TestCase):
         p.save_instance_state(bundle)
         self.assertTrue(future.abort(timeout=10.))
 
-        p = _RestartProcess.load_from(bundle)
+        p = _RestartProcess.load(bundle)
+        self.assertEqual(p.state, ProcessState.WAITING)
         future = self.procman.start(p)
         p.continue_()
         self.assertEqual(future.result(1.0), {'finished': True})

@@ -1,4 +1,3 @@
-
 from unittest import TestCase
 import time
 from plum.process import ProcessState
@@ -144,18 +143,8 @@ class TestProcessManager(TestCase):
         proc = WaitForSignalProcess.new()
         future = self.manager.start(proc)
         wait_until(proc, ProcessState.WAITING)
-        self.assertTrue(future.abort(1.))
+        self.assertTrue(future.abort(timeout=1.))
         self.assertEqual(self.manager.get_num_processes(), 0)
-
-    def test_double_abort(self):
-        p = WaitForSignalProcess.new()
-        with WaitRegion(WaitOnState(p, ProcessState.RUNNING), timeout=2):
-            future = self.manager.start(p)
-        self.assertTrue(p.is_playing())
-        self.assertTrue(future.abort(timeout=2.))
-
-        with self.assertRaises(AssertionError):
-            self.assertTrue(future.abort())
 
     def test_get_processes(self):
         p = WaitForSignalProcess.new()
@@ -165,4 +154,3 @@ class TestProcessManager(TestCase):
         self.assertEqual(len(procs), 1)
         self.assertIs(procs[0], p)
         p.abort()
-

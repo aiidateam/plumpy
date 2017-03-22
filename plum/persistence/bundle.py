@@ -68,7 +68,7 @@ class Bundle(collections.MutableMapping):
 
     @override
     def __repr__(self):
-        return '<Bundle %s>' % repr(self.__dict)
+        return 'Bundle(%r)' % self.get_dict()
 
     @override
     def __hash__(self):

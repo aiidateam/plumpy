@@ -13,15 +13,6 @@ class ProcessListener(object):
         """
         pass
 
-    def on_process_done_playing(self, process):
-        """
-        Called when the process starts to be played i.e. it is executing
-
-        :param process: The process
-        :type process: :class:`plum.process.Process`
-        """
-        pass
-
     def on_process_start(self, process):
         """
         Called when the process has been started
@@ -52,6 +43,15 @@ class ProcessListener(object):
     def on_process_resume(self, process):
         """
         Called when the process is about to re-enter the RUNNING state
+
+        :param process: The process
+        :type process: :class:`plum.process.Process`
+        """
+        pass
+
+    def on_process_abort(self, process):
+        """
+        Called when the process has been aborted
 
         :param process: The process
         :type process: :class:`plum.process.Process`
@@ -93,6 +93,15 @@ class ProcessListener(object):
     def on_process_fail(self, process):
         """
         Called when the process is about to enter the FAILED state
+
+        :param process: The process
+        :type process: :class:`plum.process.Process`
+        """
+        pass
+
+    def on_process_done_playing(self, process):
+        """
+        Called when the process starts to be played i.e. it is executing
 
         :param process: The process
         :type process: :class:`plum.process.Process`

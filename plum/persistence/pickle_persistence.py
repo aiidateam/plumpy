@@ -26,6 +26,7 @@ class RLock(portalocker.Lock):
     can be acquired multiple times.  When the corresponding number of release()
     calls are made the lock will finally release the underlying file lock.
     """
+
     def __init__(
             self, filename, mode='a', timeout=portalocker.utils.DEFAULT_TIMEOUT,
             check_interval=portalocker.utils.DEFAULT_CHECK_INTERVAL, fail_when_locked=False,
@@ -92,8 +93,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         kwargs['failed_directory'] = path.join(basedir, "failed")
         return cls(**kwargs)
 
-    def __init__(self, auto_persist=False,
-                 running_directory=_RUNNING_DIRECTORY,
+    def __init__(self, running_directory=_RUNNING_DIRECTORY,
                  finished_directory=_FINISHED_DIRECTORY,
                  failed_directory=_FAILED_DIRECTORY):
         """
@@ -123,10 +123,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         self._running_directory = running_directory
         self._finished_directory = finished_directory
         self._failed_directory = failed_directory
-        self._auto_persist = auto_persist
         self._filelocks = {}
-
-        MONITOR.start_listening(self)
 
     def load_checkpoint(self, pid):
         for check_dir in [self._running_directory, self._failed_directory,
@@ -150,6 +147,18 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
 
         return checkpoints
 
+    def enable_persist_all(self):
+        """
+        Persist all processes that run
+        """
+        MONITOR.start_listening(self)
+
+    def disable_persist_all(self):
+        """
+        Stop persisting all ran processes
+        """
+        MONITOR.stop_listening(self)
+
     @property
     def store_directory(self):
         return self._running_directory
@@ -172,7 +181,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
 
         # Create a lock for the pickle
         try:
-            lock = RLock(save_file, 'wb', timeout=0)
+            lock = RLock(save_file, 'w+b', timeout=0)
             lock.acquire()
             self._filelocks[process.pid] = lock
         except portalocker.LockException:
@@ -206,11 +215,11 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
     def save(self, process):
         self._ensure_directory(self._running_directory)
         filename = self.get_running_path(process.pid)
-        lock = self._filelocks.get(
-            process.pid, RLock(filename, 'wb', timeout=0))
+        lock = self._filelocks.get(process.pid, RLock(filename, 'w+b', timeout=0))
 
         with lock as f:
             checkpoint = self.create_bundle(process)
+            self._clear(f)
             try:
                 pickle.dump(checkpoint, f)
             except pickle.PickleError:
@@ -249,9 +258,9 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
 
     @override
     def on_process_fail(self, process):
-        self._save_noraise(process)
+        #self._save_noraise(process)
         try:
-            self._release_process(process.pid, self.finished_directory)
+            self._release_process(process.pid, self.failed_directory)
         except ValueError:
             pass
 
@@ -264,8 +273,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
     # region ProcessMonitorListener messages
     @override
     def on_monitored_process_registered(self, process):
-        if self._auto_persist:
-            self.persist_process(process)
+        self.persist_process(process)
 
     # endregion
 
@@ -313,3 +321,11 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         except pickle.PicklingError:
             LOGGER.error("Exception raised trying to pickle process (pid={})".format(process.pid))
 
+    def _clear(self, fileobj):
+        """
+        Clear the contents of an open file.
+
+        :param fileobj: The (open) file object
+        """
+        fileobj.seek(0)
+        fileobj.truncate()
