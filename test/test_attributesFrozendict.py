@@ -1,4 +1,4 @@
-from unittest import TestCase
+from util import TestCase
 from plum.util import AttributesFrozendict
 
 

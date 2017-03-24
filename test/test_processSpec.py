@@ -1,12 +1,13 @@
 import unittest
 from plum.process import ProcessSpec
+from util import TestCase
 
 
 class StrSubtype(str):
     pass
 
 
-class TestProcessSpec(unittest.TestCase):
+class TestProcessSpec(TestCase):
     def setUp(self):
         self.spec = ProcessSpec()
 

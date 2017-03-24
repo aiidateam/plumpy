@@ -1,5 +1,5 @@
 
-from unittest import TestCase
+from util import TestCase
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.util import override
 from plum.test_utils import DummyProcess, ExceptionProcess

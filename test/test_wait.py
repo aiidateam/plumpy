@@ -1,6 +1,7 @@
 import unittest
 from plum.wait import WaitOn
 from plum.persistence import Bundle
+from util import TestCase
 
 
 class _DummyWait(WaitOn):
@@ -17,7 +18,7 @@ class _DummyWait(WaitOn):
         self._value = bundle['value']
 
 
-class MyTestCase(unittest.TestCase):
+class MyTestCase(TestCase):
     def test_save_load(self):
         """
         Basic test to check saving instance state and reloading

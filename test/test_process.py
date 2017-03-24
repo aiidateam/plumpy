@@ -330,7 +330,7 @@ class TestProcess(TestCase):
         wait_until(p, ProcessState.WAITING)
         bundle = Bundle()
         p.save_instance_state(bundle)
-        self.assertTrue(future.abort(timeout=10.))
+        self.assertTrue(future.abort(timeout=5.))
 
         p = _RestartProcess.load(bundle)
         self.assertEqual(p.state, ProcessState.WAITING)
@@ -392,6 +392,8 @@ class TestProcessEvents(TestCase):
         self.assertTrue(self.events_tester.finish)
 
     def test_on_done_playing(self):
+        # Need to first call on_playing 'cause otherwise the process stack is wrong
+        self.proc.on_playing()
         self.proc.on_done_playing()
         self.assertTrue(self.events_tester.done_playing)
 

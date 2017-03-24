@@ -16,6 +16,7 @@ from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
+import plum.stack as stack
 from plum.util import protected
 import plum.util as util
 from plum.wait import WaitOn
@@ -496,6 +497,7 @@ class Process(object):
 
         try:
             try:
+                stack.push(self)
                 MONITOR.register_process(self)
                 with self.__state_lock:
                     self._call_with_super_check(self.on_playing)
@@ -514,12 +516,14 @@ class Process(object):
                 raise
         finally:
             try:
-                MONITOR.deregister_process(self)
                 self._call_with_super_check(self.on_done_playing)
             except BaseException:
                 if self.state != ProcessState.FAILED:
                     self._perform_fail(sys.exc_info())
                     raise
+            finally:
+                MONITOR.deregister_process(self)
+                stack.pop(self)
 
         return self._outputs
 
@@ -856,11 +860,6 @@ class Process(object):
 
     def _perform_create(self, bundle=None):
         """
-
-        :param pid: The process ID to use, can be None in which case one will
-            be generated
-        :param inputs: The process inputs
-        :type inputs: dict
         :param bundle: An optional saved state to recreate from
         :type bundle: `class`:plum.persistence.bundle.Bundle`
         """
