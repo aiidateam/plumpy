@@ -1,7 +1,7 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
-from plum.process import ProcessListener
+from plum.process import Process, ProcessListener
 from plum.util import override, protected
 from plum.exceptions import TimeoutError
 
@@ -13,17 +13,14 @@ class _ProcInfo(object):
 
 
 class Future(ProcessListener):
-    def __init__(self, procman, process):
+    def __init__(self, process):
         """
         The process manager creates instances of futures that can be used by the
         user.
 
-        :param procman: The process manager that the process belongs to
-        :type procman: :class:`ProcessManager`
         :param process: The process this is a future for
         :type process: :class:`plum.process.Process`
         """
-        self._procman = procman
         self._process = process
         self._terminated = threading.Event()
         self._process.add_process_listener(self)
@@ -60,7 +57,7 @@ class Future(ProcessListener):
         and then return the final dictionary of outputs.
 
         If a timeout is given and the process has not finished in that time
-        a :class:`TiemoutError` will be raised.
+        a :class:`TimeoutError` will be raised.
 
         :param timeout: (optional) maximum time to wait for process to finish
         :return: The final outputs
@@ -96,18 +93,13 @@ class Future(ProcessListener):
         return self._process.abort(msg, timeout)
 
     def play(self):
-        return self._procman.play(self.pid)
+        return self._process.play()
 
     def pause(self, timeout):
-        return self._procman.pause(self.pid, timeout)
+        return self._process.pause(timeout)
 
     def wait(self, timeout=None):
-        try:
-            return self._procman.wait_for(self.pid, timeout)
-        except ValueError:
-            # The process manager doesn't know about the process anymore
-            # because it is finished
-            return True
+        return self._terminated.wait(timeout)
 
     def add_done_callback(self, fn):
         if self._terminated.is_set():
@@ -116,12 +108,9 @@ class Future(ProcessListener):
             self._callbacks.append(fn)
 
     @protected
-    def on_process_stop(self, process):
-        self._terminate()
-
-    @protected
-    def on_process_fail(self, process):
-        self._terminate()
+    def on_process_done_playing(self, process):
+        if process.has_terminated():
+            self._terminate()
 
     def _terminate(self):
         self._terminated.set()
@@ -140,8 +129,9 @@ class ProcessManager(ProcessListener):
     """
 
     def __init__(self, max_threads=1024):
+        self._max_threads = max_threads
         self._processes = {}
-        self._executor = ThreadPoolExecutor(max_workers=max_threads)
+        self._executor = ThreadPoolExecutor(max_workers=self._max_threads)
 
     def launch(self, proc_class, inputs=None, pid=None, logger=None):
         """
@@ -168,7 +158,7 @@ class ProcessManager(ProcessListener):
         self._processes[proc.pid] = _ProcInfo(proc, None)
         proc.add_process_listener(self)
         self._play(proc)
-        return Future(self, proc)
+        return Future(proc)
 
     def get_processes(self):
         return [info.proc for info in self._processes.values()]
@@ -231,10 +221,15 @@ class ProcessManager(ProcessListener):
     def get_num_processes(self):
         return len(self._processes)
 
+    def reset(self):
+        self.shutdown()
+        self._executor = ThreadPoolExecutor(max_workers=self._max_threads)
+
     def shutdown(self):
         self.pause_all()
         for p in self._processes.values():
             self._delete_process(p.proc)
+        assert not self._processes
         self._executor.shutdown(True)
 
     # region From ProcessListener
@@ -247,6 +242,7 @@ class ProcessManager(ProcessListener):
     def on_process_fail(self, process):
         super(ProcessManager, self).on_process_fail(process)
         self._delete_process(process)
+
     # endregion
 
     def _play(self, proc):
@@ -280,7 +276,32 @@ class ProcessManager(ProcessListener):
         """
         :param proc: :class:`plum.process.Process`
         """
-        # Get rid of the info but save the thread so we can join later
-        # on shutdown
         proc.remove_process_listener(self)
-        del self._processes[proc.pid]
+        info = self._processes.pop(proc.pid)
+        assert info.executor_future is None or not info.executor_future.running()
+
+
+_DEFAULT_PROCMAN = None
+
+
+def get_default_procman():
+    """
+    :return: The default process manager
+    :rtype: :class:`ProcessManager`
+    """
+    global _DEFAULT_PROCMAN
+    if _DEFAULT_PROCMAN is None:
+        _DEFAULT_PROCMAN = ProcessManager()
+    return _DEFAULT_PROCMAN
+
+
+def async(process, **inputs):
+    if isinstance(process, Process):
+        assert not inputs, "Cannot pass inputs to an already instantiated process"
+        to_play = process
+    elif isinstance(process, Process.__class__):
+        to_play = process.new(inputs=inputs)
+    else:
+        raise ValueError("Process must be a process instance or class")
+
+    get_default_procman().start(to_play)

@@ -1,4 +1,4 @@
-from unittest import TestCase
+from test.util import TestCase
 from plum.process_manager import ProcessManager
 from plum.persistence.pickle_persistence import PicklePersistence
 from plum.process_monitor import MONITOR
@@ -11,14 +11,14 @@ class TestPicklePersistence(TestCase):
     def setUp(self):
         import tempfile
 
-        self.assertEqual(len(MONITOR.get_pids()), 0)
+        super(TestPicklePersistence, self).setUp()
 
         self.store_dir = tempfile.mkdtemp()
         self.pickle_persistence = PicklePersistence(running_directory=self.store_dir)
         self.proess_manager = ProcessManager()
 
     def tearDown(self):
-        self.assertEqual(len(MONITOR.get_pids()), 0)
+        super(TestPicklePersistence, self).tearDown()
         self.pickle_persistence.clear_all_persisted()
         self._empty_directory()
 
@@ -95,8 +95,7 @@ class TestPicklePersistence(TestCase):
             pass
 
         proc.abort()
-
-        assert future.wait(timeout=1.)
+        self.assertTrue(future.wait(timeout=5.))
 
     def _empty_directory(self):
         import shutil

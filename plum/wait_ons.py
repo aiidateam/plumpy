@@ -29,6 +29,11 @@ class _CompoundWaitOn(WaitOn):
 
     def init(self, wait_list):
         super(_CompoundWaitOn, self).init()
+        for w in wait_list:
+            if not isinstance(w, WaitOn):
+                raise ValueError(
+                    "Must provide objects of type WaitOn, got '{}'.".format(
+                        w.__class__.__name__))
         self._wait_list = wait_list
 
     @override

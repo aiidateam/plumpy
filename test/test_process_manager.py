@@ -130,7 +130,7 @@ class TestProcessManager(TestCase):
         self.assertTrue(p.is_playing())
 
         # Pause it
-        self.assertTrue(future.pause(timeout=2))
+        self.assertTrue(future.pause(timeout=5))
         self.assertFalse(p.is_playing())
 
         # Play it

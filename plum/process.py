@@ -527,12 +527,13 @@ class Process(object):
 
         return self._outputs
 
-    def pause(self):
+    def pause(self, timeout=0.):
         """
         Pause an playing process.  This can be called from another thread.
         """
         with self.__state_lock:
             self._interrupt(_Interrupt.PAUSE)
+        return self.__paused.wait(timeout)
 
     def abort(self, msg=None, timeout=None):
         """
@@ -682,10 +683,6 @@ class Process(object):
         Called if the process raised an exception.
         """
         self.__event_helper.fire_event(ProcessListener.on_process_fail, self)
-        # There will be no more messages so remove the listeners.  Otherwise we
-        # may continue to hold references to them and stop them being garbage
-        # collected
-        self.__event_helper.remove_all_listeners()
         self.__called = True
 
     def on_output_emitted(self, output_port, value, dynamic):

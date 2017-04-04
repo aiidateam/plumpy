@@ -45,10 +45,13 @@ class EventHelper(object):
             try:
                 getattr(l, event_function.__name__)(*args, **kwargs)
             except BaseException as e:
+                import traceback
+                traceback.print_exc()
+
                 _LOGGER.error(
-                    "The listener '{}' produced as exception while receiving "
-                    "the message '{}':\n{}".format(
-                        l, event_function.__name__, e.message)
+                    "The listener '{}' produced an exception while receiving "
+                    "the message '{}':\n{}: {}".format(
+                        l, event_function.__name__, e.__class__.__name__, e.message)
                 )
                 if self._raise_exceptions:
                     raise

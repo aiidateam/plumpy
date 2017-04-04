@@ -27,7 +27,7 @@ class ProcessMonitorListener(object):
 class ProcessMonitor(ProcessListener):
     """
     This class is a central monitor that keeps track of all the currently
-    running processes.  Think of it as the process manager in your OS that shows
+    playing processes.  Think of it as the process manager in your OS that shows
     you what is currently running.
 
     Clients can listen for messages to indicate when a new process is registered
