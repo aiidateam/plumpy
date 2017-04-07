@@ -67,6 +67,14 @@ class Subscriber(object):
 
     @abstractmethod
     def poll(self, time_limit=None):
+        """
+        Poll for events
+
+        :param time_limit: How long to poll for
+        :type time_limit: float
+        :return: The number of events consumed
+        :rtype: int
+        """
         pass
 
     @abstractmethod

@@ -245,11 +245,6 @@ class ProcessManager(ProcessListener):
 
     # endregion
 
-    def _play(self, proc):
-        if not proc.is_playing():
-            info = self._processes[proc.pid]
-            info.executor_future = self._executor.submit(proc.play)
-
     def _pause(self, proc, timeout=None):
         if proc.is_playing():
             info = self._processes[proc.pid]
@@ -260,6 +255,11 @@ class ProcessManager(ProcessListener):
                 return False
 
         return True
+
+    def _play(self, proc):
+        if not proc.is_playing():
+            info = self._processes[proc.pid]
+            info.executor_future = self._executor.submit(proc.play)
 
     def _abort(self, proc, msg=None, timeout=None):
         info = self._processes[proc.pid]

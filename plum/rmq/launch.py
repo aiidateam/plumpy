@@ -133,19 +133,19 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
     """
 
     def __init__(self, connection, queue=Defaults.TASK_QUEUE,
-                 decoder=json.loads, manager=None):
+                 decoder=json.loads, process_manager=None):
         """
         :param connection: The pika RabbitMQ connection
         :type connection: :class:`pika.Connection`
         :param queue: The queue name to use
         :param decoder: A function to deserialise incoming messages
-        :param manager: The process manager to use, one will be created if None is passed
-        :type manager: :class:`plum.process_manger.ProcessManager`
+        :param process_manager: The process manager to use, one will be created if None is passed
+        :type process_manager: :class:`plum.process_manger.ProcessManager`
         """
-        if manager is None:
+        if process_manager is None:
             self._manager = ProcessManager()
         else:
-            self._manager = manager
+            self._manager = process_manager
 
         self._decode = decoder
         self._running_processes = {}
@@ -174,6 +174,14 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
 
     @override
     def poll(self, time_limit=1.0):
+        """
+        Poll the channel for launch process events
+
+        :param time_limit: How long to poll for
+        :type time_limit: float
+        :return: The number of launch events consumed
+        :rtype: int
+        """
         self._num_processes = 0
         self._channel.connection.process_data_events(time_limit=time_limit)
         return self._num_processes
@@ -189,6 +197,14 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
         self._channel.close()
 
     def _on_launch(self, ch, method, properties, body):
+        """
+        Consumer function that processes the launch message.
+
+        :param ch: The channel
+        :param method: The method
+        :param properties: The message properties
+        :param body: The message body
+        """
         self._num_processes += 1
 
         task = self._decode(body)

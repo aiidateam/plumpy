@@ -12,7 +12,9 @@ except ImportError:
 import threading
 import unittest
 import uuid
+import warnings
 
+from plum.process_manager import ProcessManager
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.test_utils import TEST_PROCESSES
 from util import TestCase
@@ -34,14 +36,23 @@ class TestTaskControllerAndRunner(TestCase):
         except pika.exceptions.ConnectionClosed:
             self.fail("Couldn't open connection.  Make sure _rmq server is running")
 
+        self.procman = ProcessManager()
         queue = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
         self.publisher = ProcessLaunchPublisher(self._connection, queue=queue)
-        self.subscriber = ProcessLaunchSubscriber(self._connection, queue=queue)
+        self.subscriber = ProcessLaunchSubscriber(
+            self._connection, queue=queue, process_manager=self.procman)
 
     def tearDown(self):
         self._connection.close()
+        num_procs = self.procman.get_num_processes()
+        if num_procs != 0:
+            warnings.warn(
+                "Process manager is still running '{}' processes".format(
+                    num_procs))
+        # Kill any still running processes
+        self.procman.shutdown()
 
-    def test_send(self):
+    def test_launch(self):
         class RanLogger(ProcessMonitorListener):
             def __init__(self):
                 self.ran = []
@@ -49,23 +60,20 @@ class TestTaskControllerAndRunner(TestCase):
             def on_monitored_process_registered(self, process):
                 self.ran.append(process.__class__)
 
+        # Try launching some processes
+        for proc_class in TEST_PROCESSES:
+            self.publisher.launch(proc_class)
+
         l = RanLogger()
         with MONITOR.listen(l):
-            # Try sending some processes
-            for ProcClass in TEST_PROCESSES:
-                self.publisher.launch(ProcClass)
-
             # Now make them run
             num_ran = 0
-            i = 0
-            while num_ran < len(TEST_PROCESSES):
+            for _ in range(0, 10):
                 num_ran += self.subscriber.poll(0.2)
-                i += 1
-                if i > 10:
+                if num_ran >= len(TEST_PROCESSES):
                     break
 
-            self.assertEqual(num_ran, len(TEST_PROCESSES))
-
+        self.assertEqual(num_ran, len(TEST_PROCESSES))
         self.assertListEqual(TEST_PROCESSES, l.ran)
 
 

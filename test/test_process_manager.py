@@ -1,4 +1,4 @@
-from util import TestCase
+from .util import TestCase
 import time
 from plum.process import ProcessState
 from plum.process_monitor import MONITOR, ProcessMonitorListener
