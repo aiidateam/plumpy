@@ -1,4 +1,4 @@
-from .util import TestCase
+from test.util import TestCase
 import plum.test_utils
 import plum.stack as stack
 from plum.process_manager import async

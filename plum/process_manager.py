@@ -13,7 +13,7 @@ class _ProcInfo(object):
 
 
 class Future(ProcessListener):
-    def __init__(self, process):
+    def __init__(self, process, procman):
         """
         The process manager creates instances of futures that can be used by the
         user.
@@ -22,6 +22,7 @@ class Future(ProcessListener):
         :type process: :class:`plum.process.Process`
         """
         self._process = process
+        self._procman = procman
         self._terminated = threading.Event()
         self._process.add_process_listener(self)
         self._callbacks = []
@@ -93,7 +94,7 @@ class Future(ProcessListener):
         return self._process.abort(msg, timeout)
 
     def play(self):
-        return self._process.play()
+        return self._procman.play(self._process.pid)
 
     def pause(self, timeout):
         return self._process.pause(timeout)
@@ -155,30 +156,30 @@ class ProcessManager(ProcessListener):
         :return: A :class:`Future` representing the execution of the process
         :rtype: :class:`Future`
         """
-        self._processes[proc.pid] = _ProcInfo(proc, None)
+        self._processes[proc.pid] = proc
         proc.add_process_listener(self)
         self._play(proc)
-        return Future(proc)
+        return Future(proc, self)
 
     def get_processes(self):
-        return [info.proc for info in self._processes.values()]
+        return self._processes.values()
 
     def has_process(self, pid):
         return pid in self._processes
 
     def play(self, pid):
         try:
-            self._play(self._processes[pid].proc)
+            self._play(self._processes[pid])
         except KeyError:
             raise ValueError("Unknown pid")
 
     def play_all(self):
-        for info in self._processes.itervalues():
-            self._play(info.proc)
+        for proc in self._processes.itervalues():
+            self._play(proc)
 
     def pause(self, pid, timeout=None):
         try:
-            return self._pause(self._processes[pid].proc, timeout)
+            self._processes[pid].pause(timeout)
         except KeyError:
             raise ValueError("Unknown pid")
 
@@ -188,97 +189,49 @@ class ProcessManager(ProcessListener):
         are all paused before returning.
         """
         result = True
-        for info in self._processes.values():
-            result &= self._pause(info.proc, timeout=timeout)
+        for proc in self._processes.itervalues():
+            result &= proc.pause(timeout=timeout)
         return result
 
     def abort(self, pid, msg=None, timeout=None):
+        """
+        Abort a process.
+
+        :param pid: The process id
+        :param msg: (optional) The abort message
+        :param timeout: (optional) Time to wait until aborted
+        :return: True if aborted, False otherwise
+        """
         try:
-            return self._abort(self._processes[pid].proc, msg, timeout)
+            return self._processes[pid].abort(msg, timeout)
         except KeyError:
             raise ValueError("Unknown pid")
 
     def abort_all(self, msg=None, timeout=None):
         result = True
-        for info in self._processes.values():
+        for pid in self._processes.keys():
             try:
-                result &= self._abort(info.proc, msg, timeout)
+                result &= self.abort(pid, msg, timeout)
             except AssertionError:
                 # This happens if the process is not playing
                 pass
         return result
 
-    def wait_for(self, pid, timeout=None):
-        try:
-            self._processes[pid].executor_future.result(timeout)
-        except KeyError:
-            raise ValueError("Unknown pid")
-        except concurrent.futures.TimeoutError:
-            return False
-
-        return True
-
     def get_num_processes(self):
         return len(self._processes)
 
-    def reset(self):
-        self.shutdown()
-        self._executor = ThreadPoolExecutor(max_workers=self._max_threads)
-
-    def shutdown(self):
-        self.pause_all()
-        for p in self._processes.values():
-            self._delete_process(p.proc)
-        assert not self._processes
-        self._executor.shutdown(True)
-
     # region From ProcessListener
-    @override
-    def on_process_stop(self, process):
-        super(ProcessManager, self).on_process_stop(process)
-        self._delete_process(process)
-
-    @override
-    def on_process_fail(self, process):
-        super(ProcessManager, self).on_process_fail(process)
-        self._delete_process(process)
+    @protected
+    def on_process_done_playing(self, process):
+        if process.has_terminated():
+            process.remove_process_listener(self)
+            self._processes.pop(process.pid)
 
     # endregion
 
-    def _pause(self, proc, timeout=None):
-        if proc.is_playing():
-            info = self._processes[proc.pid]
-            proc.pause()
-            try:
-                info.executor_future.result(timeout)
-            except concurrent.futures.TimeoutError:
-                return False
-
-        return True
-
     def _play(self, proc):
         if not proc.is_playing():
-            info = self._processes[proc.pid]
-            info.executor_future = self._executor.submit(proc.play)
-
-    def _abort(self, proc, msg=None, timeout=None):
-        info = self._processes[proc.pid]
-        info.proc.abort(msg)
-
-        try:
-            info.executor_future.result(timeout)
-        except concurrent.futures.TimeoutError:
-            return False
-
-        return True
-
-    def _delete_process(self, proc):
-        """
-        :param proc: :class:`plum.process.Process`
-        """
-        proc.remove_process_listener(self)
-        info = self._processes.pop(proc.pid)
-        assert info.executor_future is None or not info.executor_future.running()
+            self._executor.submit(proc.play)
 
 
 _DEFAULT_PROCMAN = None

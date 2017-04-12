@@ -38,7 +38,7 @@ class TestStatusRequesterAndProvider(TestCase):
             self._connection, process_manager=self.manager, exchange=exchange)
 
     def tearDown(self):
-        self.manager.shutdown()
+        self.assertTrue(self.manager.abort_all(timeout=10.), "Failed to abort all processes")
         super(TestStatusRequesterAndProvider, self).tearDown()
         self._connection.close()
 
@@ -100,7 +100,7 @@ class TestStatusProvider(TestCase):
             process_manager=self.manager)
 
     def tearDown(self):
-        self.manager.shutdown()
+        self.assertTrue(self.manager.abort_all(timeout=10.), "Failed to abort all processes")
         super(TestStatusProvider, self).tearDown()
         self.channel.close()
         self._connection.close()

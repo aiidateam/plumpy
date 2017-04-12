@@ -391,10 +391,10 @@ class Process(object):
         """
         Has the process terminated
 
-        :return: True if has_finished() or has_failed(), False otherwise
+        :return: True if the process is STOPPED or FAILED, False otherwise
         :rtype: bool
         """
-        return self.has_finished() or self.has_failed()
+        return self.state in [ProcessState.STOPPED, ProcessState.FAILED]
 
     def has_aborted(self):
         return self._aborted
@@ -460,8 +460,8 @@ class Process(object):
 
             if self._wait is not None:
                 bundle[self.BundleKeys.WAITING_ON.value] = self.save_wait_on_state()
-                bundle[self.BundleKeys.WAIT_ON_CALLBACK.value] = \
-                    self._wait.callback.__name__
+                fn = self._wait.callback.__name__ if self._wait.callback is not None else None
+                bundle[self.BundleKeys.WAIT_ON_CALLBACK.value] = fn
 
     # region Wait on stuff
     @protected
@@ -497,6 +497,7 @@ class Process(object):
 
         try:
             try:
+                self.__paused.clear()
                 stack.push(self)
                 MONITOR.register_process(self)
                 with self.__state_lock:
@@ -524,6 +525,7 @@ class Process(object):
             finally:
                 MONITOR.deregister_process(self)
                 stack.pop(self)
+                self.__paused.set()
 
         return self._outputs
 
@@ -531,8 +533,11 @@ class Process(object):
         """
         Pause an playing process.  This can be called from another thread.
         """
+        self.logger.info("[pause] Pausing process '{}'".format(self.pid))
         with self.__state_lock:
-            self._interrupt(_Interrupt.PAUSE)
+            if self.is_playing():
+                self._interrupt(_Interrupt.PAUSE)
+
         return self.__paused.wait(timeout)
 
     def abort(self, msg=None, timeout=None):
@@ -547,6 +552,7 @@ class Process(object):
         :return: True if the process is aborted at the end of the function, False otherwise
         :rtype: bool
         """
+        self.logger.info("[abort] Aborting process '{}'".format(self.pid))
         interrupted = False
         with self.__state_lock:
             if self.is_playing():
@@ -559,6 +565,7 @@ class Process(object):
         if interrupted:
             self.__paused.wait(timeout)
 
+        self.logger.info("[abort] aborted: '{}'".format(self.has_aborted()))
         return self.has_aborted()
 
     def add_process_listener(self, listener):
@@ -576,7 +583,6 @@ class Process(object):
     # Make sure to call the superclass method if your override any of these
     @protected
     def on_playing(self):
-        self.__paused.clear()
         self.__break = False
         self.__interrupt_action_protect = None
         self.__event_helper.fire_event(ProcessListener.on_process_playing, self)
@@ -585,7 +591,6 @@ class Process(object):
 
     @protected
     def on_done_playing(self):
-        self.__paused.set()
         self.__event_helper.fire_event(ProcessListener.on_process_done_playing, self)
         if self.has_terminated():
             # There will be no more messages so remove the listeners.  Otherwise we
@@ -807,7 +812,7 @@ class Process(object):
                 raise ValueError(
                     "This process does not have a function with "
                     "the name '{}' as expected from the wait on".
-                        format(name))
+                    format(name))
         return callback
 
     # region Inputs
@@ -872,6 +877,8 @@ class Process(object):
          - on_start
          - on_run
         """
+        self.logger.debug("Performing start on '{}'".format(self.pid))
+
         assert self.state is ProcessState.CREATED
 
         self._call_with_super_check(self.on_start)
@@ -893,6 +900,8 @@ class Process(object):
         Messages issued (if not already waiting):
          - on_wait
         """
+        self.logger.debug("Performing wait on '{}'".format(self.pid))
+
         # This could get called when the process was already in the waiting
         # state just because it could be resuming from being paused or from
         # a saved state
@@ -910,9 +919,11 @@ class Process(object):
             else:
                 self._next_transition = self._perform_resume
         except Interrupted:
-            pass
+            self.logger.debug("Waiting was interrupted on process '{}'".format(self.pid))
 
     def _perform_interrupt(self):
+        self.logger.debug("Performing interrupt on '{}'".format(self.pid))
+
         assert self.state not in [ProcessState.STOPPED, ProcessState.FAILED]
 
         if self.__interrupt_action_protect is _Interrupt.PAUSE:
@@ -930,6 +941,8 @@ class Process(object):
          - on_resume
          - on_run
         """
+        self.logger.debug("Performing resume on '{}'".format(self.pid))
+
         assert self.state is ProcessState.WAITING
 
         self._call_with_super_check(self.on_resume)
@@ -1013,13 +1026,15 @@ class Process(object):
         self._wait = Wait(wait_on, callback)
 
     def _interrupt(self, action, msg=None):
+        assert self.is_playing(), "Cannot interrupt a process that is not playing"
+
+        self.logger.info("Interrupting process '{}'".format(self.pid))
+
         self.__interrupt_action_protect = action
         if action is _Interrupt.ABORT:
             self._abort_msg = msg
         elif msg is not None:
-            self.logger.warning(
-                "Interrupt message ignored because it is only used when aborting"
-            )
+            self.logger.warning("Interrupt message ignored because it is only used when aborting")
 
         try:
             self._wait.on.interrupt()

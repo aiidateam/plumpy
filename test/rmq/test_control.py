@@ -31,7 +31,7 @@ class TestControl(TestCase):
         self.subscriber_thread.wait_till_started()
 
     def tearDown(self):
-        self.procman.shutdown()
+        self.procman.abort_all(timeout=10.)
         super(TestControl, self).tearDown()
         self.subscriber_thread.stop()
         self.subscriber_thread.join()

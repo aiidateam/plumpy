@@ -2,10 +2,13 @@
 
 import threading
 from abc import ABCMeta
+import logging
 
 from plum.persistence.bundle import Bundle
 from plum.util import fullname, protected, override
 from plum.exceptions import Unsupported
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class Interrupted(Exception):
@@ -126,11 +129,14 @@ class WaitOn(object):
 
         if not self._waiting.wait(timeout):
             # The threading Event returns False if it timed out
+            _LOGGER.debug("Wait on '{}' timed out".format(self.__class__.__name__))
             return False
         elif self.is_done():
+            _LOGGER.debug("Wait on '{}' finished".format(self.__class__.__name__))
             return True
         else:
             # Must have been interrupted
+            _LOGGER.debug("Wait on '{}' interrupted".format(self.__class__.__name__))
             raise Interrupted()
 
     def interrupt(self):
@@ -185,6 +191,7 @@ class Unsavable(object):
     """
     A mixin used to make a wait on unable to be saved or loaded
     """
+
     @override
     def save_instance_state(self, out_state):
         raise Unsupported("This WaitOn cannot be saved")

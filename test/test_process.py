@@ -46,12 +46,11 @@ class TestProcess(TestCase):
         self.events_tester = ProcessListenerTester()
         self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
-
         self.procman = ProcessManager()
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
-        self.procman.shutdown()
+        self.assertTrue(self.procman.abort_all(timeout=10.), "Failed to abort all processes")
         super(TestProcess, self).tearDown()
 
     def test_spec(self):
@@ -368,7 +367,7 @@ class TestProcessEvents(TestCase):
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
-        self.procman.shutdown()
+        self.assertTrue(self.procman.abort_all(timeout=10.), "Failed to abort all processes")
         super(TestProcessEvents, self).tearDown()
 
     def test_on_play(self):

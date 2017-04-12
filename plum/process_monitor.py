@@ -1,4 +1,3 @@
-
 from abc import ABCMeta
 from plum.process_listener import ProcessListener
 from plum.util import EventHelper, ListenContext, override
@@ -33,6 +32,7 @@ class ProcessMonitor(ProcessListener):
     Clients can listen for messages to indicate when a new process is registered
     and when processes terminate because of finishing or failing.
     """
+
     def __init__(self):
         self._processes = {}
         self.__event_helper = EventHelper(ProcessMonitorListener)
@@ -70,7 +70,7 @@ class ProcessMonitor(ProcessListener):
         :type process: :class:`~plum.process.Process`
         """
         assert process.pid not in self._processes, \
-               "A process with the same PID cannot be registered twice!"
+            "A process with the same PID cannot be registered twice!"
 
         self._processes[process.pid] = process
         process.add_process_listener(self)
@@ -108,18 +108,7 @@ class ProcessMonitor(ProcessListener):
     def on_process_fail(self, process):
         self.__event_helper.fire_event(
             ProcessMonitorListener.on_monitored_process_failed, process)
-    # endregion
-
-    def _reset(self):
-        """
-        Reset the monitor by stopping listening for messages from any existing
-        Processes.  Be very careful with this as some of the clients may be
-        expecting to get messages about what is happening which will not be
-        sent after this call.
-        """
-        for proc in self._processes.itervalues():
-            proc.remove_process_listener(self)
-        self._processes = {}
+        # endregion
 
 
 # The global singleton

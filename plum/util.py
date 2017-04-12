@@ -38,6 +38,7 @@ class EventHelper(object):
         return self._listeners
 
     def fire_event(self, event_function, *args, **kwargs):
+        assert event_function is not None
         # TODO: Check if the function is in the listener type
         # We have to use a copy here because the listener may
         # remove themselves during the message

@@ -17,7 +17,7 @@ import warnings
 from plum.process_manager import ProcessManager
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.test_utils import TEST_PROCESSES
-from util import TestCase
+from test.util import TestCase
 
 
 class Out(object):
@@ -49,8 +49,9 @@ class TestTaskControllerAndRunner(TestCase):
             warnings.warn(
                 "Process manager is still running '{}' processes".format(
                     num_procs))
+
         # Kill any still running processes
-        self.procman.shutdown()
+        self.assertTrue(self.procman.abort_all(timeout=10.), "Failed to abort all processes")
 
     def test_launch(self):
         class RanLogger(ProcessMonitorListener):

@@ -1,10 +1,9 @@
-from test.util import TestCase
+import os.path
 from plum.process_manager import ProcessManager
 from plum.persistence.pickle_persistence import PicklePersistence
-from plum.process_monitor import MONITOR
 from plum.test_utils import ProcessWithCheckpoint, WaitForSignalProcess
 from plum.exceptions import LockError
-import os.path
+from test.util import TestCase
 
 
 class TestPicklePersistence(TestCase):
@@ -15,7 +14,7 @@ class TestPicklePersistence(TestCase):
 
         self.store_dir = tempfile.mkdtemp()
         self.pickle_persistence = PicklePersistence(running_directory=self.store_dir)
-        self.proess_manager = ProcessManager()
+        self.procman = ProcessManager()
 
     def tearDown(self):
         super(TestPicklePersistence, self).tearDown()
@@ -38,13 +37,13 @@ class TestPicklePersistence(TestCase):
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
-        future = self.proess_manager.start(proc)
+        future = self.procman.start(proc)
 
         # Check the file exists
         self.assertTrue(os.path.isfile(save_path))
 
         try:
-            self.assertTrue(self.proess_manager.abort(proc.pid, timeout=2.))
+            self.assertTrue(self.procman.abort(proc.pid, timeout=2.))
         except AssertionError:
             # Already finished
             pass
@@ -86,7 +85,7 @@ class TestPicklePersistence(TestCase):
     def test_persist_twice(self):
         proc = WaitForSignalProcess.new()
         self.pickle_persistence.persist_process(proc)
-        future = self.proess_manager.start(proc)
+        future = self.procman.start(proc)
 
         # Try persisting the process again using another persistence manager
         try:
