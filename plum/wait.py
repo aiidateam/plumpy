@@ -125,7 +125,6 @@ class WaitOn(object):
             if self.is_done():
                 return True
             # Going to have to wait
-            self._waiting.clear()
 
         if not self._waiting.wait(timeout):
             # The threading Event returns False if it timed out
@@ -142,6 +141,12 @@ class WaitOn(object):
     def interrupt(self):
         with self._interrupt_lock:
             self._waiting.set()
+
+    def clear(self):
+        """
+        Clear the wait on, including any outstanding interrupt requests
+        """
+        self._waiting.clear()
 
     @protected
     def init(self, *args, **kwargs):

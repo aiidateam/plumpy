@@ -72,6 +72,7 @@ class TestControl(TestCase):
 
         # Send a message asking the process to abort
         self.assertIsNotNone(self.publisher.abort(p.pid, msg='Farewell', timeout=5.))
+        self.assertTrue(p.wait(timeout=2.), "Process failed to stop running")
         self.assertFalse(p.is_playing())
         self.assertTrue(p.has_aborted())
         self.assertEqual(p.get_abort_msg(), 'Farewell')

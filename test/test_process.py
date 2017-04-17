@@ -337,6 +337,12 @@ class TestProcess(TestCase):
         p.continue_()
         self.assertEqual(future.result(1.0), {'finished': True})
 
+    def test_wait(self):
+        p = DummyProcess.new()
+        self.assertTrue(p.wait(timeout=2.), "Not running process didn't return from wait")
+        self.procman.start(p)
+        self.assertTrue(p.wait(timeout=2.), "Process failed to return from wait when done")
+
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 

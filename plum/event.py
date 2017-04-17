@@ -1,9 +1,12 @@
 from abc import ABCMeta, abstractmethod
+import logging
 import re
 import threading
 from plum.process_monitor import ProcessMonitorListener, MONITOR
 from plum.util import override, protected, ListenContext
 from plum.wait import WaitOn, Unsavable
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class EventEmitter(object):
@@ -132,8 +135,8 @@ class EventEmitter(object):
     def _check_listener(listener):
         if not callable(listener):
             raise ValueError("Listener must be callable")
-        # Can do more sophisticated checks here, but it's a pain (to check both
-        # classes that are callable having the right signature and plain functions)
+            # Can do more sophisticated checks here, but it's a pain (to check both
+            # classes that are callable having the right signature and plain functions)
 
     def _add_wildcard_listener(self, listener, event):
         if event in self._wildcard_listeners:
@@ -257,6 +260,7 @@ class WithProcessEvents(object):
     A mixin to add a commonly used proxy function that removes the need for
     boilerplate event message code for processes.
     """
+
     @protected
     def process_event_occurred(self, pid, event, body=None):
         self.event_occurred("process.{}.{}".format(pid, event), body)
@@ -358,6 +362,7 @@ class PollingEmitter(EventEmitter):
             self._timer = None
 
     def _poll(self):
+        _LOGGER.info("Polling emitter '{}'".format(self.__class__.__name__))
         with self._state_lock:
             if self._polling:
                 # The reason it's done this way is that the poll() call may take some

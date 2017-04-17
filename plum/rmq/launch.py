@@ -143,9 +143,9 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
         :type process_manager: :class:`plum.process_manger.ProcessManager`
         """
         if process_manager is None:
-            self._manager = ProcessManager()
+            self._procman = ProcessManager()
         else:
-            self._manager = process_manager
+            self._procman = process_manager
 
         self._decode = decoder
         self._running_processes = {}
@@ -189,8 +189,7 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
     @override
     def stop(self):
         self._stopping = True
-        self._manager.pause_all()
-        self._status_publisher.reset()
+        self._procman.pause_all()
 
     @override
     def shutdown(self):
@@ -214,7 +213,7 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
         p.add_process_listener(self)
 
         self._running_processes[p.pid] = _RunningTaskInfo(p.pid, ch, method.delivery_tag)
-        self._manager.start(p)
+        self._procman.start(p)
 
     # region From ProcessListener
     def on_process_done_playing(self, process):

@@ -4,7 +4,7 @@ from abc import ABCMeta, abstractmethod
 import time
 from collections import Sequence
 from plum.persistence.bundle import Bundle
-from plum.wait import WaitOn, Unsavable
+from plum.wait import WaitOn, Unsavable, Interrupted
 from plum.util import override
 from plum.process_listener import ProcessListener
 from plum.process import ProcessState
@@ -72,13 +72,22 @@ class WaitOnAll(_CompoundWaitOn):
     def wait(self, timeout=None):
         t0 = time.time()
         for w in self._wait_list:
-            if not w.wait(timeout - (time.time() - t0)
-                          if timeout is not None else None):
-                # We timed out
-                return False
+            try:
+                if not w.wait(timeout - (time.time() - t0)
+                              if timeout is not None else None):
+                    # We timed out
+                    return False
+            except Interrupted:
+                raise Interrupted()
 
         self.done(True)
         return True
+
+    @override
+    def interrupt(self):
+        for w in self._wait_list:
+            w.interrupt()
+        super(WaitOnAll, self).interrupt()
 
 
 class WaitOnAny(_CompoundWaitOn):

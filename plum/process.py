@@ -538,7 +538,7 @@ class Process(object):
             if self.is_playing():
                 self._interrupt(_Interrupt.PAUSE)
 
-        return self.__paused.wait(timeout)
+        return self.wait(timeout)
 
     def abort(self, msg=None, timeout=None):
         """
@@ -563,10 +563,20 @@ class Process(object):
                 self._perform_abort()
 
         if interrupted:
-            self.__paused.wait(timeout)
+            self.wait(timeout)
 
         self.logger.info("[abort] aborted: '{}'".format(self.has_aborted()))
         return self.has_aborted()
+
+    def wait(self, timeout=None):
+        """
+        Wait until the process is no longer running.
+        
+        :param timeout: The maximum time to wait, if None then waits indefinitely 
+        :return: True if the process finished running, False if timedout
+        """
+        self.logger.info("waiting {}s for process '{}' to stop playing".format(timeout, self.pid))
+        return self.__paused.wait(timeout)
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -812,7 +822,7 @@ class Process(object):
                 raise ValueError(
                     "This process does not have a function with "
                     "the name '{}' as expected from the wait on".
-                    format(name))
+                        format(name))
         return callback
 
     # region Inputs
@@ -912,6 +922,7 @@ class Process(object):
             self._state = ProcessState.WAITING
 
         try:
+            self._wait.on.clear()
             with _Unlock(self.__state_lock):
                 self._wait.on.wait()
             if self._wait.callback is None:
