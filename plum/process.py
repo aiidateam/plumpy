@@ -172,7 +172,7 @@ class Process(object):
         if class_name != my_name:
             _LOGGER.warning(
                 "Loading class from a bundle that was created from a class with a different "
-                "name.  This class is '{}', bundle created by '{}'".format(class_name, my_name))
+                "name.  This class is '{}', bundle created by '{}'".format(my_name, class_name))
 
         inputs = bundle.get(Process.BundleKeys.INPUTS.value, None)
         pid = bundle[Process.BundleKeys.PID.value]
