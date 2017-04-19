@@ -2,7 +2,9 @@
 
 from abc import ABCMeta
 import collections
+import logging
 
+_LOGGER = logging.getLogger(__name__)
 
 class ValueSpec(object):
     """
@@ -96,11 +98,27 @@ class InputPort(Port):
     """
     A simple input port for a value being received by a workflow.
     """
+    @staticmethod
+    def required_override(required, default):
+        """
+        If a default is specified an input should no longer be marked
+        as required. Otherwise the input should always be marked explicitly
+        to be not required even if a default is specified.
+        """
+        if default is None:
+            return required
+        else:
+            return False
+
     def __init__(self, name, valid_type=None, help=None, default=None,
                  required=True, validator=None):
         super(InputPort, self).__init__(
-            name, valid_type=valid_type, help=help, required=required,
+            name, valid_type=valid_type, help=help, required=InputPort.required_override(required, default),
             validator=validator)
+
+        if required is not InputPort.required_override(required, default):
+            _LOGGER.warning("the required attribute for the input port '{}' was overridden "
+                "because a default was specified".format(name))
 
         if default is not None:
             default_valid, msg = self.validate(default)
