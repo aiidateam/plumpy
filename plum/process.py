@@ -1020,6 +1020,8 @@ class Process(object):
                     "on_fail was not called\n"
                     "Hint: Did you forget to call the superclass method?")
 
+        self.logger.debug("Process {} failed with trace:\n{}".format(self.pid, traceback.format_exc()))
+
         self.__break = True
 
     def _to_running(self):

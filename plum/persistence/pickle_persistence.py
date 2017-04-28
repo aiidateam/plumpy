@@ -143,7 +143,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
             except BaseException as e:
                 LOGGER.warning(
                     "Failed to load checkpoint {} because of exception\n"
-                    "{}".format(f, e.message))
+                    "{}: {}".format(f, e.__class__.__name__, e.message))
 
         return checkpoints
 
