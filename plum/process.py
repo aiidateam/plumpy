@@ -19,7 +19,7 @@ from plum.process_spec import ProcessSpec
 import plum.stack as stack
 from plum.util import protected
 import plum.util as util
-from plum.wait import WaitOn
+from plum.wait import WaitOn, create_from as create_waiton
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -481,7 +481,7 @@ class Process(object):
 
     @protected
     def create_wait_on(self, bundle):
-        return WaitOn.create_from(bundle)
+        return create_waiton(bundle)
 
     # endregion
 

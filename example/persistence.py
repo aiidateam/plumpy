@@ -9,14 +9,18 @@ class WaitUntil(WaitOn):
     END_TIME = 'end_time'
 
     @override
-    def init(self, wait_for):
+    def __init__(self, wait_for):
+        super(WaitUntil, self).__init__()
+
         self._end_time = time.time() + wait_for
         self._timer = threading.Timer(wait_for, self._timeout)
         self._timer.start()
 
     @override
-    def load_instance_state(self, bundle):
-        self._end_time = bundle[self.END_TIME]
+    def load_instance_state(self, saved_state):
+        super(WaitUntil, self).load_instance_state(saved_state)
+
+        self._end_time = saved_state[self.END_TIME]
         self._timer = threading.Timer(
             time.time() - self._end_time, self._timeout)
         self._timer.start()

@@ -4,7 +4,7 @@ from abc import ABCMeta, abstractmethod
 import time
 from collections import Sequence
 from plum.persistence.bundle import Bundle
-from plum.wait import WaitOn, Unsavable, Interrupted
+from plum.wait import WaitOn, Unsavable, Interrupted, create_from
 from plum.util import override
 from plum.process_listener import ProcessListener
 from plum.process import ProcessState
@@ -17,8 +17,8 @@ class Checkpoint(WaitOn):
     create a checkpoint at this point in the execution of a Process.
     """
 
-    def init(self):
-        super(Checkpoint, self).init()
+    def __init__(self):
+        super(Checkpoint, self).__init__()
         self.done(True)
 
 
@@ -27,8 +27,8 @@ class _CompoundWaitOn(WaitOn):
 
     WAIT_LIST = 'wait_list'
 
-    def init(self, wait_list):
-        super(_CompoundWaitOn, self).init()
+    def __init__(self, wait_list):
+        super(_CompoundWaitOn, self).__init__()
         for w in wait_list:
             if not isinstance(w, WaitOn):
                 raise ValueError(
@@ -48,26 +48,17 @@ class _CompoundWaitOn(WaitOn):
         out_state[self.WAIT_LIST] = waits
 
     @override
-    def load_instance_state(self, bundle):
-        super(_CompoundWaitOn, self).load_instance_state(bundle)
+    def load_instance_state(self, saved_state):
+        super(_CompoundWaitOn, self).load_instance_state(saved_state)
 
         # Don't bother loading the children if we've finished
         if not self.is_done():
-            self._wait_list = \
-                [WaitOn.create_from(b) for b in bundle[self.WAIT_LIST]]
+            self._wait_list = [create_from(b) for b in saved_state[self.WAIT_LIST]]
         else:
             self._wait_list = []
 
 
 class WaitOnAll(_CompoundWaitOn):
-    @override
-    def init(self, wait_list):
-        super(WaitOnAll, self).init(wait_list)
-
-    @override
-    def load_instance_state(self, bundle):
-        super(WaitOnAll, self).load_instance_state(bundle)
-
     @override
     def wait(self, timeout=None):
         t0 = time.time()
@@ -91,14 +82,6 @@ class WaitOnAll(_CompoundWaitOn):
 
 
 class WaitOnAny(_CompoundWaitOn):
-    @override
-    def init(self, wait_list):
-        super(WaitOnAny, self).init(wait_list)
-
-    @override
-    def load_instance_state(self, bundle):
-        super(WaitOnAny, self).load_instance_state(bundle)
-
     @override
     def wait(self, timeout=None):
         t0 = time.time()

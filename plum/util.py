@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from abc import abstractmethod
 import frozendict
 import importlib
 import inspect
@@ -164,3 +165,26 @@ class AttributesFrozendict(frozendict.frozendict):
         :return: The keys of the dict
         """
         return self.keys()
+
+
+class Savable(object):
+    @classmethod
+    def create_from(cls, saved_state):
+        """
+        Create the wait on from a save instance state.
+
+        :param saved_state: The saved instance state
+        :return: The wait on with its state as it was when it was saved
+        :rtype: This class type
+        """
+        obj = cls.__new__(cls)
+        obj.load_instance_state(saved_state)
+        return obj
+
+    @abstractmethod
+    def save_instance_state(self, out_state):
+        pass
+
+    @abstractmethod
+    def load_instance_state(self, saved_state):
+        pass

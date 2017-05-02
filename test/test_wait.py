@@ -5,17 +5,17 @@ from util import TestCase
 
 
 class _DummyWait(WaitOn):
-    def init(self, value):
-        super(_DummyWait, self).init()
+    def __init__(self, value):
+        super(_DummyWait, self).__init__()
         self._value = value
 
     def save_instance_state(self, out_state):
         super(_DummyWait, self).save_instance_state(out_state)
         out_state['value'] = self._value
 
-    def load_instance_state(self, bundle):
-        super(_DummyWait, self).load_instance_state(bundle)
-        self._value = bundle['value']
+    def load_instance_state(self, saved_state):
+        super(_DummyWait, self).load_instance_state(saved_state)
+        self._value = saved_state['value']
 
 
 class MyTestCase(TestCase):
