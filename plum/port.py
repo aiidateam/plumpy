@@ -117,7 +117,7 @@ class InputPort(Port):
             validator=validator)
 
         if required is not InputPort.required_override(required, default):
-            _LOGGER.warning("the required attribute for the input port '{}' was overridden "
+            _LOGGER.info("the required attribute for the input port '{}' was overridden "
                 "because a default was specified".format(name))
 
         if default is not None:
