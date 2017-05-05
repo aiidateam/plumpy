@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from util import TestCase
 from plum.event import ProcessMonitorEmitter, WaitOnProcessEvent, EmitterAggregator, EventEmitter
 from plum.test_utils import DummyProcess, ExceptionProcess
@@ -45,24 +46,24 @@ class TestWaitOnProcessEvent(TestCase):
         super(TestWaitOnProcessEvent, self).setUp()
         self.emitter = ProcessMonitorEmitter()
 
-    def test_finished(self):
-        p = DummyProcess.new()
-        w = WaitOnProcessEvent(self.emitter, p.pid, "finished")
-        p.play()
-        self.assertTrue(w.is_done())
+    def test_finished_stopped(self):
+        for event in ("finished", "stopped"):
+            tp = ThreadPoolExecutor(max_workers=1)
+            p = DummyProcess.new()
 
-    def test_stopped(self):
-        p = DummyProcess.new()
-        w = WaitOnProcessEvent(self.emitter, p.pid, "stopped")
-        p.play()
-        self.assertTrue(w.is_done())
+            w = WaitOnProcessEvent(self.emitter, p.pid, event)
+            future = tp.submit(w.wait)
+            while not future.running():
+                pass
+
+            p.play()
+            self.assertTrue(future.result(timeout=2.))
 
     def test_failed(self):
         p = ExceptionProcess.new()
         w = WaitOnProcessEvent(self.emitter, p.pid, "failed")
         with self.assertRaises(RuntimeError):
             p.play()
-        self.assertTrue(w.is_done())
 
 
 class _EmitterTester(EventEmitter):

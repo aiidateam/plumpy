@@ -67,7 +67,7 @@ class TestControl(TestCase):
         # Create the process and wait until it is waiting
         p = WaitForSignalProcess.new()
         self.procman.start(p)
-        wait_until(p, ProcessState.WAITING)
+        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
         self.assertTrue(p.is_playing())
 
         # Send a message asking the process to abort

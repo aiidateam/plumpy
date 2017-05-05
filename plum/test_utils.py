@@ -4,7 +4,7 @@ from plum.persistence.bundle import Bundle
 from plum.process import Process
 from plum.process_listener import ProcessListener
 from plum.util import override
-from plum.wait_ons import Checkpoint, WaitForSignal
+from plum.wait_ons import Checkpoint, Barrier
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -58,7 +58,7 @@ class WaitForSignalProcess(Process):
 
     @override
     def _run(self):
-        return WaitForSignal(), self.finish
+        return Barrier(), self.finish
 
     def finish(self, wait_on):
         pass

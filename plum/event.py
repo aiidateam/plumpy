@@ -4,7 +4,7 @@ import re
 import threading
 from plum.process_monitor import ProcessMonitorListener, MONITOR
 from plum.util import override, protected, ListenContext
-from plum.wait import WaitOn, Unsavable
+from plum.wait import WaitOn, Unsavable, Interrupted, WaitEvent
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -385,10 +385,16 @@ class WaitOnEvent(WaitOn, Unsavable):
         self._emitter = emitter
         self._event = event
         self._received = None
-        emitter.start_listening(self._event_occurred, event)
+        self._timeout = WaitEvent()
 
     def __str__(self):
         return "waiting on: {}".format(self._event)
+
+    @override
+    def wait(self, timeout=None):
+        self._received = None
+        with ListenContext(self._emitter, self._event_occurred, self._event):
+            return self._timeout.wait(timeout)
 
     def get_event(self):
         return self._received[0]
@@ -398,13 +404,11 @@ class WaitOnEvent(WaitOn, Unsavable):
 
     @override
     def interrupt(self):
-        self._emitter.stop_listening(self._event_occurred)
-        super(WaitOnEvent, self).interrupt()
+        self._timeout.interrupt()
 
     def _event_occurred(self, emitter, event, body):
         self._received = event, body
-        emitter.stop_listening(self._event_occurred)
-        self.done()
+        self._timeout.set()
 
 
 class WaitOnProcessEvent(WaitOnEvent):

@@ -1,5 +1,3 @@
-
-
 class ClassNotFoundException(Exception):
     pass
 
@@ -13,4 +11,8 @@ class Unsupported(Exception):
 
 
 class LockError(Exception):
+    pass
+
+
+class ProcessFailed(Exception):
     pass

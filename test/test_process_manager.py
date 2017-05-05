@@ -4,7 +4,7 @@ from plum.process import ProcessState
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.process_manager import ProcessManager
 from plum.test_utils import DummyProcess, WaitForSignalProcess
-from plum.wait_ons import wait_until, wait_until_stopped, WaitOnState, WaitRegion
+from plum.wait_ons import wait_until, wait_until_stopped, WaitOnProcessState, WaitRegion
 
 
 class TestProcessManager(TestCase):
@@ -89,7 +89,7 @@ class TestProcessManager(TestCase):
         self.procman.play_all()
         for p in procs:
             p.continue_()
-        self.assertTrue(wait_until_stopped(procs, timeout=10.), "Not all processes stopped")
+        self.assertTrue(wait_until_stopped(procs, timeout=5.), "Not all processes stopped")
 
         # Check they all finished
         for p in procs:
@@ -112,28 +112,28 @@ class TestProcessManager(TestCase):
     def test_future_abort(self):
         p = WaitForSignalProcess.new()
 
-        with WaitRegion(WaitOnState(p, ProcessState.WAITING), timeout=2):
+        with WaitRegion(WaitOnProcessState(p, ProcessState.WAITING), timeout=2):
             future = self.procman.start(p)
 
         self.assertTrue(p.is_playing())
-        self.assertTrue(future.abort(timeout=5))
+        self.assertTrue(future.abort(timeout=3.))
         self.assertTrue(p.has_aborted())
 
     def test_future_pause_play(self):
         p = WaitForSignalProcess.new()
 
         # Run the process
-        with WaitRegion(WaitOnState(p, ProcessState.WAITING), timeout=2):
+        with WaitRegion(WaitOnProcessState(p, ProcessState.WAITING), timeout=2):
             future = self.procman.start(p)
         self.assertTrue(p.is_playing())
 
         # Pause it
-        self.assertTrue(future.pause(timeout=5))
+        self.assertTrue(future.pause(timeout=3.))
         self.assertFalse(p.is_playing())
 
         # Play it
         future.play()
-        time.sleep(1)
+        p.wait(1.)
         self.assertTrue(p.is_playing())
 
     def test_abort(self):
@@ -172,7 +172,7 @@ class TestProcessManager(TestCase):
 
     def test_get_processes(self):
         p = WaitForSignalProcess.new()
-        with WaitRegion(WaitOnState(p, ProcessState.RUNNING), timeout=2):
+        with WaitRegion(WaitOnProcessState(p, ProcessState.RUNNING), timeout=2):
             self.procman.start(p)
         procs = self.procman.get_processes()
         self.assertEqual(len(procs), 1)

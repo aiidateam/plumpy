@@ -5,7 +5,7 @@ from plum.process_monitor import MONITOR
 from plum.process_manager import ProcessManager
 from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpoint, \
     DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, check_process_against_snapshots, \
-    WaitForSignalProcess, WaitForSignal
+    WaitForSignalProcess, Barrier
 from plum.test_utils import ProcessListenerTester
 from plum.util import override
 from plum.persistence.util import save_on_next_transition
@@ -241,30 +241,26 @@ class TestProcess(TestCase):
 
     def test_wait_continue(self):
         p = WaitForSignalProcess.new()
-        t = threading.Thread(target=p.play)
-        t.start()
-        self.assertTrue(wait_until(p, ProcessState.WAITING, 1.))
-        self.assertEqual(p.state, ProcessState.WAITING)
-
-        self.assertTrue(p.is_playing())
+        self.procman.start(p)
+        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=1.))
         p.continue_()
-
-        self.assertTrue(wait_until(p, ProcessState.STOPPED, 1.))
-        self.assertEqual(p.state, ProcessState.STOPPED)
+        self.assertTrue(p.wait(timeout=2.))
+        self.assertTrue(p.has_finished())
 
     def test_wait_pause_continue_play(self):
         p = WaitForSignalProcess.new()
-        t = threading.Thread(target=p.play)
-        t.start()
-        self.assertTrue(wait_until(p, ProcessState.WAITING, 5))
 
-        self.assertTrue(p.is_playing())
-        p.pause()
-        self.safe_join(t)
-        self.assertFalse(p.is_playing())
+        # Play the process and wait until it is waiting
+        self.procman.start(p)
+        self.assertTrue(wait_until(p, ProcessState.WAITING, 3.))
 
+        # Pause it
+        self.assertTrue(p.pause(timeout=3.))
+
+        # Continue it and wait till finished
+        self.procman.start(p)
         p.continue_()
-        p.play()
+        self.assertTrue(p.wait(timeout=3.))
 
         self.assertEqual(p.state, ProcessState.STOPPED)
 
@@ -326,22 +322,37 @@ class TestProcess(TestCase):
         p = _RestartProcess.new()
 
         future = self.procman.start(p)
-        wait_until(p, ProcessState.WAITING)
+        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
+
+        # Save the state of the process
         bundle = Bundle()
         p.save_instance_state(bundle)
-        self.assertTrue(future.abort(timeout=5.))
+        self.assertTrue(future.abort(timeout=2.))
 
+        # Load a process from the saved state
         p = _RestartProcess.load(bundle)
         self.assertEqual(p.state, ProcessState.WAITING)
+
+        # Now play it
         future = self.procman.start(p)
         p.continue_()
-        self.assertEqual(future.result(1.0), {'finished': True})
+        self.assertEqual(future.result(timeout=1.0), {'finished': True})
 
     def test_wait(self):
         p = DummyProcess.new()
         self.assertTrue(p.wait(timeout=2.), "Not running process didn't return from wait")
         self.procman.start(p)
         self.assertTrue(p.wait(timeout=2.), "Process failed to return from wait when done")
+
+    def test_wait_pause_play(self):
+        p = WaitForSignalProcess.new()
+        self.procman.start(p)
+        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
+
+        self.assertTrue(p.pause(timeout=1.))
+        self.procman.start(p)
+        p.wait(1.)
+        self.assertEqual(p.state, ProcessState.WAITING)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)

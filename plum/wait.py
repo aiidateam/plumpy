@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import threading
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 import logging
 
 from plum.persistence.bundle import Bundle
@@ -16,6 +16,10 @@ class Interrupted(Exception):
     pass
 
 
+class WaitException(Exception):
+    pass
+
+
 class WaitOn(Savable):
     """
     An object that represents something that is being waited on.
@@ -26,81 +30,18 @@ class WaitOn(Savable):
     """
     __metaclass__ = ABCMeta
 
-    CLASS_NAME = "class_name"
-    OUTCOME = "outcome"
-    RECREATE_FROM_KEY = 'recreate_from'
-
-    @staticmethod
-    def _is_saved_state(args):
-        return len(args) == 1 and isinstance(args[0], Bundle)
-
-    def __init__(self, *args, **kwargs):
-        self._init()
+    CLASS_NAME = 'class_name'
 
     def __str__(self):
         return self.__class__.__name__
 
-    def is_done(self):
-        """
-        Indicate if finished waiting or not.
-        To find out if what the outcome is call `get_outcome`
-
-        :return: True if finished, False otherwise.
-        """
-        return self._outcome is not None
-
-    def get_outcome(self):
-        """
-        Get the outcome of waiting.  Returns a tuple consisting of (bool, str)
-        where the first value indicates success or failure, while the second
-        gives an optional message.
-
-        :return: A tuple indicating the outcome of waiting.
-        :rtype: tuple
-        """
-        return self._outcome
-
+    @abstractmethod
     def wait(self, timeout=None):
-        """
-        Block until this wait on to completes.  If a timeout is supplied it is
-        interpreted to be a float in second (or fractions thereof).  If the
-        timeout is reached without the wait on being done this method will
-        return False.
+        pass
 
-        :param timeout: An optional timeout after which this method will
-            return with the value False.
-        :type timeout: float
-        :raise: :class:`Interrupted` if :func:`interrupt` is called before the
-            wait on is done
-        :return: True if the wait on has completed, False otherwise.
-        """
-        # TODO: Add check that this is not called from multiple threads simultaneously
-        with self._interrupt_lock:
-            if self.is_done():
-                return True
-                # Going to have to wait
-
-        if not self._waiting.wait(timeout):
-            # The threading Event returns False if it timed out
-            _LOGGER.debug("Wait on '{}' timed out".format(self.__class__.__name__))
-            return False
-        elif self.is_done():
-            _LOGGER.debug("Wait on '{}' finished".format(self.__class__.__name__))
-            return True
-        else:
-            # Must have been interrupted
-            _LOGGER.debug("Wait on '{}' interrupted".format(self.__class__.__name__))
-            raise Interrupted()
-
+    @abstractmethod
     def interrupt(self):
-        with self._interrupt_lock:
-            self._waiting.set()
-
-    def clear(self):
-        """
-        Clear the wait on, including any outstanding interrupt requests
-        """
-        self._waiting.clear()
+        pass
 
     @protected
     def save_instance_state(self, out_state):
@@ -115,47 +56,77 @@ class WaitOn(Savable):
         :param out_state: The bundle to save the state into
         """
         out_state[self.CLASS_NAME] = fullname(self)
-        out_state[self.OUTCOME] = self._outcome
 
-    @protected
-    def load_instance_state(self, saved_state):
-        """
-        Load the state of a wait on from a saved instance state.  All
-        subclasses implementing this should call the superclass method.
 
-        :param saved_state: :class:`Bundle` The save instance state
+class WaitEvent(object):
+    """
+    An event that can be waited upon.
+    """
+
+    def __init__(self):
+        self._timeout = threading.Event()
+        self._interrupted = False
+
+    def wait(self, timeout=None):
         """
+        Wait for the event to happen with an optional timeout.  Waiting can
+        be interrupted by calling interrupt() from a different thread in which
+        case an Interrupted() exception will be raised.
+        
+        :param timeout: The wait timeout
+        :type timeout: float
+        :return: True if the event happened, False otherwise
+        """
+        self._timeout.clear()
+        self._interrupted = False
+        if not self._timeout.wait(timeout):
+            return False
+        else:
+            if self._interrupted:
+                raise Interrupted()
+            else:
+                return True
+
+    def interrupt(self):
+        """
+        If another thread is waiting on this event, interrupt it.  Otherwise
+        this call has no effect.
+        """
+        self._interrupted = True
+        self._timeout.set()
+
+    def set(self):
+        """
+        Set the event as having happened.  If someone was waiting on this event
+        they will have True returned from the wait() call.
+        """
+        self._timeout.set()
+
+
+class WaitOnEvent(WaitOn):
+    def __init__(self):
+        super(WaitOnEvent, self).__init__()
         self._init()
 
-        outcome = saved_state[self.OUTCOME]
-        if outcome is not None:
-            self.done(outcome[0], outcome[1])
+    @override
+    def load_instance_state(self, saved_state):
+        super(WaitOnEvent, self).load_instance_state(saved_state)
+        self._init()
+
+    @override
+    def wait(self, timeout=None):
+        return self._wait_event.wait(timeout)
+
+    @override
+    def interrupt(self):
+        self._wait_event.interrupt()
 
     @protected
-    def done(self, success=True, msg=None):
-        """
-        Implementing classes should call this when they are done waiting.  As
-        well as indicating success or failure they can provide an optional
-        outcome message.
-
-        :param success: True if finished waiting successfully, False otherwise.
-        :type success: bool
-        :param msg: An (optional) message
-        :type msg: str
-        """
-        assert self._outcome is None, "Cannot call done more than once"
-
-        with self._interrupt_lock:
-            self._outcome = success, msg
-            self._waiting.set()
+    def set(self):
+        self._wait_event.set()
 
     def _init(self):
-        self._outcome = None
-
-        # Variables below this don't need to be saved in the instance state
-        self._waiting = threading.Event()
-        self._interrupt_lock = threading.Lock()
-        self.__super_called = False
+        self._wait_event = WaitEvent()
 
 
 def create_from(bundle):
@@ -181,5 +152,5 @@ class Unsavable(object):
         raise Unsupported("This WaitOn cannot be saved")
 
     @override
-    def load_instance_state(self, bundle):
+    def load_instance_state(self, saved_state):
         raise Unsupported("This WaitOn cannot be loaded")

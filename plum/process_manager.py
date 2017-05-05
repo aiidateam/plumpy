@@ -1,8 +1,8 @@
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
-import concurrent.futures
 from plum.process import Process, ProcessListener
-from plum.util import override, protected
+from plum.util import protected
 from plum.exceptions import TimeoutError
 
 
@@ -124,6 +124,10 @@ def wait_for_all(futures):
         future.wait()
 
 
+class PlayError(Exception):
+    pass
+
+
 class ProcessManager(ProcessListener):
     """
     Used to launch processes on separate threads and monitor their progress
@@ -174,7 +178,7 @@ class ProcessManager(ProcessListener):
             raise ValueError("Unknown pid")
 
     def play_all(self):
-        for proc in self._processes.itervalues():
+        for proc in self._processes.values():
             self._play(proc)
 
     def pause(self, pid, timeout=None):
@@ -209,12 +213,21 @@ class ProcessManager(ProcessListener):
 
     def abort_all(self, msg=None, timeout=None):
         result = True
+        time_left = timeout
+        t0 = time.time()
         for pid in self._processes.keys():
             try:
-                result &= self.abort(pid, msg, timeout)
+                result &= self.abort(pid, msg, time_left)
             except AssertionError:
                 # This happens if the process is not playing
                 pass
+            except KeyError:
+                # Happens because the process has already terminated
+                pass
+
+            if time_left is not None:
+                time_left = timeout - (time.time() - t0)
+
         return result
 
     def get_num_processes(self):
@@ -231,7 +244,12 @@ class ProcessManager(ProcessListener):
 
     def _play(self, proc):
         if not proc.is_playing():
-            self._executor.submit(proc.play)
+            future = self._executor.submit(proc.play)
+            for i in range(0, 100):
+                if future.running():
+                    return
+            if future.cancel():
+                raise PlayError("Couldn't play the process, probably out of workers")
 
 
 _DEFAULT_PROCMAN = None

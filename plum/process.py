@@ -585,6 +585,9 @@ class Process(object):
     def remove_process_listener(self, listener):
         self.__event_helper.remove_listener(listener)
 
+    def listen_scope(self, listener):
+        return ListenContext(self, listener)
+
     @protected
     def set_logger(self, logger):
         self._logger = logger
@@ -796,11 +799,13 @@ class Process(object):
                 pass
 
             try:
-                wait_on = self.create_wait_on(bundle[self.BundleKeys.WAITING_ON.value])
-                callback = self._get_wait_on_callback_fn(bundle)
-                self._set_wait(wait_on, callback)
+                wait_bundle = bundle[self.BundleKeys.WAITING_ON.value]
             except KeyError:
                 pass  # There's no wait_on
+            else:
+                wait_on = self.create_wait_on(wait_bundle)
+                callback = self._get_wait_on_callback_fn(bundle)
+                self._set_wait(wait_on, callback)
 
     def _get_wait_on_callback_fn(self, bundle):
         """
@@ -922,9 +927,12 @@ class Process(object):
             self._state = ProcessState.WAITING
 
         try:
-            self._wait.on.clear()
             with _Unlock(self.__state_lock):
-                self._wait.on.wait()
+                if self.__interrupt_action_protect is None:
+                    self._wait.on.wait()
+                else:
+                    raise Interrupted()
+
             if self._wait.callback is None:
                 self._next_transition = self._perform_finish
             else:
@@ -1130,3 +1138,26 @@ def load(bundle):
     class_name = bundle[Process.BundleKeys.CLASS_NAME.value]
     proc_class = bundle.get_class_loader().load_class(class_name)
     return proc_class.load(bundle)
+
+
+class ListenContext(object):
+    """
+    A context manager for listening to the Process.
+    
+    A typical usage would be:
+    with ListenContext(producer, listener):
+        # Producer generates messages that the listener gets
+        pass
+    """
+
+    def __init__(self, producer, *args, **kwargs):
+        self._producer = producer
+        self._args = args
+        self._kwargs = kwargs
+
+    def __enter__(self):
+        self._producer.add_process_listener(*self._args, **self._kwargs)
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self._producer.remove_process_listener(*self._args, **self._kwargs)

@@ -115,7 +115,7 @@ class TestStatusProvider(TestCase):
             procs.append(WaitForSignalProcess.new())
         for p in procs:
             self.manager.start(p)
-        wait_until(procs, ProcessState.WAITING)
+        self.assertTrue(wait_until(procs, ProcessState.WAITING, timeout=2.))
 
         procs_dict = status_decode(self._send_and_get())[status.PROCS_KEY]
         self.assertEqual(len(procs_dict), len(procs))
@@ -128,7 +128,7 @@ class TestStatusProvider(TestCase):
         self.assertSetEqual(playing, {True})
 
         self.assertTrue(
-            self.manager.abort_all(timeout=10),
+            self.manager.abort_all(timeout=5.),
             "Couldn't abort all processes in timeout")
 
         response = status_decode(self._send_and_get())

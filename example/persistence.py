@@ -2,7 +2,7 @@ import time
 import threading
 from plum.process import Process
 from plum.util import override
-from plum.wait import WaitOn
+from plum.wait import WaitOn, WaitEvent, Interrupted
 
 
 class WaitUntil(WaitOn):
@@ -13,27 +13,36 @@ class WaitUntil(WaitOn):
         super(WaitUntil, self).__init__()
 
         self._end_time = time.time() + wait_for
-        self._timer = threading.Timer(wait_for, self._timeout)
-        self._timer.start()
+        self._timeout = WaitEvent()
+
+    @override
+    def wait(self, timeout=None):
+        wait_time = self._end_time - time.time()
+
+        if timeout is not None and timeout < wait_time:
+            wait_time = timeout
+            will_timeout = True
+        else:
+            will_timeout = False
+
+        self._timeout.wait(wait_time)
+        return not will_timeout
+
+    @override
+    def interrupt(self):
+        self._timeout.interrupt()
 
     @override
     def load_instance_state(self, saved_state):
         super(WaitUntil, self).load_instance_state(saved_state)
 
         self._end_time = saved_state[self.END_TIME]
-        self._timer = threading.Timer(
-            time.time() - self._end_time, self._timeout)
-        self._timer.start()
+        self._timeout = WaitEvent()
 
     @override
     def save_instance_state(self, out_state):
         super(WaitUntil, self).save_instance_state(out_state)
         out_state[self.END_TIME] = self._end_time
-
-    def _timeout(self):
-        self._timer.join()
-        self._timer = None
-        self.done(True)
 
 
 class Add(Process):
@@ -43,8 +52,8 @@ class Add(Process):
         spec.input('b', default=0)
         spec.output('value')
 
-    def __init__(self):
-        super(Add, self).__init__()
+    def __init__(self, inputs, pid, logger=None):
+        super(Add, self).__init__(inputs, pid, logger)
         self._a = None
         self._b = None
 
@@ -60,6 +69,3 @@ class Add(Process):
 
 if __name__ == '__main__':
     Add.run()
-
-
-
