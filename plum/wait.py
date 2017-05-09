@@ -1,19 +1,14 @@
 # -*- coding: utf-8 -*-
 
+import logging
 import threading
 from abc import ABCMeta, abstractmethod
-import logging
 
-from plum.persistence.bundle import Bundle
-from plum.util import fullname, protected, override
-from plum.exceptions import Unsupported
+from plum.exceptions import Unsupported, Interrupted
 from plum.util import Savable
+from plum.util import fullname, protected, override
 
 _LOGGER = logging.getLogger(__name__)
-
-
-class Interrupted(Exception):
-    pass
 
 
 class WaitException(Exception):

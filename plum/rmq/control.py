@@ -100,7 +100,7 @@ class ProcessControlPublisher(object):
 
 class ProcessControlSubscriber(Subscriber):
     def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
-                 decoder=action_decode, process_manager=None, response_encoder=json.dumps):
+                 decoder=action_decode, process_controller=None, response_encoder=json.dumps):
         """
         Subscribes and listens for process control messages and acts on them
         by calling the corresponding methods of the process manager.
@@ -108,12 +108,12 @@ class ProcessControlSubscriber(Subscriber):
         :param connection: The RMQ connection object
         :param exchange: The name of the exchange to use
         :param decoder:
-        :param process_manager: The process manager running the processes
+        :param process_controller: The process controller running the processes
             that are being controlled.
-        :type process_manager: :class:`plum.process_manager.ProcessManager`
+        :type process_controller: :class:`plum.process_controller.ProcessController`
         """
         self._decode = decoder
-        self._manager = process_manager
+        self._controller = process_controller
         self._response_encode = response_encoder
         self._stopping = False
         self._last_correlation_id = None
@@ -142,8 +142,8 @@ class ProcessControlSubscriber(Subscriber):
     def stop(self):
         self._stopping = True
 
-    def set_process_manager(self, manager):
-        self._manager = manager
+    def set_process_controller(self, controller):
+        self._controller = controller
 
     def _on_control(self, ch, method, props, body):
         d = self._decode(body)
@@ -151,13 +151,13 @@ class ProcessControlSubscriber(Subscriber):
         intent = d['intent']
         try:
             if intent == Action.PLAY:
-                self._manager.play(pid)
+                self._controller.play(pid)
                 result = 'PLAYED'
             elif intent == Action.PAUSE:
-                self._manager.pause(pid)
+                self._controller.pause(pid, timeout=0.)
                 result = 'PAUSING'
             elif intent == Action.ABORT:
-                self._manager.abort(pid, d.get('msg', None), timeout=0)
+                self._controller.abort(pid, d.get('msg', None), timeout=0.)
                 result = 'ABORTING'
             else:
                 raise RuntimeError("Unknown intent")

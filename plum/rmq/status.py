@@ -110,14 +110,15 @@ class ProcessStatusRequester(object):
 
 class ProcessStatusSubscriber(Subscriber):
     """
-    This class listens for messages asking for a status update on the processes
-    currently being managed by a process manager and responds accordingly.
+    This class listens for messages asking for a status update from a group of 
+    processes.
     """
 
-    def __init__(self, connection, process_manager=None,
+    def __init__(self, connection, process_controller=None,
                  exchange=Defaults.STATUS_REQUEST_EXCHANGE,
                  decoder=status_request_decode, encoder=status_encode):
-        self._manager = process_manager
+
+        self._controller = process_controller
         self._decode = decoder
         self._encode = encoder
         self._stopping = False
@@ -129,8 +130,14 @@ class ProcessStatusSubscriber(Subscriber):
         self._channel.queue_bind(exchange=exchange, queue=result.method.queue)
         self._channel.basic_consume(self._on_request, queue=result.method.queue)
 
-    def set_process_manager(self, manager):
-        self._manager = manager
+    def set_process_controller(self, controller):
+        """
+        Set the process controller that is controlling the processes this 
+        subscriber provides status updates for.
+        
+        :param controller: The controller
+        """
+        self._controller = controller
 
     @override
     def start(self, poll_time=1.0):
@@ -156,7 +163,7 @@ class ProcessStatusSubscriber(Subscriber):
         # d = self._decode(body)
 
         proc_status = {}
-        for p in self._manager.get_processes():
+        for p in self._controller.get_processes():
             proc_status[p.pid] = self._get_status(p)
 
         response = {PROCS_KEY: proc_status}

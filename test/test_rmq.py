@@ -14,7 +14,7 @@ import unittest
 import uuid
 import warnings
 
-from plum.process_manager import ProcessManager
+from plum.process_controller import ProcessController
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.test_utils import TEST_PROCESSES
 from test.util import TestCase
@@ -36,22 +36,23 @@ class TestTaskControllerAndRunner(TestCase):
         except pika.exceptions.ConnectionClosed:
             self.fail("Couldn't open connection.  Make sure _rmq server is running")
 
-        self.procman = ProcessManager()
+        self.controller = ProcessController()
         queue = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
         self.publisher = ProcessLaunchPublisher(self._connection, queue=queue)
         self.subscriber = ProcessLaunchSubscriber(
-            self._connection, queue=queue, process_manager=self.procman)
+            self._connection, queue=queue, process_controller=self.controller)
 
     def tearDown(self):
         self._connection.close()
-        num_procs = self.procman.get_num_processes()
+        num_procs = self.controller.get_num_processes()
         if num_procs != 0:
             warnings.warn(
                 "Process manager is still running '{}' processes".format(
                     num_procs))
 
         # Kill any still running processes
-        self.assertTrue(self.procman.abort_all(timeout=10.), "Failed to abort all processes")
+        self.controller.abort_all(timeout=10.)
+        self.assertEqual(self.controller.get_num_processes(), 0, "Failed to abort all processes")
 
     def test_launch(self):
         class RanLogger(ProcessMonitorListener):

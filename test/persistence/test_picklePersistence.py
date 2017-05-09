@@ -37,17 +37,12 @@ class TestPicklePersistence(TestCase):
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
-        future = self.procman.start(proc)
+        future = self.procman.play(proc)
 
         # Check the file exists
         self.assertTrue(os.path.isfile(save_path))
 
-        try:
-            self.assertTrue(self.procman.abort(proc.pid, timeout=2.))
-        except AssertionError:
-            # Already finished
-            pass
-        self.assertTrue(future.wait(timeout=5.))
+        self.assertTrue(future.abort(timeout=2.))
 
     def test_on_finishing_process(self):
         proc = ProcessWithCheckpoint.new()
@@ -85,7 +80,7 @@ class TestPicklePersistence(TestCase):
     def test_persist_twice(self):
         proc = WaitForSignalProcess.new()
         self.pickle_persistence.persist_process(proc)
-        future = self.procman.start(proc)
+        future = self.procman.play(proc)
 
         # Try persisting the process again using another persistence manager
         try:
@@ -93,8 +88,7 @@ class TestPicklePersistence(TestCase):
         except LockError:
             pass
 
-        proc.abort()
-        self.assertTrue(future.wait(timeout=5.))
+        self.assertTrue(proc.abort(timeout=1.))
 
     def _empty_directory(self):
         import shutil
