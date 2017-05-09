@@ -64,7 +64,7 @@ class WaitForSignalProcess(Process):
         pass
 
     def continue_(self):
-        self.get_waiting_on().continue_()
+        self.get_waiting_on().open()
 
 
 class EventsTesterMixin(object):
@@ -85,8 +85,8 @@ class EventsTesterMixin(object):
         self.__class__.called_events = []
 
     @override
-    def on_create(self, bundle):
-        super(EventsTesterMixin, self).on_create(bundle)
+    def on_create(self):
+        super(EventsTesterMixin, self).on_create()
         self.called('create')
 
     @override
@@ -101,8 +101,8 @@ class EventsTesterMixin(object):
         self.called('emitted')
 
     @override
-    def on_wait(self):
-        super(EventsTesterMixin, self).on_wait()
+    def on_wait(self, wait_on):
+        super(EventsTesterMixin, self).on_wait(wait_on)
         self.called('wait')
 
     @override

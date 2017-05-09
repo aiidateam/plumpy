@@ -16,3 +16,7 @@ class LockError(Exception):
 
 class ProcessFailed(Exception):
     pass
+
+
+class Interrupted(Exception):
+    pass

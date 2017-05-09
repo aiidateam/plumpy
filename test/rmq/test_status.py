@@ -10,9 +10,8 @@ try:
     _HAS_PIKA = True
 except ImportError:
     _HAS_PIKA = False
-import json
 import uuid
-from plum.process_manager import ProcessManager
+from plum.process_controller import ProcessController
 from plum.test_utils import WaitForSignalProcess
 from plum.process import ProcessState
 from plum.wait_ons import wait_until
@@ -33,20 +32,22 @@ class TestStatusRequesterAndProvider(TestCase):
 
         exchange = "{}.{}.status_request".format(self.__class__.__name__, uuid.uuid4())
         self.requester = ProcessStatusRequester(self._connection, exchange=exchange)
-        self.manager = ProcessManager()
+        self.controller = ProcessController()
         self.provider = ProcessStatusSubscriber(
-            self._connection, process_manager=self.manager, exchange=exchange)
+            self._connection, exchange=exchange, process_controller=self.controller)
 
     def tearDown(self):
-        self.assertTrue(self.manager.abort_all(timeout=10.), "Failed to abort all processes")
+        self.controller.remove_all(timeout=10.)
+        self.assertEqual(self.controller.get_num_processes(), 0, "Failed to remove all processes")
         super(TestStatusRequesterAndProvider, self).tearDown()
         self._connection.close()
 
     def test_request(self):
         procs = []
         for i in range(0, 10):
-            procs.append(WaitForSignalProcess.new())
-            self.manager.start(procs[-1])
+            p = WaitForSignalProcess.new()
+            procs.append(p)
+            self.controller.insert_and_play(p)
 
         responses = self._send_request_poll_response(0.2)
         self.assertEqual(len(responses), 1)
@@ -54,10 +55,8 @@ class TestStatusRequesterAndProvider(TestCase):
         self.assertEqual(len(procs_info), len(procs))
         self.assertSetEqual(set(procs_info.keys()), {p.pid for p in procs})
 
-        self.assertTrue(
-            self.manager.abort_all(timeout=10),
-            "Failed to abort processes within timeout"
-        )
+        self.controller.remove_all(timeout=10.)
+        self.assertEqual(self.controller.get_num_processes(), 0, "Failed to abort all processes")
 
         responses = self._send_request_poll_response(0.2)
         self.assertEqual(len(responses), 1)
@@ -94,13 +93,14 @@ class TestStatusProvider(TestCase):
         self.channel.basic_consume(
             self._on_response, no_ack=True, queue=self.response_queue)
 
-        self.manager = ProcessManager()
+        self.controller = ProcessController()
         self.provider = ProcessStatusSubscriber(
             self._connection, exchange=self.request_exchange,
-            process_manager=self.manager)
+            process_controller=self.controller)
 
     def tearDown(self):
-        self.assertTrue(self.manager.abort_all(timeout=10.), "Failed to abort all processes")
+        self.controller.abort_all(timeout=10.)
+        self.assertEqual(self.controller.get_num_processes(), 0, "Failed to abort all processes")
         super(TestStatusProvider, self).tearDown()
         self.channel.close()
         self._connection.close()
@@ -112,9 +112,10 @@ class TestStatusProvider(TestCase):
     def test_status(self):
         procs = []
         for i in range(0, 20):
-            procs.append(WaitForSignalProcess.new())
-        for p in procs:
-            self.manager.start(p)
+            p = WaitForSignalProcess.new()
+            procs.append(p)
+            self.controller.insert_and_play(p)
+
         self.assertTrue(wait_until(procs, ProcessState.WAITING, timeout=2.))
 
         procs_dict = status_decode(self._send_and_get())[status.PROCS_KEY]
@@ -128,8 +129,10 @@ class TestStatusProvider(TestCase):
         self.assertSetEqual(playing, {True})
 
         self.assertTrue(
-            self.manager.abort_all(timeout=5.),
+            self.controller.abort_all(timeout=5.),
             "Couldn't abort all processes in timeout")
+
+        self.controller.remove_all()
 
         response = status_decode(self._send_and_get())
         self.assertEqual(len(response[status.PROCS_KEY]), 0)

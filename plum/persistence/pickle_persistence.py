@@ -249,7 +249,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         self._save_noraise(process)
 
     @override
-    def on_process_finish(self, process):
+    def on_process_stop(self, process):
         self._save_noraise(process)
         try:
             self._release_process(process.pid, self.finished_directory)

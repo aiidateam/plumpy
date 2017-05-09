@@ -2,7 +2,8 @@ import time
 import threading
 from plum.process import Process
 from plum.util import override
-from plum.wait import WaitOn, WaitEvent, Interrupted
+from plum.wait import WaitOn, WaitEvent
+from plum.exceptions import Interrupted
 
 
 class WaitUntil(WaitOn):

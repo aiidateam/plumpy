@@ -4,7 +4,8 @@ import re
 import threading
 from plum.process_monitor import ProcessMonitorListener, MONITOR
 from plum.util import override, protected, ListenContext
-from plum.wait import WaitOn, Unsavable, Interrupted, WaitEvent
+from plum.wait import WaitOn, Unsavable, WaitEvent
+from plum.exceptions import Interrupted
 
 _LOGGER = logging.getLogger(__name__)
 

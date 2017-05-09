@@ -5,11 +5,11 @@ import time
 import threading
 from collections import Sequence
 from plum.persistence.bundle import Bundle
-from plum.wait import WaitOn, Unsavable, Interrupted, WaitException, create_from, WaitEvent, WaitOnEvent
+from plum.wait import WaitOn, Unsavable, WaitException, create_from, WaitEvent, WaitOnEvent
 from plum.util import override
 from plum.process_listener import ProcessListener
 from plum.process import ProcessState
-from plum.exceptions import TimeoutError
+from plum.exceptions import TimeoutError, Interrupted
 
 
 class Checkpoint(WaitOn):
@@ -135,9 +135,12 @@ class WaitOnProcessState(WaitOn, Unsavable, ProcessListener):
         self._target_state = target_state
         self._wait_outcome = None
         self._state_event = WaitOnEvent()
+        self._interrupted = False
 
     @override
     def wait(self, timeout=None):
+        self._interrupted = False
+
         self._wait_outcome = None
         with self._proc.listen_scope(self):
             state = self._proc.state
@@ -150,6 +153,9 @@ class WaitOnProcessState(WaitOn, Unsavable, ProcessListener):
                     "Target state '{}' is unreachable from current state "
                     "'{}'".format(self._target_state, state)
                 )
+
+            if self._interrupted:
+                raise Interrupted()
 
             if not self._state_event.wait(timeout):
                 # Timed-out
@@ -286,41 +292,26 @@ def wait_until_stopped(proc, timeout=None):
     return wait_until(proc, ProcessState.STOPPED, timeout)
 
 
-class WaitRegion(object):
-    """
-    A WaitRegion is a context that will not exit until the wait on has finished
-    or the (optional) timeout has been reached in which case an TimeoutError is
-    raised.
-    """
-
-    def __init__(self, wait_on, timeout=None):
-        self._wait_on = wait_on
-        self._timeout = timeout
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if not self._wait_on.wait(self._timeout):
-            raise TimeoutError()
-
-
 class Barrier(WaitOn):
     def __init__(self):
         super(Barrier, self).__init__()
         self._barrier = threading.Event()
-        self._blocking = True
+        self._is_open = False
 
     @override
     def wait(self, timeout=None):
+        if self._is_open:
+            return True
+
+        self._barrier.clear()
         if not self._barrier.wait(timeout):
             return False
+
+        if self._is_open:
+            return True
         else:
-            if self._blocking:
-                # Must have been interrupted
-                raise Interrupted()
-            else:
-                return True
+            # Must have been interrupted
+            raise Interrupted()
 
     @override
     def interrupt(self):
@@ -329,14 +320,18 @@ class Barrier(WaitOn):
     @override
     def save_instance_state(self, out_state):
         super(Barrier, self).save_instance_state(out_state)
-        out_state['blocking'] = self._blocking
+        out_state['is_open'] = self._is_open
 
     @override
     def load_instance_state(self, saved_state):
         super(Barrier, self).load_instance_state(saved_state)
         self._barrier = threading.Event()
-        self._blocking = saved_state['blocking']
+        self._is_open = saved_state['is_open']
 
-    def continue_(self):
-        self._blocking = False
+    def open(self):
+        self._is_open = True
+        self._barrier.set()
+
+    def close(self):
+        self._is_open = False
         self._barrier.set()

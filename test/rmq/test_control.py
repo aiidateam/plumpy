@@ -5,7 +5,7 @@ import pika
 import pika.exceptions
 
 from plum.process import ProcessState
-from plum.process_manager import ProcessManager
+from plum.process_controller import ProcessController
 from plum.rmq.control import ProcessControlPublisher, ProcessControlSubscriber
 from plum.test_utils import WaitForSignalProcess
 from plum.rmq.util import SubscriberThread
@@ -20,7 +20,7 @@ class TestControl(TestCase):
         super(TestControl, self).setUp()
 
         self._connection = self._create_connection()
-        self.procman = ProcessManager()
+        self.controller = ProcessController()
         self.exchange = "{}.{}.control".format(self.__class__, uuid.uuid4())
         self.publisher = ProcessControlPublisher(self._connection, exchange=self.exchange)
 
@@ -31,7 +31,8 @@ class TestControl(TestCase):
         self.subscriber_thread.wait_till_started()
 
     def tearDown(self):
-        self.procman.abort_all(timeout=10.)
+        self.controller.remove_all(timeout=10.)
+        self.assertEqual(self.controller.get_num_processes(), 0, "Failed to abort all processes")
         super(TestControl, self).tearDown()
         self.subscriber_thread.stop()
         self.subscriber_thread.join()
@@ -40,7 +41,7 @@ class TestControl(TestCase):
     def test_pause(self):
         # Create the process and wait until it is waiting
         p = WaitForSignalProcess.new()
-        self.procman.start(p)
+        self.controller.insert_and_play(p)
         wait_until(p, ProcessState.WAITING)
         self.assertTrue(p.is_playing())
 
@@ -51,10 +52,13 @@ class TestControl(TestCase):
     def test_pause_play(self):
         # Create the process and wait until it is waiting
         p = WaitForSignalProcess.new()
-        self.procman.start(p)
+
+        # Play
+        self.controller.insert_and_play(p)
         self.assertTrue(wait_until(p, ProcessState.WAITING, 1))
         self.assertTrue(p.is_playing())
 
+        # Pause
         # Send a message asking the process to pause
         self.assertIsNotNone(self.publisher.pause(p.pid, timeout=5.))
         self.assertFalse(p.is_playing())
@@ -66,7 +70,7 @@ class TestControl(TestCase):
     def test_abort(self):
         # Create the process and wait until it is waiting
         p = WaitForSignalProcess.new()
-        self.procman.start(p)
+        self.controller.insert_and_play(p)
         self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
         self.assertTrue(p.is_playing())
 
@@ -81,4 +85,4 @@ class TestControl(TestCase):
         return pika.BlockingConnection()
 
     def _create_control_subscriber(self, connection):
-        return ProcessControlSubscriber(connection, exchange=self.exchange, process_manager=self.procman)
+        return ProcessControlSubscriber(connection, exchange=self.exchange, process_controller=self.controller)

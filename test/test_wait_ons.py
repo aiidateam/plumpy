@@ -2,7 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 from util import TestCase
 from plum.process import ProcessState
-from plum.wait import Interrupted
+from plum.exceptions import Interrupted
 from plum.wait_ons import WaitOnProcessState, wait_until
 from plum.test_utils import WaitForSignalProcess, DummyProcess
 from plum.process_manager import ProcessManager
@@ -14,7 +14,8 @@ class TestWaitOnProcessStateEvent(TestCase):
         self.procman = ProcessManager()
 
     def tearDown(self):
-        self.assertTrue(self.procman.abort_all(timeout=2.))
+        self.procman.abort_all(timeout=10.)
+        self.assertEqual(self.procman.get_num_processes(), 0, "Failed to abort all processes")
 
     def test_already_in_state(self):
         p = DummyProcess.new()
@@ -39,7 +40,7 @@ class TestWaitOnProcessStateEvent(TestCase):
         waiton = WaitOnProcessState(p, ProcessState.WAITING)
         future = tp.submit(waiton.wait)
 
-        self.procman.start(p)
+        self.procman.play(p)
         self.assertTrue(future.result(timeout=2.))
         self.assertTrue(p.abort(timeout=2.))
 
@@ -52,9 +53,9 @@ class TestWaitOnProcessStateEvent(TestCase):
         while not future.running():
             pass
 
-        waiton.interrupt()
         with self.assertRaises(Interrupted):
-            future.result(timeout=1.)
+            waiton.interrupt()
+            future.result(timeout=2.)
 
     def test_interrupt_not_waiting(self):
         """
@@ -66,5 +67,5 @@ class TestWaitOnProcessStateEvent(TestCase):
 
     def test_wait_until(self):
         p = WaitForSignalProcess.new()
-        self.procman.start(p)
+        self.procman.play(p)
         self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=1.))

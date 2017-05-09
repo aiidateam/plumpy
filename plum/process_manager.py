@@ -94,7 +94,7 @@ class Future(ProcessListener):
         return self._process.abort(msg, timeout)
 
     def play(self):
-        return self._procman.play(self._process.pid)
+        return self._procman.play(self._process)
 
     def pause(self, timeout):
         return self._process.pause(timeout)
@@ -149,9 +149,9 @@ class ProcessManager(ProcessListener):
         :return: A :class:`Future` representing the execution of the process
         :rtype: :class:`Future`
         """
-        return self.start(proc_class.new(inputs, pid, logger))
+        return self.play(proc_class.new(inputs, pid, logger))
 
-    def start(self, proc):
+    def play(self, proc):
         """
         Start an existing process.
 
@@ -171,31 +171,28 @@ class ProcessManager(ProcessListener):
     def has_process(self, pid):
         return pid in self._processes
 
-    def play(self, pid):
-        try:
-            self._play(self._processes[pid])
-        except KeyError:
-            raise ValueError("Unknown pid")
-
-    def play_all(self):
-        for proc in self._processes.values():
-            self._play(proc)
-
     def pause(self, pid, timeout=None):
         try:
-            self._processes[pid].pause(timeout)
+            return self._processes[pid].pause(timeout)
         except KeyError:
             raise ValueError("Unknown pid")
 
     def pause_all(self, timeout=None):
         """
-        Pause all processes.  This is a blocking call and will wait until they
-        are all paused before returning.
+        Pause all processes.
         """
-        result = True
-        for proc in self._processes.itervalues():
-            result &= proc.pause(timeout=timeout)
-        return result
+        num_paused = 0
+
+        time_left = timeout
+        t0 = time.time()
+        for proc in self._processes.values():
+            if proc.pause(timeout=time_left):
+                num_paused += 1
+
+            if time_left is not None:
+                time_left = timeout - (time.time() - t0)
+
+        return num_paused
 
     def abort(self, pid, msg=None, timeout=None):
         """
@@ -212,35 +209,30 @@ class ProcessManager(ProcessListener):
             raise ValueError("Unknown pid")
 
     def abort_all(self, msg=None, timeout=None):
-        result = True
+        num_aborted = 0
+
         time_left = timeout
         t0 = time.time()
-        for pid in self._processes.keys():
+        for proc in self._processes.values():
             try:
-                result &= self.abort(pid, msg, time_left)
+                if proc.abort(msg, time_left):
+                    num_aborted += 1
             except AssertionError:
                 # This happens if the process is not playing
-                pass
-            except KeyError:
-                # Happens because the process has already terminated
                 pass
 
             if time_left is not None:
                 time_left = timeout - (time.time() - t0)
 
-        return result
+        return num_aborted
 
     def get_num_processes(self):
         return len(self._processes)
 
-    # region From ProcessListener
     @protected
     def on_process_done_playing(self, process):
-        if process.has_terminated():
-            process.remove_process_listener(self)
-            self._processes.pop(process.pid)
-
-    # endregion
+        process.remove_process_listener(self)
+        self._processes.pop(process.pid)
 
     def _play(self, proc):
         if not proc.is_playing():
@@ -248,6 +240,7 @@ class ProcessManager(ProcessListener):
             for i in range(0, 100):
                 if future.running():
                     return
+                time.sleep(0.01)
             if future.cancel():
                 raise PlayError("Couldn't play the process, probably out of workers")
 
@@ -275,4 +268,4 @@ def async(process, **inputs):
     else:
         raise ValueError("Process must be a process instance or class")
 
-    get_default_procman().start(to_play)
+    return get_default_procman().play(to_play)

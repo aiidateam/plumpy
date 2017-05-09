@@ -188,3 +188,22 @@ class Savable(object):
     @abstractmethod
     def load_instance_state(self, saved_state):
         pass
+
+
+class SavableWithClassloader(Savable):
+    def save_instance_state(self, out_state):
+        pass
+
+
+def load_with_classloader(bundle):
+    """
+    Load a process from a saved instance state
+
+    :param bundle: The saved instance state bundle
+    :return: The process instance
+    :rtype: :class:`Process`
+    """
+    # Get the class using the class loader and instantiate it
+    class_name = bundle['class_name']
+    proc_class = bundle.get_class_loader().load_class(class_name)
+    return proc_class.load(bundle)
