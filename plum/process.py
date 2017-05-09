@@ -172,7 +172,7 @@ class Process(object):
         if class_name != my_name:
             _LOGGER.warning(
                 "Loading class from a bundle that was created from a class with a different "
-                "name.  This class is '{}', bundle created by '{}'".format(class_name, my_name))
+                "name.  This class is '{}', bundle created by '{}'".format(my_name, class_name))
 
         inputs = bundle.get(Process.BundleKeys.INPUTS.value, None)
         pid = bundle[Process.BundleKeys.PID.value]
@@ -1027,6 +1027,8 @@ class Process(object):
                 self.logger.error(
                     "on_fail was not called\n"
                     "Hint: Did you forget to call the superclass method?")
+
+        self.logger.debug("Process {} failed with trace:\n{}".format(self.pid, traceback.format_exc()))
 
         self.__break = True
 

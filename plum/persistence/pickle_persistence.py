@@ -143,7 +143,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
             except BaseException as e:
                 LOGGER.warning(
                     "Failed to load checkpoint {} because of exception\n"
-                    "{}".format(f, e.message))
+                    "{}: {}".format(f, e.__class__.__name__, e.message))
 
         return checkpoints
 
@@ -222,7 +222,9 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
             self._clear(f)
             try:
                 pickle.dump(checkpoint, f)
-            except pickle.PickleError:
+            except BaseException as exception:
+                LOGGER.debug("Failed to save the pickle\n{}: {}\n"
+                             "Pickle contents: {}".format(type(exception), exception, checkpoint))
                 # Don't leave a half-baked pickle around
                 if path.isfile(filename):
                     os.remove(filename)
@@ -263,10 +265,6 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
             self._release_process(process.pid, self.failed_directory)
         except ValueError:
             pass
-
-    @override
-    def on_process_done_playing(self, process):
-        self._filelocks.pop(process.pid).release()
 
     # endregion
 
@@ -318,8 +316,9 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
     def _save_noraise(self, process):
         try:
             self.save(process)
-        except pickle.PicklingError:
-            LOGGER.error("Exception raised trying to pickle process (pid={})".format(process.pid))
+        except BaseException as exception:
+            LOGGER.error("Exception raised trying to pickle process (pid={})\n"
+                         "{}: {}".format(process.pid, type(exception), exception))
 
     def _clear(self, fileobj):
         """
