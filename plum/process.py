@@ -89,12 +89,9 @@ class Process(object):
         INPUTS = 'inputs'
         OUTPUTS = 'outputs'
         PID = 'pid'
-        WAITING_ON = 'waiting_on'
         STATE = 'state'
         FINISHED = 'finished'
         TERMINATED = 'terminated'
-        EXC_INFO = 'exc_info'
-        NEXT_TRANSITION = 'next_transition'
 
     @staticmethod
     def _is_wait_retval(retval):
