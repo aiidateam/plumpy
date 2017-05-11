@@ -5,13 +5,13 @@ from plum.process import ProcessState
 from plum.exceptions import Interrupted
 from plum.wait_ons import WaitOnProcessState, wait_until
 from plum.test_utils import WaitForSignalProcess, DummyProcess
-from plum.thread_executor import ThreadPoolExecutor
+from plum.thread_executor import ThreadExecutor
 
 
 class TestWaitOnProcessStateEvent(TestCase):
     def setUp(self):
         super(TestWaitOnProcessStateEvent, self).setUp()
-        self.executor = ThreadPoolExecutor()
+        self.executor = ThreadExecutor()
 
     def tearDown(self):
         self.executor.abort_all(timeout=10.)

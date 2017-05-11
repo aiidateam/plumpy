@@ -128,7 +128,7 @@ class PlayError(Exception):
     pass
 
 
-class ThreadPoolExecutor(ProcessListener):
+class ThreadExecutor(ProcessListener):
     """
     Used to launch processes on separate threads and monitor their progress
     """
@@ -251,11 +251,11 @@ _DEFAULT_PROCMAN = None
 def get_default_procman():
     """
     :return: The default process manager
-    :rtype: :class:`ThreadPoolExecutor`
+    :rtype: :class:`ThreadExecutor`
     """
     global _DEFAULT_PROCMAN
     if _DEFAULT_PROCMAN is None:
-        _DEFAULT_PROCMAN = ThreadPoolExecutor()
+        _DEFAULT_PROCMAN = ThreadExecutor()
     return _DEFAULT_PROCMAN
 
 

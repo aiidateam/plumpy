@@ -1,7 +1,7 @@
 from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.process_monitor import MONITOR
-from plum.thread_executor import ThreadPoolExecutor
+from plum.thread_executor import ThreadExecutor
 from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpoint, \
     DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, check_process_against_snapshots, \
     WaitForSignalProcess, Barrier
@@ -55,7 +55,7 @@ class TestProcess(TestCase):
         self.events_tester = ProcessListenerTester()
         self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
-        self.procman = ThreadPoolExecutor()
+        self.procman = ThreadExecutor()
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
@@ -399,7 +399,7 @@ class TestProcessEvents(TestCase):
         self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
 
-        self.procman = ThreadPoolExecutor()
+        self.procman = ThreadExecutor()
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
