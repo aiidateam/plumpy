@@ -2,7 +2,7 @@ from test.util import TestCase
 import time
 from plum.process import ProcessState
 from plum.process_monitor import MONITOR, ProcessMonitorListener
-from plum.process_manager import ProcessManager
+from plum.thread_executor import ThreadPoolExecutor
 from plum.test_utils import DummyProcess, WaitForSignalProcess
 from plum.wait_ons import wait_until, wait_until_stopped, WaitOnProcessState
 
@@ -10,7 +10,7 @@ from plum.wait_ons import wait_until, wait_until_stopped, WaitOnProcessState
 class TestProcessManager(TestCase):
     def setUp(self):
         self.assertEqual(len(MONITOR.get_pids()), 0)
-        self.procman = ProcessManager()
+        self.procman = ThreadPoolExecutor()
 
     def tearDown(self):
         self.procman.abort_all(timeout=10.)
@@ -40,7 +40,7 @@ class TestProcessManager(TestCase):
         self.assertFalse(p.has_finished())
 
         self.procman.play(p)
-        wait_until_stopped(p, timeout=1.)
+        self.assertTrue(p.wait(timeout=1.))
 
         self.assertTrue(p.has_terminated())
         self.assertTrue(p.has_finished())

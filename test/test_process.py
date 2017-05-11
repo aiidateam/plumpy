@@ -1,7 +1,7 @@
 from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.process_monitor import MONITOR
-from plum.process_manager import ProcessManager
+from plum.thread_executor import ThreadPoolExecutor
 from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpoint, \
     DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, check_process_against_snapshots, \
     WaitForSignalProcess, Barrier
@@ -55,7 +55,7 @@ class TestProcess(TestCase):
         self.events_tester = ProcessListenerTester()
         self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
-        self.procman = ProcessManager()
+        self.procman = ThreadPoolExecutor()
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
@@ -297,7 +297,7 @@ class TestProcess(TestCase):
     def test_exc_info(self):
         p = ExceptionProcess.new()
         try:
-            p.start()
+            p.play()
         except BaseException:
             import sys
             exc_info = sys.exc_info()
@@ -323,10 +323,6 @@ class TestProcess(TestCase):
         with self.assertRaises(RuntimeError):
             p.play()
 
-    def test_direct_instantiate(self):
-        with self.assertRaises(AssertionError):
-            DummyProcess(inputs={}, pid=None)
-
     def test_restart(self):
         p = _RestartProcess.new()
 
@@ -339,7 +335,7 @@ class TestProcess(TestCase):
         self.assertTrue(future.abort(timeout=2.))
 
         # Load a process from the saved state
-        p = _RestartProcess.load(bundle)
+        p = _RestartProcess.create_from(bundle)
         self.assertEqual(p.state, ProcessState.WAITING)
 
         # Now play it
@@ -403,7 +399,7 @@ class TestProcessEvents(TestCase):
         self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
 
-        self.procman = ProcessManager()
+        self.procman = ThreadPoolExecutor()
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)

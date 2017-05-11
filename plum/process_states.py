@@ -114,6 +114,8 @@ class Running(State):
             self._process._on_start()
         elif previous_state is ProcessState.WAITING:
             self._process._on_resume()
+        elif previous_state is ProcessState.RUNNING:
+            pass
         else:
             raise RuntimeError("Cannot enter RUNNING from '{}'".format(previous_state))
 
@@ -124,7 +126,15 @@ class Running(State):
 
         retval = self._exec_func(*self._args, **self._kwargs)
         if Running._is_wait_retval(retval):
-            return Waiting(self._process, retval[0], retval[1])
+            wait_on, callback = retval
+            # Check if we can continue straight away
+            if wait_on.wait(timeout=0):
+                if callback is None:
+                    return Stopped(self._process)
+                else:
+                    return Running(self._process, callback, wait_on)
+            else:
+                return Waiting(self._process, wait_on, callback)
         else:
             return Stopped(self._process)
 

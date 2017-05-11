@@ -1,5 +1,5 @@
 import os.path
-from plum.process_manager import ProcessManager
+from plum.thread_executor import ThreadPoolExecutor
 from plum.persistence.pickle_persistence import PicklePersistence
 from plum.test_utils import ProcessWithCheckpoint, WaitForSignalProcess
 from plum.exceptions import LockError
@@ -14,7 +14,7 @@ class TestPicklePersistence(TestCase):
 
         self.store_dir = tempfile.mkdtemp()
         self.pickle_persistence = PicklePersistence(running_directory=self.store_dir)
-        self.procman = ProcessManager()
+        self.procman = ThreadPoolExecutor()
 
     def tearDown(self):
         super(TestPicklePersistence, self).tearDown()

@@ -1,7 +1,7 @@
 from test.util import TestCase
 import plum.test_utils
 import plum.stack as stack
-from plum.process_manager import async
+from plum.thread_executor import async
 
 
 class TestStack(TestCase):

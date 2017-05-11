@@ -174,8 +174,8 @@ class Savable(object):
         Create the wait on from a save instance state.
 
         :param saved_state: The saved instance state
+        :type saved_state: :class:`plum.persistence.Bundle`
         :return: The wait on with its state as it was when it was saved
-        :rtype: This class type
         """
         obj = cls.__new__(cls)
         obj.load_instance_state(saved_state)
@@ -206,4 +206,4 @@ def load_with_classloader(bundle):
     # Get the class using the class loader and instantiate it
     class_name = bundle['class_name']
     proc_class = bundle.get_class_loader().load_class(class_name)
-    return proc_class.load(bundle)
+    return proc_class.create_from(bundle)

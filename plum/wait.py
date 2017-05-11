@@ -124,6 +124,51 @@ class WaitOnEvent(WaitOn):
         self._wait_event = WaitEvent()
 
 
+class WaitOnOneOff(WaitOn):
+    """
+    Wait on an event that happens once.  After it has happened, subsequent calls
+    to wait() will return True immediately.
+    """
+
+    def __init__(self):
+        super(WaitOnOneOff, self).__init__()
+        self._occurred = False
+        self._timeout = threading.Event()
+
+    def wait(self, timeout=None):
+        if not self._timeout.wait(timeout):
+            return False
+        else:
+            if self._occurred:
+                return True
+            else:
+                self._timeout.clear()
+                raise Interrupted()
+
+    def interrupt(self):
+        self._timeout.set()
+
+    def save_instance_state(self, out_state):
+        super(WaitOnOneOff, self).save_instance_state(out_state)
+        out_state['occurred'] = self._occurred
+
+    def load_instance_state(self, saved_state):
+        super(WaitOnOneOff, self).load_instance_state(saved_state)
+        self._occurred = saved_state['occurred']
+        if self._occurred:
+            self._timeout.set()
+
+    def has_occurred(self):
+        return self._occurred
+
+    def set(self):
+        """
+        Set the event as having occurred.
+        """
+        self._occurred = True
+        self._timeout.set()
+
+
 def create_from(bundle):
     """
     Load a WaitOn from a save instance state.

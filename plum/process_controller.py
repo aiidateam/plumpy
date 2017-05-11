@@ -1,5 +1,5 @@
 import time
-from plum.process_manager import ProcessManager
+from plum.thread_executor import ThreadPoolExecutor
 from plum.process_listener import ProcessListener
 
 
@@ -11,7 +11,7 @@ class ProcessController(ProcessListener):
             from the control of this class.
         """
         if executor is None:
-            self._executor = ProcessManager()
+            self._executor = ThreadPoolExecutor()
         else:
             self._executor = executor
 

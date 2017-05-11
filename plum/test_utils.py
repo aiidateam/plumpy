@@ -302,7 +302,7 @@ def check_process_against_snapshots(proc_class, snapshots):
     :rtype: bool
     """
     for i, info in zip(range(0, len(snapshots)), snapshots):
-        loaded = proc_class.load(info[1])
+        loaded = proc_class.create_from(info[1])
         ps = ProcessSaver(loaded)
         try:
             loaded.play()

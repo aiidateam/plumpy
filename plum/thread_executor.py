@@ -1,6 +1,6 @@
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor as PythonThreadPoolExecutor
 from plum.process import Process, ProcessListener
 from plum.util import protected
 from plum.exceptions import TimeoutError
@@ -128,7 +128,7 @@ class PlayError(Exception):
     pass
 
 
-class ProcessManager(ProcessListener):
+class ThreadPoolExecutor(ProcessListener):
     """
     Used to launch processes on separate threads and monitor their progress
     """
@@ -136,7 +136,7 @@ class ProcessManager(ProcessListener):
     def __init__(self, max_threads=1024):
         self._max_threads = max_threads
         self._processes = {}
-        self._executor = ThreadPoolExecutor(max_workers=self._max_threads)
+        self._executor = PythonThreadPoolExecutor(max_workers=self._max_threads)
 
     def launch(self, proc_class, inputs=None, pid=None, logger=None):
         """
@@ -251,11 +251,11 @@ _DEFAULT_PROCMAN = None
 def get_default_procman():
     """
     :return: The default process manager
-    :rtype: :class:`ProcessManager`
+    :rtype: :class:`ThreadPoolExecutor`
     """
     global _DEFAULT_PROCMAN
     if _DEFAULT_PROCMAN is None:
-        _DEFAULT_PROCMAN = ProcessManager()
+        _DEFAULT_PROCMAN = ThreadPoolExecutor()
     return _DEFAULT_PROCMAN
 
 
