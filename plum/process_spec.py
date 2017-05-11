@@ -16,10 +16,11 @@ class ProcessSpec(object):
 
     Every Process class has one of these.
     """
+    INPUT_PORT_TYPE = InputPort
+
     def __init__(self):
         self._inputs = {}
         self._outputs = {}
-        self._deterministic = None
         self._validator = None
         self._sealed = False
 
@@ -50,18 +51,18 @@ class ProcessSpec(object):
         if self.inputs:
             desc.append("Inputs")
             desc.append("======")
-            desc.extend([p.get_description() + "\n" for k, p in
+            desc.extend([p.get_description() for k, p in
                          sorted(self.inputs.iteritems(), key=lambda x: x[0])])
 
         if self.outputs:
             desc.append("Outputs")
             desc.append("=======")
-            desc.extend([p.get_description() + "\n" for k, p in
+            desc.extend([p.get_description() for k, p in
                          sorted(self.outputs.iteritems(), key=lambda x: x[0])])
 
         return "\n".join(desc)
 
-    # Inputs ##################################################################
+    # region Inputs
     @property
     def inputs(self):
         """
@@ -73,7 +74,10 @@ class ProcessSpec(object):
         return self._inputs
 
     def get_input(self, name):
-        return self._inputs[name]
+        try:
+            return self._inputs[name]
+        except KeyError:
+            raise ValueError("Unknown input '{}'".format(name))
 
     def get_dynamic_input(self):
         return self._inputs.get(DynamicInputPort.NAME, None)
@@ -88,7 +92,7 @@ class ProcessSpec(object):
         :param name: The name of the input.
         :param kwargs: The input port options.
         """
-        self.input_port(name, InputPort(name, **kwargs))
+        self.input_port(name, self.INPUT_PORT_TYPE(name, **kwargs))
 
     def dynamic_input(self, **kwargs):
         self.input_port(DynamicInputPort.NAME, DynamicInputPort(**kwargs))
@@ -119,9 +123,9 @@ class ProcessSpec(object):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._inputs.pop(name)
-    ###########################################################################
+    # endregion
 
-    # Outputs #################################################################
+    # region Outputs
     @property
     def outputs(self):
         return self._outputs
@@ -168,29 +172,7 @@ class ProcessSpec(object):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._outputs.pop(name)
-    ###########################################################################
-
-    def deterministic(self):
-        self.set_deterministic(True)
-
-    def not_deterministic(self):
-        self.set_deterministic(False)
-
-    def is_deterministic(self):
-        return self._deterministic
-
-    @protected
-    def set_deterministic(self, to):
-        assert not self.sealed, "Cannot change the spec after it is sealed"
-
-        if self._deterministic is False:
-            LOGGER.warn("A process spec that was not deterministic has been "
-                        "changed to be deterministic.  This may be ok if the "
-                        "caller knows for sure this is the case but a subclass "
-                        "may have set the flag because it is really not "
-                        "deterministic.")
-
-        self._deterministic = to
+    # end region
 
     def validator(self, fn):
         """

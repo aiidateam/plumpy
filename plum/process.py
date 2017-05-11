@@ -56,6 +56,8 @@ class Process(object):
 
     The possible transitions between states are::
 
+                              _(reenter)_
+                              |         |
         CREATED---on_start,on_run-->RUNNING---on_finish,on_stop-->STOPPED
                                     |     ^               |         ^
                                on_wait on_resume,on_run   |   on_abort,on_stop
@@ -182,8 +184,8 @@ class Process(object):
 
         spec_desc = cls.spec().get_description()
         if spec_desc:
-            desc.append("Specifications")
-            desc.append("==============")
+            desc.append("Specification")
+            desc.append("=============")
             desc.append(spec_desc)
 
         return "\n".join(desc)

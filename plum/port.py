@@ -6,6 +6,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class ValueSpec(object):
     """
     Specifications relating to a general input/output value including
@@ -57,14 +58,14 @@ class ValueSpec(object):
     def validate(self, value):
         if value is None:
             if self._required:
-                return False, "required value was not provided for '{}'".\
+                return False, "required value was not provided for '{}'". \
                     format(self.name)
         else:
             if self._valid_type is not None and \
                     not isinstance(value, self._valid_type):
                 msg = "value '{}' is not of the right type. " \
                       "Got '{}', expected '{}'".format(
-                            self.name, type(value), self._valid_type)
+                    self.name, type(value), self._valid_type)
                 return False, msg
 
         if self._validator is not None:
@@ -98,6 +99,7 @@ class InputPort(Port):
     """
     A simple input port for a value being received by a workflow.
     """
+
     @staticmethod
     def required_override(required, default):
         """
@@ -118,7 +120,7 @@ class InputPort(Port):
 
         if required is not InputPort.required_override(required, default):
             _LOGGER.info("the required attribute for the input port '{}' was overridden "
-                "because a default was specified".format(name))
+                         "because a default was specified".format(name))
 
         if default is not None:
             default_valid, msg = self.validate(default)
@@ -145,6 +147,7 @@ class InputGroupPort(InputPort):
     then each value is checked to meet the validation criteria rather than
     the whole input itself.
     """
+
     def __init__(self, name, valid_type=None, help=None, default=None,
                  required=False):
         # We have to set _valid_inner_type before calling the super constructor
