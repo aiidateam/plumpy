@@ -53,18 +53,35 @@ class ProcessWithCheckpoint(Process):
 
 
 class WaitForSignalProcess(Process):
-    def __init__(self, inputs, pid, logger=None):
+    BARRIER = 'barrier'
+
+    def __init__(self, inputs=None, pid=None, logger=None):
         super(WaitForSignalProcess, self).__init__(inputs, pid, logger)
+        self._barrier = Barrier()
+
+    def load_instance_state(self, saved_state, logger=None):
+        # Have to create the barrier before because create_wait_on will be called by
+        # the super call which returns out barrier
+        self._barrier = Barrier.create_from(saved_state[self.BARRIER])
+        super(WaitForSignalProcess, self).load_instance_state(saved_state, logger)
+
+    def save_instance_state(self, bundle):
+        super(WaitForSignalProcess, self).save_instance_state(bundle)
+        bundle[self.BARRIER] = Bundle()
+        self._barrier.save_instance_state(bundle[self.BARRIER])
 
     @override
     def _run(self):
-        return Barrier(), self.finish
+        return self._barrier, self.finish
 
     def finish(self, wait_on):
         pass
 
     def continue_(self):
-        self.get_waiting_on().open()
+        self._barrier.open()
+
+    def create_wait_on(self, saved_state, callback):
+        return self._barrier
 
 
 class EventsTesterMixin(object):

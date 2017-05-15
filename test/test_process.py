@@ -55,12 +55,11 @@ class TestProcess(TestCase):
         self.events_tester = ProcessListenerTester()
         self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
-        self.procman = ThreadExecutor()
+        self.executor = ThreadExecutor()
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
-        self.procman.abort_all(timeout=10.)
-        self.assertEqual(self.procman.get_num_processes(), 0, "Failed to abort all processes")
+        self.executor.shutdown()
         super(TestProcess, self).tearDown()
 
     def test_spec(self):
@@ -246,7 +245,7 @@ class TestProcess(TestCase):
 
     def test_wait_continue(self):
         p = WaitForSignalProcess.new()
-        self.procman.play(p)
+        self.executor.play(p)
         self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=1.))
         p.continue_()
         self.assertTrue(p.wait(timeout=2.))
@@ -256,7 +255,7 @@ class TestProcess(TestCase):
         p = WaitForSignalProcess.new()
 
         # Play the process and wait until it is waiting
-        self.procman.play(p)
+        self.executor.play(p)
 
         # Wait
         self.assertTrue(wait_until(p, ProcessState.WAITING, 1.))
@@ -276,7 +275,7 @@ class TestProcess(TestCase):
     def test_wait_pause_play_continue(self):
         p = WaitForSignalProcess.new()
 
-        fut = self.procman.play(p)
+        fut = self.executor.play(p)
 
         # Wait
         self.assertTrue(wait_until(p, ProcessState.WAITING, 1.))
@@ -326,7 +325,7 @@ class TestProcess(TestCase):
     def test_restart(self):
         p = _RestartProcess.new()
 
-        future = self.procman.play(p)
+        future = self.executor.play(p)
         self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
 
         # Save the state of the process
@@ -339,19 +338,19 @@ class TestProcess(TestCase):
         self.assertEqual(p.state, ProcessState.WAITING)
 
         # Now play it
-        future = self.procman.play(p)
+        future = self.executor.play(p)
         p.continue_()
         self.assertEqual(future.result(timeout=1.0), {'finished': True})
 
     def test_wait(self):
         p = DummyProcess.new()
         self.assertTrue(p.wait(timeout=2.), "Not running process didn't return from wait")
-        self.procman.play(p)
+        self.executor.play(p)
         self.assertTrue(p.wait(timeout=2.), "Process failed to return from wait when done")
 
     def test_wait_pause_play(self):
         p = WaitForSignalProcess.new()
-        self.procman.play(p)
+        self.executor.play(p)
 
         # Wait
         self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
@@ -360,7 +359,7 @@ class TestProcess(TestCase):
         self.assertTrue(p.pause(timeout=1.))
 
         # Play
-        self.procman.play(p)
+        self.executor.play(p)
         self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
 
     def test_pause_play(self):
@@ -372,6 +371,12 @@ class TestProcess(TestCase):
         self.assertTrue(p.pause(timeout=1.))
         p.play()
         self.assertEqual(p.state, ProcessState.STOPPED)
+
+    def test_play_terminated(self):
+        p = DummyProcess()
+        p.play()
+        self.assertTrue(p.has_terminated())
+        p.play()
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
@@ -399,12 +404,8 @@ class TestProcessEvents(TestCase):
         self.proc = DummyProcessWithOutput.new()
         self.proc.add_process_listener(self.events_tester)
 
-        self.procman = ThreadExecutor()
-
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
-        self.procman.abort_all(timeout=10.)
-        self.assertEqual(self.procman.get_num_processes(), 0, "Failed to abort all processes")
         super(TestProcessEvents, self).tearDown()
 
     def test_on_play(self):

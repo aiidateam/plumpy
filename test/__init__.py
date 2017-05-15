@@ -8,4 +8,5 @@ try:
 except OSError:
     pass
 print("Logging test to '{}'".format(testfile))
-logging.basicConfig(filename=testfile, level=logging.DEBUG)
+FORMAT = "[%(filename)s:%(lineno)s - %(funcName)s()] %(message)s"
+logging.basicConfig(filename=testfile, level=logging.DEBUG, format=FORMAT)

@@ -92,6 +92,7 @@ class Process(object):
         STATE = 'state'
         FINISHED = 'finished'
         TERMINATED = 'terminated'
+        WAIT_ON = 'wait_on'
 
     @staticmethod
     def _is_wait_retval(retval):
@@ -443,26 +444,27 @@ class Process(object):
         try:
             self._on_start_playing()
 
-            # Keep going until we run out of tasks
-            while True:
-                try:
-                    locked_save = False
-                    if self.state is not ProcessState.WAITING:
-                        self.__save_lock.acquire()
-                        locked_save = True
+            if not self.has_terminated():
+                # Keep going until we run out of tasks
+                while True:
+                    try:
+                        locked_save = False
+                        if self.state is not ProcessState.WAITING:
+                            self.__save_lock.acquire()
+                            locked_save = True
 
-                    if self.__interrupt_action is not None:
-                        raise Interrupted()  # Caught below
+                        if self.__interrupt_action is not None:
+                            raise Interrupted()  # Caught below
 
-                    next_state = self._execute_state()
-                    if next_state is None:
-                        break
+                        next_state = self._execute_state()
+                        if next_state is None:
+                            break
 
-                    self._set_state(next_state)
+                        self._set_state(next_state)
 
-                finally:
-                    if locked_save:
-                        self.__save_lock.release()
+                    finally:
+                        if locked_save:
+                            self.__save_lock.release()
 
         except Interrupted:
             self._perform_interrupt()
@@ -478,9 +480,9 @@ class Process(object):
 
     def pause(self, timeout=0.):
         """
-        Pause an playing process.  This can be called from another thread.
+        Pause a playing process.  This can be called from another thread.
         """
-        self.logger.info("Pausing process '{}'".format(self.pid))
+        self.log_with_pid(logging.INFO, "pausing")
 
         self._interrupt(_Interrupt.PAUSE)
         return self.wait(timeout)
@@ -497,7 +499,7 @@ class Process(object):
         :return: True if the process is aborted at the end of the function, False otherwise
         :rtype: bool
         """
-        self.logger.info("[abort] Aborting process '{}'".format(self.pid))
+        self.log_with_pid(logging.INFO, "aborting")
         if self.__play_lock.acquire(False):
             if not self.has_terminated():
                 # It's not currently running, we can abort
@@ -511,7 +513,7 @@ class Process(object):
             self._interrupt(_Interrupt.ABORT, msg)
             self.wait(timeout)
 
-        self.logger.info("[abort] aborted: '{}'".format(self.has_aborted()))
+        self.log_with_pid(logging.INFO, "aborted: '{}'".format(self.has_aborted()))
         return self.has_aborted()
 
     def wait(self, timeout=None):
@@ -521,7 +523,6 @@ class Process(object):
         :param timeout: The maximum time to wait, if None then waits indefinitely 
         :return: True if the process finished running, False if timed-out
         """
-        self.logger.info("waiting {}s for process '{}' to stop playing".format(timeout, self.pid))
         t0 = time.time()
         while self.is_playing():
             time.sleep(0.01)
@@ -544,24 +545,20 @@ class Process(object):
     def set_logger(self, logger):
         self.__logger = logger
 
+    @protected
+    def log_with_pid(self, level, msg):
+        self.logger.log(level, "{}: {}".format(self.pid, msg))
+
     # region Process messages
     # Make sure to call the superclass method if your override any of these
     @protected
     def on_playing(self):
-        self.__interrupt_action = None
         self.__event_helper.fire_event(ProcessListener.on_process_playing, self)
 
         self.__called = True
 
     @protected
     def on_done_playing(self):
-        self.__event_helper.fire_event(ProcessListener.on_process_done_playing, self)
-        if self.has_terminated():
-            # There will be no more messages so remove the listeners.  Otherwise we
-            # may continue to hold references to them and stop them being garbage
-            # collected
-            self.__event_helper.remove_all_listeners()
-
         self.__called = True
 
     @protected
@@ -754,6 +751,7 @@ class Process(object):
         self.__interrupt_abort_msg = None
 
         # While this is locked the process state cannot be saved
+
         self.__save_lock = threading.RLock()
 
         # Events and running
@@ -772,6 +770,13 @@ class Process(object):
         self._call_with_super_check(self.on_playing)
 
     def _on_stop_playing(self):
+        """
+        WARNING: No state changes should be made after this call.
+        """
+        MONITOR.deregister_process(self)
+        stack.pop(self)
+        self.__play_lock.release()
+
         try:
             self._call_with_super_check(self.on_done_playing)
         except BaseException:
@@ -780,10 +785,13 @@ class Process(object):
             if self.state != ProcessState.FAILED:
                 self._set_and_execute_state(Failed(self, sys.exc_info()))
                 raise
-        finally:
-            MONITOR.deregister_process(self)
-            stack.pop(self)
-            self.__play_lock.release()
+
+        self.__event_helper.fire_event(ProcessListener.on_process_done_playing, self)
+        if self.has_terminated():
+            # There will be no more messages so remove the listeners.  Otherwise we
+            # may continue to hold references to them and stop them being garbage
+            # collected
+            self.__event_helper.remove_all_listeners()
 
     def _on_create(self):
         self._call_with_super_check(self.on_create)
@@ -821,7 +829,7 @@ class Process(object):
         self.__event_helper.fire_event(ProcessListener.on_process_fail, self)
 
     def _perform_interrupt(self):
-        self.logger.debug("Performing interrupt on '{}'".format(self.pid))
+        self.log_with_pid(logging.DEBUG, "performing interrupt")
 
         if self.__interrupt_action is _Interrupt.ABORT:
             self._perform_abort(self.__interrupt_abort_msg)
@@ -835,13 +843,13 @@ class Process(object):
         self._set_and_execute_state(Stopped(self, abort=True, abort_msg=msg))
 
     def _interrupt(self, action, msg=None):
-        self.logger.info("Interrupting process '{}'".format(self.pid))
+        self.log_with_pid(logging.DEBUG, "interrupting process")
 
         self.__interrupt_action = action
         if action is _Interrupt.ABORT:
             self.__interrupt_abort_msg = msg
         elif msg is not None:
-            self.logger.warning("Interrupt message ignored because it is only used when aborting")
+            self.log_with_pid(logging.WARNING, "interrupt message ignored because it is only used when aborting")
 
         self._state.interrupt()
 

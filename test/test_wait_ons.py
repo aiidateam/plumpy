@@ -14,8 +14,7 @@ class TestWaitOnProcessStateEvent(TestCase):
         self.executor = ThreadExecutor()
 
     def tearDown(self):
-        self.executor.abort_all(timeout=10.)
-        self.assertEqual(self.executor.get_num_processes(), 0, "Failed to abort all processes")
+        self.executor.shutdown()
 
     def test_already_in_state(self):
         p = DummyProcess.new()

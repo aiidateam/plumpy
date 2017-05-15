@@ -1,4 +1,5 @@
 from enum import Enum
+import logging
 import traceback
 from plum.wait import WaitOn, Interrupted
 import plum.util as util
@@ -44,14 +45,14 @@ class State(object):
         return self.LABEL
 
     def enter(self, previous_state):
-        self._process.logger.debug("Entering state '{}'".format(self.label))
+        self._process.log_with_pid(logging.DEBUG, "entering state '{}'".format(self.label))
 
     def execute(self):
-        self._process.logger.debug("Executing state '{}'".format(self.label))
+        self._process.log_with_pid(logging.DEBUG, "executing state '{}'".format(self.label))
         return None
 
     def exit(self):
-        self._process.logger.debug("Exiting state '{}'".format(self.label))
+        self._process.log_with_pid(logging.DEBUG, "exiting state '{}'".format(self.label))
 
     def interrupt(self):
         pass
@@ -251,14 +252,19 @@ class Failed(State):
 
     def enter(self, previous_state):
         super(Failed, self).enter(previous_state)
-        self._process._on_fail(self._exc_info)
+        try:
+            self._process._on_fail(self._exc_info)
+        except BaseException:
+            import traceback
+            self._process.log_with_pid(
+                logging.ERROR, "exception entering failed state:\n{}".format(traceback.format_exc()))
 
     def save_instance_state(self, out_state):
         super(Failed, self).save_instance_state(out_state)
 
         exc_info = self._exc_info
         # Saving traceback can be problematic so don't bother, just store None
-        bundle['exc_info'] = (exc_info[0], exc_info[1], None)
+        out_state['exc_info'] = (exc_info[0], exc_info[1], None)
 
     def load_instance_state(self, process, saved_state):
         super(Failed, self).load_instance_state(process, saved_state)

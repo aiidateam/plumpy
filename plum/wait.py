@@ -32,6 +32,12 @@ class WaitOn(Savable):
 
     @abstractmethod
     def wait(self, timeout=None):
+        """
+        Wait for something.
+
+        :param timeout: The waiting timeout
+        :return: True if the something happened, False otherwise
+        """
         pass
 
     @abstractmethod
@@ -96,6 +102,14 @@ class WaitEvent(object):
         they will have True returned from the wait() call.
         """
         self._timeout.set()
+
+    def is_waiting(self):
+        if self._timeout.acquire(False):
+            # We managed to acquire, so not waiting
+            self._timeout.release()
+            return False
+        else:
+            return True
 
 
 class WaitOnEvent(WaitOn):

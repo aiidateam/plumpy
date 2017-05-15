@@ -17,6 +17,8 @@ class ProcessSpec(object):
     Every Process class has one of these.
     """
     INPUT_PORT_TYPE = InputPort
+    DYNAMIC_INPUT_PORT_TYPE = DynamicInputPort
+    INPUT_GROUP_PORT_TYPE = InputGroupPort
 
     def __init__(self):
         self._inputs = {}
@@ -95,7 +97,8 @@ class ProcessSpec(object):
         self.input_port(name, self.INPUT_PORT_TYPE(name, **kwargs))
 
     def dynamic_input(self, **kwargs):
-        self.input_port(DynamicInputPort.NAME, DynamicInputPort(**kwargs))
+        self.input_port(self.DYNAMIC_INPUT_PORT_TYPE.NAME,
+                        self.DYNAMIC_INPUT_PORT_TYPE(**kwargs))
 
     def no_dynamic_input(self):
         try:
@@ -107,7 +110,7 @@ class ProcessSpec(object):
         return self.has_input(DynamicInputPort.NAME)
 
     def input_group(self, name, **kwargs):
-        self.input_port(name, InputGroupPort(name, **kwargs))
+        self.input_port(name, self.INPUT_GROUP_PORT_TYPE(name, **kwargs))
 
     def input_port(self, name, port):
         if self.sealed:
