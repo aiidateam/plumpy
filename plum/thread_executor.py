@@ -213,7 +213,7 @@ class _ExecutorCommon(object):
 
     def shutdown(self, wait=True):
         for proc in self._processes.values():
-            proc.abort(timeout=0)
+            proc.pause(timeout=0)
         return self._executor.shutdown(wait)
 
 
