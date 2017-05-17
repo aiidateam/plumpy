@@ -65,7 +65,7 @@ class TestPicklePersistence(TestCase):
         # Create some processes
         for i in range(0, 3):
             proc = ProcessWithCheckpoint.new(pid=i)
-            self.pickle_persistence.persist_process(proc)
+            self.pickle_persistence.save(proc)
 
         # Check that the number of checkpoints matches we expected
         num_cps = len(self.pickle_persistence.load_all_checkpoints())

@@ -185,7 +185,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
     def persist_process(self, process):
         if process.pid in self._filelocks:
             # Already persisted
-            return None
+            return
 
         save_file = self.get_running_path(process.pid)
         self._ensure_directory(self._running_directory)
@@ -207,6 +207,13 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         except AssertionError:
             # Happens if we're already listening
             pass
+
+    def unpersist_process(self, process):
+        if process.pid not in self._filelocks:
+            return
+
+        self._filelocks.pop(process.pid).release()
+        process.remove_process_listener(self)
 
     def clear_all_persisted(self):
         for pid in self._filelocks.keys():

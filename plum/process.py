@@ -441,8 +441,8 @@ class Process(object):
         """
         Play the process.
         """
+        self._on_start_playing()
         try:
-            self._on_start_playing()
 
             if not self.has_terminated():
                 # Keep going until we run out of tasks

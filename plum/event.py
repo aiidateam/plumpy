@@ -158,7 +158,7 @@ class EventEmitter(object):
         :param event: The event to stop listening for
         """
         self._wildcard_listeners[event].listeners.discard(listener)
-        if len(self._wildcard_listeners[event]) == 0:
+        if len(self._wildcard_listeners[event].listeners) == 0:
             del self._wildcard_listeners[event]
 
     def _add_specific_listener(self, listener, event):
