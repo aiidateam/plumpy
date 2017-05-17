@@ -1,13 +1,17 @@
 from abc import ABCMeta, abstractmethod
+from collections import namedtuple
 import logging
 import re
 import threading
+import traceback
 from plum.process_monitor import ProcessMonitorListener, MONITOR
 from plum.util import override, protected, ListenContext
 from plum.wait import WaitOn, Unsavable, WaitEvent
 from plum.exceptions import Interrupted
 
 _LOGGER = logging.getLogger(__name__)
+
+_WilcardEntry = namedtuple("_WildcardEntry", ['re', 'listeners'])
 
 
 class EventEmitter(object):
@@ -30,7 +34,6 @@ class EventEmitter(object):
     def __init__(self):
         self._specific_listeners = {}
         self._wildcard_listeners = {}
-        self._wildcard_regexs = {}
 
     def start_listening(self, listener, event='*'):
         """
@@ -58,10 +61,10 @@ class EventEmitter(object):
         """
         if event is None:
             # This means remove ALL messages for this listener
-            for e, ls, in self._specific_listeners.items():
-                self._remove_specific_listener(listener, e)
-            for e, ls in self._wildcard_listeners.items():
-                self._remove_wildcard_listener(listener, e)
+            for evt in self._specific_listeners.keys():
+                self._remove_specific_listener(listener, evt)
+            for evt in self._wildcard_listeners.keys():
+                self._remove_wildcard_listener(listener, evt)
         else:
             if self.contains_wildcard(event):
                 try:
@@ -78,8 +81,8 @@ class EventEmitter(object):
         return ListenContext(self, listener, event)
 
     def clear_all_listeners(self):
-        self._specific_listeners = {}
-        self._wildcard_listeners = {}
+        self._specific_listeners.clear()
+        self._wildcard_listeners.clear()
 
     def num_listening(self):
         """
@@ -91,10 +94,10 @@ class EventEmitter(object):
         :rtype: int
         """
         total = 0
-        for e, ls in self._specific_listeners.iteritems():
-            total += len(ls)
-        for e, ls in self._wildcard_listeners.iteritems():
-            total += len(ls)
+        for listeners in self._specific_listeners.itervalues():
+            total += len(listeners)
+        for entry in self._wildcard_listeners.itervalues():
+            total += len(entry.listeners)
         return total
 
     def event_occurred(self, event, body=None):
@@ -102,9 +105,9 @@ class EventEmitter(object):
         # add or remove listeners during the delivery
 
         # Deal with the wildcard listeners
-        for e, ls in self._wildcard_listeners.items():
-            if self._wildcard_match(e, event):
-                for l in ls.copy():
+        for evt, entry in self._wildcard_listeners.items():
+            if self._wildcard_match(evt, event):
+                for l in list(entry.listeners):
                     self.deliver_msg(l, event, body)
 
         # And now with the specific listeners
@@ -119,10 +122,9 @@ class EventEmitter(object):
     def deliver_msg(self, listener, event, body):
         try:
             listener(self, event, body)
-        except TypeError:
-            raise RuntimeError(
-                "Failed to deliver message to '{}', check that it "
-                "takes three arguments".format(listener))
+        except BaseException:
+            _LOGGER.error("Exception deliverying message to {}:\n{}".format(
+                listener, traceback.format_exc()))
 
     @protected
     def get_specific_listeners(self):
@@ -141,12 +143,11 @@ class EventEmitter(object):
 
     def _add_wildcard_listener(self, listener, event):
         if event in self._wildcard_listeners:
-            self._wildcard_listeners[event].add(listener)
+            self._wildcard_listeners[event].listeners.add(listener)
         else:
-            self._wildcard_listeners[event] = {listener}
             # Build the regular expression
             regex = event.replace('.', '\.').replace('*', '.*').replace('#', '.+')
-            self._wildcard_regexs[event] = re.compile(regex)
+            self._wildcard_listeners[event] = _WilcardEntry(re.compile(regex), {listener})
 
     def _remove_wildcard_listener(self, listener, event):
         """
@@ -156,10 +157,9 @@ class EventEmitter(object):
         :param listener: The listener to remove
         :param event: The event to stop listening for
         """
-        self._wildcard_listeners[event].discard(listener)
+        self._wildcard_listeners[event].listeners.discard(listener)
         if len(self._wildcard_listeners[event]) == 0:
             del self._wildcard_listeners[event]
-            del self._wildcard_regexs[event]
 
     def _add_specific_listener(self, listener, event):
         self._specific_listeners.setdefault(event, set()).add(listener)
@@ -176,8 +176,8 @@ class EventEmitter(object):
         if len(self._specific_listeners[event]) == 0:
             del self._specific_listeners[event]
 
-    def _wildcard_match(self, wildcard_string, to_match):
-        return self._wildcard_regexs[wildcard_string].match(to_match) is not None
+    def _wildcard_match(self, event, to_match):
+        return self._wildcard_listeners[event].re.match(to_match) is not None
 
 
 class EmitterAggregator(EventEmitter):

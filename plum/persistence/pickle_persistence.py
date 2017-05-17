@@ -5,6 +5,7 @@ import portalocker
 import portalocker.utils
 from shutil import copyfile
 import tempfile
+import traceback
 import pickle
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
@@ -67,7 +68,7 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
 
     @staticmethod
     def load_checkpoint_from_file(filepath):
-        with open(filepath, 'rb') as f:
+        with portalocker.Lock(filepath, 'r', timeout=1) as f:
             return pickle.load(f)
 
     @classmethod
@@ -140,10 +141,20 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         for f in glob.glob(path.join(self._running_directory, "*.pickle")):
             try:
                 checkpoints.append(self.load_checkpoint_from_file(f))
-            except BaseException as e:
+            except (portalocker.LockException, IOError):
+                # Don't load locked checkpoints or those with IOErrors
+                # these often come if the pickle was deleted since the glob
+                pass
+            except BaseException:
                 LOGGER.warning(
-                    "Failed to load checkpoint {} because of exception\n"
-                    "{}: {}".format(f, e.__class__.__name__, e.message))
+                    "Failed to load checkpoint '{}' (deleting)\n"
+                    "{}".format(f, traceback.format_exc()))
+
+                # Deleting
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
 
         return checkpoints
 
@@ -260,7 +271,6 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
 
     @override
     def on_process_fail(self, process):
-        #self._save_noraise(process)
         try:
             self._release_process(process.pid, self.failed_directory)
         except ValueError:
@@ -316,9 +326,9 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
     def _save_noraise(self, process):
         try:
             self.save(process)
-        except BaseException as exception:
-            LOGGER.error("Exception raised trying to pickle process (pid={})\n"
-                         "{}: {}".format(process.pid, type(exception), exception))
+        except BaseException:
+            LOGGER.error("Exception raised trying to pickle process (pid={})\n{}"
+                         .format(process.pid, traceback.format_exc()))
 
     def _clear(self, fileobj):
         """

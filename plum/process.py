@@ -765,9 +765,9 @@ class Process(object):
     def _on_start_playing(self):
         self.__play_lock.acquire()
         self.__interrupt_action = None
+        self._call_with_super_check(self.on_playing)
         stack.push(self)
         MONITOR.register_process(self)
-        self._call_with_super_check(self.on_playing)
 
     def _on_stop_playing(self):
         """
@@ -798,35 +798,30 @@ class Process(object):
 
     def _on_start(self):
         self._call_with_super_check(self.on_start)
-        self.__event_helper.fire_event(ProcessListener.on_process_start, self)
 
     def _on_resume(self):
         self._call_with_super_check(self.on_resume)
-        self.__event_helper.fire_event(ProcessListener.on_process_resume, self)
 
     def _on_run(self):
         self._call_with_super_check(self.on_run)
-        self.__event_helper.fire_event(ProcessListener.on_process_run, self)
 
     def _on_wait(self, wait_on):
         self._call_with_super_check(self.on_wait, wait_on)
-        self.__event_helper.fire_event(ProcessListener.on_process_wait, self)
 
     def _on_finish(self):
         self._call_with_super_check(self.on_finish)
-        self.__event_helper.fire_event(ProcessListener.on_process_finish, self)
 
     def _on_abort(self, msg):
         self._call_with_super_check(self.on_abort, msg)
-        self.__event_helper.fire_event(ProcessListener.on_process_abort, self)
 
     def _on_stop(self, msg):
         self._call_with_super_check(self.on_stop)
-        self.__event_helper.fire_event(ProcessListener.on_process_stop, self)
 
     def _on_fail(self, exc_info):
         self._call_with_super_check(self.on_fail)
-        self.__event_helper.fire_event(ProcessListener.on_process_fail, self)
+
+    def _fire_listener_event(self, event):
+        self.__event_helper.fire_event(event, self)
 
     def _perform_interrupt(self):
         self.log_with_pid(logging.DEBUG, "performing interrupt")

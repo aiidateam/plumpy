@@ -3,6 +3,7 @@ import logging
 import traceback
 from plum.wait import WaitOn, Interrupted
 import plum.util as util
+from plum.process_listener import ProcessListener
 
 
 class ProcessState(Enum):
@@ -113,14 +114,17 @@ class Running(State):
 
         if previous_state is ProcessState.CREATED:
             self._process._on_start()
+            self._process._fire_listener_event(ProcessListener.on_process_start)
         elif previous_state is ProcessState.WAITING:
             self._process._on_resume()
+            self._process._fire_listener_event(ProcessListener.on_process_resume)
         elif previous_state is ProcessState.RUNNING:
             pass
         else:
             raise RuntimeError("Cannot enter RUNNING from '{}'".format(previous_state))
 
         self._process._on_run()
+        self._process._fire_listener_event(ProcessListener.on_process_run)
 
     def execute(self):
         super(Running, self).execute()
@@ -128,14 +132,15 @@ class Running(State):
         retval = self._exec_func(*self._args, **self._kwargs)
         if Running._is_wait_retval(retval):
             wait_on, callback = retval
-            # Check if we can continue straight away
-            if wait_on.wait(timeout=0):
-                if callback is None:
-                    return Stopped(self._process)
-                else:
-                    return Running(self._process, callback, wait_on)
-            else:
-                return Waiting(self._process, wait_on, callback)
+            # # Check if we can continue straight away
+            # if wait_on.wait(timeout=0):
+            #     if callback is None:
+            #         return Stopped(self._process)
+            #     else:
+            #         return Running(self._process, callback, wait_on)
+            # else:
+            #     return Waiting(self._process, wait_on, callback)
+            return Waiting(self._process, wait_on, callback)
         else:
             return Stopped(self._process)
 
@@ -170,6 +175,7 @@ class Waiting(State):
     def enter(self, previous_state):
         super(Waiting, self).enter(previous_state)
         self._process._on_wait(self._wait_on)
+        self._process._fire_listener_event(ProcessListener.on_process_wait)
 
     def execute(self):
         super(Waiting, self).execute()
@@ -219,12 +225,15 @@ class Stopped(State):
 
         if self._abort:
             self._process._on_abort(self._abort_msg)
+            self._process._fire_listener_event(ProcessListener.on_process_abort)
         elif previous_state is ProcessState.RUNNING:
             self._process._on_finish()
+            self._process._fire_listener_event(ProcessListener.on_process_finish)
         else:
             raise RuntimeError("Cannot enter STOPPED from '{}'".format(previous_state))
 
         self._process._on_stop(self._abort_msg)
+        self._process._fire_listener_event(ProcessListener.on_process_stop)
 
     def save_instance_state(self, out_state):
         super(Stopped, self).save_instance_state(out_state)
@@ -258,6 +267,8 @@ class Failed(State):
             import traceback
             self._process.log_with_pid(
                 logging.ERROR, "exception entering failed state:\n{}".format(traceback.format_exc()))
+
+        self._process._fire_listener_event(ProcessListener.on_process_fail)
 
     def save_instance_state(self, out_state):
         super(Failed, self).save_instance_state(out_state)

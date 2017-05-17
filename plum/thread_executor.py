@@ -337,7 +337,7 @@ class SchedulingExecutor(_ExecutorCommon, ProcessListener):
                 waiting = [
                     pid for pid in self._playing if
                     self._processes[pid].state is ProcessState.WAITING
-                    ]
+                ]
                 if waiting:
                     proc = self._processes[random.choice(waiting)]
                     self._requeue(proc)
@@ -353,12 +353,6 @@ class SchedulingExecutor(_ExecutorCommon, ProcessListener):
             # Let someone else have a chance
             self._requeue(process)
 
-    @protected
-    def on_process_done_playing(self, proc):
-        if proc.has_terminated():
-            proc.remove_process_listener(self)
-            self._processes.pop(proc.pid)
-
     def _play(self, future):
         """
         :param future: The future to play
@@ -371,10 +365,17 @@ class SchedulingExecutor(_ExecutorCommon, ProcessListener):
             self._playing.append(proc.pid)
         future._playing()
 
-        retval = proc.play()
+        try:
+            retval = proc.play()
+        except BaseException:
+            retval = None
 
         with self._state_lock:
             self._playing.remove(proc.pid)
+            if proc.has_terminated():
+                proc.remove_process_listener(self)
+                self._processes.pop(proc.pid)
+
         future._done_playing()
         _LOGGER.debug("Finished playing '{}'".format(proc.pid))
 
