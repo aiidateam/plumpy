@@ -65,7 +65,7 @@ class WaitEvent(object):
     """
 
     def __init__(self):
-        self._timeout = threading.Event()
+        self._timeout = threading.Condition()
         self._interrupted = False
 
     def wait(self, timeout=None):
@@ -78,38 +78,32 @@ class WaitEvent(object):
         :type timeout: float
         :return: True if the event happened, False otherwise
         """
-        self._timeout.clear()
-        self._interrupted = False
-        if not self._timeout.wait(timeout):
-            return False
-        else:
-            if self._interrupted:
-                raise Interrupted()
+        with self._timeout:
+            self._interrupted = False
+            if not self._timeout.wait(timeout):
+                return False
             else:
-                return True
+                if self._interrupted:
+                    raise Interrupted()
+                else:
+                    return True
 
     def interrupt(self):
         """
         If another thread is waiting on this event, interrupt it.  Otherwise
         this call has no effect.
         """
-        self._interrupted = True
-        self._timeout.set()
+        with self._timeout:
+            self._interrupted = True
+            self._timeout.notify_all()
 
     def set(self):
         """
         Set the event as having happened.  If someone was waiting on this event
         they will have True returned from the wait() call.
         """
-        self._timeout.set()
-
-    def is_waiting(self):
-        if self._timeout.acquire(False):
-            # We managed to acquire, so not waiting
-            self._timeout.release()
-            return False
-        else:
-            return True
+        with self._timeout:
+            self._timeout.notify_all()
 
 
 class WaitOnEvent(WaitOn):
