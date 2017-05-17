@@ -34,6 +34,7 @@ class EventEmitter(object):
     def __init__(self):
         self._specific_listeners = {}
         self._wildcard_listeners = {}
+        self._listeners_lock = threading.Lock()
 
     def start_listening(self, listener, event='*'):
         """
@@ -44,11 +45,12 @@ class EventEmitter(object):
         :param event: An event string
         :type event: str or unicode
         """
-        self._check_listener(listener)
-        if self.contains_wildcard(event):
-            self._add_wildcard_listener(listener, event)
-        else:
-            self._add_specific_listener(listener, event)
+        with self._listeners_lock:
+            self._check_listener(listener)
+            if self.contains_wildcard(event):
+                self._add_wildcard_listener(listener, event)
+            else:
+                self._add_specific_listener(listener, event)
 
     def stop_listening(self, listener, event=None):
         """
@@ -59,30 +61,32 @@ class EventEmitter(object):
         :param event: (optional) event to stop listening for
         :type event: str or unicode
         """
-        if event is None:
-            # This means remove ALL messages for this listener
-            for evt in self._specific_listeners.keys():
-                self._remove_specific_listener(listener, evt)
-            for evt in self._wildcard_listeners.keys():
-                self._remove_wildcard_listener(listener, evt)
-        else:
-            if self.contains_wildcard(event):
-                try:
-                    self._remove_wildcard_listener(listener, event)
-                except KeyError:
-                    pass
+        with self._listeners_lock:
+            if event is None:
+                # This means remove ALL messages for this listener
+                for evt in self._specific_listeners.iterkeys():
+                    self._remove_specific_listener(listener, evt)
+                for evt in self._wildcard_listeners.iterkeys():
+                    self._remove_wildcard_listener(listener, evt)
             else:
-                try:
-                    self._remove_specific_listener(listener, event)
-                except KeyError:
-                    pass
+                if self.contains_wildcard(event):
+                    try:
+                        self._remove_wildcard_listener(listener, event)
+                    except KeyError:
+                        pass
+                else:
+                    try:
+                        self._remove_specific_listener(listener, event)
+                    except KeyError:
+                        pass
 
     def listen_scope(self, listener, event=None):
         return ListenContext(self, listener, event)
 
     def clear_all_listeners(self):
-        self._specific_listeners.clear()
-        self._wildcard_listeners.clear()
+        with self._listeners_lock:
+            self._specific_listeners.clear()
+            self._wildcard_listeners.clear()
 
     def num_listening(self):
         """
@@ -93,12 +97,13 @@ class EventEmitter(object):
         :return: The number of events listened for
         :rtype: int
         """
-        total = 0
-        for listeners in self._specific_listeners.itervalues():
-            total += len(listeners)
-        for entry in self._wildcard_listeners.itervalues():
-            total += len(entry.listeners)
-        return total
+        with self._listeners_lock:
+            total = 0
+            for listeners in self._specific_listeners.itervalues():
+                total += len(listeners)
+            for entry in self._wildcard_listeners.itervalues():
+                total += len(entry.listeners)
+            return total
 
     def event_occurred(self, event, body=None):
         # These loops need to use copies because, e.g., the recipient may
@@ -112,8 +117,7 @@ class EventEmitter(object):
 
         # And now with the specific listeners
         try:
-            ls = self._specific_listeners[event].copy()
-            for l in ls:
+            for l in self._specific_listeners[event].copy():
                 self.deliver_msg(l, event, body)
         except KeyError:
             pass
@@ -184,35 +188,38 @@ class EmitterAggregator(EventEmitter):
     def __init__(self):
         super(EmitterAggregator, self).__init__()
         self._children = []
+        self._listeners_lock = threading.Lock()
 
     @override
     def start_listening(self, listener, event='*'):
-        super(EmitterAggregator, self).start_listening(listener, event)
-        started_listening = False
-        for t in self._children:
-            try:
-                t.start_listening(self._event_passthrough, event)
-                started_listening = True
-            except ValueError:
-                pass
-        if not started_listening:
-            raise ValueError(
-                "There are no emitters that emit messages of type '{}'".format(event))
+        with self._listeners_lock:
+            super(EmitterAggregator, self).start_listening(listener, event)
+            started_listening = False
+            for t in self._children:
+                try:
+                    t.start_listening(self._event_passthrough, event)
+                    started_listening = True
+                except ValueError:
+                    pass
+            if not started_listening:
+                raise ValueError(
+                    "There are no emitters that emit messages of type '{}'".format(event))
 
     @override
     def stop_listening(self, listener, event=None):
-        specific = set(self.get_specific_listeners().viewkeys())
-        wildcard = set(self.get_wildcard_listeners().viewkeys())
-        # Now stop firing myself
-        super(EmitterAggregator, self).stop_listening(listener, event)
+        with self._listeners_lock:
+            specific = set(self.get_specific_listeners().viewkeys())
+            wildcard = set(self.get_wildcard_listeners().viewkeys())
+            # Now stop firing myself
+            super(EmitterAggregator, self).stop_listening(listener, event)
 
-        # Check the different in events being listen to to see if we now are no
-        # longer listening to some events
-        specific -= set(self.get_specific_listeners().viewkeys())
-        wildcard -= set(self.get_wildcard_listeners().viewkeys())
-        for event in specific | wildcard:
-            for child in self._children:
-                child.stop_listening(self._event_passthrough, event)
+            # Check the different in events being listen to to see if we now are no
+            # longer listening to some events
+            specific -= set(self.get_specific_listeners().viewkeys())
+            wildcard -= set(self.get_wildcard_listeners().viewkeys())
+            for event in specific | wildcard:
+                for child in self._children:
+                    child.stop_listening(self._event_passthrough, event)
 
     @override
     def clear_all_listeners(self):
