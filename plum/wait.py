@@ -168,6 +168,7 @@ class WaitOnOneOff(WaitOn):
 
     def load_instance_state(self, saved_state):
         super(WaitOnOneOff, self).load_instance_state(saved_state)
+        self._timeout = threading.Event()
         self._occurred = saved_state['occurred']
         if self._occurred:
             self._timeout.set()
