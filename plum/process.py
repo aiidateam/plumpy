@@ -669,7 +669,7 @@ class Process(object):
         # inputs
         for name, port in self.spec().inputs.iteritems():
             if name not in ins:
-                if port.default:
+                if port.default is not None:
                     ins[name] = port.default
                 elif port.required:
                     raise ValueError(

@@ -151,6 +151,19 @@ class TestProcess(TestCase):
         p = Proc.new_instance()
         self.assertEqual(p.inputs['input'], 5)
 
+    def test_inputs_default_that_evaluate_to_false(self):
+        for def_val in (True, False, 0, 1):
+            class Proc(DummyProcess):
+                @classmethod
+                def define(cls, spec):
+                    super(Proc, cls).define(spec)
+                    spec.input("input", default=def_val)
+
+            # Don't supply, use default
+            p = Proc.new_instance()
+            self.assertIn('input', p.inputs)
+            self.assertEqual(p.inputs['input'], def_val)
+
     def test_run(self):
         dp = DummyProcessWithOutput.new_instance()
         dp.run_until_complete()
