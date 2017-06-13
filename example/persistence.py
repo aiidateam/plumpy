@@ -69,4 +69,4 @@ class Add(Process):
 
 
 if __name__ == '__main__':
-    Add.run()
+    Add.launch()
