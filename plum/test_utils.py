@@ -59,16 +59,15 @@ class WaitForSignalProcess(Process):
         super(WaitForSignalProcess, self).__init__(inputs, pid, logger)
         self._barrier = Barrier()
 
-    def load_instance_state(self, saved_state, logger=None):
-        # Have to create the barrier before because create_wait_on will be called by
-        # the super call which returns out barrier
-        self._barrier = Barrier.create_from(saved_state[self.BARRIER])
-        super(WaitForSignalProcess, self).load_instance_state(saved_state, logger)
-
     def save_instance_state(self, bundle):
         super(WaitForSignalProcess, self).save_instance_state(bundle)
         bundle[self.BARRIER] = Bundle()
         self._barrier.save_instance_state(bundle[self.BARRIER])
+
+    def load_instance_state(self, saved_state, logger=None):
+        super(WaitForSignalProcess, self).load_instance_state(saved_state, logger)
+        assert isinstance(self.get_waiting_on(), Barrier)
+        self._barrier = self.get_waiting_on()
 
     @override
     def _run(self):
@@ -80,13 +79,9 @@ class WaitForSignalProcess(Process):
     def continue_(self):
         self._barrier.open()
 
-    def create_wait_on(self, saved_state, callback):
-        return self._barrier
-
 
 class EventsTesterMixin(object):
-    EVENTS = ["create", "run", "resume", "finish", "emitted", "wait",
-              "stop"]
+    EVENTS = ["create", "run", "finish", "emitted", "wait", "stop", "terminate"]
 
     called_events = []
 
@@ -136,6 +131,11 @@ class EventsTesterMixin(object):
     def on_stop(self):
         super(EventsTesterMixin, self).on_stop()
         self.called('stop')
+
+    @override
+    def on_terminate(self):
+        super(EventsTesterMixin, self).on_terminate()
+        self.called('terminate')
 
 
 class ProcessEventsTester(EventsTesterMixin, Process):
@@ -191,19 +191,13 @@ class TwoCheckpointThenException(TwoCheckpoint):
 
 class ProcessListenerTester(ProcessListener):
     def __init__(self):
-        self.play = False
         self.start = False
         self.run = False
         self.continue_ = False
         self.emitted = False
         self.finish = False
         self.stop = False
-        self.done_playing = False
-
-    @override
-    def on_process_playing(self, process):
-        assert isinstance(process, Process)
-        self.play = True
+        self.terminate = False
 
     @override
     def on_process_start(self, process):
@@ -241,9 +235,9 @@ class ProcessListenerTester(ProcessListener):
         self.stop = True
 
     @override
-    def on_process_done_playing(self, process):
+    def on_process_terminate(self, process):
         assert isinstance(process, Process)
-        self.done_playing = True
+        self.terminate = True
 
 
 class Saver(object):

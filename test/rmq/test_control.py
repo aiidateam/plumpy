@@ -9,7 +9,7 @@ from plum.process_controller import ProcessController
 from plum.rmq.control import ProcessControlPublisher, ProcessControlSubscriber
 from plum.test_utils import WaitForSignalProcess
 from plum.rmq.util import SubscriberThread
-from plum.wait_ons import wait_until
+from plum.wait_ons import run_until
 from test.test_rmq import _HAS_PIKA
 from test.util import TestCase
 
@@ -42,7 +42,7 @@ class TestControl(TestCase):
         # Create the process and wait until it is waiting
         p = WaitForSignalProcess.new()
         self.controller.insert_and_play(p)
-        wait_until(p, ProcessState.WAITING)
+        run_until(p, ProcessState.WAITING)
         self.assertTrue(p.is_playing())
 
         # Send a message asking the process to pause
@@ -55,7 +55,7 @@ class TestControl(TestCase):
 
         # Play
         self.controller.insert_and_play(p)
-        self.assertTrue(wait_until(p, ProcessState.WAITING, 1))
+        self.assertTrue(run_until(p, ProcessState.WAITING, 1))
         self.assertTrue(p.is_playing())
 
         # Pause
@@ -71,7 +71,7 @@ class TestControl(TestCase):
         # Create the process and wait until it is waiting
         p = WaitForSignalProcess.new()
         self.controller.insert_and_play(p)
-        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
+        self.assertTrue(run_until(p, ProcessState.WAITING, timeout=2.))
         self.assertTrue(p.is_playing())
 
         # Send a message asking the process to abort

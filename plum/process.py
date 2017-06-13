@@ -1,40 +1,29 @@
 # -*- coding: utf-8 -*-
 
-import uuid
-from enum import Enum
-from abc import ABCMeta, abstractmethod
-from collections import namedtuple
 import logging
-import threading
 import sys
 import time
+import uuid
+from abc import ABCMeta, abstractmethod
+from collections import namedtuple
 
+import plum.stack as stack
+import plum.util as util
+from plum.loop.object import LoopObject
+from plum.loop.event_loop import BaseEventLoop, Terminated
 from plum.persistence.bundle import Bundle
-from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.process_states import *
-from plum.exceptions import Interrupted
-import plum.stack as stack
 from plum.util import protected
-import plum.util as util
 from plum.wait import WaitOn, create_from as load_wait_on
 
 _LOGGER = logging.getLogger(__name__)
 
-
-class _Interrupt(Enum):
-    """
-    Interrupt the playing of the process and instead do one of the following
-    """
-    PAUSE = 0
-    ABORT = 1
-
-
 Wait = namedtuple('Wait', ['on', 'callback'])
 
 
-class Process(object):
+class Process(LoopObject):
     """
     The Process class is the base for any unit of work in plum.
 
@@ -192,7 +181,7 @@ class Process(object):
         return "\n".join(desc)
 
     @classmethod
-    def run(cls, **inputs):
+    def launch(cls, **inputs):
         """
         A convenience method to create and run a process.  The keyword arguments
         will be used as process inputs.
@@ -202,7 +191,7 @@ class Process(object):
         :rtype: dict
         """
         p = cls(inputs=inputs)
-        return p.play()
+        return p.run()
 
     @classmethod
     def restart(cls, bundle, logger=None):
@@ -229,6 +218,8 @@ class Process(object):
         :param logger: An optional logger for the process to use
         :type logger: :class:`logging.Logger`
         """
+        super(Process, self).__init__()
+
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
@@ -243,14 +234,14 @@ class Process(object):
 
         # Set up a process ID
         if pid is None:
-            self._pid = uuid.uuid1()
+            self._pid = self.uuid
         else:
             self._pid = pid
 
         # State stuff
         self._CREATION_TIME = time.time()
-        self._terminated = False
         self._finished = False
+        self._terminated = False
 
         # Finally enter the CREATED state
         self._state = Created(self)
@@ -304,19 +295,6 @@ class Process(object):
             return self.__logger
         else:
             return _LOGGER
-
-    def is_playing(self):
-        """
-        Is the process currently playing.
-
-        :return: True if playing, False otherwise
-        :rtype: bool
-        """
-        if self.__play_lock.acquire(False):
-            self.__play_lock.release()
-            return False
-        else:
-            return True
 
     def has_finished(self):
         """
@@ -398,28 +376,25 @@ class Process(object):
         :param bundle: A bundle to save the state to
         :type bundle: :class:`plum.persistence.Bundle`
         """
-        # TODO: Add a timeout to this method, the user may not want to wait
-        # indefinitely for the lock
-        with self.__save_lock:
-            # Immutables first
-            bundle[self.BundleKeys.CREATION_TIME.value] = self.creation_time
-            bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
-            bundle[self.BundleKeys.PID.value] = self.pid
+        # Immutables first
+        bundle[self.BundleKeys.CREATION_TIME.value] = self.creation_time
+        bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
+        bundle[self.BundleKeys.PID.value] = self.pid
 
-            # Now state stuff
-            state_bundle = Bundle()
-            self._state.save_instance_state(state_bundle)
-            bundle[self.BundleKeys.STATE.value] = state_bundle
+        # Now state stuff
+        state_bundle = Bundle()
+        self._state.save_instance_state(state_bundle)
+        bundle[self.BundleKeys.STATE.value] = state_bundle
 
-            bundle[self.BundleKeys.FINISHED.value] = self._finished
-            bundle[self.BundleKeys.TERMINATED.value] = self._terminated
+        bundle[self.BundleKeys.FINISHED.value] = self._finished
+        bundle[self.BundleKeys.TERMINATED.value] = self._terminated
 
-            # Inputs/outputs
-            bundle.set_if_not_none(self.BundleKeys.INPUTS.value, self.raw_inputs)
-            bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
+        # Inputs/outputs
+        bundle.set_if_not_none(self.BundleKeys.INPUTS.value, self.raw_inputs)
+        bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
 
     @protected
-    def save_wait_on_state(self, wait_on, callback):
+    def save_wait_on_state(self, wait_on):
         """
         Create a saved instance state for the WaitOn the process is currently
         waiting for.  If the wait on is :class:`plum.wait.Unsavable` then
@@ -434,58 +409,59 @@ class Process(object):
         return b
 
     @protected
-    def create_wait_on(self, saved_state, callback):
+    def create_wait_on(self, saved_state):
         return load_wait_on(saved_state)
 
-    def play(self):
-        """
-        Play the process.
-        """
-        self._on_start_playing()
+    def tick(self):
+        if self.__paused:
+            return
+
         try:
+            stack.push(self)
+            MONITOR.register_process(self)
 
-            if not self.has_terminated():
-                # Keep going until we run out of tasks
-                while True:
-                    try:
-                        locked_save = False
-                        if self.state is not ProcessState.WAITING:
-                            self.__save_lock.acquire()
-                            locked_save = True
-
-                        if self.__interrupt_action is not None:
-                            raise Interrupted()  # Caught below
-
-                        next_state = self._execute_state()
-                        if next_state is None:
-                            break
-
-                        self._set_state(next_state)
-
-                    finally:
-                        if locked_save:
-                            self.__save_lock.release()
-
-        except Interrupted:
-            self._perform_interrupt()
+            if self.__aborting:
+                self._set_state(Stopped(self, abort=True, abort_msg=self.__abort_msg))
+                self.__aborting, self.__abort_msg = None, None
+            else:
+                result = self._state.execute()
+                if self.has_terminated():
+                    return Terminated(self.outputs)
 
         except BaseException:
-            self._set_and_execute_state(Failed(self, sys.exc_info()))
+            self._set_state(Failed(self, sys.exc_info()))
             raise
 
         finally:
-            self._on_stop_playing()
+            MONITOR.deregister_process(self)
+            stack.pop(self)
+
+    def run(self, loop=None):
+        """
+        Run the process until it is finished.
+        """
+        self.play()
+
+        if loop is None:
+            loop = BaseEventLoop()
+
+        loop.run_until_complete(self)
 
         return self._outputs
 
-    def pause(self, timeout=0.):
+    def play(self):
+        """
+        Play the process, i.e. unpause it if it was paused, otherwise do nothing.
+        """
+        self.log_with_pid(logging.INFO, "pausing")
+        self.__paused = False
+
+    def pause(self):
         """
         Pause a playing process.  This can be called from another thread.
         """
         self.log_with_pid(logging.INFO, "pausing")
-
-        self._interrupt(_Interrupt.PAUSE)
-        return self.wait(timeout)
+        self.__paused = True
 
     def abort(self, msg=None, timeout=None):
         """
@@ -500,36 +476,8 @@ class Process(object):
         :rtype: bool
         """
         self.log_with_pid(logging.INFO, "aborting")
-        if self.__play_lock.acquire(False):
-            if not self.has_terminated():
-                # It's not currently running, we can abort
-                try:
-                    self._on_start_playing()
-                    self._perform_abort(msg)
-                finally:
-                    self.__play_lock.release()
-                    self._on_stop_playing()
-        else:
-            self._interrupt(_Interrupt.ABORT, msg)
-            self.wait(timeout)
-
-        self.log_with_pid(logging.INFO, "aborted: '{}'".format(self.has_aborted()))
-        return self.has_aborted()
-
-    def wait(self, timeout=None):
-        """
-        Wait until the process is no longer playing.
-        
-        :param timeout: The maximum time to wait, if None then waits indefinitely 
-        :return: True if the process finished running, False if timed-out
-        """
-        t0 = time.time()
-        while self.is_playing():
-            time.sleep(0.01)
-            if (time.time() - t0) > timeout:
-                return False
-
-        return True
+        self.__aborting = True
+        self.__abort_msg = msg
 
     def add_process_listener(self, listener):
         assert (listener != self)
@@ -551,16 +499,6 @@ class Process(object):
 
     # region Process messages
     # Make sure to call the superclass method if your override any of these
-    @protected
-    def on_playing(self):
-        self.__event_helper.fire_event(ProcessListener.on_process_playing, self)
-
-        self.__called = True
-
-    @protected
-    def on_done_playing(self):
-        self.__called = True
-
     @protected
     def on_create(self):
         """
@@ -634,6 +572,15 @@ class Process(object):
         """
         self.__called = True
 
+    @protected
+    def on_terminate(self):
+        """
+        Called when the process reaches a terminal state.
+        """
+        self.__event_helper.fire_event(ProcessListener.on_process_terminate)
+
+        self.__called = True
+
     def on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
@@ -661,8 +608,7 @@ class Process(object):
                     "and does not have a dynamic output port in spec.".
                         format(output_port))
 
-            if port.valid_type is not None and \
-                    not isinstance(value, port.valid_type):
+            if port.valid_type is not None and not isinstance(value, port.valid_type):
                 raise TypeError(
                     "Process returned output '{}' of wrong type."
                     "Expected '{}', got '{}'".
@@ -673,26 +619,26 @@ class Process(object):
 
     @protected
     def load_instance_state(self, saved_state, logger=None):
-        self.__init(logger, acquire_play_lock=True)
+        super(Process, self).__init__()
+
+        self.__init(logger)
+
+        # Immutable stuff
+        self._CREATION_TIME = saved_state[self.BundleKeys.CREATION_TIME.value]
+        self._pid = saved_state[self.BundleKeys.PID.value]
+
+        # State stuff
+        self._state = load_state(self, saved_state[self.BundleKeys.STATE.value])
+        self._finished = saved_state[self.BundleKeys.FINISHED.value]
+        self._terminated = saved_state[self.BundleKeys.TERMINATED.value]
+
+        # Inputs/outputs
         try:
-            # Immutable stuff
-            self._CREATION_TIME = saved_state[self.BundleKeys.CREATION_TIME.value]
-            self._pid = saved_state[self.BundleKeys.PID.value]
-
-            # State stuff
-            self._state = load_state(self, saved_state[self.BundleKeys.STATE.value])
-            self._finished = saved_state[self.BundleKeys.FINISHED.value]
-            self._terminated = saved_state[self.BundleKeys.TERMINATED.value]
-
-            # Inputs/outputs
-            try:
-                self._raw_inputs = util.AttributesFrozendict(saved_state[self.BundleKeys.INPUTS.value])
-            except KeyError:
-                self._raw_inputs = None
-            self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
-            self._outputs = saved_state[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
-        finally:
-            self.__play_lock.release()
+            self._raw_inputs = util.AttributesFrozendict(saved_state[self.BundleKeys.INPUTS.value])
+        except KeyError:
+            self._raw_inputs = None
+        self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        self._outputs = saved_state[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
 
     @protected
     def create_input_args(self, inputs):
@@ -723,36 +669,16 @@ class Process(object):
 
         return ins
 
-    def __init(self, logger, acquire_play_lock=False):
+    def __init(self, logger):
         """
         Common place to put all runtime state variables i.e. those that don't need
         to be persisted.  This can be called from the constructor or
         load_instance_state.
-
-        If acquire_run_lock is True then the caller is responsible for releasing
-        self.__play_lock
         """
-        # Either the run lock already exits, in which case try and acquire
-        # it but only keep it if asked to acquire, else, create it and acquire
-        # it if asked
-        try:
-            if not self.__play_lock.acquire(False):
-                raise RuntimeError("Cannot initialise while running")
-            if not acquire_play_lock:
-                self.__play_lock.release()
-        except AttributeError:
-            # This is locked whenever something is playing the process
-            self.__play_lock = threading.RLock()
-            if acquire_play_lock:
-                self.__play_lock.acquire()
-
         self.__logger = logger
-        self.__interrupt_action = None
-        self.__interrupt_abort_msg = None
-
-        # While this is locked the process state cannot be saved
-
-        self.__save_lock = threading.RLock()
+        self.__paused = False
+        self.__aborting = None
+        self.__abort_msg = None
 
         # Events and running
         self.__event_helper = util.EventHelper(ProcessListener)
@@ -763,9 +689,6 @@ class Process(object):
     # region State event/transition methods
 
     def _on_start_playing(self):
-        self.__play_lock.acquire()
-        self.__interrupt_action = None
-        self._call_with_super_check(self.on_playing)
         stack.push(self)
         MONITOR.register_process(self)
 
@@ -775,18 +698,7 @@ class Process(object):
         """
         MONITOR.deregister_process(self)
         stack.pop(self)
-        self.__play_lock.release()
 
-        try:
-            self._call_with_super_check(self.on_done_playing)
-        except BaseException:
-            # Only set failed if it hasn't already failed, otherwise
-            # we could obscure the real reason
-            if self.state != ProcessState.FAILED:
-                self._set_and_execute_state(Failed(self, sys.exc_info()))
-                raise
-
-        self.__event_helper.fire_event(ProcessListener.on_process_done_playing, self)
         if self.has_terminated():
             # There will be no more messages so remove the listeners.  Otherwise we
             # may continue to hold references to them and stop them being garbage
@@ -820,33 +732,15 @@ class Process(object):
     def _on_fail(self, exc_info):
         self._call_with_super_check(self.on_fail)
 
-    def _fire_listener_event(self, event):
-        self.__event_helper.fire_event(event, self)
+    def _on_terminate(self):
+        self._call_with_super_check(self.on_terminate)
 
-    def _perform_interrupt(self):
-        self.log_with_pid(logging.DEBUG, "performing interrupt")
+    def _fire_event(self, event):
+        self.loop().call_soon(self.__event_helper.fire_event, event, self)
 
-        if self.__interrupt_action is _Interrupt.ABORT:
-            self._perform_abort(self.__interrupt_abort_msg)
-
-    def _perform_abort(self, msg=None):
-        """
-        Transition the process into the STOPPED state by aborting.
-
-        :param msg: An optional abort message.
-        """
-        self._set_and_execute_state(Stopped(self, abort=True, abort_msg=msg))
-
-    def _interrupt(self, action, msg=None):
-        self.log_with_pid(logging.DEBUG, "interrupting process")
-
-        self.__interrupt_action = action
-        if action is _Interrupt.ABORT:
-            self.__interrupt_abort_msg = msg
-        elif msg is not None:
-            self.log_with_pid(logging.WARNING, "interrupt message ignored because it is only used when aborting")
-
-        self._state.interrupt()
+    def _terminate(self):
+        self.loop().remove(self)
+        self._terminated = True
 
     def _call_with_super_check(self, fn, *args, **kwargs):
         self.__called = False
@@ -881,11 +775,7 @@ class Process(object):
         """
         :return: The next state.  Will be None if we this state was terminal. 
         """
-        next_state = self._state.execute()
-        if next_state is None:
-            self._terminated = True
-
-        return next_state
+        return self._state.execute()
 
     def _set_and_execute_state(self, state):
         """

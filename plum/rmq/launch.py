@@ -2,8 +2,8 @@ import json
 import pika
 from collections import namedtuple
 
+from plum.loop.object import LoopObject
 from plum.process_listener import ProcessListener
-from plum.process_controller import ProcessController
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import Subscriber
 from plum.util import override, load_class, fullname
@@ -11,7 +11,7 @@ from plum.util import override, load_class, fullname
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
 
 
-class ProcessLaunchSubscriber(Subscriber, ProcessListener):
+class ProcessLaunchSubscriber(LoopObject, ProcessListener):
     """
     Run tasks as they come form the RabbitMQ task queue
 
@@ -20,20 +20,14 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
         as the start method is called.
     """
 
-    def __init__(self, connection, queue=Defaults.TASK_QUEUE,
-                 decoder=json.loads, process_controller=None):
+    def __init__(self, connection, queue=Defaults.TASK_QUEUE, decoder=json.loads):
         """
         :param connection: The pika RabbitMQ connection
         :type connection: :class:`pika.Connection`
         :param queue: The queue name to use
         :param decoder: A function to deserialise incoming messages
-        :param process_controller: The process controller to use, one will be created if None is passed
-        :type process_controller: :class:`plum.process_controller.ProcessController`
         """
-        if process_controller is None:
-            self._controller = ProcessController()
-        else:
-            self._controller = process_controller
+        super(ProcessLaunchSubscriber, self).__init__()
 
         self._decode = decoder
         self._running_processes = {}
@@ -47,21 +41,7 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
         self._channel.basic_consume(self._on_launch, queue=queue)
 
     @override
-    def start(self, poll_time=1.0):
-        """
-        Start polling for tasks.  Will block until stop() is called.
-
-        .. warning:: Must be called from the same threads where the connection
-            that was passed into the constructor was created.
-        """
-        while self._channel._consumer_infos:
-            self.poll(poll_time)
-            if self._stopping:
-                self._channel.stop_consuming()
-                self._stopping = False
-
-    @override
-    def poll(self, time_limit=1.0):
+    def tick(self, time_limit=1.0):
         """
         Poll the channel for launch process events
 
@@ -73,15 +53,6 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
         self._num_processes = 0
         self._channel.connection.process_data_events(time_limit=time_limit)
         return self._num_processes
-
-    @override
-    def stop(self):
-        self._stopping = True
-        self._controller.pause_all()
-
-    @override
-    def shutdown(self):
-        self._channel.close()
 
     def _on_launch(self, ch, method, properties, body):
         """
@@ -101,19 +72,13 @@ class ProcessLaunchSubscriber(Subscriber, ProcessListener):
         proc.add_process_listener(self)
 
         self._running_processes[proc.pid] = _RunningTaskInfo(proc.pid, ch, method.delivery_tag)
-        self._controller.insert(proc)
-        self._controller.play(proc.pid)
+        self.loop().insert(proc)
 
-    # region From ProcessListener
-    def on_process_done_playing(self, process):
-        self._process_terminated(process)
-
-    # endregion
-
-    def _process_terminated(self, process):
+    def on_process_terminate(self, process):
         """
         A process has finished for whatever reason so clean up.
-        :param process: The process that finished
+        
+        :param process: The process that terminated
         :type process: :class:`plum.process.Process`
         """
         info = self._running_processes.pop(process.pid)

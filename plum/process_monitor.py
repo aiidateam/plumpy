@@ -16,12 +16,6 @@ class ProcessMonitorListener(object):
     def on_monitored_process_finish(self, process):
         pass
 
-    def on_monitored_process_stopped(self, process):
-        pass
-
-    def on_monitored_process_failed(self, process):
-        pass
-
 
 class ProcessMonitor(ProcessListener):
     """
@@ -99,16 +93,7 @@ class ProcessMonitor(ProcessListener):
         self.__event_helper.fire_event(
             ProcessMonitorListener.on_monitored_process_finish, process)
 
-    @override
-    def on_process_stop(self, process):
-        self.__event_helper.fire_event(
-            ProcessMonitorListener.on_monitored_process_stopped, process)
-
-    @override
-    def on_process_fail(self, process):
-        self.__event_helper.fire_event(
-            ProcessMonitorListener.on_monitored_process_failed, process)
-        # endregion
+    # endregion
 
 
 # The global singleton

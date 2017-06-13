@@ -4,7 +4,7 @@ from plum.process import ProcessState
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.thread_executor import ThreadExecutor, SchedulingExecutor
 from plum.test_utils import DummyProcess, WaitForSignalProcess
-from plum.wait_ons import wait_until, wait_until_stopped, WaitOnProcessState
+from plum.wait_ons import run_until, wait_until_stopped, WaitOnProcessState
 
 
 class TestThreadExecutor(TestCase):
@@ -52,7 +52,7 @@ class TestThreadExecutor(TestCase):
             procs.append(WaitForSignalProcess.new())
             self.executor.play(procs[-1])
 
-        self.assertTrue(wait_until(procs, ProcessState.WAITING, timeout=5))
+        self.assertTrue(run_until(procs, ProcessState.WAITING, timeout=5))
 
         # Check they are all in state we expect
         for p in procs:
@@ -74,7 +74,7 @@ class TestThreadExecutor(TestCase):
             self.executor.play(procs[-1])
 
         # Wait
-        self.assertTrue(wait_until(procs, ProcessState.WAITING))
+        self.assertTrue(run_until(procs, ProcessState.WAITING))
 
         self.assertEqual(self.executor.pause_all(timeout=3.), num_procs)
 
@@ -88,7 +88,7 @@ class TestThreadExecutor(TestCase):
         future = self.executor.play(p)
 
         # Wait
-        self.assertTrue(wait_until(p, ProcessState.WAITING))
+        self.assertTrue(run_until(p, ProcessState.WAITING))
         self.assertTrue(p.is_playing())
 
         # Abort
@@ -100,7 +100,7 @@ class TestThreadExecutor(TestCase):
         future = self.executor.play(p)
 
         # Wait
-        self.assertTrue(wait_until(p, ProcessState.WAITING))
+        self.assertTrue(run_until(p, ProcessState.WAITING))
         self.assertTrue(p.is_playing())
 
         # Pause
@@ -130,7 +130,7 @@ class TestThreadExecutor(TestCase):
         proc = WaitForSignalProcess.new()
         # Start a process and make sure it is waiting
         future = self.executor.play(proc)
-        wait_until(proc, ProcessState.WAITING)
+        run_until(proc, ProcessState.WAITING)
         # Then interrupt by aborting
         self.assertTrue(future.abort(timeout=2.))
         self.assertEqual(self.executor.get_num_processes(), 0)
@@ -142,7 +142,7 @@ class TestThreadExecutor(TestCase):
         self.assertEqual(self.executor.get_num_processes(), 0)
         proc = WaitForSignalProcess.new()
         future = self.executor.play(proc)
-        wait_until(proc, ProcessState.WAITING)
+        run_until(proc, ProcessState.WAITING)
         self.assertTrue(future.abort(timeout=2.))
         self.assertEqual(self.executor.get_num_processes(), 0)
 
@@ -165,7 +165,7 @@ class TestSchedulerExecutor(TestCase):
                 procs.append(proc)
                 executor.play(proc)
 
-            self.assertTrue(wait_until(procs, ProcessState.STOPPED, timeout=2.))
+            self.assertTrue(run_until(procs, ProcessState.STOPPED, timeout=2.))
 
     def test_simple_push_over_limit(self):
         with SchedulingExecutor(max_threads=1) as executor:
@@ -173,12 +173,12 @@ class TestSchedulerExecutor(TestCase):
             p2 = WaitForSignalProcess()
 
             f1 = executor.play(p1)
-            self.assertTrue(wait_until(p1, ProcessState.WAITING, timeout=2.))
+            self.assertTrue(run_until(p1, ProcessState.WAITING, timeout=2.))
 
             # This should push of P1
             f2 = executor.play(p2)
             self.assertTrue(p1.wait(timeout=1.))
-            self.assertTrue(wait_until(p2, ProcessState.WAITING, timeout=2.))
+            self.assertTrue(run_until(p2, ProcessState.WAITING, timeout=2.))
 
             # Now P2 should be paused and P1 running again
             self.assertTrue(p2.wait(timeout=1.))
@@ -200,7 +200,7 @@ class TestSchedulerExecutor(TestCase):
             executor.play(procs[1])
 
             # Get first two to the waiting state
-            self.assertTrue(wait_until((procs[0], procs[1]), ProcessState.WAITING, timeout=2.))
+            self.assertTrue(run_until((procs[0], procs[1]), ProcessState.WAITING, timeout=2.))
 
             self.assertTrue(procs[0].is_playing())
             self.assertTrue(procs[1].is_playing())
@@ -210,7 +210,7 @@ class TestSchedulerExecutor(TestCase):
             executor.play(procs[2])
 
             # Get third to the waiting state
-            self.assertTrue(wait_until(procs[2], ProcessState.WAITING, timeout=2.))
+            self.assertTrue(run_until(procs[2], ProcessState.WAITING, timeout=2.))
 
             # Now that it's waiting p2 should be pulled and the other two should be playing
             self.assertTrue(procs[2].wait(timeout=2.))

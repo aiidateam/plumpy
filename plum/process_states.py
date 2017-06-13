@@ -1,7 +1,7 @@
 from enum import Enum
 import logging
 import traceback
-from plum.wait import WaitOn, Interrupted
+from plum.wait import WaitOn
 import plum.util as util
 from plum.process_listener import ProcessListener
 
@@ -55,9 +55,6 @@ class State(object):
     def exit(self):
         self._process.log_with_pid(logging.DEBUG, "exiting state '{}'".format(self.label))
 
-    def interrupt(self):
-        pass
-
     def save_instance_state(self, out_state):
         out_state['class_name'] = util.fullname(self)
 
@@ -77,7 +74,8 @@ class Created(State):
 
     def execute(self):
         super(Created, self).execute()
-        return Running(self._process, self._process.do_run)
+        # Move to the running state
+        self._process._set_state(Running(self._process, self._process.do_run))
 
 
 class Running(State):
@@ -114,17 +112,17 @@ class Running(State):
 
         if previous_state is ProcessState.CREATED:
             self._process._on_start()
-            self._process._fire_listener_event(ProcessListener.on_process_start)
+            self._process._fire_event(ProcessListener.on_process_start)
         elif previous_state is ProcessState.WAITING:
             self._process._on_resume()
-            self._process._fire_listener_event(ProcessListener.on_process_resume)
+            self._process._fire_event(ProcessListener.on_process_resume)
         elif previous_state is ProcessState.RUNNING:
             pass
         else:
             raise RuntimeError("Cannot enter RUNNING from '{}'".format(previous_state))
 
         self._process._on_run()
-        self._process._fire_listener_event(ProcessListener.on_process_run)
+        self._process._fire_event(ProcessListener.on_process_run)
 
     def execute(self):
         super(Running, self).execute()
@@ -132,17 +130,9 @@ class Running(State):
         retval = self._exec_func(*self._args, **self._kwargs)
         if Running._is_wait_retval(retval):
             wait_on, callback = retval
-            # # Check if we can continue straight away
-            # if wait_on.wait(timeout=0):
-            #     if callback is None:
-            #         return Stopped(self._process)
-            #     else:
-            #         return Running(self._process, callback, wait_on)
-            # else:
-            #     return Waiting(self._process, wait_on, callback)
-            return Waiting(self._process, wait_on, callback)
+            self._process._set_state(Waiting(self._process, wait_on, callback))
         else:
-            return Stopped(self._process)
+            self._process._set_state(Stopped(self._process))
 
     def save_instance_state(self, out_state):
         super(Running, self).save_instance_state(out_state)
@@ -162,8 +152,6 @@ class Waiting(State):
         """
         :param process: The process this state belongs to
         :type process: :class:`plum.process.Process`
-        :param wait_on: The WaitOn to wait for
-        :type wait_on: :class:`plum.wait.WaitOn`
         :param callback: A callback function for the next Running state after
             finished waiting.  Can be None in which case next state will be
             STOPPED.
@@ -175,28 +163,27 @@ class Waiting(State):
     def enter(self, previous_state):
         super(Waiting, self).enter(previous_state)
         self._process._on_wait(self._wait_on)
-        self._process._fire_listener_event(ProcessListener.on_process_wait)
+        self._process._fire_event(ProcessListener.on_process_wait)
 
     def execute(self):
         super(Waiting, self).execute()
+        future = self._wait_on.get_future(self._process.loop())
+        if not future.done():
+            return future
 
-        self._wait_on.wait()
         if self._callback is None:
-            return Stopped(self._process)
+            self._process._set_state(Stopped(self._process))
         else:
-            return Running(self._process, self._callback, self._wait_on)
-
-    def interrupt(self):
-        self._wait_on.interrupt()
+            self._process._set_state(Running(self._process, self._callback, future))
 
     def save_instance_state(self, out_state):
         super(Waiting, self).save_instance_state(out_state)
-        out_state[self.WAIT_ON] = \
-            self._process.save_wait_on_state(self._wait_on, self._callback)
         out_state[self.CALLBACK] = self._callback.__name__
+        out_state[self.WAIT_ON] = self._process.save_wait_on_state(self._wait_on)
 
     def load_instance_state(self, process, saved_state):
         super(Waiting, self).load_instance_state(process, saved_state)
+        self._wait_on = self._process.create_wait_on(saved_state[self.WAIT_ON])
 
         try:
             self._callback = getattr(self._process, saved_state[self.CALLBACK])
@@ -205,8 +192,6 @@ class Waiting(State):
                 "This process does not have a function with "
                 "the name '{}' as expected from the wait on".
                     format(saved_state[self.CALLBACK]))
-
-        self._wait_on = self._process.create_wait_on(saved_state[self.WAIT_ON], self._callback)
 
     def get_wait_on(self):
         return self._wait_on
@@ -225,15 +210,19 @@ class Stopped(State):
 
         if self._abort:
             self._process._on_abort(self._abort_msg)
-            self._process._fire_listener_event(ProcessListener.on_process_abort)
+            self._process._fire_event(ProcessListener.on_process_abort)
         elif previous_state is ProcessState.RUNNING:
             self._process._on_finish()
-            self._process._fire_listener_event(ProcessListener.on_process_finish)
+            self._process._fire_event(ProcessListener.on_process_finish)
         else:
             raise RuntimeError("Cannot enter STOPPED from '{}'".format(previous_state))
 
         self._process._on_stop(self._abort_msg)
-        self._process._fire_listener_event(ProcessListener.on_process_stop)
+        self._process._fire_event(ProcessListener.on_process_stop)
+
+    def execute(self):
+        super(Stopped, self).execute()
+        self._process._terminate()
 
     def save_instance_state(self, out_state):
         super(Stopped, self).save_instance_state(out_state)
@@ -268,7 +257,11 @@ class Failed(State):
             self._process.log_with_pid(
                 logging.ERROR, "exception entering failed state:\n{}".format(traceback.format_exc()))
 
-        self._process._fire_listener_event(ProcessListener.on_process_fail)
+        self._process._fire_event(ProcessListener.on_process_fail)
+
+    def execute(self):
+        super(Failed, self).execute()
+        self._process._terminate()
 
     def save_instance_state(self, out_state):
         super(Failed, self).save_instance_state(out_state)
@@ -279,7 +272,6 @@ class Failed(State):
 
     def load_instance_state(self, process, saved_state):
         super(Failed, self).load_instance_state(process, saved_state)
-        super(Failed, self).load_instance_state(saved_state)
         self._exc_info = saved_state['exc_info']
 
     def get_exc_info(self):

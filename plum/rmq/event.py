@@ -77,10 +77,6 @@ class ProcessEventPublisher(ProcessListener, ProcessMonitorListener):
         self.add_process(process)
 
     # region From ProcessListener
-    def on_process_playing(self, process):
-        key = "{}.playing".format(process.pid)
-        self._send_event_msg(process, key)
-
     def on_process_start(self, process):
         key = "{}.start".format(process.pid)
         self._send_event_msg(process, key)
@@ -124,10 +120,6 @@ class ProcessEventPublisher(ProcessListener, ProcessMonitorListener):
         # Don't send the value, it could be large and/or unserialisable
         evt_details = {'port': output_port, 'dynamic': dynamic}
         self._send_event_msg(process, key, {DETAILS_KEY: evt_details})
-
-    def on_process_done_playing(self, process):
-        key = "{}.done_playing".format(process.pid)
-        self._send_event_msg(process, key)
 
     # endregion
 

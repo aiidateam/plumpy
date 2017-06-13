@@ -1,70 +1,45 @@
-from concurrent.futures import ThreadPoolExecutor as PythonThreadPoolExecutor
-import time
-from util import TestCase
+from plum.loop.event_loop import BaseEventLoop
 from plum.process import ProcessState
-from plum.exceptions import Interrupted
-from plum.wait_ons import WaitOnProcessState, wait_until
 from plum.test_utils import WaitForSignalProcess, DummyProcess
-from plum.thread_executor import ThreadExecutor
+from plum.wait_ons import WaitOnProcessState, run_until
+from util import TestCase
 
 
 class TestWaitOnProcessStateEvent(TestCase):
     def setUp(self):
         super(TestWaitOnProcessStateEvent, self).setUp()
-        self.executor = ThreadExecutor()
-
-    def tearDown(self):
-        self.executor.shutdown()
+        self.loop = BaseEventLoop()
 
     def test_already_in_state(self):
         p = DummyProcess.new()
-        self.assertTrue(WaitOnProcessState(p, ProcessState.CREATED).wait(timeout=2.))
+        self.loop.insert(p)
+        wait_for = WaitOnProcessState(p, ProcessState.CREATED)
+        result = self.loop.run_until_complete(wait_for.get_future(self.loop))
+        self.assertEqual(result, WaitOnProcessState.STATE_REACHED)
 
     def test_state_messages(self):
-        tp = PythonThreadPoolExecutor(max_workers=1)
         for state in (ProcessState.RUNNING, ProcessState.STOPPED):
             p = DummyProcess.new()
-            waiton = WaitOnProcessState(p, state)
-            future = tp.submit(waiton.wait)
-            while not future.running():
-                pass
+            self.loop.insert(p)
 
-            p.play()
-            self.assertTrue(future.result(timeout=2.))
+            wait_for = WaitOnProcessState(p, state)
+            result = self.loop.run_until_complete(wait_for.get_future(self.loop))
+            self.assertEqual(result, WaitOnProcessState.STATE_REACHED)
+            self.assertTrue(p.state, state)
 
     def test_waiting_state(self):
-        tp = PythonThreadPoolExecutor(max_workers=1)
-
         p = WaitForSignalProcess.new()
-        waiton = WaitOnProcessState(p, ProcessState.WAITING)
-        future = tp.submit(waiton.wait)
+        self.loop.insert(p)
 
-        self.executor.play(p)
-        self.assertTrue(future.result(timeout=2.))
-        self.assertTrue(p.abort(timeout=2.))
+        wait_for = WaitOnProcessState(p, ProcessState.WAITING)
+        result = self.loop.run_until_complete(wait_for.get_future(self.loop))
 
-    def test_interrupt(self):
-        tp = PythonThreadPoolExecutor(max_workers=1)
-
-        p = DummyProcess.new()
-        waiton = WaitOnProcessState(p, ProcessState.STOPPED)
-        future = tp.submit(waiton.wait)
-        while not future.running():
-            pass
-
-        with self.assertRaises(Interrupted):
-            waiton.interrupt()
-            future.result(timeout=2.)
-
-    def test_interrupt_not_waiting(self):
-        """
-        If you interrupt when it's not waiting then nothing happens.
-        """
-        p = DummyProcess.new()
-        waiton = WaitOnProcessState(p, ProcessState.STOPPED)
-        waiton.interrupt()
+        self.assertEqual(result, WaitOnProcessState.STATE_REACHED)
 
     def test_wait_until(self):
         p = WaitForSignalProcess.new()
-        self.executor.play(p)
-        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=1.))
+        self.loop.insert(p)
+        self.assertEquals(
+            WaitOnProcessState.STATE_REACHED,
+            run_until(p, ProcessState.WAITING, self.loop)
+        )

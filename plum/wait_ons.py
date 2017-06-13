@@ -18,13 +18,20 @@ class Checkpoint(WaitOn):
     create a checkpoint at this point in the execution of a Process.
     """
 
-    @override
-    def wait(self, timeout=None):
-        return True
+    def __init__(self):
+        self._future = None
 
     @override
-    def interrupt(self):
-        pass
+    def load_instance_state(self, saved_state):
+        self._future = None
+
+    @override
+    def get_future(self, loop):
+        if self._future is None:
+            self._future = loop.create_future()
+            self._future.set_result(None)
+
+        return self._future
 
 
 class _CompoundWaitOn(WaitOn):
@@ -41,7 +48,7 @@ class _CompoundWaitOn(WaitOn):
                         w.__class__.__name__))
 
         self._wait_list = wait_list
-        self._interrupted = False
+        self._future = None
 
     @override
     def save_instance_state(self, out_state):
@@ -52,71 +59,56 @@ class _CompoundWaitOn(WaitOn):
             b = Bundle()
             w.save_instance_state(b)
             waits.append(b)
+
         out_state[self.WAIT_LIST] = waits
 
     @override
     def load_instance_state(self, saved_state):
         super(_CompoundWaitOn, self).load_instance_state(saved_state)
         self._wait_list = [create_from(b) for b in saved_state[self.WAIT_LIST]]
-        self._interrupted = False
+        self._future = None
 
 
 class WaitOnAll(_CompoundWaitOn):
-    @override
-    def wait(self, timeout=None):
-        self._interrupted = False
-        t0 = time.time()
-        remaining_timeout = timeout
-        for w in self._wait_list:
-            if self._interrupted:
-                raise Interrupted()
+    def __init__(self, wait_list):
+        super(WaitOnAll, self).__init__(wait_list)
+        self._num_finished = 0
 
-            if not w.wait(remaining_timeout):
-                # We timed out
-                return False
+    def load_instance_state(self, saved_state):
+        super(WaitOnAll, self).load_instance_state(saved_state)
+        self._num_finished = 0
 
-            if timeout is not None:
-                elapsed_time = time.time() - t0
-                remaining_timeout = timeout - elapsed_time
+    def get_future(self, loop):
+        if not self._future:
+            self._future = loop.create_future()
+            for wait_on in self._wait_list:
+                wait_on.get_future(loop).add_done_callback(self._wait_done)
 
-        return True
+        return self._future
 
-    @override
-    def interrupt(self):
-        self._interrupted = True
-        for w in self._wait_list:
-            w.interrupt()
+    def _wait_done(self, future):
+        self._num_finished += 1
+        if self._num_finished == len(self._wait_list):
+            self._future.set_result(None)
 
 
 class WaitOnAny(_CompoundWaitOn):
-    def __init__(self, wait_list):
-        super(WaitOnAny, self).__init__(wait_list)
-        self._interrupted = False
+    def get_future(self, loop):
+        if not self._future:
+            self._future = loop.create_future()
+            for wait_on in self._wait_list:
+                wait_on.get_future(loop).add_done_callback(self._wait_done)
 
-    @override
-    def wait(self, timeout=None):
-        self._interrupted = False
-        t0 = time.time()
-        while True:
-            for w in self._wait_list:
-                if self._interrupted:
-                    raise Interrupted()
+        return self._future
 
-                if timeout is not None and time.time() - t0 >= timeout:
-                    return False
-
-                # Check if anyone is finished
-                if w.wait(0):
-                    return True
-
-    @override
-    def interrupt(self):
-        self._interrupted = True
+    def _wait_done(self, future):
+        if not self._future.done():
+            self._future.set_result(None)
 
 
-class WaitOnProcessState(WaitOn, Unsavable, ProcessListener):
-    STATE_REACHED = 0
-    STATE_UNREACHABLE = 1
+class WaitOnProcessState(WaitOn, ProcessListener):
+    STATE_REACHED = 'state_reached'
+    STATE_UNREACHABLE = 'state_unreachable'
 
     @override
     def __init__(self, proc, target_state):
@@ -131,45 +123,26 @@ class WaitOnProcessState(WaitOn, Unsavable, ProcessListener):
         assert target_state in ProcessState
         super(WaitOnProcessState, self).__init__()
 
-        self._proc = proc
+        self._pid = proc.pid
         self._target_state = target_state
-        self._wait_outcome = None
-        self._state_event = WaitOnEvent()
-        self._interrupted = False
+        self._future = None
 
-    @override
-    def wait(self, timeout=None):
-        self._interrupted = False
+    def get_future(self, loop):
+        if self._future is None:
+            future = loop.create_future()
+            proc = loop.get_process(self._pid)
 
-        self._wait_outcome = None
-        with self._proc.listen_scope(self):
-            state = self._proc.state
             # Are we currently in the state?
-            if state == self._target_state:
-                return True
+            if proc.state == self._target_state:
+                future.set_result(self.STATE_REACHED)
+            elif self._is_target_state_unreachable(proc.state):
+                future.set_result(self.STATE_UNREACHABLE)
+            else:
+                proc.add_process_listener(self)
 
-            if self._is_target_state_unreachable(state):
-                raise WaitException(
-                    "Target state '{}' is unreachable from current state "
-                    "'{}'".format(self._target_state, state)
-                )
+            self._future = future
 
-            if self._interrupted:
-                raise Interrupted()
-
-            if not self._state_event.wait(timeout):
-                # Timed-out
-                return False
-            elif self._wait_outcome is self.STATE_REACHED:
-                return True
-            elif self._wait_outcome is self.STATE_UNREACHABLE:
-                raise WaitException(
-                    "Target state '{}' is unreachable".format(self._target_state)
-                )
-
-    @override
-    def interrupt(self):
-        self._state_event.interrupt()
+        return self._future
 
     @override
     def on_process_run(self, proc):
@@ -189,9 +162,9 @@ class WaitOnProcessState(WaitOn, Unsavable, ProcessListener):
 
     def _state_changed(self, new_state):
         if new_state is self._target_state:
-            self._set_outcome(self.STATE_REACHED)
+            self._future.set_result(self.STATE_REACHED)
         elif self._is_target_state_unreachable(new_state):
-            self._set_outcome(self.STATE_UNREACHABLE)
+            self._future.set_result(self.STATE_UNREACHABLE)
 
     def _is_target_state_unreachable(self, current_state):
         # Check start state
@@ -207,29 +180,26 @@ class WaitOnProcessState(WaitOn, Unsavable, ProcessListener):
 
         return False
 
-    def _set_outcome(self, outcome):
-        if self._wait_outcome is None:
-            self._wait_outcome = outcome
-            self._state_event.set()
 
-
-def wait_until(proc, state, timeout=None):
+def run_until(proc, state, loop):
     """
-    Wait until a process or processes reaches a certain state.  `proc` can be
-    a single process or a sequence of processes.
+    Run the event loop until a process or processes reaches a certain state.
+    `proc` can be a single process or a sequence of processes.
 
     :param proc: The process or sequence of processes to wait for
     :type proc: :class:`plum.process.Process` or :class:`Sequence`
-    :param state: The state to wait for
-    :param timeout: The optional timeout
+    :param state: The state to run until
+    :param loop: The event loop
     """
     if isinstance(proc, Sequence):
-        return WaitOnAll([WaitOnProcessState(p, state) for p in proc]).wait(timeout)
+        wait_for = WaitOnAll([WaitOnProcessState(p, state) for p in proc])
     else:
-        return WaitOnProcessState(proc, state).wait(timeout)
+        wait_for = WaitOnProcessState(proc, state)
+
+    return loop.run_until_complete(wait_for.get_future(loop))
 
 
-class WaitOnProcess(WaitOnEvent, Unsavable, ProcessListener):
+class WaitOnProcess(WaitOnEvent):
     def __init__(self, process):
         """
         Wait for a process to terminate.
@@ -238,20 +208,18 @@ class WaitOnProcess(WaitOnEvent, Unsavable, ProcessListener):
         :type process: :class:`plum.process.Process`
         """
         super(WaitOnProcess, self).__init__()
-        self._proc = process
+        self._pid = process.pid
 
-    @override
-    def wait(self, timeout=None):
-        with self._proc.listen_scope(self):
-            if self._proc.has_terminated():
-                return True
+    def get_future(self, loop):
+        return loop.get_process_future(self._pid)
 
-            return super(WaitOnProcess, self).wait(timeout)
+    def save_instance_state(self, out_state):
+        super(WaitOnProcess, self).save_instance_state(out_state)
+        out_state['pid'] = self._pid
 
-    @override
-    def on_process_done_playing(self, process):
-        if process.has_terminated():
-            self.set()
+    def load_instance_state(self, saved_state):
+        super(WaitOnProcess, self).load_instance_state(saved_state)
+        self._pid = saved_state['pid']
 
 
 class WaitOnProcessOutput(WaitOnEvent, Unsavable, ProcessListener):
@@ -289,33 +257,14 @@ def wait_until_stopped(proc, timeout=None):
     :type proc: :class:`~plum.process.Process` or :class:`Sequence`
     :param timeout: The optional timeout
     """
-    return wait_until(proc, ProcessState.STOPPED, timeout)
+    return run_until(proc, ProcessState.STOPPED, timeout)
 
 
 class Barrier(WaitOn):
     def __init__(self):
         super(Barrier, self).__init__()
-        self._barrier = threading.Event()
         self._is_open = False
-
-    @override
-    def wait(self, timeout=None):
-        if self._is_open:
-            return True
-
-        self._barrier.clear()
-        if not self._barrier.wait(timeout):
-            return False
-
-        if self._is_open:
-            return True
-        else:
-            # Must have been interrupted
-            raise Interrupted()
-
-    @override
-    def interrupt(self):
-        self._barrier.set()
+        self._future = None
 
     @override
     def save_instance_state(self, out_state):
@@ -325,13 +274,18 @@ class Barrier(WaitOn):
     @override
     def load_instance_state(self, saved_state):
         super(Barrier, self).load_instance_state(saved_state)
-        self._barrier = threading.Event()
         self._is_open = saved_state['is_open']
+        self._future = None
+
+    def get_future(self, loop):
+        if self._future is None:
+            self._future = loop.create_future()
+            if self._is_open:
+                self._future.set_result('open')
+
+        return self._future
 
     def open(self):
         self._is_open = True
-        self._barrier.set()
-
-    def close(self):
-        self._is_open = False
-        self._barrier.set()
+        if self._future is not None:
+            self._future.set_result('open')

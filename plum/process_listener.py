@@ -4,15 +4,6 @@ from abc import ABCMeta
 class ProcessListener(object):
     __metaclass__ = ABCMeta
 
-    def on_process_playing(self, process):
-        """
-        Called when the process starts to be played i.e. it is executing
-
-        :param process: The process
-        :type process: :class:`plum.process.Process`
-        """
-        pass
-
     def on_process_start(self, process):
         """
         Called when the process has been started
@@ -58,6 +49,16 @@ class ProcessListener(object):
         """
         pass
 
+    def on_process_terminate(self, process):
+        """
+        Called when the process has terminated, either because of finishing, being
+        aborted or failing.
+        
+        :param process: The process
+        :type process: :class:`plum.process.Process`
+        """
+        pass
+
     def on_output_emitted(self, process, output_port, value, dynamic):
         """
         Called when the process has emitted an output value
@@ -93,15 +94,6 @@ class ProcessListener(object):
     def on_process_fail(self, process):
         """
         Called when the process is about to enter the FAILED state
-
-        :param process: The process
-        :type process: :class:`plum.process.Process`
-        """
-        pass
-
-    def on_process_done_playing(self, process):
-        """
-        Called when the process starts to be played i.e. it is executing
 
         :param process: The process
         :type process: :class:`plum.process.Process`

@@ -43,12 +43,11 @@ class TestProcessMonitor(TestCase):
             self.assertFalse(l.stopped_called)
             self.assertFalse(l.failed_called)
 
-            DummyProcess.run()
+            DummyProcess.launch()
 
             self.assertTrue(l.created_called)
             self.assertTrue(l.stopped_called)
             self.assertFalse(l.failed_called)
-
 
     def test_create_fail(self):
         l = EventTracker()
@@ -58,7 +57,7 @@ class TestProcessMonitor(TestCase):
             self.assertFalse(l.failed_called)
 
             try:
-                ExceptionProcess.run()
+                ExceptionProcess.launch()
             except RuntimeError:
                 pass
             except BaseException as e:

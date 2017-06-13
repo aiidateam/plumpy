@@ -14,6 +14,7 @@ import unittest
 import uuid
 import warnings
 
+from plum.loop.event_loop import BaseEventLoop
 from plum.process_controller import ProcessController
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.test_utils import TEST_PROCESSES
@@ -39,8 +40,10 @@ class TestTaskControllerAndRunner(TestCase):
         self.controller = ProcessController()
         queue = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
         self.publisher = ProcessLaunchPublisher(self._connection, queue=queue)
-        self.subscriber = ProcessLaunchSubscriber(
-            self._connection, queue=queue, process_controller=self.controller)
+        self.subscriber = ProcessLaunchSubscriber(self._connection, queue=queue)
+
+        self.loop = BaseEventLoop()
+        self.loop.insert(self.subscriber)
 
     def tearDown(self):
         self._connection.close()
@@ -66,16 +69,21 @@ class TestTaskControllerAndRunner(TestCase):
         for proc_class in TEST_PROCESSES:
             self.publisher.launch(proc_class)
 
+        proc_pids = set()
+
         l = RanLogger()
         with MONITOR.listen(l):
             # Now make them run
-            num_ran = 0
             for _ in range(0, 10):
-                num_ran += self.subscriber.poll(0.2)
-                if num_ran >= len(TEST_PROCESSES):
+                self.loop.tick()
+
+                for proc in self.loop.processes():
+                    proc_pids.add(proc.pid)
+
+                if len(proc_pids) >= len(TEST_PROCESSES):
                     break
 
-        self.assertEqual(num_ran, len(TEST_PROCESSES))
+        self.assertEqual(len(proc_pids), len(TEST_PROCESSES))
         self.assertListEqual(TEST_PROCESSES, l.ran)
 
 

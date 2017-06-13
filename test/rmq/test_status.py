@@ -14,7 +14,7 @@ import uuid
 from plum.process_controller import ProcessController
 from plum.test_utils import WaitForSignalProcess
 from plum.process import ProcessState
-from plum.wait_ons import wait_until
+from plum.wait_ons import run_until
 
 
 @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
@@ -116,7 +116,7 @@ class TestStatusProvider(TestCase):
             procs.append(p)
             self.controller.insert_and_play(p)
 
-        self.assertTrue(wait_until(procs, ProcessState.WAITING, timeout=2.))
+        self.assertTrue(run_until(procs, ProcessState.WAITING, timeout=2.))
 
         procs_dict = status_decode(self._send_and_get())[status.PROCS_KEY]
         self.assertEqual(len(procs_dict), len(procs))

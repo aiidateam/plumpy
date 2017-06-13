@@ -11,3 +11,5 @@ class NullHandler(logging.Handler):
 
 
 logging.getLogger("plum").addHandler(NullHandler())
+
+from plum.process import Process

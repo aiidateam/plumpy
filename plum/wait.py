@@ -18,10 +18,6 @@ class WaitException(Exception):
 class WaitOn(Savable):
     """
     An object that represents something that is being waited on.
-
-    .. warning:: Only a single thread can `wait` on this wait on.  If it is
-        necessary to have another thread wait on the same thing then a copy
-        should be made.
     """
     __metaclass__ = ABCMeta
 
@@ -31,17 +27,12 @@ class WaitOn(Savable):
         return self.__class__.__name__
 
     @abstractmethod
-    def wait(self, timeout=None):
+    def get_future(self, loop):
         """
-        Wait for something.
-
-        :param timeout: The waiting timeout
-        :return: True if the something happened, False otherwise
+        :param loop: :class:`plum.event_loop.AbstractEventLoop` 
+        :return: The future corresponding to this wait on
+        :rtype: :class:`plum.event_loop.Future`
         """
-        pass
-
-    @abstractmethod
-    def interrupt(self):
         pass
 
     @protected
