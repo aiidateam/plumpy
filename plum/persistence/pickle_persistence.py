@@ -9,7 +9,8 @@ import traceback
 import pickle
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
-from plum.process_monitor import MONITOR, ProcessMonitorListener
+from plum.process import Process
+from plum.loop import LoopListener
 from plum.util import override, protected
 from plum.exceptions import LockError
 from plum.persistence._base import LOGGER
@@ -56,7 +57,7 @@ class RLock(portalocker.Lock):
         self._acquire_count -= 1
 
 
-class PicklePersistence(ProcessListener, ProcessMonitorListener):
+class PicklePersistence(ProcessListener, LoopListener):
     """
     Class that uses pickles stored in particular directories to persist the
     instance state of Processes.
@@ -110,8 +111,6 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
         finished_directory/[pid].pickle - Finished processes
         failed_directory/[pid].pickle - Failed processes
 
-        :param auto_persist: Will automatically persist Processes if True.
-        :type auto_persist: bool
         :param running_directory: The base directory to store all pickles in.
         :type running_directory: str
         :param finished_directory: The (relative) subdirectory to put finished
@@ -158,17 +157,19 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
 
         return checkpoints
 
-    def enable_persist_all(self):
+    def start_persisting(self, loop):
+        """      
+        :param loop: The event loop
+        :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
         """
-        Persist all processes that run
-        """
-        MONITOR.start_listening(self)
+        loop.add_loop_listener(self)
 
-    def disable_persist_all(self):
+    def stop_persisting(self, loop):
+        """      
+        :param loop: The event loop
+        :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
         """
-        Stop persisting all ran processes
-        """
-        MONITOR.stop_listening(self)
+        loop.remove_loop_listener(self)
 
     @property
     def store_directory(self):
@@ -285,10 +286,11 @@ class PicklePersistence(ProcessListener, ProcessMonitorListener):
 
     # endregion
 
-    # region ProcessMonitorListener messages
+    # region LoopListener messages
     @override
-    def on_monitored_process_registered(self, process):
-        self.persist_process(process)
+    def on_object_inserted(self, loop, loop_object):
+        if isinstance(loop_object, Process):
+            self.persist_process(loop_object)
 
     # endregion
 

@@ -12,6 +12,7 @@ import plum.util as util
 from plum.loop.object import LoopObject
 from plum.loop.event_loop import BaseEventLoop, Terminated
 from plum.persistence.bundle import Bundle
+from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.process_states import *
@@ -463,6 +464,9 @@ class Process(LoopObject):
         self.log_with_pid(logging.INFO, "pausing")
         self.__paused = True
 
+    def is_playing(self):
+        return not self.__paused
+
     def abort(self, msg=None, timeout=None):
         """
         Abort a playing process.  Can optionally provide a message with
@@ -476,11 +480,13 @@ class Process(LoopObject):
         :rtype: bool
         """
         self.log_with_pid(logging.INFO, "aborting")
+        # Make sure we're playing
+        self.play()
         self.__aborting = True
         self.__abort_msg = msg
 
     def add_process_listener(self, listener):
-        assert (listener != self)
+        assert (listener != self), "Cannot listen to yourself!"
         self.__event_helper.add_listener(listener)
 
     def remove_process_listener(self, listener):
@@ -518,6 +524,8 @@ class Process(LoopObject):
         Any class overriding this method should make sure to call the super
         method, usually at the end of the function.
         """
+        self._fire_event(ProcessListener.on_process_start)
+
         self.__called = True
 
     @protected
@@ -531,6 +539,8 @@ class Process(LoopObject):
         Any class overriding this method should make sure to call the super
         method.
         """
+        self._fire_event(ProcessListener.on_process_run)
+
         self.__called = True
 
     @protected
@@ -538,10 +548,14 @@ class Process(LoopObject):
         """
         Called when the process is about to enter the WAITING state
         """
+        self._fire_event(ProcessListener.on_process_wait)
+
         self.__called = True
 
     @protected
     def on_resume(self):
+        self._fire_event(ProcessListener.on_process_resume)
+
         self.__called = True
 
     @protected
@@ -549,6 +563,8 @@ class Process(LoopObject):
         """
         Called when the process has been asked to abort itself.
         """
+        self._fire_event(ProcessListener.on_process_abort)
+
         self.__called = True
 
     @protected
@@ -559,10 +575,14 @@ class Process(LoopObject):
         """
         self._check_outputs()
         self._finished = True
+        self._fire_event(ProcessListener.on_process_finish)
+
         self.__called = True
 
     @protected
     def on_stop(self):
+        self._fire_event(ProcessListener.on_process_stop)
+
         self.__called = True
 
     @protected
@@ -570,6 +590,8 @@ class Process(LoopObject):
         """
         Called if the process raised an exception.
         """
+        self._fire_event(ProcessListener.on_process_fail)
+
         self.__called = True
 
     @protected
@@ -577,7 +599,7 @@ class Process(LoopObject):
         """
         Called when the process reaches a terminal state.
         """
-        self.__event_helper.fire_event(ProcessListener.on_process_terminate)
+        self._fire_event(ProcessListener.on_process_terminate)
 
         self.__called = True
 
@@ -732,15 +754,13 @@ class Process(LoopObject):
     def _on_fail(self, exc_info):
         self._call_with_super_check(self.on_fail)
 
-    def _on_terminate(self):
-        self._call_with_super_check(self.on_terminate)
-
     def _fire_event(self, event):
         self.loop().call_soon(self.__event_helper.fire_event, event, self)
 
     def _terminate(self):
         self.loop().remove(self)
         self._terminated = True
+        self._call_with_super_check(self.on_terminate)
 
     def _call_with_super_check(self, fn, *args, **kwargs):
         self.__called = False
@@ -770,19 +790,6 @@ class Process(LoopObject):
         self._state.exit()
         self._state = state
         self._state.enter(previous_state)
-
-    def _execute_state(self):
-        """
-        :return: The next state.  Will be None if we this state was terminal. 
-        """
-        return self._state.execute()
-
-    def _set_and_execute_state(self, state):
-        """
-        :return: The next state.  Will be None if we this state was terminal. 
-        """
-        self._set_state(state)
-        return self._execute_state()
 
     @abstractmethod
     def _run(self, **kwargs):

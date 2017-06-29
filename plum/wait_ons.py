@@ -44,8 +44,7 @@ class _CompoundWaitOn(WaitOn):
         for w in wait_list:
             if not isinstance(w, WaitOn):
                 raise ValueError(
-                    "Must provide objects of type WaitOn, got '{}'.".format(
-                        w.__class__.__name__))
+                    "Must provide objects of type WaitOn, got '{}'.".format(w.__class__.__name__))
 
         self._wait_list = wait_list
         self._future = None
@@ -89,7 +88,8 @@ class WaitOnAll(_CompoundWaitOn):
     def _wait_done(self, future):
         self._num_finished += 1
         if self._num_finished == len(self._wait_list):
-            self._future.set_result(None)
+            loop = self._future.loop()
+            self._future.set_result([w.get_future(loop).result() for w in self._wait_list])
 
 
 class WaitOnAny(_CompoundWaitOn):
@@ -120,7 +120,7 @@ class WaitOnProcessState(WaitOn, ProcessListener):
         :param target_state: The state it needs to reach before being ready
         :type target_state: :class:`plum.process.ProcessState`
         """
-        assert target_state in ProcessState
+        assert target_state in ProcessState, "Must supply a valid process state"
         super(WaitOnProcessState, self).__init__()
 
         self._pid = proc.pid
@@ -146,25 +146,28 @@ class WaitOnProcessState(WaitOn, ProcessListener):
 
     @override
     def on_process_run(self, proc):
-        self._state_changed(ProcessState.RUNNING)
+        self._state_changed(proc)
 
     @override
     def on_process_wait(self, proc):
-        self._state_changed(ProcessState.WAITING)
+        self._state_changed(proc)
 
     @override
     def on_process_stop(self, proc):
-        self._state_changed(ProcessState.STOPPED)
+        self._state_changed(proc)
 
     @override
     def on_process_fail(self, proc):
-        self._state_changed(ProcessState.FAILED)
+        self._state_changed(proc)
 
-    def _state_changed(self, new_state):
-        if new_state is self._target_state:
+    def _state_changed(self, proc):
+        if proc.state is self._target_state:
             self._future.set_result(self.STATE_REACHED)
-        elif self._is_target_state_unreachable(new_state):
+        elif self._is_target_state_unreachable(proc.state):
             self._future.set_result(self.STATE_UNREACHABLE)
+
+        if self._future.done():
+            proc.remove_process_listener(self)
 
     def _is_target_state_unreachable(self, current_state):
         # Check start state
@@ -191,12 +194,31 @@ def run_until(proc, state, loop):
     :param state: The state to run until
     :param loop: The event loop
     """
+    loop_inserted = []
     if isinstance(proc, Sequence):
         wait_for = WaitOnAll([WaitOnProcessState(p, state) for p in proc])
+        # Check if we need to insert into loop
+        for p in proc:
+            if p.loop() is None:
+                loop.insert(p)
+                loop_inserted.append(p)
     else:
         wait_for = WaitOnProcessState(proc, state)
+        # Check if we need to insert into loop
+        if proc.loop() is None:
+            loop.insert(proc)
+            loop_inserted.append(proc)
 
-    return loop.run_until_complete(wait_for.get_future(loop))
+    results = loop.run_until_complete(wait_for.get_future(loop))
+
+    for p in loop_inserted:
+        try:
+            loop.remove(p)
+        except ValueError:
+            pass  # Already removed
+
+    if any(result is WaitOnProcessState.STATE_UNREACHABLE for result in results):
+        raise RuntimeError("State '{}' could not be reached for at least one process".format(state))
 
 
 class WaitOnProcess(WaitOnEvent):

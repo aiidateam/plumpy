@@ -1,86 +1,39 @@
+import itertools
+import thread
+import time
 from abc import ABCMeta, abstractmethod
 from collections import deque, namedtuple
-import thread
-import uuid as libuuid
+
 import plum.process
+import plum.util
+from plum.loop import events
+from plum.loop.direct_executor import DirectExecutor as _DirectExecutor
+from plum.loop.messages import Mailman
+from plum.loop.object import LoopObject
+from plum.util import EventHelper
 
 Terminated = namedtuple("Terminated", ['result'])
-
-
-class InvalidStateError(Exception):
-    pass
-
-
-class Handle(object):
-    def __init__(self, fn, args, loop):
-        self._loop = loop
-        self._fn = fn
-        self._args = args
-        self._cancelled = False
-
-    def cancel(self):
-        if not self._cancelled:
-            self._cancelled = True
-            self._fn = None
-            self._args = None
-
-    def _run(self):
-        self._fn(*self._args)
-
 
 _PENDING = 'PENDING'
 _CANCELLED = 'CANCELLED'
 _FINISHED = 'FINISHED'
 
 
-class Future(object):
-    _UNSET = ()
-
-    def __init__(self, loop, uuid=None):
+class Future(plum.util.Future):
+    def __init__(self, loop):
+        super(Future, self).__init__()
         self._loop = loop
-        if uuid is None:
-            self._uuid = libuuid.uuid4()
-        else:
-            self._uuid = uuid
-        self._state = _PENDING
-        self._result = self._UNSET
-        self._exception = None
         self._callbacks = []
 
-    def uuid(self):
-        return self._uuid
-
-    def done(self):
-        return self._state != _PENDING
-
-    def result(self):
-        if self._state is not _FINISHED:
-            raise InvalidStateError("The future has not completed yet")
-        elif self._exception is not None:
-            raise self._exception
-
-        return self._result
+    def loop(self):
+        return self._loop
 
     def set_result(self, result):
-        if self.done():
-            raise InvalidStateError("The future is already done")
-
-        self._result = result
-        self._state = _FINISHED
+        super(Future, self).set_result(result)
         self._schedule_callbacks()
 
-    def exception(self):
-        if self._state is not _FINISHED:
-            raise InvalidStateError("Exception not set")
-
-        return self._exception
-
     def set_exception(self, exception):
-        if self.done():
-            raise InvalidStateError("The future is already done")
-
-        self._exception = exception
-        self._state = _FINISHED
+        super(Future, self).set_exception(exception)
         self._schedule_callbacks()
 
     def add_done_callback(self, fn):
@@ -89,7 +42,7 @@ class Future(object):
         
         :param fn: The callback function.
         """
-        if self._state != _PENDING:
+        if self.done():
             self._loop.call_soon(fn, self)
         else:
             self._callbacks.append(fn)
@@ -107,6 +60,14 @@ class Future(object):
         self._callbacks[:] = []
         for callback in callbacks:
             self._loop.call_soon(callback, self)
+
+
+class LoopListener(object):
+    def on_object_inserted(self, loop, loop_object):
+        pass
+
+    def on_object_removed(self, loop, loop_object):
+        pass
 
 
 class AbstractEventLoop(object):
@@ -129,6 +90,10 @@ class AbstractEventLoop(object):
         pass
 
     @abstractmethod
+    def call_later(self, delay, callback, *args):
+        pass
+
+    @abstractmethod
     def insert(self, loop_object):
         pass
 
@@ -142,6 +107,22 @@ class AbstractEventLoop(object):
 
     @abstractmethod
     def get_process_future(self, pid):
+        pass
+
+    @abstractmethod
+    def add_loop_listener(self, listener):
+        pass
+
+    @abstractmethod
+    def remove_loop_listener(self, listener):
+        pass
+
+    @abstractmethod
+    def time(self):
+        pass
+
+    @abstractmethod
+    def messages(self):
         pass
 
 
@@ -170,15 +151,22 @@ class _ObjectHandle(object):
 
 
 class BaseEventLoop(AbstractEventLoop):
-    def __init__(self):
+    def __init__(self, executor=None):
+        if executor is None:
+            self._executor = _DirectExecutor()
+        else:
+            self._executor = executor
+
         self._stopping = False
         self._callbacks = deque()
 
         self._objects = {}
-        self._processes = {}
         self._to_insert = []
         self._to_remove = set()
         self._thread_id = None
+
+        self.__mailman = Mailman(self)
+        self.__event_helper = EventHelper(LoopListener)
 
     def is_running(self):
         """
@@ -209,9 +197,7 @@ class BaseEventLoop(AbstractEventLoop):
         :type future: union(:class:`Future`, :class:`Process`)
         :return: The result of the future
         """
-        from plum.process import Process
-
-        if isinstance(future, Process):
+        if isinstance(future, LoopObject):
             future = self.insert(future)
 
         future.add_done_callback(self._run_until_complete_cb)
@@ -220,21 +206,38 @@ class BaseEventLoop(AbstractEventLoop):
         return future.result()
 
     def call_soon(self, fn, *args):
-        handle = Handle(fn, args, self)
+        """
+        Call a callback function on the next tick
+
+        :param fn: The callback function
+        :param args: The function arguments
+        :return: A callback handle
+        :rtype: :class:`plum.loop.events.Handle`
+        """
+        handle = events.Handle(fn, args, self)
         self._callbacks.append(handle)
         return handle
+
+    def call_later(self, delay, callback, *args):
+        timer = events.Timer(self.time() + delay, callback, args)
+        self.insert(timer)
+        return timer
 
     def insert(self, loop_object):
         if loop_object.uuid in self._objects:
             return self._objects[loop_object.uuid].future()
 
         for handle in self._to_insert:
-            if loop_object.uuid == handle.object().uuid:
+            if loop_object is handle.object():
                 return handle.future()
 
         future = self.create_future()
         handle = _ObjectHandle(loop_object, future, self)
-        self._to_insert.append(handle)
+
+        if self.is_running():
+            self._to_insert.append(handle)
+        else:
+            self._insert_process(handle)
 
         return future
 
@@ -255,8 +258,14 @@ class BaseEventLoop(AbstractEventLoop):
             self._remove_process(loop_object.uuid)
             return True
 
-    def objects(self):
-        return [h.object() for h in self._objects.itervalues()]
+    def objects(self, type=None):
+        objs = [h.object() for h in self._objects.itervalues()]
+
+        # Filter the type if necessary
+        if type is not None:
+            return [obj for obj in objs if isinstance(obj, type)]
+        else:
+            return objs
 
     def get_object(self, uuid):
         try:
@@ -283,33 +292,23 @@ class BaseEventLoop(AbstractEventLoop):
         raise ValueError("Unknown uuid")
 
     def processes(self):
-        return [self._objects[uuid].object() for uuid in self._processes.itervalues()]
+        return self.objects(type=plum.Process)
 
     def get_process(self, pid):
-        try:
-            self._objects[self._processes[pid]].future()
-        except KeyError:
-            pass
-
-        for handle in self._to_insert:
+        for handle in itertools.chain(self._objects.itervalues(), self._to_insert):
             if isinstance(handle.object(), plum.process.Process) and \
-                    handle.object().pid == pid:
+                            handle.object().pid == pid:
                 return handle.object()
 
         raise ValueError("Unknown pid")
 
     def get_process_future(self, pid):
-        try:
-            self._objects[self._processes[pid]].future()
-        except KeyError:
-            pass
-
-        for handle in self._to_insert:
+        for handle in itertools.chain(self._objects.itervalues(), self._to_insert):
             if isinstance(handle.object(), plum.process.Process) and \
-                    handle.object().pid == pid:
+                            handle.object().pid == pid:
                 return handle.future()
 
-        raise ValueError("Unknown pid")
+        raise ValueError("Unknown pid '{}'".format(pid))
 
     def stop(self):
         """
@@ -320,20 +319,32 @@ class BaseEventLoop(AbstractEventLoop):
     def tick(self):
         self._tick()
 
+    def add_loop_listener(self, listener):
+        self.__event_helper.add_listener(listener)
+
+    def remove_loop_listener(self, listener):
+        self.__event_helper.remove_listener(listener)
+
+    def time(self):
+        return time.time()
+
+    def messages(self):
+        return self.__mailman
+
     def _tick(self):
         # Insert any new processes
         for handle in self._to_insert:
-            object = handle.object()
-            self._objects[object.uuid] = handle
-            if isinstance(object, plum.process.Process):
-                self._processes[object.pid] = object.uuid
-
-            object.on_loop_inserted(self)
+            self._insert_process(handle)
         del self._to_insert[:]
 
         # Tick the processes
+        futs = []
         for handle in self._objects.values():
-            handle.tick()
+            futs.append(self._executor.submit(handle.tick))
+
+        # Wait for everything to complete
+        for fut in futs:
+            fut.result()
 
         # Call all the callbacks
         todo = len(self._callbacks)
@@ -352,12 +363,18 @@ class BaseEventLoop(AbstractEventLoop):
     def _run_until_complete_cb(self, fut):
         self.stop()
 
+    def _insert_process(self, handle):
+        obj = handle.object()
+        self._objects[obj.uuid] = handle
+        obj.on_loop_inserted(self)
+
+        self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_inserted, self, obj)
+
     def _remove_process(self, uuid):
         try:
             handle = self._objects.pop(uuid)
         except KeyError:
             raise ValueError("Unknown uuid")
         else:
-            if isinstance(handle.object(), plum.process.Process):
-                self._processes.pop(handle.object().pid)
             handle.object().on_loop_removed()
+            self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_removed, self, handle.object())

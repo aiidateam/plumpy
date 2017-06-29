@@ -39,7 +39,4 @@ class TestWaitOnProcessStateEvent(TestCase):
     def test_wait_until(self):
         p = WaitForSignalProcess.new()
         self.loop.insert(p)
-        self.assertEquals(
-            WaitOnProcessState.STATE_REACHED,
-            run_until(p, ProcessState.WAITING, self.loop)
-        )
+        run_until(p, ProcessState.WAITING, self.loop)

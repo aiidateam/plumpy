@@ -1,10 +1,11 @@
 import json
 import pika
 import pika.exceptions
-import time
 import uuid
+
+from plum.loop import LoopObject
 from plum.rmq.defaults import Defaults
-from plum.rmq.util import Subscriber, add_host_info
+from plum.rmq.util import add_host_info
 from plum.util import override
 
 
@@ -34,7 +35,7 @@ def action_encode(msg):
 RESULT_KEY = 'result'
 
 
-class ProcessControlPublisher(object):
+class ProcessControlPublisher(LoopObject):
     """
     This class is responsible for sending control messages to processes e.g.
     play, pause, abort, etc.
@@ -42,65 +43,66 @@ class ProcessControlPublisher(object):
 
     def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
                  encoder=action_encode, response_decoder=json.loads):
+        super(ProcessControlPublisher, self).__init__()
+
         self._exchange = exchange
         self._encode = encoder
         self._response_decode = response_decoder
-
-        self._response = None
-        self._correlation_id = None
+        self._responses = {}
 
         # Set up comms
         self._connection = connection
         self._channel = connection.channel()
         self._channel.exchange_declare(exchange=exchange, type='fanout')
+        # Response queue
         result = self._channel.queue_declare(exclusive=True)
         self._callback_queue = result.method.queue
         self._channel.basic_consume(self._on_response, no_ack=True, queue=self._callback_queue)
 
-    def abort(self, pid, msg=None, timeout=None):
-        return self._send_msg({'pid': pid, 'intent': Action.ABORT, 'msg': msg}, timeout)
+    def abort(self, pid, msg=None):
+        return self._send_msg({'pid': pid, 'intent': Action.ABORT, 'msg': msg})
 
-    def pause(self, pid, timeout=None):
-        return self._send_msg({'pid': pid, 'intent': Action.PAUSE}, timeout)
+    def pause(self, pid):
+        return self._send_msg({'pid': pid, 'intent': Action.PAUSE})
 
-    def play(self, pid, timeout=None):
-        return self._send_msg({'pid': pid, 'intent': Action.PLAY}, timeout)
+    def play(self, pid):
+        return self._send_msg({'pid': pid, 'intent': Action.PLAY})
 
-    def _send_msg(self, msg, timeout=None):
-        self._response = None
-        self._correlation_id = str(uuid.uuid4())
+    @override
+    def tick(self):
+        self._channel.connection.process_data_events(time_limit=0.1)
+
+    def _send_msg(self, msg):
+        correlation_id = str(uuid.uuid4())
 
         delivered = self._channel.basic_publish(
             exchange=self._exchange, routing_key='',
             properties=pika.BasicProperties(
-                reply_to=self._callback_queue, correlation_id=self._correlation_id,
+                reply_to=self._callback_queue, correlation_id=correlation_id,
                 delivery_mode=1, content_type='text/json'
             ),
             body=action_encode(msg),
         )
 
         if not delivered:
-            return False
+            return None
 
-        deadline = time.time() + timeout if timeout is not None else None
-        while self._response is None:
-            self._connection.process_data_events()
-            if deadline is not None and time.time() >= deadline:
-                break
+        future = None
+        if self.loop() is not None:
+            future = self.loop().create_future()
+            self._responses[correlation_id] = future
 
-        return self._response
+        return future
 
     def _on_response(self, ch, method, props, body):
-        if self._correlation_id == props.correlation_id:
-            self._response = self._response_decode(body)
-
-    def __del__(self):
-        self._channel.close()
+        if props.correlation_id in self._responses:
+            future = self._responses.pop(props.correlation_id)
+            future.set_result(self._response_decode(body))
 
 
-class ProcessControlSubscriber(Subscriber):
+class ProcessControlSubscriber(LoopObject):
     def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
-                 decoder=action_decode, process_controller=None, response_encoder=json.dumps):
+                 decoder=action_decode, response_encoder=json.dumps):
         """
         Subscribes and listens for process control messages and acts on them
         by calling the corresponding methods of the process manager.
@@ -108,12 +110,10 @@ class ProcessControlSubscriber(Subscriber):
         :param connection: The RMQ connection object
         :param exchange: The name of the exchange to use
         :param decoder:
-        :param process_controller: The process controller running the processes
-            that are being controlled.
-        :type process_controller: :class:`plum.process_controller.ProcessController`
         """
+        super(ProcessControlSubscriber, self).__init__()
+
         self._decode = decoder
-        self._controller = process_controller
         self._response_encode = response_encoder
         self._stopping = False
         self._last_correlation_id = None
@@ -127,23 +127,8 @@ class ProcessControlSubscriber(Subscriber):
         self._channel.basic_consume(self._on_control, queue=queue, no_ack=True)
 
     @override
-    def start(self, poll_time=0.2):
-        while self._channel._consumer_infos:
-            self.poll(poll_time)
-            if self._stopping:
-                self._channel.stop_consuming()
-                self._stopping = False
-
-    @override
-    def poll(self, time_limit=0.2):
-        self._channel.connection.process_data_events(time_limit=time_limit)
-
-    @override
-    def stop(self):
-        self._stopping = True
-
-    def set_process_controller(self, controller):
-        self._controller = controller
+    def tick(self):
+        self._channel.connection.process_data_events(time_limit=0.1)
 
     def _on_control(self, ch, method, props, body):
         d = self._decode(body)
@@ -151,18 +136,18 @@ class ProcessControlSubscriber(Subscriber):
         intent = d['intent']
         try:
             if intent == Action.PLAY:
-                self._controller.play(pid)
+                self.loop().get_process(pid).play()
                 result = 'PLAYED'
             elif intent == Action.PAUSE:
-                self._controller.pause(pid, timeout=0.)
-                result = 'PAUSING'
+                self.loop().get_process(pid).pause()
+                result = 'PAUSED'
             elif intent == Action.ABORT:
-                self._controller.abort(pid, d.get('msg', None), timeout=0.)
-                result = 'ABORTING'
+                self.loop().get_process(pid).abort(msg=d.get('msg', None))
+                result = 'ABORTED'
             else:
                 raise RuntimeError("Unknown intent")
-        except BaseException:
-            pass
+        except ValueError as e:
+            result = e.message
         else:
             response = {RESULT_KEY: result}
             add_host_info(response)
@@ -174,11 +159,3 @@ class ProcessControlSubscriber(Subscriber):
                 body=self._response_encode(response)
             )
 
-    def shutdown(self):
-        self._channel.close()
-
-    def __del__(self):
-        try:
-            self.shutdown()
-        except pika.exceptions.ChannelClosed:
-            pass

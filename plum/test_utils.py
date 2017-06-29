@@ -66,7 +66,7 @@ class WaitForSignalProcess(Process):
 
     def load_instance_state(self, saved_state, logger=None):
         super(WaitForSignalProcess, self).load_instance_state(saved_state, logger)
-        assert isinstance(self.get_waiting_on(), Barrier)
+        assert isinstance(self.get_waiting_on(), Barrier), "Barrier not loaded correctly"
         self._barrier = self.get_waiting_on()
 
     @override
@@ -81,13 +81,13 @@ class WaitForSignalProcess(Process):
 
 
 class EventsTesterMixin(object):
-    EVENTS = ["create", "run", "finish", "emitted", "wait", "stop", "terminate"]
+    EVENTS = ["create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate"]
 
     called_events = []
 
     @classmethod
     def called(cls, event):
-        assert event in cls.EVENTS
+        assert event in cls.EVENTS, "Unknown event '{}'".format(event)
         cls.called_events.append(event)
 
     def __init__(self, inputs=None, pid=None, logger=None):
@@ -201,42 +201,34 @@ class ProcessListenerTester(ProcessListener):
 
     @override
     def on_process_start(self, process):
-        assert isinstance(process, Process)
         self.start = True
 
     @override
     def on_process_run(self, process):
-        assert isinstance(process, Process)
         self.run = True
 
     @override
     def on_output_emitted(self, process, output_port, value, dynamic):
-        assert isinstance(process, Process)
         self.emitted = True
 
     @override
     def on_process_wait(self, process):
-        assert isinstance(process, Process)
         self.wait = True
 
     @override
     def on_process_continue(self, process, wait_on):
-        assert isinstance(process, Process)
         self.continue_ = True
 
     @override
     def on_process_finish(self, process):
-        assert isinstance(process, Process)
         self.finish = True
 
     @override
     def on_process_stop(self, process):
-        assert isinstance(process, Process)
         self.stop = True
 
     @override
     def on_process_terminate(self, process):
-        assert isinstance(process, Process)
         self.terminate = True
 
 
@@ -271,8 +263,8 @@ class ProcessSaver(ProcessListener, Saver):
         self._save(process)
 
     @override
-    def on_process_wait(self, p):
-        self._save(p)
+    def on_process_wait(self, process):
+        self._save(process)
 
     @override
     def on_process_finish(self, process):
@@ -316,7 +308,7 @@ def check_process_against_snapshots(proc_class, snapshots):
         loaded = proc_class.create_from(info[1])
         ps = ProcessSaver(loaded)
         try:
-            loaded.play()
+            loaded.run()
         except BaseException:
             pass
 
@@ -329,4 +321,5 @@ def check_process_against_snapshots(proc_class, snapshots):
             if snapshots[-j] != ps.snapshots[-j]:
                 return False
             j += 1
+
         return True

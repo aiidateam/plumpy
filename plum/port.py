@@ -71,7 +71,7 @@ class ValueSpec(object):
         if self._validator is not None:
             result = self._validator(value)
             if isinstance(result, collections.Sequence):
-                assert (len(result) == 2)
+                assert (len(result) == 2), "Invalid validator return type"
                 return result
             elif result is False:
                 return False, "Value failed validation"

@@ -1,10 +1,10 @@
 import logging
 import json
 
+from plum.loop import LoopObject
 from plum.process_listener import ProcessListener
 from plum.process_monitor import ProcessMonitorListener, MONITOR
 from plum.rmq.defaults import Defaults
-from plum.rmq.util import Subscriber
 from plum.util import fullname, override
 
 PROC_INFO_KEY = 'proc_info'
@@ -133,13 +133,15 @@ class ProcessEventPublisher(ProcessListener, ProcessMonitorListener):
         msg[PROC_INFO_KEY] = {'type': fullname(process)}
 
 
-class ProcessEventSubscriber(Subscriber):
+class ProcessEventSubscriber(LoopObject):
     def __init__(self, connection, exchange=Defaults.EVENT_EXCHANGE, decoder=json.loads):
+        super(ProcessEventSubscriber, self).__init__()
+
         self._exchange = exchange
         self._decode = decoder
-        self._stopping = False
         self._callbacks = set()
 
+        # Set up connection
         self._channel = connection.channel()
         self._channel.exchange_declare(exchange=self._exchange, type='topic')
         result = self._channel.queue_declare(exclusive=True)
@@ -154,24 +156,8 @@ class ProcessEventSubscriber(Subscriber):
         self._callbacks.remove(fn)
 
     @override
-    def start(self, poll_time=1.0):
-        while self._channel._consumer_infos:
-            self.poll(poll_time)
-            if self._stopping:
-                self._channel.stop_consuming()
-                self._stopping = False
-
-    @override
-    def poll(self, time_limit=1.0):
-        self._channel.connection.process_data_events(time_limit=time_limit)
-
-    @override
-    def stop(self):
-        self._stopping = True
-
-    @override
-    def shutdown(self):
-        self._channel.close()
+    def tick(self):
+        self._channel.connection.process_data_events(time_limit=0.1)
 
     def _on_event(self, ch, method, props, body):
         for fn in self._callbacks:

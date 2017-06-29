@@ -20,3 +20,7 @@ class ProcessFailed(Exception):
 
 class Interrupted(Exception):
     pass
+
+
+class InvalidStateError(Exception):
+    pass

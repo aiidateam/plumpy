@@ -7,8 +7,7 @@ import inspect
 import logging
 import plum.lang
 import threading
-from plum.exceptions import ClassNotFoundException
-from plum.process_listener import ProcessListener
+from plum.exceptions import ClassNotFoundException, InvalidStateError
 from plum.settings import check_protected, check_override
 
 protected = plum.lang.protected(check=check_protected)
@@ -19,13 +18,14 @@ _LOGGER = logging.getLogger(__name__)
 
 class EventHelper(object):
     def __init__(self, listener_type, raise_exceptions=False):
-        assert (listener_type is not None)
+        assert (listener_type is not None), "Must provide valid listener type"
+
         self._listener_type = listener_type
         self._raise_exceptions = raise_exceptions
         self._listeners = set()
 
     def add_listener(self, listener):
-        assert isinstance(listener, self._listener_type)
+        assert isinstance(listener, self._listener_type), "Listener is not of right type"
         self._listeners.add(listener)
 
     def remove_listener(self, listener):
@@ -39,7 +39,8 @@ class EventHelper(object):
         return self._listeners
 
     def fire_event(self, event_function, *args, **kwargs):
-        assert event_function is not None
+        assert event_function is not None, "Must provide valid event method"
+
         # TODO: Check if the function is in the listener type
         # We have to use a copy here because the listener may
         # remove themselves during the message
@@ -105,6 +106,54 @@ class ThreadSafeCounter(object):
     def value(self):
         with self.lock:
             return self.counter
+
+
+_PENDING = 'PENDING'
+_CANCELLED = 'CANCELLED'
+_FINISHED = 'FINISHED'
+
+
+class Future(object):
+    """
+    A generic future object.  Can be used as is or subclassed.
+    """
+    _UNSET = ()
+
+    def __init__(self):
+        self._state = _PENDING
+        self._result = self._UNSET
+        self._exception = None
+
+    def done(self):
+        return self._state != _PENDING
+
+    def result(self):
+        if self._state is not _FINISHED:
+            raise InvalidStateError("The future has not completed yet")
+        elif self._exception is not None:
+            raise self._exception
+
+        return self._result
+
+    def set_result(self, result):
+        if self.done():
+            raise InvalidStateError("The future is already done")
+
+        self._result = result
+        self._state = _FINISHED
+
+    def exception(self):
+        if self._state is not _FINISHED:
+            raise InvalidStateError("Exception not set")
+
+        return self._exception
+
+    def set_exception(self, exception):
+        if self.done():
+            raise InvalidStateError("The future is already done")
+
+        self._exception = exception
+        self._state = _FINISHED
 
 
 def fullname(object):

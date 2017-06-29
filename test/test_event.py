@@ -1,6 +1,6 @@
-from concurrent.futures import ThreadPoolExecutor
 from util import TestCase
-from plum.event import ProcessMonitorEmitter, WaitOnProcessEvent, EmitterAggregator, EventEmitter
+from plum.event import wait_on_process_event, EventEmitter, ProcessEventEmitter
+from plum.loop import BaseEventLoop
 from plum.test_utils import DummyProcess, ExceptionProcess
 from plum.util import ListenContext
 
@@ -15,55 +15,26 @@ class _EventSaver(object):
         self.events.append(evt)
 
 
-class TestProcessMonitorEmitter(TestCase):
-    def setUp(self):
-        super(TestProcessMonitorEmitter, self).setUp()
-        self.emitter = ProcessMonitorEmitter()
-
-    def test_normal_process(self):
-        saver = _EventSaver()
-        self.emitter.start_listening(saver.event_ocurred, "process.*")
-
-        p = DummyProcess.new()
-        preamble = "process.{}.".format(p.pid)
-        p.play()
-
-        self.assertEqual(saver.events, [preamble + 'finished', preamble + 'stopped'])
-
-    def test_fail_process(self):
-        saver = _EventSaver()
-        self.emitter.start_listening(saver.event_ocurred, "process.*")
-
-        p = ExceptionProcess.new()
-        preamble = "process.{}".format(p.pid)
-        with self.assertRaises(RuntimeError):
-            p.play()
-        self.assertEqual(saver.events, [preamble + '.failed'])
-
-
 class TestWaitOnProcessEvent(TestCase):
     def setUp(self):
         super(TestWaitOnProcessEvent, self).setUp()
-        self.emitter = ProcessMonitorEmitter()
+        self.loop = BaseEventLoop()
+
+        self.emitter = ProcessEventEmitter(self.loop)
 
     def test_finished_stopped(self):
-        for event in ("finished", "stopped"):
-            tp = ThreadPoolExecutor(max_workers=1)
+        for event in ("finish", "stop"):
             p = DummyProcess.new()
+            self.loop.insert(p)
 
-            w = WaitOnProcessEvent(self.emitter, p.pid, event)
-            future = tp.submit(w.wait)
-            while not future.running():
-                pass
-
-            p.play()
-            self.assertTrue(future.result(timeout=2.))
+            wait_on = wait_on_process_event(p.pid, event)
+            self.loop.run_until_complete(wait_on.get_future(self.loop))
 
     def test_failed(self):
         p = ExceptionProcess.new()
-        w = WaitOnProcessEvent(self.emitter, p.pid, "failed")
-        with self.assertRaises(RuntimeError):
-            p.play()
+        self.loop.insert(p)
+        wait_on = wait_on_process_event(p.pid, 'fail')
+        self.loop.run_until_complete(wait_on.get_future(self.loop))
 
 
 class _EmitterTester(EventEmitter):
@@ -78,135 +49,84 @@ class _EmitterTester(EventEmitter):
 class TestEventEmitter(TestCase):
     def setUp(self):
         super(TestEventEmitter, self).setUp()
+        self.loop = BaseEventLoop()
+
         self.last = None
-        self.emitter = _EmitterTester()
 
     def test_listen_all(self):
         # This should listen for all events
-        self.emitter.start_listening(self._receive, '*')
+        self.loop.messages().start_listening(self._receive, '*')
 
         # Simple message
-        self.emitter.emit("Hello")
+        self.loop.messages().send("Hello")
+        self.loop.tick()
         self.assertEqual(self.last[1], "Hello")
 
         # More complex
-        self.emitter.emit("Hello.how.are.you?")
+        self.loop.messages().send("Hello.how.are.you?")
+        self.loop.tick()
         self.assertEqual(self.last[1], "Hello.how.are.you?")
 
     def test_stop_listening_specific(self):
-        self.emitter.start_listening(self._receive, "hello")
-        self.assertEqual(self.emitter.num_listening(), 1)
-        self.emitter.stop_listening(self._receive, "hello")
-        self.assertEqual(self.emitter.num_listening(), 0)
+        self.loop.messages().start_listening(self._receive, "hello")
+        self.assertEqual(self.loop.messages().num_listening(), 1)
+        self.loop.messages().stop_listening(self._receive, "hello")
+        self.assertEqual(self.loop.messages().num_listening(), 0)
 
         # Not listening
-        self.emitter.emit("hello")
+        self.loop.messages().send("hello")
         self.assertIsNone(self.last)
 
     def test_stop_listening_all(self):
-        self.emitter.start_listening(self._receive)
-        self.emitter.start_listening(self._receive, "hello")
-        self.assertEqual(self.emitter.num_listening(), 2)
-        self.emitter.stop_listening(self._receive)
-        self.assertEqual(self.emitter.num_listening(), 0)
+        self.loop.messages().start_listening(self._receive)
+        self.loop.messages().start_listening(self._receive, "hello")
+        self.assertEqual(self.loop.messages().num_listening(), 2)
+        self.loop.messages().stop_listening(self._receive)
+        self.assertEqual(self.loop.messages().num_listening(), 0)
 
         # Not listening
-        self.emitter.emit("hello")
+        self.loop.messages().send("hello")
         self.assertIsNone(self.last)
 
     def test_listen_specific(self):
-        self.emitter.start_listening(self._receive, "hello")
+        self.loop.messages().start_listening(self._receive, "hello")
 
         # Check we get the one we want to hear
-        self.emitter.emit("hello")
+        self.loop.messages().send("hello")
+        self.loop.tick()
         self.assertEqual(self.last[1], "hello")
 
         # Check we don't get what we don't won't to hear
         self.last = None
-        self.emitter.emit("goodbye")
+        self.loop.messages().send("goodbye")
+        self.loop.tick()
         self.assertIsNone(self.last)
 
-    def _receive(self, emitter, evt, body):
-        self.last = emitter, evt, body
-
     def test_listen_wildcard(self):
-        self.emitter.start_listening(self._receive, "martin.*")
+        self.loop.messages().start_listening(self._receive, "martin.*")
+        self.loop.tick()
 
         # Check I get my message
-        self.emitter.emit("martin.hello")
+        self.loop.messages().send("martin.hello")
+        self.loop.tick()
         self.assertEqual(self.last[1], "martin.hello")
 
         # Check I don't get messages for someone else
         self.last = None
-        self.emitter.emit("giovanni.hello")
+        self.loop.messages().send("giovanni.hello")
+        self.loop.tick()
         self.assertIsNone(self.last)
 
     def test_listen_wildcard_hash(self):
-        self.emitter.start_listening(self._receive, "##")
-        self.emitter.emit("12")
+        self.loop.messages().start_listening(self._receive, "##")
+        self.loop.messages().send("12")
+        self.loop.tick()
         self.assertEqual(self.last[1], "12")
 
         self.last = None
-        self.emitter.emit("1")
+        self.loop.messages().send("1")
+        self.loop.tick()
         self.assertIsNone(self.last)
-
-
-class TestEmitterAggregator(TestCase):
-    def setUp(self):
-        super(TestEmitterAggregator, self).setUp()
-        self.last = None
-        self.aggregator = EmitterAggregator()
-
-    def test_listen(self):
-        e1 = _EmitterTester()
-        e2 = _EmitterTester()
-
-        self.aggregator.add_child(e1)
-        self.aggregator.add_child(e2)
-
-        self.aggregator.start_listening(self._receive)
-
-        e1.emit("e1")
-        self.assertEqual(self.last[1], "e1")
-
-        e2.emit("e2")
-        self.assertEqual(self.last[1], "e2")
-
-    def test_stop_listening_specific(self):
-        e1 = _EmitterTester()
-        e2 = _EmitterTester()
-        self.aggregator.add_child(e1)
-        self.aggregator.add_child(e2)
-
-        # Start listening
-        self.aggregator.start_listening(self._receive, "hello")
-        self.assertEqual(self.aggregator.num_listening(), 1)
-        self.assertEqual(e1.num_listening(), 1)
-        self.assertEqual(e2.num_listening(), 1)
-
-        # Stop listening
-        self.aggregator.stop_listening(self._receive, "hello")
-        self.assertEqual(self.aggregator.num_listening(), 0)
-        self.assertEqual(e1.num_listening(), 0)
-        self.assertEqual(e2.num_listening(), 0)
-
-    def test_stop_listening_wildcard(self):
-        e1 = _EmitterTester()
-        e2 = _EmitterTester()
-        self.aggregator.add_child(e1)
-        self.aggregator.add_child(e2)
-
-        # Start listening
-        self.aggregator.start_listening(self._receive)
-        self.assertEqual(self.aggregator.num_listening(), 1)
-        self.assertEqual(e1.num_listening(), 1)
-        self.assertEqual(e2.num_listening(), 1)
-
-        # Stop listening
-        self.aggregator.stop_listening(self._receive)
-        self.assertEqual(self.aggregator.num_listening(), 0)
-        self.assertEqual(e1.num_listening(), 0)
-        self.assertEqual(e2.num_listening(), 0)
 
     def _receive(self, emitter, evt, body):
         self.last = emitter, evt, body

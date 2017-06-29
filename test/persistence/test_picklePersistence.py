@@ -1,8 +1,10 @@
 import os.path
-from plum.thread_executor import ThreadExecutor
+from plum.process import ProcessState
 from plum.persistence.pickle_persistence import PicklePersistence
 from plum.test_utils import ProcessWithCheckpoint, WaitForSignalProcess
 from plum.exceptions import LockError
+from plum.loop import BaseEventLoop
+from plum.wait_ons import run_until
 from test.util import TestCase
 
 
@@ -14,7 +16,8 @@ class TestPicklePersistence(TestCase):
 
         self.store_dir = tempfile.mkdtemp()
         self.pickle_persistence = PicklePersistence(running_directory=self.store_dir)
-        self.procman = ThreadExecutor()
+        self.loop = BaseEventLoop()
+        self.pickle_persistence.start_persisting(self.loop)
 
     def tearDown(self):
         super(TestPicklePersistence, self).tearDown()
@@ -22,8 +25,7 @@ class TestPicklePersistence(TestCase):
         self._empty_directory()
 
     def test_store_directory(self):
-        self.assertEqual(self.store_dir,
-                         self.pickle_persistence.store_directory)
+        self.assertEqual(self.store_dir, self.pickle_persistence.store_directory)
 
     def test_on_create_process(self):
         proc = ProcessWithCheckpoint.new()
@@ -37,12 +39,11 @@ class TestPicklePersistence(TestCase):
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
-        future = self.procman.play(proc)
+        # Wait - Run the process and wait until it is waiting
+        run_until(proc, ProcessState.WAITING, self.loop)
 
         # Check the file exists
         self.assertTrue(os.path.isfile(save_path))
-
-        self.assertTrue(future.abort(timeout=2.))
 
     def test_on_finishing_process(self):
         proc = ProcessWithCheckpoint.new()
@@ -51,7 +52,7 @@ class TestPicklePersistence(TestCase):
         running_path = self.pickle_persistence.get_running_path(proc.pid)
 
         self.assertTrue(os.path.isfile(running_path))
-        proc.play()
+        proc.run(self.loop)
         self.assertFalse(os.path.isfile(running_path))
         finished_path = \
             os.path.join(self.store_dir,
@@ -80,15 +81,10 @@ class TestPicklePersistence(TestCase):
     def test_persist_twice(self):
         proc = WaitForSignalProcess.new()
         self.pickle_persistence.persist_process(proc)
-        future = self.procman.play(proc)
 
         # Try persisting the process again using another persistence manager
-        try:
+        with self.assertRaises(LockError):
             PicklePersistence(running_directory=self.store_dir).persist_process(proc)
-        except LockError:
-            pass
-
-        self.assertTrue(proc.abort(timeout=1.))
 
     def _empty_directory(self):
         import shutil

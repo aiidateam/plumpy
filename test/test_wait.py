@@ -9,11 +9,10 @@ class _DummyWait(WaitOn):
         super(_DummyWait, self).__init__()
         self._value = value
 
-    def wait(self, timeout=None):
-        return True
-
-    def interrupt(self):
-        pass
+    def get_future(self, loop):
+        future = loop.create_future()
+        future.set_value(self._value)
+        return future
 
     def save_instance_state(self, out_state):
         super(_DummyWait, self).save_instance_state(out_state)

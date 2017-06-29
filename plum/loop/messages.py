@@ -1,102 +1,35 @@
-from abc import ABCMeta, abstractmethod
 from collections import namedtuple
-import logging
-import re
 import threading
-import traceback
+import re
 
-from plum import Process
-from plum.loop import LoopListener
-from plum.process_listener import ProcessListener
-from plum.util import override, protected, ListenContext
-from plum.wait import WaitOn, Unsavable, WaitEvent
-from plum.exceptions import Interrupted
-
-_LOGGER = logging.getLogger(__name__)
+from plum.util import ListenContext
 
 _WilcardEntry = namedtuple("_WildcardEntry", ['re', 'listeners'])
 
 
-class ProcessEventEmitter(LoopListener, ProcessListener):
-    def __init__(self, loop=None):
-        self.__loop = None
-        if loop is not None:
-            self.start_emitting(loop)
-
-    def start_emitting(self, loop):
-        self.__loop = loop
-        self.__loop.add_loop_listener(self)
-
-    def stop_emitting(self):
-        self.__loop.remove_loop_listener(self)
-        self.__loop = None
-
-    # region LoopListener
-    def on_object_inserted(self, loop, loop_object):
-        if isinstance(loop_object, Process):
-            loop_object.add_process_listener(self)
-
-    def on_object_removed(self, loop, loop_object):
-        if isinstance(loop_object, Process):
-            loop_object.remove_process_listener(self)
-
-    # endregion LoopListener
-
-    # region ProcessListener
-    def on_process_start(self, process):
-        self._emit_message(process, 'start')
-
-    def on_process_run(self, process):
-        self._emit_message(process, 'run')
-
-    def on_process_wait(self, process):
-        self._emit_message(process, 'wait')
-
-    def on_process_resume(self, process):
-        self._emit_message(process, 'resume')
-
-    def on_process_abort(self, process):
-        self._emit_message(process, 'abort')
-
-    def on_output_emitted(self, process, output_port, value, dynamic):
-        self._emit_message(process, 'emitted')
-
-    def on_process_finish(self, process):
-        self._emit_message(process, 'finish')
-
-    def on_process_stop(self, process):
-        self._emit_message(process, 'stop')
-
-    def on_process_fail(self, process):
-        self._emit_message(process, 'fail')
-
-    def on_process_terminate(self, process):
-        self._emit_message(process, 'terminate')
-
-    # endregion ProcessListener
-
-    def _emit_message(self, process, message, body=None):
-        self.__loop.messages().send('process.{}.{}'.format(process.pid, message), body)
-
-
-class EventEmitter(object):
+class Mailman(object):
     """
     A class to send general events to listeners
     """
-    __metaclass__ = ABCMeta
 
     @staticmethod
-    def contains_wildcard(eventstring):
+    def contains_wildcard(event):
         """
         Does the event string contain a wildcard.
 
-        :param eventstring: The event string
-        :type eventstring: str or unicode
+        :param event: The event string
+        :type event: str or unicode
         :return: True if it does, False otherwise
         """
-        return eventstring.find('*') != -1 or eventstring.find('#') != -1
+        return event.find('*') != -1 or event.find('#') != -1
 
-    def __init__(self):
+    def __init__(self, loop):
+        """
+
+        :param loop: The event loop
+        :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
+        """
+        self.__loop = loop
         self._specific_listeners = {}
         self._wildcard_listeners = {}
         self._listeners_lock = threading.Lock()
@@ -110,6 +43,9 @@ class EventEmitter(object):
         :param event: An event string
         :type event: str or unicode
         """
+        if event is None:
+            raise ValueError("Invalid event '{}'".format(event))
+
         with self._listeners_lock:
             self._check_listener(listener)
             if self.contains_wildcard(event):
@@ -129,9 +65,9 @@ class EventEmitter(object):
         with self._listeners_lock:
             if event is None:
                 # This means remove ALL messages for this listener
-                for evt in self._specific_listeners.iterkeys():
+                for evt in self._specific_listeners.keys():
                     self._remove_specific_listener(listener, evt)
-                for evt in self._wildcard_listeners.iterkeys():
+                for evt in self._wildcard_listeners.keys():
                     self._remove_wildcard_listener(listener, evt)
             else:
                 if self.contains_wildcard(event):
@@ -170,7 +106,7 @@ class EventEmitter(object):
                 total += len(entry.listeners)
             return total
 
-    def event_occurred(self, event, body=None):
+    def send(self, event, body=None):
         # These loops need to use copies because, e.g., the recipient may
         # add or remove listeners during the delivery
 
@@ -178,29 +114,22 @@ class EventEmitter(object):
         for evt, entry in self._wildcard_listeners.items():
             if self._wildcard_match(evt, event):
                 for l in list(entry.listeners):
-                    self.deliver_msg(l, event, body)
+                    self._deliver_msg(l, event, body)
 
         # And now with the specific listeners
         try:
             for l in self._specific_listeners[event].copy():
-                self.deliver_msg(l, event, body)
+                self._deliver_msg(l, event, body)
         except KeyError:
             pass
 
-    @protected
-    def deliver_msg(self, listener, event, body):
-        try:
-            listener(self, event, body)
-        except BaseException:
-            _LOGGER.error("Exception deliverying message to {}:\n{}".format(
-                listener, traceback.format_exc()))
+    def _deliver_msg(self, listener, event, body):
+        self.__loop.call_soon(listener, self.__loop, event, body)
 
-    @protected
-    def get_specific_listeners(self):
+    def _get_specific_listeners(self):
         return self._specific_listeners
 
-    @protected
-    def get_wildcard_listeners(self):
+    def _get_wildcard_listeners(self):
         return self._wildcard_listeners
 
     @staticmethod
@@ -247,54 +176,3 @@ class EventEmitter(object):
 
     def _wildcard_match(self, event, to_match):
         return self._wildcard_listeners[event].re.match(to_match) is not None
-
-
-class WaitOnEvent(WaitOn):
-    def __init__(self, event):
-        """
-        :param event: The event to listen for
-        :type event: str or unicode
-        """
-        super(WaitOnEvent, self).__init__()
-        self._event = event
-        self._body = None
-        self._future = None
-
-    def __str__(self):
-        return "waiting on: {}".format(self._event)
-
-    @override
-    def get_future(self, loop):
-        if self._future is None:
-            loop.messages().start_listening(self._event_occurred, self._event)
-            self._future = loop.create_future()
-
-        return self._future
-
-    @override
-    def save_instance_state(self, out_state):
-        super(WaitOnEvent, self).save_instance_state(out_state)
-        out_state['event'] = self._event
-        out_state['body'] = self._body
-
-    @override
-    def load_instance_state(self, saved_state):
-        super(WaitOnEvent, self).load_instance_state(saved_state)
-        self._event = saved_state['event']
-        self._body = saved_state['body']
-
-    def get_event(self):
-        return self._event
-
-    def get_body(self):
-        return self._body
-
-    def _event_occurred(self, loop, event, body):
-        self._event = event
-        self._body = body
-        self._future.set_result((self._event, self._body))
-        loop.messages().stop_listening(self._event_occurred)
-
-
-def wait_on_process_event(pid='*', event='*'):
-    return WaitOnEvent("process.{}.{}".format(pid, event))

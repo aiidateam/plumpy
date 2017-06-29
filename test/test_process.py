@@ -1,4 +1,4 @@
-from plum.loop.event_loop import BaseEventLoop
+from plum.loop import BaseEventLoop
 from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, \
@@ -246,10 +246,7 @@ class TestProcess(TestCase):
         future = self.loop.insert(p)
 
         # Wait - Run the process and wait until it is waiting
-        self.assertEquals(
-            WaitOnProcessState.STATE_REACHED,
-            run_until(p, ProcessState.WAITING, self.loop)
-        )
+        run_until(p, ProcessState.WAITING, self.loop)
 
         p.continue_()
 
@@ -265,10 +262,7 @@ class TestProcess(TestCase):
         future = self.loop.insert(p)
 
         # Wait - Run the process and wait until it is waiting
-        self.assertEquals(
-            WaitOnProcessState.STATE_REACHED,
-            run_until(p, ProcessState.WAITING, self.loop)
-        )
+        run_until(p, ProcessState.WAITING, self.loop)
 
         # Pause
         p.pause()
@@ -294,10 +288,7 @@ class TestProcess(TestCase):
         future = self.loop.insert(p)
 
         # Wait - Run the process and wait until it is waiting
-        self.assertEquals(
-            WaitOnProcessState.STATE_REACHED,
-            run_until(p, ProcessState.WAITING, self.loop)
-        )
+        run_until(p, ProcessState.WAITING, self.loop)
 
         # Pause
         p.pause()
@@ -332,10 +323,7 @@ class TestProcess(TestCase):
         p = _RestartProcess.new()
 
         self.loop.insert(p)
-        self.assertEquals(
-            WaitOnProcessState.STATE_REACHED,
-            run_until(p, ProcessState.WAITING, self.loop)
-        )
+        run_until(p, ProcessState.WAITING, self.loop)
 
         # Save the state of the process
         bundle = Bundle()
@@ -356,10 +344,7 @@ class TestProcess(TestCase):
         future = self.loop.insert(p)
 
         # Wait
-        self.assertEquals(
-            WaitOnProcessState.STATE_REACHED,
-            run_until(p, ProcessState.WAITING, self.loop)
-        )
+        run_until(p, ProcessState.WAITING, self.loop)
 
         # Pause
         p.pause()
@@ -445,7 +430,6 @@ class TestProcessEvents(TestCase):
         self.assertTrue(self.events_tester.finish)
         self.assertTrue(self.events_tester.stop)
         self.assertTrue(self.events_tester.terminate)
-
 
 
 class _RestartProcess(WaitForSignalProcess):
