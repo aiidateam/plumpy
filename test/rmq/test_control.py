@@ -37,7 +37,6 @@ class TestControl(TestCase):
         self.loop.insert(p)
 
         run_until(p, ProcessState.WAITING, self.loop)
-        self.assertTrue(p.is_playing())
 
         # Send a message asking the process to pause
         self.loop.run_until_complete(self.publisher.pause(p.pid))
@@ -48,8 +47,7 @@ class TestControl(TestCase):
         p = WaitForSignalProcess.new()
         self.loop.insert(p)
 
-        # Play
-        run_until(p, ProcessState.WAITING, self.loop)
+        # Playing
         self.assertTrue(p.is_playing())
 
         # Pause
@@ -66,10 +64,12 @@ class TestControl(TestCase):
         p = WaitForSignalProcess.new()
         self.loop.insert(p)
         run_until(p, ProcessState.WAITING, self.loop)
-        self.assertTrue(p.is_playing())
 
         # Send a message asking the process to abort
         self.loop.run_until_complete(self.publisher.abort(p.pid, msg='Farewell'))
+
+        # Now tick the loop to action the abort
+        self.loop.tick()
 
         # Check the resulting state
         self.assertTrue(p.has_aborted())

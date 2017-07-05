@@ -232,7 +232,7 @@ class TestProcess(TestCase):
 
         # TODO: Test giving a custom logger to see if it gets used
         p = LoggerTester.new()
-        p.play()
+        p.run()
 
     def test_abort(self):
         proc = DummyProcess.new()
@@ -243,7 +243,7 @@ class TestProcess(TestCase):
 
     def test_wait_continue(self):
         p = WaitForSignalProcess.new()
-        future = self.loop.insert(p)
+        future = self.loop.insert_task(p)
 
         # Wait - Run the process and wait until it is waiting
         run_until(p, ProcessState.WAITING, self.loop)
@@ -257,61 +257,25 @@ class TestProcess(TestCase):
         self.assertEqual(p.state, ProcessState.STOPPED)
         self.assertTrue(p.has_finished())
 
-    def test_wait_pause_continue_play(self):
+    def test_wait_play(self):
         p = WaitForSignalProcess.new()
-        future = self.loop.insert(p)
+        future = self.loop.insert_task(p)
 
         # Wait - Run the process and wait until it is waiting
         run_until(p, ProcessState.WAITING, self.loop)
 
-        # Pause
-        p.pause()
-
-        # Continue
-        p.continue_()
-
-        for _ in range(10):
-            self.loop.tick()
-
-        # Should still be waiting
-        self.assertEqual(p.state, ProcessState.WAITING)
-
         # Play
         p.play()
-        self.loop.run_until_complete(future)
+        self.assertTrue(p.is_playing())
 
-        # Check it's done
-        self.assertEqual(p.state, ProcessState.STOPPED)
-
-    def test_wait_pause_play_continue(self):
-        p = WaitForSignalProcess.new()
-        future = self.loop.insert(p)
-
-        # Wait - Run the process and wait until it is waiting
-        run_until(p, ProcessState.WAITING, self.loop)
-
-        # Pause
-        p.pause()
-        for _ in range(10):
-            self.loop.tick()
-        # Should still be waiting
-        self.assertEqual(p.state, ProcessState.WAITING)
-
-        # Play
-        p.play()
-
-        # Continue
-        p.continue_()
-
-        self.loop.run_until_complete(future)
-
-        # Check it's done
-        self.assertEqual(p.state, ProcessState.STOPPED)
+        self.loop.tick()
+        # Should have gone back to paused as it's still waiting
+        self.assertFalse(p.is_playing())
 
     def test_exc_info(self):
         p = ExceptionProcess.new()
         try:
-            p.play()
+            p.run()
         except BaseException:
             import sys
             exc_info = sys.exc_info()
@@ -338,37 +302,6 @@ class TestProcess(TestCase):
         p.continue_()
         result = self.loop.run_until_complete(p)
         self.assertEqual(result, {'finished': True})
-
-    def test_wait_pause_run(self):
-        p = WaitForSignalProcess.new()
-        future = self.loop.insert(p)
-
-        # Wait
-        run_until(p, ProcessState.WAITING, self.loop)
-
-        # Pause
-        p.pause()
-
-        # Now it should be getting ticked and so shouldn't change states
-        p.continue_()
-        for _ in range(10):
-            self.loop.tick()
-
-        # Still waiting?
-        self.assertEqual(p.state, ProcessState.WAITING)
-
-        # Run (should play)
-        p.run(self.loop)
-        self.assertEqual(p.state, ProcessState.STOPPED)
-
-    def test_pause_run(self):
-        """
-        Run should override a pause and play the process.
-        """
-        p = DummyProcess.new()
-        p.pause()
-        p.run()
-        self.assertEqual(p.state, ProcessState.STOPPED)
 
     def test_run_terminated(self):
         p = DummyProcess()

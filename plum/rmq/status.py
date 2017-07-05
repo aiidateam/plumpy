@@ -4,7 +4,7 @@ import pika
 import time
 import uuid
 
-from plum.loop import LoopObject
+from plum.loop.object import LoopObject, Ticking
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.util import override
@@ -48,7 +48,7 @@ def status_request_decode(msg):
 RequestInfo = collections.namedtuple('RequestInfo', ['future', 'responses', 'callback'])
 
 
-class ProcessStatusRequester(LoopObject):
+class ProcessStatusRequester(Ticking, LoopObject):
     """
     This class can be used to request the status of processes
     """
@@ -112,7 +112,7 @@ class ProcessStatusRequester(LoopObject):
         rinfo.future.set_result(rinfo.responses)
 
 
-class ProcessStatusSubscriber(LoopObject):
+class ProcessStatusSubscriber(Ticking, LoopObject):
     """
     This class listens for messages asking for a status update from a group of 
     processes.

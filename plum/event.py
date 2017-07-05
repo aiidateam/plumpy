@@ -9,27 +9,23 @@ from plum import Process
 from plum.loop import LoopListener
 from plum.process_listener import ProcessListener
 from plum.util import override, protected, ListenContext
-from plum.wait import WaitOn, Unsavable, WaitEvent
-from plum.exceptions import Interrupted
+from plum.wait import WaitOn
+from plum.loop.object import LoopObject
+
 
 _LOGGER = logging.getLogger(__name__)
 
 _WilcardEntry = namedtuple("_WildcardEntry", ['re', 'listeners'])
 
 
-class ProcessEventEmitter(LoopListener, ProcessListener):
-    def __init__(self, loop=None):
-        self.__loop = None
-        if loop is not None:
-            self.start_emitting(loop)
+class ProcessEventEmitter(LoopObject, LoopListener, ProcessListener):
+    def on_loop_inserted(self, loop):
+        super(ProcessEventEmitter, self).on_loop_inserted(loop)
+        self.loop().add_loop_listener(self)
 
-    def start_emitting(self, loop):
-        self.__loop = loop
-        self.__loop.add_loop_listener(self)
-
-    def stop_emitting(self):
-        self.__loop.remove_loop_listener(self)
-        self.__loop = None
+    def on_loop_removed(self):
+        self.loop().remove_loop_listener(self)
+        super(ProcessEventEmitter, self).on_loop_removed()
 
     # region LoopListener
     def on_object_inserted(self, loop, loop_object):
@@ -76,7 +72,7 @@ class ProcessEventEmitter(LoopListener, ProcessListener):
     # endregion ProcessListener
 
     def _emit_message(self, process, message, body=None):
-        self.__loop.messages().send('process.{}.{}'.format(process.pid, message), body)
+        self.loop().messages().send('process.{}.{}'.format(process.pid, message), body)
 
 
 class EventEmitter(object):
@@ -266,7 +262,7 @@ class WaitOnEvent(WaitOn):
     @override
     def get_future(self, loop):
         if self._future is None:
-            loop.messages().start_listening(self._event_occurred, self._event)
+            loop.messages().add_listener(self._event_occurred, self._event)
             self._future = loop.create_future()
 
         return self._future
@@ -293,7 +289,7 @@ class WaitOnEvent(WaitOn):
         self._event = event
         self._body = body
         self._future.set_result((self._event, self._body))
-        loop.messages().stop_listening(self._event_occurred)
+        loop.messages().remove_listener(self._event_occurred)
 
 
 def wait_on_process_event(pid='*', event='*'):

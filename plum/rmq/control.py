@@ -3,7 +3,7 @@ import pika
 import pika.exceptions
 import uuid
 
-from plum.loop import LoopObject
+from plum.loop.object import Ticking, LoopObject
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.util import override
@@ -35,7 +35,7 @@ def action_encode(msg):
 RESULT_KEY = 'result'
 
 
-class ProcessControlPublisher(LoopObject):
+class ProcessControlPublisher(Ticking, LoopObject):
     """
     This class is responsible for sending control messages to processes e.g.
     play, pause, abort, etc.
@@ -100,7 +100,7 @@ class ProcessControlPublisher(LoopObject):
             future.set_result(self._response_decode(body))
 
 
-class ProcessControlSubscriber(LoopObject):
+class ProcessControlSubscriber(Ticking, LoopObject):
     def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
                  decoder=action_decode, response_encoder=json.dumps):
         """

@@ -9,7 +9,7 @@ class _EventSaver(object):
     def __init__(self, emitter=None):
         self.events = []
         if emitter is not None:
-            emitter.start_listening(self.event_ocurred)
+            emitter.add_listener(self.event_ocurred)
 
     def event_ocurred(self, emitter, evt, body):
         self.events.append(evt)
@@ -19,8 +19,7 @@ class TestWaitOnProcessEvent(TestCase):
     def setUp(self):
         super(TestWaitOnProcessEvent, self).setUp()
         self.loop = BaseEventLoop()
-
-        self.emitter = ProcessEventEmitter(self.loop)
+        self.loop.insert(ProcessEventEmitter(self.loop))
 
     def test_finished_stopped(self):
         for event in ("finish", "stop"):
@@ -55,7 +54,7 @@ class TestEventEmitter(TestCase):
 
     def test_listen_all(self):
         # This should listen for all events
-        self.loop.messages().start_listening(self._receive, '*')
+        self.loop.messages().add_listener(self._receive, '*')
 
         # Simple message
         self.loop.messages().send("Hello")
@@ -68,9 +67,9 @@ class TestEventEmitter(TestCase):
         self.assertEqual(self.last[1], "Hello.how.are.you?")
 
     def test_stop_listening_specific(self):
-        self.loop.messages().start_listening(self._receive, "hello")
+        self.loop.messages().add_listener(self._receive, "hello")
         self.assertEqual(self.loop.messages().num_listening(), 1)
-        self.loop.messages().stop_listening(self._receive, "hello")
+        self.loop.messages().remove_listener(self._receive, "hello")
         self.assertEqual(self.loop.messages().num_listening(), 0)
 
         # Not listening
@@ -78,10 +77,10 @@ class TestEventEmitter(TestCase):
         self.assertIsNone(self.last)
 
     def test_stop_listening_all(self):
-        self.loop.messages().start_listening(self._receive)
-        self.loop.messages().start_listening(self._receive, "hello")
+        self.loop.messages().add_listener(self._receive)
+        self.loop.messages().add_listener(self._receive, "hello")
         self.assertEqual(self.loop.messages().num_listening(), 2)
-        self.loop.messages().stop_listening(self._receive)
+        self.loop.messages().remove_listener(self._receive)
         self.assertEqual(self.loop.messages().num_listening(), 0)
 
         # Not listening
@@ -89,7 +88,7 @@ class TestEventEmitter(TestCase):
         self.assertIsNone(self.last)
 
     def test_listen_specific(self):
-        self.loop.messages().start_listening(self._receive, "hello")
+        self.loop.messages().add_listener(self._receive, "hello")
 
         # Check we get the one we want to hear
         self.loop.messages().send("hello")
@@ -103,7 +102,7 @@ class TestEventEmitter(TestCase):
         self.assertIsNone(self.last)
 
     def test_listen_wildcard(self):
-        self.loop.messages().start_listening(self._receive, "martin.*")
+        self.loop.messages().add_listener(self._receive, "martin.*")
         self.loop.tick()
 
         # Check I get my message
@@ -118,7 +117,7 @@ class TestEventEmitter(TestCase):
         self.assertIsNone(self.last)
 
     def test_listen_wildcard_hash(self):
-        self.loop.messages().start_listening(self._receive, "##")
+        self.loop.messages().add_listener(self._receive, "##")
         self.loop.messages().send("12")
         self.loop.tick()
         self.assertEqual(self.last[1], "12")

@@ -7,7 +7,7 @@ import inspect
 import logging
 import plum.lang
 import threading
-from plum.exceptions import ClassNotFoundException, InvalidStateError
+from plum.exceptions import ClassNotFoundException, InvalidStateError, CancelledError
 from plum.settings import check_protected, check_override
 
 protected = plum.lang.protected(check=check_protected)
@@ -82,11 +82,11 @@ class ListenContext(object):
         self._kwargs = kwargs
 
     def __enter__(self):
-        self._producer.start_listening(*self._args, **self._kwargs)
+        self._producer.add_listener(*self._args, **self._kwargs)
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self._producer.stop_listening(*self._args, **self._kwargs)
+        self._producer.remove_listener(*self._args, **self._kwargs)
 
 
 class ThreadSafeCounter(object):
@@ -124,11 +124,23 @@ class Future(object):
         self._result = self._UNSET
         self._exception = None
 
+    def cancel(self):
+        if self.done():
+            return False
+
+        self._state = _CANCELLED
+        return True
+
+    def cancelled(self):
+        return self._state is _CANCELLED
+
     def done(self):
         return self._state != _PENDING
 
     def result(self):
-        if self._state is not _FINISHED:
+        if self.cancelled():
+            raise CancelledError()
+        elif self._state is not _FINISHED:
             raise InvalidStateError("The future has not completed yet")
         elif self._exception is not None:
             raise self._exception
@@ -143,6 +155,8 @@ class Future(object):
         self._state = _FINISHED
 
     def exception(self):
+        if self.cancelled():
+            raise CancelledError()
         if self._state is not _FINISHED:
             raise InvalidStateError("Exception not set")
 

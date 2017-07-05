@@ -3,7 +3,7 @@ import json
 import pika
 import uuid
 
-from plum.loop import LoopObject
+from plum.loop.object import Ticking, LoopObject
 from plum.process_listener import ProcessListener
 from plum.rmq.defaults import Defaults
 from plum.util import override, load_class, fullname
@@ -28,7 +28,7 @@ def launched_encode(msg):
     return json.dumps(d)
 
 
-class ProcessLaunchSubscriber(LoopObject, ProcessListener):
+class ProcessLaunchSubscriber(Ticking, LoopObject, ProcessListener):
     """
     Run tasks as they come form the RabbitMQ task queue
 
@@ -104,7 +104,7 @@ class ProcessLaunchSubscriber(LoopObject, ProcessListener):
         info.ch.basic_ack(delivery_tag=info.delivery_tag)
 
 
-class ProcessLaunchPublisher(LoopObject):
+class ProcessLaunchPublisher(Ticking, LoopObject):
     """
     Class used to publishes messages requesting a process to be launched
     """

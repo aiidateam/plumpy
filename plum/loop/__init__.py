@@ -1,2 +1,2 @@
-from plum.loop.object import LoopObject
-from plum.loop.event_loop import LoopListener, BaseEventLoop
+from plum.loop.object import LoopObject, Task
+from plum.loop.event_loop import LoopListener, BaseEventLoop, Future

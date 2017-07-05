@@ -9,14 +9,8 @@ import plum.util
 from plum.loop import events
 from plum.loop.direct_executor import DirectExecutor as _DirectExecutor
 from plum.loop.messages import Mailman
-from plum.loop.object import LoopObject
+from plum.loop.object import Task
 from plum.util import EventHelper
-
-Terminated = namedtuple("Terminated", ['result'])
-
-_PENDING = 'PENDING'
-_CANCELLED = 'CANCELLED'
-_FINISHED = 'FINISHED'
 
 
 class Future(plum.util.Future):
@@ -27,6 +21,13 @@ class Future(plum.util.Future):
 
     def loop(self):
         return self._loop
+
+    def cancel(self):
+        if super(Future, self).cancel():
+            self._schedule_callbacks()
+            return True
+        else:
+            return False
 
     def set_result(self, result):
         super(Future, self).set_result(result)
@@ -46,6 +47,9 @@ class Future(plum.util.Future):
             self._loop.call_soon(fn, self)
         else:
             self._callbacks.append(fn)
+
+    def remove_done_callback(self, fn):
+        self._callbacks.remove(fn)
 
     def _schedule_callbacks(self):
         """
@@ -91,6 +95,16 @@ class AbstractEventLoop(object):
 
     @abstractmethod
     def call_later(self, delay, callback, *args):
+        """
+        Schedule `callback` to be called after the given `delay` in seconds.
+         
+        :param delay: The callback delay
+        :type delay: float
+        :param callback: The callback to call
+        :param args: The callback arguments
+        :return: A callback handle
+        :rtype: :class:`events.Handle`
+        """
         pass
 
     @abstractmethod
@@ -125,29 +139,23 @@ class AbstractEventLoop(object):
     def messages(self):
         pass
 
+    @abstractmethod
+    def start_ticking(self, loop_object):
+        pass
 
-class _ObjectHandle(object):
-    def __init__(self, loop_object, future, loop):
-        self._loop = loop
-        self._loop_object = loop_object
-        self._future = future
+    @abstractmethod
+    def stop_ticking(self, loop_object):
+        pass
 
-    def object(self):
-        return self._loop_object
-
-    def future(self):
-        return self._future
-
-    def tick(self):
-        try:
-            result = self._loop_object.tick()
-        except BaseException as e:
-            self._future.set_exception(e)
-            self._loop.remove(self._loop_object)
-        else:
-            if isinstance(result, Terminated):
-                self._loop.remove(self._loop_object)
-                self._future.set_result(result.result)
+    @abstractmethod
+    def is_ticking(self, loop_object):
+        """
+        Is the event loop currently ticking the given loop object
+        
+        :param loop_object: The loop object 
+        :return: True if ticking, False otherwise
+        """
+        pass
 
 
 class BaseEventLoop(AbstractEventLoop):
@@ -161,6 +169,8 @@ class BaseEventLoop(AbstractEventLoop):
         self._callbacks = deque()
 
         self._objects = {}
+        self._ticking = []
+
         self._to_insert = []
         self._to_remove = set()
         self._thread_id = None
@@ -197,8 +207,8 @@ class BaseEventLoop(AbstractEventLoop):
         :type future: union(:class:`Future`, :class:`Process`)
         :return: The result of the future
         """
-        if isinstance(future, LoopObject):
-            future = self.insert(future)
+        if isinstance(future, Task):
+            future = self.insert_task(future)
 
         future.add_done_callback(self._run_until_complete_cb)
         self.run_forever()
@@ -225,21 +235,28 @@ class BaseEventLoop(AbstractEventLoop):
 
     def insert(self, loop_object):
         if loop_object.uuid in self._objects:
-            return self._objects[loop_object.uuid].future()
+            return
 
-        for handle in self._to_insert:
-            if loop_object is handle.object():
-                return handle.future()
+        if isinstance(loop_object, Task):
+            self.insert_task(loop_object)
+        else:
+            self._do_insert(loop_object)
+
+    def insert_task(self, task):
+        if task.uuid in self._objects:
+            return task.future()
 
         future = self.create_future()
-        handle = _ObjectHandle(loop_object, future, self)
-
-        if self.is_running():
-            self._to_insert.append(handle)
-        else:
-            self._insert_process(handle)
+        task.set_future(future)
+        self._do_insert(task)
 
         return future
+
+    def _do_insert(self, loop_object):
+        if self.is_running():
+            self._to_insert.append(loop_object)
+        else:
+            self._insert(loop_object)
 
     def remove(self, loop_object):
         """
@@ -255,39 +272,25 @@ class BaseEventLoop(AbstractEventLoop):
             self._to_remove.add(loop_object.uuid)
             return False
         else:
-            self._remove_process(loop_object.uuid)
+            self._remove(loop_object.uuid)
             return True
 
     def objects(self, type=None):
-        objs = [h.object() for h in self._objects.itervalues()]
-
         # Filter the type if necessary
         if type is not None:
-            return [obj for obj in objs if isinstance(obj, type)]
+            return [obj for obj in self._objects.itervalues() if isinstance(obj, type)]
         else:
-            return objs
+            return self._objects.values()
 
     def get_object(self, uuid):
         try:
-            self._objects[uuid].object()
+            return self._objects[uuid]
         except KeyError:
             pass
 
-        for handle in self._to_insert:
-            if handle.object().uuid == uuid:
-                return handle.object()
-
-        raise ValueError("Unknown uuid")
-
-    def get_object_future(self, uuid):
-        try:
-            self._objects[uuid].future()
-        except KeyError:
-            pass
-
-        for handle in self._to_insert:
-            if handle.object().uuid == uuid:
-                return handle.future()
+        for obj in self._to_insert:
+            if obj.uuid == uuid:
+                return obj
 
         raise ValueError("Unknown uuid")
 
@@ -295,20 +298,14 @@ class BaseEventLoop(AbstractEventLoop):
         return self.objects(type=plum.Process)
 
     def get_process(self, pid):
-        for handle in itertools.chain(self._objects.itervalues(), self._to_insert):
-            if isinstance(handle.object(), plum.process.Process) and \
-                            handle.object().pid == pid:
-                return handle.object()
+        for obj in itertools.chain(self._objects.itervalues(), self._to_insert):
+            if isinstance(obj, plum.process.Process) and obj.pid == pid:
+                return obj
 
         raise ValueError("Unknown pid")
 
     def get_process_future(self, pid):
-        for handle in itertools.chain(self._objects.itervalues(), self._to_insert):
-            if isinstance(handle.object(), plum.process.Process) and \
-                            handle.object().pid == pid:
-                return handle.future()
-
-        raise ValueError("Unknown pid '{}'".format(pid))
+        return self.get_process(pid).future()
 
     def stop(self):
         """
@@ -317,7 +314,11 @@ class BaseEventLoop(AbstractEventLoop):
         self._stopping = True
 
     def tick(self):
-        self._tick()
+        self._thread_id = thread.get_ident()
+        try:
+            self._tick()
+        finally:
+            self._thread_id = None
 
     def add_loop_listener(self, listener):
         self.__event_helper.add_listener(listener)
@@ -331,16 +332,32 @@ class BaseEventLoop(AbstractEventLoop):
     def messages(self):
         return self.__mailman
 
+    def start_ticking(self, loop_object):
+        if loop_object.loop() is not self:
+            raise ValueError("Cannot tick an object not in the event loop")
+        if loop_object not in self._ticking:
+            self._ticking.append(loop_object)
+
+    def stop_ticking(self, loop_object):
+        if loop_object.loop() is not self:
+            raise ValueError("Cannot stop ticking an object not in the event loop")
+        if loop_object in self._ticking:
+            self._ticking.remove(loop_object)
+
+    def is_ticking(self, loop_object):
+        return loop_object in self._ticking
+
     def _tick(self):
         # Insert any new processes
-        for handle in self._to_insert:
-            self._insert_process(handle)
+        for loop_object in self._to_insert:
+            self._insert(loop_object)
         del self._to_insert[:]
 
-        # Tick the processes
+        # Tick the processes, have to use a copy of the list as they may stop ticking
+        # during the tick call
         futs = []
-        for handle in self._objects.values():
-            futs.append(self._executor.submit(handle.tick))
+        for loop_object in list(self._ticking):
+            futs.append(self._executor.submit(loop_object.tick))
 
         # Wait for everything to complete
         for fut in futs:
@@ -357,24 +374,26 @@ class BaseEventLoop(AbstractEventLoop):
 
         # Finally deal with processes to be removed
         for pid in self._to_remove:
-            self._remove_process(pid)
+            self._remove(pid)
         self._to_remove.clear()
 
     def _run_until_complete_cb(self, fut):
         self.stop()
 
-    def _insert_process(self, handle):
-        obj = handle.object()
-        self._objects[obj.uuid] = handle
-        obj.on_loop_inserted(self)
+    def _insert(self, loop_object):
+        self._objects[loop_object.uuid] = loop_object
+        loop_object.on_loop_inserted(self)
 
-        self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_inserted, self, obj)
+        self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_inserted, self, loop_object)
 
-    def _remove_process(self, uuid):
+    def _remove(self, uuid):
         try:
-            handle = self._objects.pop(uuid)
+            loop_object = self._objects.pop(uuid)
         except KeyError:
             raise ValueError("Unknown uuid")
         else:
-            handle.object().on_loop_removed()
-            self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_removed, self, handle.object())
+            loop_object.on_loop_removed()
+            if loop_object in self._ticking:
+                self._ticking.remove(loop_object)
+
+            self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_removed, self, loop_object)

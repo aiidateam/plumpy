@@ -9,8 +9,8 @@ from collections import namedtuple
 
 import plum.stack as stack
 import plum.util as util
-from plum.loop.object import LoopObject
-from plum.loop.event_loop import BaseEventLoop, Terminated
+from plum.loop.object import Task
+from plum.loop.event_loop import BaseEventLoop
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
@@ -24,7 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 Wait = namedtuple('Wait', ['on', 'callback'])
 
 
-class Process(LoopObject):
+class Process(Task):
     """
     The Process class is the base for any unit of work in plum.
 
@@ -413,21 +413,16 @@ class Process(LoopObject):
     def create_wait_on(self, saved_state):
         return load_wait_on(saved_state)
 
-    def tick(self):
-        if self.__paused:
-            return
-
+    def step(self):
         try:
             stack.push(self)
             MONITOR.register_process(self)
 
             if self.__aborting:
                 self._set_state(Stopped(self, abort=True, abort_msg=self.__abort_msg))
-                self.__aborting, self.__abort_msg = None, None
-            else:
-                result = self._state.execute()
-                if self.has_terminated():
-                    return Terminated(self.outputs)
+                self.__aborting, self.__abort_msg = False, None
+
+            return self._state.execute()
 
         except BaseException:
             self._set_state(Failed(self, sys.exc_info()))
@@ -441,31 +436,12 @@ class Process(LoopObject):
         """
         Run the process until it is finished.
         """
-        self.play()
-
         if loop is None:
             loop = BaseEventLoop()
 
         loop.run_until_complete(self)
 
         return self._outputs
-
-    def play(self):
-        """
-        Play the process, i.e. unpause it if it was paused, otherwise do nothing.
-        """
-        self.log_with_pid(logging.INFO, "pausing")
-        self.__paused = False
-
-    def pause(self):
-        """
-        Pause a playing process.  This can be called from another thread.
-        """
-        self.log_with_pid(logging.INFO, "pausing")
-        self.__paused = True
-
-    def is_playing(self):
-        return not self.__paused
 
     def abort(self, msg=None, timeout=None):
         """
@@ -480,8 +456,9 @@ class Process(LoopObject):
         :rtype: bool
         """
         self.log_with_pid(logging.INFO, "aborting")
-        # Make sure we're playing
-        self.play()
+        if self.loop() is not None:
+            # Make sure we're playing so the abort gets actioned on next tick
+            self.play()
         self.__aborting = True
         self.__abort_msg = msg
 
@@ -698,7 +675,6 @@ class Process(LoopObject):
         load_instance_state.
         """
         self.__logger = logger
-        self.__paused = False
         self.__aborting = None
         self.__abort_msg = None
 

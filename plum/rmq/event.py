@@ -1,7 +1,7 @@
 import logging
 import json
 
-from plum.loop import LoopObject
+from plum.loop.object import Ticking, LoopObject
 from plum.process_listener import ProcessListener
 from plum.process_monitor import ProcessMonitorListener, MONITOR
 from plum.rmq.defaults import Defaults
@@ -65,13 +65,13 @@ class ProcessEventPublisher(ProcessListener, ProcessMonitorListener):
         """
         Publish event messages from all run processes.
         """
-        MONITOR.start_listening(self)
+        MONITOR.add_listener(self)
 
     def disable_publish_all(self):
         """
         Stop publishing messages from all run processes.
         """
-        MONITOR.stop_listening(self)
+        MONITOR.remove_listener(self)
 
     def on_monitored_process_registered(self, process):
         self.add_process(process)
@@ -133,7 +133,7 @@ class ProcessEventPublisher(ProcessListener, ProcessMonitorListener):
         msg[PROC_INFO_KEY] = {'type': fullname(process)}
 
 
-class ProcessEventSubscriber(LoopObject):
+class ProcessEventSubscriber(Ticking, LoopObject):
     def __init__(self, connection, exchange=Defaults.EVENT_EXCHANGE, decoder=json.loads):
         super(ProcessEventSubscriber, self).__init__()
 

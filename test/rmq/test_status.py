@@ -111,8 +111,9 @@ class TestStatusProvider(TestCase):
             set(procs_dict.keys())
         )
 
+        # Check they are all paused (waiting)
         playing = set([entry['playing'] for entry in procs_dict.itervalues()])
-        self.assertSetEqual(playing, {True})
+        self.assertSetEqual(playing, {False})
 
         for proc in procs:
             proc.abort()
