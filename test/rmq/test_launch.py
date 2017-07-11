@@ -3,7 +3,7 @@ import uuid
 
 import pika
 
-from plum.loop import BaseEventLoop
+from plum import loop_factory
 from plum.rmq import ProcessLaunchPublisher, ProcessLaunchSubscriber
 from plum.test_utils import TEST_PROCESSES
 from test.test_rmq import _HAS_PIKA
@@ -24,7 +24,7 @@ class TestTaskControllerAndRunner(TestCase):
         self.publisher = ProcessLaunchPublisher(self._connection, queue=queue)
         self.subscriber = ProcessLaunchSubscriber(self._connection, queue=queue)
 
-        self.loop = BaseEventLoop()
+        self.loop = loop_factory()
         self.loop.insert(self.publisher)
         self.loop.insert(self.subscriber)
 
@@ -41,7 +41,7 @@ class TestTaskControllerAndRunner(TestCase):
         launched = []
         for future in launch_requests:
             self.loop.run_until_complete(future)
-            launched.append(self.loop.get_process(future.result()['pid']).__class__)
+            launched.append(self.loop.get_object(future.result()['pid']).__class__)
 
         self.assertEqual(len(launched), len(TEST_PROCESSES))
         self.assertListEqual(TEST_PROCESSES, launched)

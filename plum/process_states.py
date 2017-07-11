@@ -3,7 +3,7 @@ import logging
 import traceback
 from plum.wait import WaitOn
 import plum.util as util
-from plum.loop.object import Task
+from plum.loop.objects import Task
 
 
 class ProcessState(Enum):
@@ -156,7 +156,6 @@ class Waiting(State):
         super(Waiting, self).__init__(process)
         self._wait_on = wait_on
         self._callback = callback
-        self._future = None
 
     def enter(self, previous_state):
         super(Waiting, self).enter(previous_state)
@@ -164,11 +163,15 @@ class Waiting(State):
 
     def execute(self):
         super(Waiting, self).execute()
+        future = self._wait_on.future()
 
-        if self._future is None:
-            self._future = self._wait_on.get_future(self._process.loop())
-            self._future.add_done_callback(self._wait_on_done)
-        return self._wait_on
+        if future.done():
+            if self._callback is None:
+                self._process._set_state(Stopped(self._process))
+            else:
+                self._process._set_state(Running(self._process, self._callback, self._wait_on))
+        else:
+            return futrue
 
     def save_instance_state(self, out_state):
         super(Waiting, self).save_instance_state(out_state)
@@ -176,6 +179,7 @@ class Waiting(State):
             out_state[self.CALLBACK] = None
         else:
             out_state[self.CALLBACK] = self._callback.__name__
+
         out_state[self.WAIT_ON] = self._process.save_wait_on_state(self._wait_on)
 
     def load_instance_state(self, process, saved_state):
@@ -190,17 +194,8 @@ class Waiting(State):
                 "the name '{}' as expected from the wait on".
                     format(saved_state[self.CALLBACK]))
 
-        self._future = None
-
     def get_wait_on(self):
         return self._wait_on
-
-    def _wait_on_done(self, future):
-        if self._callback is None:
-            self._process._set_state(Stopped(self._process))
-        else:
-            self._process._set_state(Running(self._process, self._callback, self._wait_on))
-        self._future = None
 
 
 class Stopped(State):

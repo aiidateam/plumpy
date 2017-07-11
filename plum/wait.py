@@ -15,7 +15,7 @@ class WaitException(Exception):
     pass
 
 
-class WaitOn(Savable):
+class WaitOn(object):
     """
     An object that represents something that is being waited on.
     """
@@ -23,19 +23,42 @@ class WaitOn(Savable):
 
     CLASS_NAME = 'class_name'
 
+    @classmethod
+    def create_from(cls, saved_state, loop):
+        """
+        Create the wait on from a save instance state.
+
+        :param saved_state: The saved instance state
+        :type saved_state: :class:`plum.persistence.Bundle`
+        :param loop: The event loop this want on is part of
+        :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
+        :return: The wait on with its state as it was when it was saved
+        """
+        obj = cls.__new__(cls)
+        obj.load_instance_state(saved_state, loop)
+        return obj
+
+    def __init__(self, loop):
+        self._loop = loop
+        self._future = loop.create_future()
+
     def __str__(self):
         return self.__class__.__name__
 
-    @abstractmethod
-    def get_future(self, loop):
+    def loop(self):
+        return self._loop
+
+    def future(self):
         """
-        :param loop: :class:`plum.event_loop.AbstractEventLoop` 
         :return: The future corresponding to this wait on
         :rtype: :class:`plum.event_loop.Future`
         """
-        pass
+        return self._future
 
-    @protected
+    def load_instance_state(self, saved_state, loop):
+        self._loop = loop
+        self._future = loop.create_future()
+
     def save_instance_state(self, out_state):
         """
         Save the current state of this wait on.  Subclassing methods should
@@ -97,32 +120,6 @@ class WaitEvent(object):
             self._timeout.notify_all()
 
 
-class WaitOnEvent(WaitOn):
-    def __init__(self):
-        super(WaitOnEvent, self).__init__()
-        self._init()
-
-    @override
-    def load_instance_state(self, saved_state):
-        super(WaitOnEvent, self).load_instance_state(saved_state)
-        self._init()
-
-    @override
-    def wait(self, timeout=None):
-        return self._wait_event.wait(timeout)
-
-    @override
-    def interrupt(self):
-        self._wait_event.interrupt()
-
-    @protected
-    def set(self):
-        self._wait_event.set()
-
-    def _init(self):
-        self._wait_event = WaitEvent()
-
-
 class WaitOnOneOff(WaitOn):
     """
     Wait on an event that happens once.  After it has happened, subsequent calls
@@ -168,17 +165,19 @@ class WaitOnOneOff(WaitOn):
         self._timeout.set()
 
 
-def create_from(bundle):
+def create_from(bundle, loop):
     """
     Load a WaitOn from a save instance state.
 
     :param bundle: The saved instance state
     :return: The wait on with its state as it was when it was saved
+    :param loop: The event loop this want on is part of
+    :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
     :rtype: :class:`WaitOn`
     """
     class_name = bundle[WaitOn.CLASS_NAME]
     wait_on_class = bundle.get_class_loader().load_class(class_name)
-    return wait_on_class.create_from(bundle)
+    return wait_on_class.create_from(bundle, loop)
 
 
 class Unsavable(object):

@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta, abstractmethod
-import time
-import threading
+from abc import ABCMeta
+
 from collections import Sequence
 from plum.persistence.bundle import Bundle
-from plum.wait import WaitOn, Unsavable, WaitException, create_from, WaitEvent, WaitOnEvent
+from plum.event import WaitOnEvent, wait_on_process_event
+from plum.wait import WaitOn, create_from
 from plum.util import override
 from plum.process_listener import ProcessListener
 from plum.process import ProcessState
-from plum.exceptions import TimeoutError, Interrupted
 
 
 class Checkpoint(WaitOn):
@@ -18,20 +17,9 @@ class Checkpoint(WaitOn):
     create a checkpoint at this point in the execution of a Process.
     """
 
-    def __init__(self):
-        self._future = None
-
-    @override
-    def load_instance_state(self, saved_state):
-        self._future = None
-
-    @override
-    def get_future(self, loop):
-        if self._future is None:
-            self._future = loop.create_future()
-            self._future.set_result(None)
-
-        return self._future
+    def __init__(self, loop):
+        super(Checkpoint, self).__init__(loop)
+        self.future().set_result(None)
 
 
 class _CompoundWaitOn(WaitOn):
@@ -39,15 +27,14 @@ class _CompoundWaitOn(WaitOn):
 
     WAIT_LIST = 'wait_list'
 
-    def __init__(self, wait_list):
-        super(_CompoundWaitOn, self).__init__()
+    def __init__(self, wait_list, loop):
+        super(_CompoundWaitOn, self).__init__(loop)
         for w in wait_list:
             if not isinstance(w, WaitOn):
                 raise ValueError(
                     "Must provide objects of type WaitOn, got '{}'.".format(w.__class__.__name__))
 
         self._wait_list = wait_list
-        self._future = None
 
     @override
     def save_instance_state(self, out_state):
@@ -62,44 +49,35 @@ class _CompoundWaitOn(WaitOn):
         out_state[self.WAIT_LIST] = waits
 
     @override
-    def load_instance_state(self, saved_state):
-        super(_CompoundWaitOn, self).load_instance_state(saved_state)
-        self._wait_list = [create_from(b) for b in saved_state[self.WAIT_LIST]]
-        self._future = None
+    def load_instance_state(self, saved_state, loop):
+        super(_CompoundWaitOn, self).load_instance_state(saved_state, loop)
+        self._wait_list = [create_from(b, loop) for b in saved_state[self.WAIT_LIST]]
 
 
 class WaitOnAll(_CompoundWaitOn):
-    def __init__(self, wait_list):
-        super(WaitOnAll, self).__init__(wait_list)
+    def __init__(self, wait_list, loop):
+        super(WaitOnAll, self).__init__(wait_list, loop)
         self._num_finished = 0
 
-    def load_instance_state(self, saved_state):
-        super(WaitOnAll, self).load_instance_state(saved_state)
+        for wait_on in self._wait_list:
+            wait_on.future().add_done_callback(self._wait_done)
+
+    def load_instance_state(self, saved_state, loop):
+        super(WaitOnAll, self).load_instance_state(saved_state, loop)
         self._num_finished = 0
-
-    def get_future(self, loop):
-        if not self._future:
-            self._future = loop.create_future()
-            for wait_on in self._wait_list:
-                wait_on.get_future(loop).add_done_callback(self._wait_done)
-
-        return self._future
 
     def _wait_done(self, future):
         self._num_finished += 1
         if self._num_finished == len(self._wait_list):
-            loop = self._future.loop()
-            self._future.set_result([w.get_future(loop).result() for w in self._wait_list])
+            self._future.set_result([w.future().result() for w in self._wait_list])
 
 
 class WaitOnAny(_CompoundWaitOn):
-    def get_future(self, loop):
-        if not self._future:
-            self._future = loop.create_future()
-            for wait_on in self._wait_list:
-                wait_on.get_future(loop).add_done_callback(self._wait_done)
+    def __init__(self, wait_list, loop):
+        super(WaitOnAny, self).__init__(wait_list, loop)
 
-        return self._future
+        for wait_on in self._wait_list:
+            wait_on.future(loop).add_done_callback(self._wait_done)
 
     def _wait_done(self, future):
         if not self._future.done():
@@ -111,7 +89,7 @@ class WaitOnProcessState(WaitOn, ProcessListener):
     STATE_UNREACHABLE = 'state_unreachable'
 
     @override
-    def __init__(self, proc, target_state):
+    def __init__(self, proc, target_state, loop):
         """
         Create the WaitOnState.
 
@@ -121,28 +99,20 @@ class WaitOnProcessState(WaitOn, ProcessListener):
         :type target_state: :class:`plum.process.ProcessState`
         """
         assert target_state in ProcessState, "Must supply a valid process state"
-        super(WaitOnProcessState, self).__init__()
+        super(WaitOnProcessState, self).__init__(loop)
 
         self._pid = proc.pid
         self._target_state = target_state
-        self._future = None
 
-    def get_future(self, loop):
-        if self._future is None:
-            future = loop.create_future()
-            proc = loop.get_process(self._pid)
+        proc = loop.get_object(self._pid)
 
-            # Are we currently in the state?
-            if proc.state == self._target_state:
-                future.set_result(self.STATE_REACHED)
-            elif self._is_target_state_unreachable(proc.state):
-                future.set_result(self.STATE_UNREACHABLE)
-            else:
-                proc.add_process_listener(self)
-
-            self._future = future
-
-        return self._future
+        # Are we currently in the state?
+        if proc.state == self._target_state:
+            self.future().set_result(self.STATE_REACHED)
+        elif self._is_target_state_unreachable(proc.state):
+            self.future().set_result(self.STATE_UNREACHABLE)
+        else:
+            proc.add_process_listener(self)
 
     @override
     def on_process_run(self, proc):
@@ -194,80 +164,45 @@ def run_until(proc, state, loop):
     :param state: The state to run until
     :param loop: The event loop
     """
-    loop_inserted = []
     if isinstance(proc, Sequence):
-        wait_for = WaitOnAll([WaitOnProcessState(p, state) for p in proc])
-        # Check if we need to insert into loop
-        for p in proc:
-            if p.loop() is None:
-                loop.insert(p)
-                loop_inserted.append(p)
+        wait_for = WaitOnAll([WaitOnProcessState(p, state, loop) for p in proc], loop)
     else:
-        wait_for = WaitOnProcessState(proc, state)
-        # Check if we need to insert into loop
-        if proc.loop() is None:
-            loop.insert(proc)
-            loop_inserted.append(proc)
+        wait_for = WaitOnProcessState(proc, state, loop)
 
-    results = loop.run_until_complete(wait_for.get_future(loop))
-
-    for p in loop_inserted:
-        try:
-            loop.remove(p)
-        except ValueError:
-            pass  # Already removed
+    results = loop.run_until_complete(wait_for.future())
 
     if any(result is WaitOnProcessState.STATE_UNREACHABLE for result in results):
         raise RuntimeError("State '{}' could not be reached for at least one process".format(state))
 
 
-class WaitOnProcess(WaitOnEvent):
-    def __init__(self, process):
-        """
-        Wait for a process to terminate.
-
-        :param process: The process
-        :type process: :class:`plum.process.Process`
-        """
-        super(WaitOnProcess, self).__init__()
-        self._pid = process.pid
-
-    def get_future(self, loop):
-        return loop.get_process_future(self._pid)
-
-    def save_instance_state(self, out_state):
-        super(WaitOnProcess, self).save_instance_state(out_state)
-        out_state['pid'] = self._pid
-
-    def load_instance_state(self, saved_state):
-        super(WaitOnProcess, self).load_instance_state(saved_state)
-        self._pid = saved_state['pid']
+def wait_on_process(pid, loop):
+    return wait_on_process_event(loop, pid, 'terminated')
 
 
-class WaitOnProcessOutput(WaitOnEvent, Unsavable, ProcessListener):
-    def __init__(self, process, output_port):
+class WaitOnProcessOutput(WaitOn):
+    def __init__(self, pid, port, loop):
         """
         :param process: The process whose output is being waited for
         :type process: :class:`plum.process.Process`
-        :param output_port: The output port being waited on
-        :type output_port: str or unicode
+        :param port: The output port being waited on
+        :type port: str or unicode
         """
-        super(WaitOnProcessOutput, self).__init__()
-        self._proc = process
-        self._output_port = output_port
+        super(WaitOnProcessOutput, self).__init__(loop)
+        self._wait_on_event = wait_on_process_event(loop, pid, 'output_emitted.{}'.format(port))
+        self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
-    @override
-    def wait(self, timeout=None):
-        with self._proc.listen_scope(self):
-            if self._output_port in self._proc.outputs:
-                return True
+    def load_instance_state(self, saved_state, loop):
+        super(WaitOnProcessOutput, self).load_instance_state(saved_state, loop)
+        self._wait_on_event = WaitOnEvent.create_from(loop, saved_state['output_event'])
+        self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
-            return super(WaitOnProcessOutput, self).wait(timeout)
+    def save_instance_state(self, out_state):
+        event_state = Bundle()
+        self._wait_on_event.save_instance_state(event_state)
+        out_state['output_event'] = event_state
 
-    @override
-    def on_output_emitted(self, process, output_port, value, dynamic):
-        if output_port == self._output_port:
-            self.set()
+    def _output_emitted(self, future):
+        self.future().set_result(future.get_result()[1])
 
 
 def wait_until_stopped(proc, timeout=None):
@@ -283,31 +218,19 @@ def wait_until_stopped(proc, timeout=None):
 
 
 class Barrier(WaitOn):
-    def __init__(self):
-        super(Barrier, self).__init__()
-        self._is_open = False
-        self._future = None
+    @override
+    def load_instance_state(self, saved_state, loop):
+        super(Barrier, self).load_instance_state(saved_state, loop)
+        if saved_state['is_open']:
+            self.open()
 
     @override
     def save_instance_state(self, out_state):
         super(Barrier, self).save_instance_state(out_state)
-        out_state['is_open'] = self._is_open
-
-    @override
-    def load_instance_state(self, saved_state):
-        super(Barrier, self).load_instance_state(saved_state)
-        self._is_open = saved_state['is_open']
-        self._future = None
-
-    def get_future(self, loop):
-        if self._future is None:
-            self._future = loop.create_future()
-            if self._is_open:
-                self._future.set_result('open')
-
-        return self._future
+        out_state['is_open'] = self.future().done()
 
     def open(self):
-        self._is_open = True
-        if self._future is not None:
-            self._future.set_result('open')
+        if self._future.done():
+            raise RuntimeError('Barrier already open')
+
+        self._future.set_result('open')

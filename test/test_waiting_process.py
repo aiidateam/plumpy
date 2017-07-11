@@ -1,10 +1,9 @@
-import threading
-from plum.loop import BaseEventLoop
+from plum import loop_factory
 from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.test_utils import TwoCheckpoint, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
-from plum.test_utils import ProcessListenerTester, check_process_against_snapshots
+from plum.test_utils import check_process_against_snapshots
 from plum.util import override
 from plum.test_utils import ProcessSaver
 from plum.wait_ons import run_until
@@ -15,10 +14,10 @@ class TestWaitingProcess(TestCase):
     def setUp(self):
         super(TestWaitingProcess, self).setUp()
 
-        self.loop = BaseEventLoop()
+        self.loop = loop_factory()
 
     def test_instance_state(self):
-        proc = TwoCheckpoint.new()
+        proc = self.loop.create_task(TwoCheckpoint)
         wl = ProcessSaver(proc)
         proc.run()
 
@@ -28,17 +27,17 @@ class TestWaitingProcess(TestCase):
 
     def test_saving_each_step(self):
         for ProcClass in TEST_WAITING_PROCESSES:
-            proc = ProcClass.new()
+            proc = self.loop.create_task(ProcClass)
             saver = ProcessSaver(proc)
             try:
                 proc.run()
             except BaseException:
                 pass
 
-            self.assertTrue(check_process_against_snapshots(ProcClass, saver.snapshots))
+            self.assertTrue(check_process_against_snapshots(self.loop, ProcClass, saver.snapshots))
 
     def test_abort(self):
-        p = WaitForSignalProcess.new()
+        p = self.loop.create_task(WaitForSignalProcess)
 
         # Wait until it is waiting
         run_until(p, ProcessState.WAITING, self.loop)

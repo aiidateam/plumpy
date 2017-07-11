@@ -4,7 +4,7 @@ import uuid
 import pika
 import pika.exceptions
 
-from plum.loop.event_loop import BaseEventLoop
+from plum import loop_factory
 from plum.process import ProcessState
 from plum.rmq.control import ProcessControlPublisher, ProcessControlSubscriber
 from plum.test_utils import WaitForSignalProcess
@@ -23,7 +23,7 @@ class TestControl(TestCase):
         self.publisher = ProcessControlPublisher(self._connection, exchange=self.exchange)
         self.subscriber = ProcessControlSubscriber(self._connection, exchange=self.exchange)
 
-        self.loop = BaseEventLoop()
+        self.loop = loop_factory()
         self.loop.insert(self.publisher)
         self.loop.insert(self.subscriber)
 
@@ -33,8 +33,7 @@ class TestControl(TestCase):
 
     def test_pause(self):
         # Create the process and wait until it is waiting
-        p = WaitForSignalProcess.new()
-        self.loop.insert(p)
+        p = self.loop.create_task(WaitForSignalProcess)
 
         run_until(p, ProcessState.WAITING, self.loop)
 
@@ -44,8 +43,7 @@ class TestControl(TestCase):
 
     def test_pause_play(self):
         # Create the process and wait until it is waiting
-        p = WaitForSignalProcess.new()
-        self.loop.insert(p)
+        p = self.loop.create_task(WaitForSignalProcess)
 
         # Playing
         self.assertTrue(p.is_playing())
@@ -61,8 +59,7 @@ class TestControl(TestCase):
 
     def test_abort(self):
         # Create the process and wait until it is waiting
-        p = WaitForSignalProcess.new()
-        self.loop.insert(p)
+        p = self.loop.create_task(WaitForSignalProcess)
         run_until(p, ProcessState.WAITING, self.loop)
 
         # Send a message asking the process to abort

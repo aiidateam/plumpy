@@ -1,4 +1,8 @@
 import logging
+from .process import *
+from .util import *
+
+__all__ = (process.__all__ + util.__all__)
 
 
 # Do this se we don't get the "No handlers could be found..." warnings that will be produced
@@ -11,5 +15,3 @@ class NullHandler(logging.Handler):
 
 
 logging.getLogger("plum").addHandler(NullHandler())
-
-from plum.process import Process

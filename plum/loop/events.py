@@ -1,4 +1,4 @@
-from plum.loop.object import Task
+from plum.loop.objects import Task
 
 
 class Handle(object):
@@ -19,8 +19,8 @@ class Handle(object):
 
 
 class Timer(Task):
-    def __init__(self, when, callback, args):
-        super(Timer, self).__init__()
+    def __init__(self, loop, when, callback, args):
+        super(Timer, self).__init__(loop)
 
         self._when = when
         self._callback = callback

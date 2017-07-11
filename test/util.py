@@ -1,5 +1,4 @@
 import unittest
-import threading
 import plum.stack as stack
 from plum.process_monitor import MONITOR
 

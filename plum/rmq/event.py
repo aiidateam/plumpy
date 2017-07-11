@@ -1,7 +1,7 @@
 import logging
 import json
 
-from plum.loop.object import Ticking, LoopObject
+from plum.loop.objects import Ticking, LoopObject
 from plum.process_listener import ProcessListener
 from plum.process_monitor import ProcessMonitorListener, MONITOR
 from plum.rmq.defaults import Defaults

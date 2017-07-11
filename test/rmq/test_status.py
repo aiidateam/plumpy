@@ -12,7 +12,7 @@ except ImportError:
     _HAS_PIKA = False
 import uuid
 
-from plum.loop.event_loop import BaseEventLoop
+from plum import loop_factory
 from plum.test_utils import WaitForSignalProcess
 from plum.process import ProcessState
 from plum.wait_ons import run_until
@@ -35,7 +35,7 @@ class TestStatusRequesterAndProvider(TestCase):
         self.requester = ProcessStatusRequester(self._connection, exchange=exchange)
         self.subscriber = ProcessStatusSubscriber(self._connection, exchange=exchange)
 
-        self.loop = BaseEventLoop()
+        self.loop = loop_factory()
         self.loop.insert(self.requester)
         self.loop.insert(self.subscriber)
 
@@ -46,8 +46,8 @@ class TestStatusRequesterAndProvider(TestCase):
     def test_request(self):
         procs = []
         for i in range(10):
-            procs.append(WaitForSignalProcess.new())
-            self.loop.insert(procs[-1])
+            procs.append(self.loop.create_task(WaitForSignalProcess))
+
         run_until(procs, ProcessState.WAITING, self.loop)
 
         future = self.requester.send_request(timeout=0.1)
@@ -85,7 +85,7 @@ class TestStatusProvider(TestCase):
 
         self.subscriber = ProcessStatusSubscriber(self._connection, exchange=self.request_exchange)
 
-        self.loop = BaseEventLoop()
+        self.loop = loop_factory()
         self.loop.insert(self.subscriber)
 
     def tearDown(self):
@@ -100,8 +100,8 @@ class TestStatusProvider(TestCase):
     def test_status(self):
         procs = []
         for i in range(20):
-            procs.append(WaitForSignalProcess.new())
-            self.loop.insert(procs[-1])
+            procs.append(self.loop.create_task(WaitForSignalProcess))
+
         run_until(procs, ProcessState.WAITING, self.loop)
 
         procs_dict = status_decode(self._send_and_get())[status.PROCS_KEY]

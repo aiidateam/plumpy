@@ -1,6 +1,3 @@
-
-
-
 class DirectExecutor(object):
     class Future(object):
         def __init__(self):

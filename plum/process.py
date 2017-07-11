@@ -7,17 +7,17 @@ import uuid
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 
-import plum.stack as stack
-import plum.util as util
-from plum.loop.object import Task
-from plum.loop.event_loop import BaseEventLoop
+import plum.stack as _stack
+from plum.loop import Task
 from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.process_states import *
-from plum.util import protected
+from plum.util import protected, get_default_loop
 from plum.wait import WaitOn, create_from as load_wait_on
+
+__all__ = ['Process']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -116,10 +116,12 @@ class Process(Task):
         return proc
 
     @classmethod
-    def create_from(cls, saved_state, logger=None):
+    def create_from(cls, loop, saved_state, logger=None):
         """
         Create a process from a saved instance state.
-
+        
+        :param loop: The event loop
+        :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
         :param saved_state: The saved state
         :type saved_state: :class:`plum.persistence.Bundle`
         :param logger: The logger for this process to use
@@ -134,6 +136,8 @@ class Process(Task):
                 "name.  This class is '{}', bundle created by '{}'".format(class_name, my_name))
 
         proc = cls.__new__(cls)
+        # Make sure to call the superclass constructor
+        super(Process, proc).__init__(loop)
         proc.load_instance_state(saved_state, logger)
         return proc
 
@@ -191,8 +195,8 @@ class Process(Task):
         :return: The process outputs after running
         :rtype: dict
         """
-        p = cls(inputs=inputs)
-        return p.run()
+        loop = get_default_loop()
+        return loop.run_until_complete(loop.create_task(cls, inputs=inputs))
 
     @classmethod
     def restart(cls, bundle, logger=None):
@@ -208,7 +212,7 @@ class Process(Task):
         """
         return cls.create_from(bundle, logger).play()
 
-    def __init__(self, inputs=None, pid=None, logger=None):
+    def __init__(self, loop, inputs=None, pid=None, logger=None):
         """
         The signature of the constructor should not be changed by subclassing
         processes.
@@ -219,7 +223,7 @@ class Process(Task):
         :param logger: An optional logger for the process to use
         :type logger: :class:`logging.Logger`
         """
-        super(Process, self).__init__()
+        super(Process, self).__init__(loop)
 
         # Don't allow the spec to be changed anymore
         self.spec().seal()
@@ -243,6 +247,7 @@ class Process(Task):
         self._CREATION_TIME = time.time()
         self._finished = False
         self._terminated = False
+        self._state_bundle = None
 
         # Finally enter the CREATED state
         self._state = Created(self)
@@ -411,11 +416,11 @@ class Process(Task):
 
     @protected
     def create_wait_on(self, saved_state):
-        return load_wait_on(saved_state)
+        return load_wait_on(saved_state, self.loop())
 
-    def step(self):
+    def execute(self):
         try:
-            stack.push(self)
+            _stack.push(self)
             MONITOR.register_process(self)
 
             if self.__aborting:
@@ -430,18 +435,16 @@ class Process(Task):
 
         finally:
             MONITOR.deregister_process(self)
-            stack.pop(self)
+            _stack.pop(self)
 
-    def run(self, loop=None):
+    def run(self):
         """
         Run the process until it is finished.
         """
-        if loop is None:
-            loop = BaseEventLoop()
+        if self.has_terminated():
+            raise RuntimeError("Cannot run, already terminated")
 
-        loop.run_until_complete(self)
-
-        return self._outputs
+        return self.loop().run_until_complete(self)
 
     def abort(self, msg=None, timeout=None):
         """
@@ -480,6 +483,16 @@ class Process(Task):
     def log_with_pid(self, level, msg):
         self.logger.log(level, "{}: {}".format(self.pid, msg))
 
+    def on_loop_inserted(self, loop):
+        super(Process, self).on_loop_inserted(loop)
+
+        # Load the state, needed to wait till here to do it because at the time
+        # of load_instance_state we don't have the loop yet which may be needed
+        # by the state
+        if self._state_bundle is not None:
+            self._state = load_state(self, self._state_bundle)
+            self._state_bundle = None
+
     # region Process messages
     # Make sure to call the superclass method if your override any of these
     @protected
@@ -502,6 +515,7 @@ class Process(Task):
         method, usually at the end of the function.
         """
         self._fire_event(ProcessListener.on_process_start)
+        self._send_message('start')
 
         self.__called = True
 
@@ -517,6 +531,7 @@ class Process(Task):
         method.
         """
         self._fire_event(ProcessListener.on_process_run)
+        self._send_message('run')
 
         self.__called = True
 
@@ -526,12 +541,14 @@ class Process(Task):
         Called when the process is about to enter the WAITING state
         """
         self._fire_event(ProcessListener.on_process_wait)
+        self._send_message('wait', wait_on)
 
         self.__called = True
 
     @protected
     def on_resume(self):
         self._fire_event(ProcessListener.on_process_resume)
+        self._send_message('resume')
 
         self.__called = True
 
@@ -541,6 +558,7 @@ class Process(Task):
         Called when the process has been asked to abort itself.
         """
         self._fire_event(ProcessListener.on_process_abort)
+        self._send_message('abort', abort_msg)
 
         self.__called = True
 
@@ -553,12 +571,14 @@ class Process(Task):
         self._check_outputs()
         self._finished = True
         self._fire_event(ProcessListener.on_process_finish)
+        self._send_message('finish')
 
         self.__called = True
 
     @protected
     def on_stop(self):
         self._fire_event(ProcessListener.on_process_stop)
+        self._send_message('stop')
 
         self.__called = True
 
@@ -568,6 +588,7 @@ class Process(Task):
         Called if the process raised an exception.
         """
         self._fire_event(ProcessListener.on_process_fail)
+        self._send_message('fail')
 
         self.__called = True
 
@@ -577,6 +598,7 @@ class Process(Task):
         Called when the process reaches a terminal state.
         """
         self._fire_event(ProcessListener.on_process_terminate)
+        self._send_message('terminate')
 
         self.__called = True
 
@@ -618,8 +640,6 @@ class Process(Task):
 
     @protected
     def load_instance_state(self, saved_state, logger=None):
-        super(Process, self).__init__()
-
         self.__init(logger)
 
         # Immutable stuff
@@ -627,9 +647,9 @@ class Process(Task):
         self._pid = saved_state[self.BundleKeys.PID.value]
 
         # State stuff
-        self._state = load_state(self, saved_state[self.BundleKeys.STATE.value])
         self._finished = saved_state[self.BundleKeys.FINISHED.value]
         self._terminated = saved_state[self.BundleKeys.TERMINATED.value]
+        self._state_bundle = saved_state[self.BundleKeys.STATE.value]
 
         # Inputs/outputs
         try:
@@ -687,7 +707,7 @@ class Process(Task):
     # region State event/transition methods
 
     def _on_start_playing(self):
-        stack.push(self)
+        _stack.push(self)
         MONITOR.register_process(self)
 
     def _on_stop_playing(self):
@@ -695,7 +715,7 @@ class Process(Task):
         WARNING: No state changes should be made after this call.
         """
         MONITOR.deregister_process(self)
-        stack.pop(self)
+        _stack.pop(self)
 
         if self.has_terminated():
             # There will be no more messages so remove the listeners.  Otherwise we
@@ -732,6 +752,9 @@ class Process(Task):
 
     def _fire_event(self, event):
         self.loop().call_soon(self.__event_helper.fire_event, event, self)
+
+    def _send_message(self, subject, body=None):
+        self.loop().messages().send('process.{}.{}'.format(self.pid, subject), body)
 
     def _terminate(self):
         self.loop().remove(self)

@@ -1,10 +1,10 @@
 import collections
 import json
 import pika
-import time
 import uuid
 
-from plum.loop.object import LoopObject, Ticking
+from plum import Process
+from plum.loop.objects import LoopObject, Ticking
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.util import override
@@ -142,7 +142,7 @@ class ProcessStatusSubscriber(Ticking, LoopObject):
         # d = self._decode(body)
 
         proc_status = {}
-        for p in self.loop().processes():
+        for p in self.loop().objects(obj_type=Process):
             proc_status[p.pid] = self._get_status(p)
 
         response = {PROCS_KEY: proc_status}

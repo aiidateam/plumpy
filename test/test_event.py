@@ -1,8 +1,7 @@
 from util import TestCase
-from plum.event import wait_on_process_event, EventEmitter, ProcessEventEmitter
-from plum.loop import BaseEventLoop
+from plum.event import wait_on_process_event, EventEmitter
+from plum import loop_factory
 from plum.test_utils import DummyProcess, ExceptionProcess
-from plum.util import ListenContext
 
 
 class _EventSaver(object):
@@ -18,22 +17,19 @@ class _EventSaver(object):
 class TestWaitOnProcessEvent(TestCase):
     def setUp(self):
         super(TestWaitOnProcessEvent, self).setUp()
-        self.loop = BaseEventLoop()
-        self.loop.insert(ProcessEventEmitter(self.loop))
+        self.loop = loop_factory()
 
     def test_finished_stopped(self):
         for event in ("finish", "stop"):
-            p = DummyProcess.new()
-            self.loop.insert(p)
+            p = self.loop.create_task(DummyProcess)
 
-            wait_on = wait_on_process_event(p.pid, event)
-            self.loop.run_until_complete(wait_on.get_future(self.loop))
+            wait_on = wait_on_process_event(self.loop, p.pid, event)
+            self.loop.run_until_complete(wait_on.future())
 
     def test_failed(self):
-        p = ExceptionProcess.new()
-        self.loop.insert(p)
-        wait_on = wait_on_process_event(p.pid, 'fail')
-        self.loop.run_until_complete(wait_on.get_future(self.loop))
+        p = self.loop.create_task(ExceptionProcess)
+        wait_on = wait_on_process_event(self.loop, p.pid, 'fail')
+        self.loop.run_until_complete(wait_on.future())
 
 
 class _EmitterTester(EventEmitter):
@@ -48,8 +44,7 @@ class _EmitterTester(EventEmitter):
 class TestEventEmitter(TestCase):
     def setUp(self):
         super(TestEventEmitter, self).setUp()
-        self.loop = BaseEventLoop()
-
+        self.loop = loop_factory()
         self.last = None
 
     def test_listen_all(self):

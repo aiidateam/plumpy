@@ -3,7 +3,7 @@ import pika
 import pika.exceptions
 import uuid
 
-from plum.loop.object import Ticking, LoopObject
+from plum.loop.objects import Ticking, LoopObject
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.util import override
@@ -136,13 +136,13 @@ class ProcessControlSubscriber(Ticking, LoopObject):
         intent = d['intent']
         try:
             if intent == Action.PLAY:
-                self.loop().get_process(pid).play()
+                self.loop().get_object(pid).play()
                 result = 'PLAYED'
             elif intent == Action.PAUSE:
-                self.loop().get_process(pid).pause()
+                self.loop().get_object(pid).pause()
                 result = 'PAUSED'
             elif intent == Action.ABORT:
-                self.loop().get_process(pid).abort(msg=d.get('msg', None))
+                self.loop().get_object(pid).abort(msg=d.get('msg', None))
                 result = 'ABORTED'
             else:
                 raise RuntimeError("Unknown intent")

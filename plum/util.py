@@ -10,10 +10,13 @@ import threading
 from plum.exceptions import ClassNotFoundException, InvalidStateError, CancelledError
 from plum.settings import check_protected, check_override
 
+__all__ = ['loop_factory', 'get_default_loop']
+
 protected = plum.lang.protected(check=check_protected)
 override = plum.lang.override(check=check_override)
 
 _LOGGER = logging.getLogger(__name__)
+_default_loop = None
 
 
 class EventHelper(object):
@@ -270,3 +273,32 @@ def load_with_classloader(bundle):
     class_name = bundle['class_name']
     proc_class = bundle.get_class_loader().load_class(class_name)
     return proc_class.create_from(bundle)
+
+
+def process_factory(loop, task_class, *args, **kwargs):
+    from plum.persistence import Bundle
+
+    if args and len(args) == 1 and isinstance(args[0], Bundle):
+        if kwargs:
+            RuntimeError("Found unexpected kwargs in call to process factory")
+        return task_class.create_from(loop, args[0])
+    elif kwargs and 'saved_state' in kwargs:
+        return task_class.create_from(loop, kwargs['saved_state'])
+    else:
+        return task_class(loop, *args, **kwargs)
+
+
+def loop_factory(*args, **kwargs):
+    from plum.loop import BaseEventLoop
+
+    loop = BaseEventLoop(*args, **kwargs)
+    loop.set_task_factory(process_factory)
+    return loop
+
+
+def get_default_loop():
+    global _default_loop
+    if _default_loop is None:
+        _default_loop = loop_factory()
+
+    return _default_loop

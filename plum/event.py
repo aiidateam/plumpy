@@ -6,73 +6,14 @@ import threading
 import traceback
 
 from plum import Process
-from plum.loop import LoopListener
 from plum.process_listener import ProcessListener
 from plum.util import override, protected, ListenContext
 from plum.wait import WaitOn
-from plum.loop.object import LoopObject
-
+from plum.loop.objects import LoopObject
 
 _LOGGER = logging.getLogger(__name__)
 
 _WilcardEntry = namedtuple("_WildcardEntry", ['re', 'listeners'])
-
-
-class ProcessEventEmitter(LoopObject, LoopListener, ProcessListener):
-    def on_loop_inserted(self, loop):
-        super(ProcessEventEmitter, self).on_loop_inserted(loop)
-        self.loop().add_loop_listener(self)
-
-    def on_loop_removed(self):
-        self.loop().remove_loop_listener(self)
-        super(ProcessEventEmitter, self).on_loop_removed()
-
-    # region LoopListener
-    def on_object_inserted(self, loop, loop_object):
-        if isinstance(loop_object, Process):
-            loop_object.add_process_listener(self)
-
-    def on_object_removed(self, loop, loop_object):
-        if isinstance(loop_object, Process):
-            loop_object.remove_process_listener(self)
-
-    # endregion LoopListener
-
-    # region ProcessListener
-    def on_process_start(self, process):
-        self._emit_message(process, 'start')
-
-    def on_process_run(self, process):
-        self._emit_message(process, 'run')
-
-    def on_process_wait(self, process):
-        self._emit_message(process, 'wait')
-
-    def on_process_resume(self, process):
-        self._emit_message(process, 'resume')
-
-    def on_process_abort(self, process):
-        self._emit_message(process, 'abort')
-
-    def on_output_emitted(self, process, output_port, value, dynamic):
-        self._emit_message(process, 'emitted')
-
-    def on_process_finish(self, process):
-        self._emit_message(process, 'finish')
-
-    def on_process_stop(self, process):
-        self._emit_message(process, 'stop')
-
-    def on_process_fail(self, process):
-        self._emit_message(process, 'fail')
-
-    def on_process_terminate(self, process):
-        self._emit_message(process, 'terminate')
-
-    # endregion ProcessListener
-
-    def _emit_message(self, process, message, body=None):
-        self.loop().messages().send('process.{}.{}'.format(process.pid, message), body)
 
 
 class EventEmitter(object):
@@ -246,38 +187,32 @@ class EventEmitter(object):
 
 
 class WaitOnEvent(WaitOn):
-    def __init__(self, event):
+    def __init__(self, loop, subject):
         """
-        :param event: The event to listen for
-        :type event: str or unicode
+        :param loop: The event loop
+        :param subject: The subject to listen for
+        :type subject: str or unicode
         """
-        super(WaitOnEvent, self).__init__()
-        self._event = event
+        super(WaitOnEvent, self).__init__(loop)
+        self._event = subject
         self._body = None
-        self._future = None
+
+        loop.messages().add_listener(self._event_occurred, self._event)
 
     def __str__(self):
         return "waiting on: {}".format(self._event)
 
     @override
-    def get_future(self, loop):
-        if self._future is None:
-            loop.messages().add_listener(self._event_occurred, self._event)
-            self._future = loop.create_future()
-
-        return self._future
+    def load_instance_state(self, saved_state, loop):
+        super(WaitOnEvent, self).load_instance_state(saved_state, loop)
+        self._event = saved_state['event']
+        self._body = saved_state['body']
 
     @override
     def save_instance_state(self, out_state):
         super(WaitOnEvent, self).save_instance_state(out_state)
         out_state['event'] = self._event
         out_state['body'] = self._body
-
-    @override
-    def load_instance_state(self, saved_state):
-        super(WaitOnEvent, self).load_instance_state(saved_state)
-        self._event = saved_state['event']
-        self._body = saved_state['body']
 
     def get_event(self):
         return self._event
@@ -292,5 +227,5 @@ class WaitOnEvent(WaitOn):
         loop.messages().remove_listener(self._event_occurred)
 
 
-def wait_on_process_event(pid='*', event='*'):
-    return WaitOnEvent("process.{}.{}".format(pid, event))
+def wait_on_process_event(loop, pid='*', event='*'):
+    return WaitOnEvent(loop, "process.{}.{}".format(pid, event))

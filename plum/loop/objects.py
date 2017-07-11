@@ -1,7 +1,9 @@
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 from uuid import uuid1
-from plum.wait import WaitOn
+from . import futures
+
+__all__ = ['LoopObject', 'Ticking', 'Task']
 
 
 class LoopObject(object):
@@ -31,7 +33,7 @@ class LoopObject(object):
 
     def on_loop_removed(self):
         """
-        Called when the process is removed from the event loop.
+        Called when the object is removed from the event loop.
         """
         if self.__loop is None:
             raise RuntimeError("Not in an event loop")
@@ -63,37 +65,40 @@ class Ticking(object):
         pass
 
 
+class Await(object):
+    def __init__(self, callback, *args):
+        self.callback = callback
+        self.futures = args
+
+
+class Continue(object):
+    def __init__(self, callback):
+        self.callback = callback
+
+
 class Task(Ticking, LoopObject):
     __metaclass__ = ABCMeta
 
     Terminated = namedtuple("Terminated", ['result'])
 
-    def __init__(self):
+    def __init__(self, loop):
         super(Task, self).__init__()
-        self._future = None
-        self._cancelling = False
         self._wait_on_future = None
-
-    def set_future(self, future):
-        if self.future() is not None:
-            raise RuntimeError("Future already set")
-        self._future = future
+        self._future = loop.create_future()
+        self._future.add_done_callback(self._future_done)
 
     def future(self):
         return self._future
 
     def tick(self):
-        if self.future().cancelled():
-            self.loop().remove()
-
         try:
-            result = self.step()
+            result = self.execute()
         except BaseException as e:
             self.loop().remove(self)
             self.future().set_exception(e)
         else:
-            if isinstance(result, WaitOn):
-                self._wait_on_future = result.get_future(self.loop())
+            if isinstance(result, futures.Future):
+                self._wait_on_future = result
                 self._wait_on_future.add_done_callback(self._wait_on_future_cb)
                 self.loop().stop_ticking(self)
 
@@ -127,9 +132,13 @@ class Task(Ticking, LoopObject):
         return self.loop().is_ticking(self)
 
     @abstractmethod
-    def step(self):
+    def execute(self):
         pass
 
     def _wait_on_future_cb(self, future):
         self.loop().start_ticking(self)
         self._wait_on_future = None
+
+    def _future_done(self, future):
+        if future.cancelled():
+            self.loop().remove(self)

@@ -3,7 +3,7 @@ import json
 import pika
 import uuid
 
-from plum.loop.object import Ticking, LoopObject
+from plum.loop.objects import Ticking, LoopObject
 from plum.process_listener import ProcessListener
 from plum.rmq.defaults import Defaults
 from plum.util import override, load_class, fullname
@@ -80,11 +80,10 @@ class ProcessLaunchSubscriber(Ticking, LoopObject, ProcessListener):
         task = self._decode(body)
         proc_class = load_class(task['proc_class'])
 
-        proc = proc_class.new(inputs=task['inputs'])
+        proc = self.loop().create_task(proc_class, inputs=task['inputs'])
         proc.add_process_listener(self)
 
         self._running_processes[proc.pid] = _RunningTaskInfo(proc.pid, ch, method.delivery_tag)
-        self.loop().insert(proc)
 
         # Tell the sender that we've launched it
         ch.basic_publish(

@@ -46,7 +46,7 @@ class KeyboardInterruptProc(Process):
 class ProcessWithCheckpoint(Process):
     @override
     def _run(self):
-        return Checkpoint(), self.finish
+        return Checkpoint(self.loop()), self.finish
 
     def finish(self, wait_on):
         pass
@@ -55,29 +55,18 @@ class ProcessWithCheckpoint(Process):
 class WaitForSignalProcess(Process):
     BARRIER = 'barrier'
 
-    def __init__(self, inputs=None, pid=None, logger=None):
-        super(WaitForSignalProcess, self).__init__(inputs, pid, logger)
-        self._barrier = Barrier()
-
-    def save_instance_state(self, bundle):
-        super(WaitForSignalProcess, self).save_instance_state(bundle)
-        bundle[self.BARRIER] = Bundle()
-        self._barrier.save_instance_state(bundle[self.BARRIER])
-
-    def load_instance_state(self, saved_state, logger=None):
-        super(WaitForSignalProcess, self).load_instance_state(saved_state, logger)
-        assert isinstance(self.get_waiting_on(), Barrier), "Barrier not loaded correctly"
-        self._barrier = self.get_waiting_on()
-
     @override
     def _run(self):
-        return self._barrier, self.finish
+        return Barrier(self.loop()), self.finish
 
     def finish(self, wait_on):
         pass
 
     def continue_(self):
-        self._barrier.open()
+        """
+        Can only be called when in the WAITING state
+        """
+        self.get_waiting_on().open()
 
 
 class EventsTesterMixin(object):
@@ -157,10 +146,10 @@ class TwoCheckpoint(ProcessEventsTester):
     @override
     def _run(self):
         self.out("test", 5)
-        return Checkpoint(), self.middle_step
+        return Checkpoint(self.loop()), self.middle_step
 
     def middle_step(self, wait_on):
-        return Checkpoint(), self.finish
+        return Checkpoint(self.loop()), self.finish
 
     def finish(self, wait_on):
         pass
@@ -170,10 +159,10 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
     @override
     def _run(self):
         self.out("test", 5)
-        return Checkpoint(), self.middle_step
+        return Checkpoint(self.loop()), self.middle_step
 
     def middle_step(self, wait_on):
-        return Checkpoint(), None
+        return Checkpoint(self.loop()), None
 
 
 class ExceptionProcess(ProcessEventsTester):
@@ -288,7 +277,7 @@ TEST_WAITING_PROCESSES = [
 ]
 
 
-def check_process_against_snapshots(proc_class, snapshots):
+def check_process_against_snapshots(loop, proc_class, snapshots):
     """
     Take the series of snapshots from a Process that executed and run it
     forward from each one.  Check that the subsequent snapshots match.
@@ -297,6 +286,8 @@ def check_process_against_snapshots(proc_class, snapshots):
 
     Return True if they match, False otherwise.
 
+    :param loop: The event loop
+    :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
     :param proc_class: The process class to check
     :type proc_class: :class:`Process`
     :param snapshots: The snapshots taken from from an execution of that
@@ -305,7 +296,7 @@ def check_process_against_snapshots(proc_class, snapshots):
     :rtype: bool
     """
     for i, info in zip(range(0, len(snapshots)), snapshots):
-        loaded = proc_class.create_from(info[1])
+        loaded = loop.create_task(proc_class, info[1])
         ps = ProcessSaver(loaded)
         try:
             loaded.run()

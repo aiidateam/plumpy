@@ -1,69 +1,16 @@
-import itertools
 import thread
 import time
 from abc import ABCMeta, abstractmethod
-from collections import deque, namedtuple
+from collections import deque
 
-import plum.process
-import plum.util
-from plum.loop import events
+from . import futures
+from . import events
 from plum.loop.direct_executor import DirectExecutor as _DirectExecutor
 from plum.loop.messages import Mailman
-from plum.loop.object import Task
+from plum.loop.objects import Task
 from plum.util import EventHelper
 
-
-class Future(plum.util.Future):
-    def __init__(self, loop):
-        super(Future, self).__init__()
-        self._loop = loop
-        self._callbacks = []
-
-    def loop(self):
-        return self._loop
-
-    def cancel(self):
-        if super(Future, self).cancel():
-            self._schedule_callbacks()
-            return True
-        else:
-            return False
-
-    def set_result(self, result):
-        super(Future, self).set_result(result)
-        self._schedule_callbacks()
-
-    def set_exception(self, exception):
-        super(Future, self).set_exception(exception)
-        self._schedule_callbacks()
-
-    def add_done_callback(self, fn):
-        """
-        Add a callback to be run when the future becomes done.
-        
-        :param fn: The callback function.
-        """
-        if self.done():
-            self._loop.call_soon(fn, self)
-        else:
-            self._callbacks.append(fn)
-
-    def remove_done_callback(self, fn):
-        self._callbacks.remove(fn)
-
-    def _schedule_callbacks(self):
-        """
-        Ask the event loop to call all callbacks.
-        
-        The callbacks are scheduled to be called as soon as possible.
-        """
-        callbacks = self._callbacks[:]
-        if not callbacks:
-            return
-
-        self._callbacks[:] = []
-        for callback in callbacks:
-            self._loop.call_soon(callback, self)
+__all__ = ['LoopListener', 'BaseEventLoop']
 
 
 class LoopListener(object):
@@ -116,14 +63,6 @@ class AbstractEventLoop(object):
         pass
 
     @abstractmethod
-    def get_process(self, pid):
-        pass
-
-    @abstractmethod
-    def get_process_future(self, pid):
-        pass
-
-    @abstractmethod
     def add_loop_listener(self, listener):
         pass
 
@@ -137,6 +76,17 @@ class AbstractEventLoop(object):
 
     @abstractmethod
     def messages(self):
+        pass
+
+    @abstractmethod
+    def objects(self, obj_type=None):
+        """
+        Get the objects in the event loop.  Optionally filer for loop objects of
+        a given type.
+        
+        :param obj_type: The loop object class to filter for. 
+        :return: A list of the found objects.
+        """
         pass
 
     @abstractmethod
@@ -157,6 +107,47 @@ class AbstractEventLoop(object):
         """
         pass
 
+    # region Tasks
+    @abstractmethod
+    def create_task(self, task, *args, **kwargs):
+        """
+        Create a task.
+        
+        :param task: The task identifier 
+        :param args: (optional) positional arguments to the task
+        :param kwargs: (optional) keyword arguments to the task
+        
+        :return: The task object
+        """
+        pass
+
+    @abstractmethod
+    def set_task_factory(self, factory):
+        """
+        Set the factory used by :class:`AbstractEventLoop.create_task()`.
+        
+        If `None` then the default will be set.
+        
+        The factory should be a callabke with signature matching `(loop, task, *args, **kwargs)`
+        where task is some task identifier and positional and keyword arguments
+        can be supplied and it returns the :class:`Task` instance.
+        
+        :param factory: The task factory 
+        """
+        pass
+
+    @abstractmethod
+    def get_task_factory(self):
+        """
+        Get the task factory currently in use.  Returns `None` if the default is
+        being used.
+        
+        :return: The task factory
+        """
+        pass
+
+        # endregion
+
 
 class BaseEventLoop(AbstractEventLoop):
     def __init__(self, executor=None):
@@ -170,6 +161,7 @@ class BaseEventLoop(AbstractEventLoop):
 
         self._objects = {}
         self._ticking = []
+        self._task_factory = None
 
         self._to_insert = []
         self._to_remove = set()
@@ -188,7 +180,7 @@ class BaseEventLoop(AbstractEventLoop):
         return self._thread_id is not None
 
     def create_future(self):
-        return Future(self)
+        return futures.Future(self)
 
     def run_forever(self):
         self._thread_id = thread.get_ident()
@@ -203,12 +195,12 @@ class BaseEventLoop(AbstractEventLoop):
 
     def run_until_complete(self, future):
         """
-        :param future: The future or a process
-        :type future: union(:class:`Future`, :class:`Process`)
+        :param future: The future
+        :type future: :class:`futures.Future`
         :return: The result of the future
         """
         if isinstance(future, Task):
-            future = self.insert_task(future)
+            future = future.future()
 
         future.add_done_callback(self._run_until_complete_cb)
         self.run_forever()
@@ -229,7 +221,7 @@ class BaseEventLoop(AbstractEventLoop):
         return handle
 
     def call_later(self, delay, callback, *args):
-        timer = events.Timer(self.time() + delay, callback, args)
+        timer = self.create_task(events.Timer, self.time() + delay, callback, args)
         self.insert(timer)
         return timer
 
@@ -237,20 +229,7 @@ class BaseEventLoop(AbstractEventLoop):
         if loop_object.uuid in self._objects:
             return
 
-        if isinstance(loop_object, Task):
-            self.insert_task(loop_object)
-        else:
-            self._do_insert(loop_object)
-
-    def insert_task(self, task):
-        if task.uuid in self._objects:
-            return task.future()
-
-        future = self.create_future()
-        task.set_future(future)
-        self._do_insert(task)
-
-        return future
+        self._do_insert(loop_object)
 
     def _do_insert(self, loop_object):
         if self.is_running():
@@ -260,11 +239,11 @@ class BaseEventLoop(AbstractEventLoop):
 
     def remove(self, loop_object):
         """
-        Remove a process from the event loop.  If the event loop is not running
-        the process is removed immediately, otherwise it is scheduled to be
+        Remove an object from the event loop.  If the event loop is not running
+        the object is removed immediately, otherwise it is scheduled to be
         removed at the end of the next tick.
         
-        :param loop_object: The process to remove 
+        :param loop_object: The object to remove 
         :return: True if it was removed, False if it was scheduled to be removed
         :rtype: bool
         """
@@ -275,10 +254,10 @@ class BaseEventLoop(AbstractEventLoop):
             self._remove(loop_object.uuid)
             return True
 
-    def objects(self, type=None):
+    def objects(self, obj_type=None):
         # Filter the type if necessary
-        if type is not None:
-            return [obj for obj in self._objects.itervalues() if isinstance(obj, type)]
+        if obj_type is not None:
+            return [obj for obj in self._objects.itervalues() if isinstance(obj, obj_type)]
         else:
             return self._objects.values()
 
@@ -293,19 +272,6 @@ class BaseEventLoop(AbstractEventLoop):
                 return obj
 
         raise ValueError("Unknown uuid")
-
-    def processes(self):
-        return self.objects(type=plum.Process)
-
-    def get_process(self, pid):
-        for obj in itertools.chain(self._objects.itervalues(), self._to_insert):
-            if isinstance(obj, plum.process.Process) and obj.pid == pid:
-                return obj
-
-        raise ValueError("Unknown pid")
-
-    def get_process_future(self, pid):
-        return self.get_process(pid).future()
 
     def stop(self):
         """
@@ -346,6 +312,24 @@ class BaseEventLoop(AbstractEventLoop):
 
     def is_ticking(self, loop_object):
         return loop_object in self._ticking
+
+    # region Tasks
+    def create_task(self, task, *args, **kwargs):
+        if self._task_factory is None:
+            task = task(self, *args, **kwargs)
+        else:
+            task = self._task_factory(self, task, *args, **kwargs)
+
+        self.insert(task)
+        return task
+
+    def set_task_factory(self, factory):
+        self._task_factory = factory
+
+    def get_task_factory(self):
+        return self._task_factory
+
+    # endregion
 
     def _tick(self):
         # Insert any new processes
