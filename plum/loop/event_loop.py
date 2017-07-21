@@ -2,13 +2,16 @@ import thread
 import time
 from abc import ABCMeta, abstractmethod
 from collections import deque
+import logging
 
 from . import futures
 from . import events
 from plum.loop.direct_executor import DirectExecutor as _DirectExecutor
 from plum.loop.messages import Mailman
-from plum.loop.objects import Task
+from plum.loop.tasks import Task
 from plum.util import EventHelper
+
+_LOGGER = logging.getLogger(__name__)
 
 __all__ = ['LoopListener', 'BaseEventLoop']
 
@@ -26,6 +29,11 @@ class AbstractEventLoop(object):
 
     @abstractmethod
     def create_future(self):
+        """
+
+        :return: A new future
+        :rtype: :class:`futures.Future`
+        """
         pass
 
     @abstractmethod
@@ -79,6 +87,10 @@ class AbstractEventLoop(object):
         pass
 
     @abstractmethod
+    def get_object(self, uuid):
+        pass
+
+    @abstractmethod
     def objects(self, obj_type=None):
         """
         Get the objects in the event loop.  Optionally filer for loop objects of
@@ -89,27 +101,9 @@ class AbstractEventLoop(object):
         """
         pass
 
-    @abstractmethod
-    def start_ticking(self, loop_object):
-        pass
-
-    @abstractmethod
-    def stop_ticking(self, loop_object):
-        pass
-
-    @abstractmethod
-    def is_ticking(self, loop_object):
-        """
-        Is the event loop currently ticking the given loop object
-        
-        :param loop_object: The loop object 
-        :return: True if ticking, False otherwise
-        """
-        pass
-
     # region Tasks
     @abstractmethod
-    def create_task(self, task, *args, **kwargs):
+    def create(self, task, *args, **kwargs):
         """
         Create a task.
         
@@ -122,7 +116,7 @@ class AbstractEventLoop(object):
         pass
 
     @abstractmethod
-    def set_task_factory(self, factory):
+    def set_object_factory(self, factory):
         """
         Set the factory used by :class:`AbstractEventLoop.create_task()`.
         
@@ -137,7 +131,7 @@ class AbstractEventLoop(object):
         pass
 
     @abstractmethod
-    def get_task_factory(self):
+    def get_object_factory(self):
         """
         Get the task factory currently in use.  Returns `None` if the default is
         being used.
@@ -148,20 +142,19 @@ class AbstractEventLoop(object):
 
         # endregion
 
+    @abstractmethod
+    def close(self):
+        """ Shutdown the event loop"""
+        pass
+
 
 class BaseEventLoop(AbstractEventLoop):
-    def __init__(self, executor=None):
-        if executor is None:
-            self._executor = _DirectExecutor()
-        else:
-            self._executor = executor
-
+    def __init__(self):
         self._stopping = False
         self._callbacks = deque()
 
         self._objects = {}
-        self._ticking = []
-        self._task_factory = None
+        self._object_factory = None
 
         self._to_insert = []
         self._to_remove = set()
@@ -199,8 +192,7 @@ class BaseEventLoop(AbstractEventLoop):
         :type future: :class:`futures.Future`
         :return: The result of the future
         """
-        if isinstance(future, Task):
-            future = future.future()
+        future = futures.get_future(future)
 
         future.add_done_callback(self._run_until_complete_cb)
         self.run_forever()
@@ -221,7 +213,7 @@ class BaseEventLoop(AbstractEventLoop):
         return handle
 
     def call_later(self, delay, callback, *args):
-        timer = self.create_task(events.Timer, self.time() + delay, callback, args)
+        timer = self.create(events.Timer, self.time() + delay, callback, args)
         self.insert(timer)
         return timer
 
@@ -247,6 +239,11 @@ class BaseEventLoop(AbstractEventLoop):
         :return: True if it was removed, False if it was scheduled to be removed
         :rtype: bool
         """
+        if loop_object.uuid not in self._objects:
+            raise ValueError("Unknown loop object")
+        if loop_object.uuid in self._to_remove:
+            raise ValueError("Loop object already scheduled to be removed")
+
         if self.is_running():
             self._to_remove.add(loop_object.uuid)
             return False
@@ -298,54 +295,45 @@ class BaseEventLoop(AbstractEventLoop):
     def messages(self):
         return self.__mailman
 
-    def start_ticking(self, loop_object):
-        if loop_object.loop() is not self:
-            raise ValueError("Cannot tick an object not in the event loop")
-        if loop_object not in self._ticking:
-            self._ticking.append(loop_object)
-
-    def stop_ticking(self, loop_object):
-        if loop_object.loop() is not self:
-            raise ValueError("Cannot stop ticking an object not in the event loop")
-        if loop_object in self._ticking:
-            self._ticking.remove(loop_object)
-
-    def is_ticking(self, loop_object):
-        return loop_object in self._ticking
-
     # region Tasks
-    def create_task(self, task, *args, **kwargs):
-        if self._task_factory is None:
-            task = task(self, *args, **kwargs)
+    def create(self, object_type, *args, **kwargs):
+        if self._object_factory is None:
+            object_type = object_type(self, *args, **kwargs)
         else:
-            task = self._task_factory(self, task, *args, **kwargs)
+            object_type = self._object_factory(self, object_type, *args, **kwargs)
 
-        self.insert(task)
-        return task
+        self.insert(object_type)
+        return object_type
 
-    def set_task_factory(self, factory):
-        self._task_factory = factory
+    def set_object_factory(self, factory):
+        self._object_factory = factory
 
-    def get_task_factory(self):
-        return self._task_factory
+    def get_object_factory(self):
+        return self._object_factory
 
     # endregion
+
+    def close(self):
+        assert not self.is_running(), "Can't close a running loop"
+
+        self._stopping = False
+        self._callbacks = None
+
+        self._objects = None
+        self._object_factory = None
+
+        self._to_insert = None
+        self._to_remove = None
+        self._thread_id = None
+
+        self.__mailman = None
+        self.__event_helper = None
 
     def _tick(self):
         # Insert any new processes
         for loop_object in self._to_insert:
             self._insert(loop_object)
         del self._to_insert[:]
-
-        # Tick the processes, have to use a copy of the list as they may stop ticking
-        # during the tick call
-        futs = []
-        for loop_object in list(self._ticking):
-            futs.append(self._executor.submit(loop_object.tick))
-
-        # Wait for everything to complete
-        for fut in futs:
-            fut.result()
 
         # Call all the callbacks
         todo = len(self._callbacks)
@@ -368,6 +356,7 @@ class BaseEventLoop(AbstractEventLoop):
         self._objects[loop_object.uuid] = loop_object
         loop_object.on_loop_inserted(self)
 
+        self.messages().send("loop.object.{}.inserted".format(loop_object.uuid))
         self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_inserted, self, loop_object)
 
     def _remove(self, uuid):
@@ -376,8 +365,12 @@ class BaseEventLoop(AbstractEventLoop):
         except KeyError:
             raise ValueError("Unknown uuid")
         else:
-            loop_object.on_loop_removed()
-            if loop_object in self._ticking:
-                self._ticking.remove(loop_object)
+            try:
+                loop_object.on_loop_removed()
+            except BaseException as e:
+                _LOGGER.warning(
+                    "Object '{}' produced exception '{}' during on_loop_removed".format(loop_object, e)
+                )
 
+            self.messages().send("loop.object.{}.removed".format(uuid))
             self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_removed, self, loop_object)

@@ -4,10 +4,17 @@ import uuid
 import pika
 
 from plum import loop_factory
+from plum.exceptions import CancelledError
 from plum.rmq import ProcessLaunchPublisher, ProcessLaunchSubscriber
 from plum.test_utils import TEST_PROCESSES
 from test.test_rmq import _HAS_PIKA
 from test.util import TestCase
+
+
+def _create_temporary_queue(connection):
+    channel = connection.channel()
+    result = channel.queue_declare(exclusive=True)
+    return result.method.queue
 
 
 @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
@@ -20,16 +27,29 @@ class TestTaskControllerAndRunner(TestCase):
         except pika.exceptions.ConnectionClosed:
             self.fail("Couldn't open connection.  Make sure rmq server is running")
 
-        queue = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
-        self.publisher = ProcessLaunchPublisher(self._connection, queue=queue)
-        self.subscriber = ProcessLaunchSubscriber(self._connection, queue=queue)
-
         self.loop = loop_factory()
-        self.loop.insert(self.publisher)
-        self.loop.insert(self.subscriber)
+
+        queue = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
+        self.publisher = self.loop.create(ProcessLaunchPublisher, self._connection, queue=queue)
+        self.subscriber = self.loop.create(ProcessLaunchSubscriber, self._connection, queue=queue)
 
     def tearDown(self):
         self._connection.close()
+        self.loop.close()
+        self.loop = None
+
+    # def test_launch_with_timeout(self):
+    #     """ Test launching a process without a response from a subscriber within the timeout """
+    #     # Create a test queue
+    #     queue = _create_temporary_queue(self._connection)
+    #     publisher = self.loop.create(ProcessLaunchPublisher, self._connection, queue=queue)
+    #
+    #     future = publisher.launch(DummyProcess, launch_timeout=0.)
+    #
+    #     # The future should be cancelled by the publisher because there will be no
+    #     # response in the timeout
+    #     with self.assertRaises(CancelledError):
+    #         self.loop.run_until_complete(future)
 
     def test_launch(self):
         # Try launching some processes

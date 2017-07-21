@@ -17,7 +17,7 @@ class TestWaitingProcess(TestCase):
         self.loop = loop_factory()
 
     def test_instance_state(self):
-        proc = self.loop.create_task(TwoCheckpoint)
+        proc = self.loop.create(TwoCheckpoint)
         wl = ProcessSaver(proc)
         proc.run()
 
@@ -26,18 +26,18 @@ class TestWaitingProcess(TestCase):
             self.assertEqual(outputs, bundle[Process.BundleKeys.OUTPUTS.value].get_dict())
 
     def test_saving_each_step(self):
-        for ProcClass in TEST_WAITING_PROCESSES:
-            proc = self.loop.create_task(ProcClass)
+        for proc_class in TEST_WAITING_PROCESSES:
+            proc = self.loop.create(proc_class)
             saver = ProcessSaver(proc)
             try:
                 proc.run()
             except BaseException:
                 pass
 
-            self.assertTrue(check_process_against_snapshots(self.loop, ProcClass, saver.snapshots))
+            self.assertTrue(check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
 
     def test_abort(self):
-        p = self.loop.create_task(WaitForSignalProcess)
+        p = self.loop.create(WaitForSignalProcess)
 
         # Wait until it is waiting
         run_until(p, ProcessState.WAITING, self.loop)

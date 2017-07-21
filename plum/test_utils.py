@@ -46,9 +46,9 @@ class KeyboardInterruptProc(Process):
 class ProcessWithCheckpoint(Process):
     @override
     def _run(self):
-        return Checkpoint(self.loop()), self.finish
+        return self.loop().create(Checkpoint), self.finish
 
-    def finish(self, wait_on):
+    def finish(self, result):
         pass
 
 
@@ -57,7 +57,7 @@ class WaitForSignalProcess(Process):
 
     @override
     def _run(self):
-        return Barrier(self.loop()), self.finish
+        return self.loop().create(Barrier), self.finish
 
     def finish(self, wait_on):
         pass
@@ -146,10 +146,10 @@ class TwoCheckpoint(ProcessEventsTester):
     @override
     def _run(self):
         self.out("test", 5)
-        return Checkpoint(self.loop()), self.middle_step
+        return self.loop().create(Checkpoint), self.middle_step
 
     def middle_step(self, wait_on):
-        return Checkpoint(self.loop()), self.finish
+        return self.loop().create(Checkpoint), self.finish
 
     def finish(self, wait_on):
         pass
@@ -159,10 +159,10 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
     @override
     def _run(self):
         self.out("test", 5)
-        return Checkpoint(self.loop()), self.middle_step
+        return self.loop().create(Checkpoint), self.middle_step
 
     def middle_step(self, wait_on):
-        return Checkpoint(self.loop()), None
+        return self.loop().create(Checkpoint), None
 
 
 class ExceptionProcess(ProcessEventsTester):
@@ -296,10 +296,10 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     :rtype: bool
     """
     for i, info in zip(range(0, len(snapshots)), snapshots):
-        loaded = loop.create_task(proc_class, info[1])
+        loaded = loop.create(proc_class, info[1])
         ps = ProcessSaver(loaded)
         try:
-            loaded.run()
+            loop.run_until_complete(loaded)
         except BaseException:
             pass
 

@@ -5,10 +5,11 @@ from abc import ABCMeta
 from collections import Sequence
 from plum.persistence.bundle import Bundle
 from plum.event import WaitOnEvent, wait_on_process_event
-from plum.wait import WaitOn, create_from
+from plum.wait import WaitOn
 from plum.util import override
 from plum.process_listener import ProcessListener
 from plum.process import ProcessState
+from plum.loop import objects
 
 
 class Checkpoint(WaitOn):
@@ -16,10 +17,8 @@ class Checkpoint(WaitOn):
     This WaitOn doesn't actually wait, it's just a way to ask the engine to
     create a checkpoint at this point in the execution of a Process.
     """
-
-    def __init__(self, loop):
-        super(Checkpoint, self).__init__(loop)
-        self.future().set_result(None)
+    def on_loop_inserted(self, loop):
+        self.set_result(None)
 
 
 class _CompoundWaitOn(WaitOn):
@@ -27,12 +26,12 @@ class _CompoundWaitOn(WaitOn):
 
     WAIT_LIST = 'wait_list'
 
-    def __init__(self, wait_list, loop):
+    def __init__(self, loop, wait_list):
         super(_CompoundWaitOn, self).__init__(loop)
         for w in wait_list:
-            if not isinstance(w, WaitOn):
+            if not isinstance(w, objects.Awaitable):
                 raise ValueError(
-                    "Must provide objects of type WaitOn, got '{}'.".format(w.__class__.__name__))
+                    "Must provide objects of type Awaitable, got '{}'.".format(w.__class__.__name__))
 
         self._wait_list = wait_list
 
@@ -49,22 +48,23 @@ class _CompoundWaitOn(WaitOn):
         out_state[self.WAIT_LIST] = waits
 
     @override
-    def load_instance_state(self, saved_state, loop):
+    def load_instance_state(self, loop, saved_state, *args):
         super(_CompoundWaitOn, self).load_instance_state(saved_state, loop)
-        self._wait_list = [create_from(b, loop) for b in saved_state[self.WAIT_LIST]]
+        self._wait_list = [self.loop().create(b) for b in saved_state[self.WAIT_LIST]]
 
 
 class WaitOnAll(_CompoundWaitOn):
-    def __init__(self, wait_list, loop):
-        super(WaitOnAll, self).__init__(wait_list, loop)
+    def __init__(self, loop, wait_list):
+        super(WaitOnAll, self).__init__(loop, wait_list)
         self._num_finished = 0
-
         for wait_on in self._wait_list:
             wait_on.future().add_done_callback(self._wait_done)
 
-    def load_instance_state(self, saved_state, loop):
-        super(WaitOnAll, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, loop, saved_state, *args):
+        super(WaitOnAll, self).load_instance_state(loop, saved_state)
         self._num_finished = 0
+        for wait_on in self._wait_list:
+            wait_on.future().add_done_callback(self._wait_done)
 
     def _wait_done(self, future):
         self._num_finished += 1
@@ -73,8 +73,8 @@ class WaitOnAll(_CompoundWaitOn):
 
 
 class WaitOnAny(_CompoundWaitOn):
-    def __init__(self, wait_list, loop):
-        super(WaitOnAny, self).__init__(wait_list, loop)
+    def __init__(self, loop, wait_list):
+        super(WaitOnAny, self).__init__(loop, wait_list)
 
         for wait_on in self._wait_list:
             wait_on.future(loop).add_done_callback(self._wait_done)
@@ -89,7 +89,7 @@ class WaitOnProcessState(WaitOn, ProcessListener):
     STATE_UNREACHABLE = 'state_unreachable'
 
     @override
-    def __init__(self, proc, target_state, loop):
+    def __init__(self, loop, proc, target_state):
         """
         Create the WaitOnState.
 
@@ -104,13 +104,28 @@ class WaitOnProcessState(WaitOn, ProcessListener):
         self._pid = proc.pid
         self._target_state = target_state
 
-        proc = loop.get_object(self._pid)
+    def on_loop_inserted(self, loop):
+        super(WaitOnProcessState, self).on_loop_inserted(loop)
+        self.execute()
+
+    def save_instance_state(self, out_state):
+        super(WaitOnProcessState, self).save_instance_state()
+        out_state['calc_pid'] = self._pid
+        out_state['target_state'] = self._target_state
+
+    def load_instance_state(self, loop, saved_state, *args):
+        super(WaitOnProcessState, self).load_instance_state(loop, saved_state, *args)
+        self._pid = saved_state['calc_pid']
+        self._target_state = saved_state['target_state']
+
+    def execute(self):
+        proc = self.loop().get_object(self._pid)
 
         # Are we currently in the state?
         if proc.state == self._target_state:
-            self.future().set_result(self.STATE_REACHED)
+            self.set_result(self.STATE_REACHED)
         elif self._is_target_state_unreachable(proc.state):
-            self.future().set_result(self.STATE_UNREACHABLE)
+            self.set_result(self.STATE_UNREACHABLE)
         else:
             proc.add_process_listener(self)
 
@@ -132,11 +147,11 @@ class WaitOnProcessState(WaitOn, ProcessListener):
 
     def _state_changed(self, proc):
         if proc.state is self._target_state:
-            self._future.set_result(self.STATE_REACHED)
+            self.set_result(self.STATE_REACHED)
         elif self._is_target_state_unreachable(proc.state):
-            self._future.set_result(self.STATE_UNREACHABLE)
+            self.set_result(self.STATE_UNREACHABLE)
 
-        if self._future.done():
+        if self.done():
             proc.remove_process_listener(self)
 
     def _is_target_state_unreachable(self, current_state):
@@ -165,9 +180,9 @@ def run_until(proc, state, loop):
     :param loop: The event loop
     """
     if isinstance(proc, Sequence):
-        wait_for = WaitOnAll([WaitOnProcessState(p, state, loop) for p in proc], loop)
+        wait_for = loop.create(WaitOnAll, [loop.create(WaitOnProcessState, p, state) for p in proc])
     else:
-        wait_for = WaitOnProcessState(proc, state, loop)
+        wait_for = loop.create(WaitOnProcessState, proc, state)
 
     results = loop.run_until_complete(wait_for.future())
 
@@ -180,20 +195,20 @@ def wait_on_process(pid, loop):
 
 
 class WaitOnProcessOutput(WaitOn):
-    def __init__(self, pid, port, loop):
+    def __init__(self, loop, pid, port):
         """
         :param process: The process whose output is being waited for
         :type process: :class:`plum.process.Process`
         :param port: The output port being waited on
         :type port: str or unicode
         """
-        super(WaitOnProcessOutput, self).__init__(loop)
+        super(WaitOnProcessOutput, self).__init__()
         self._wait_on_event = wait_on_process_event(loop, pid, 'output_emitted.{}'.format(port))
         self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
-    def load_instance_state(self, saved_state, loop):
-        super(WaitOnProcessOutput, self).load_instance_state(saved_state, loop)
-        self._wait_on_event = WaitOnEvent.create_from(loop, saved_state['output_event'])
+    def load_instance_state(self, saved_state, loop, *args):
+        super(WaitOnProcessOutput, self).load_instance_state(saved_state, loop, *args)
+        self._wait_on_event = self.loop().create(WaitOnEvent, saved_state['output_event'])
         self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
     def save_instance_state(self, out_state):
@@ -219,18 +234,18 @@ def wait_until_stopped(proc, timeout=None):
 
 class Barrier(WaitOn):
     @override
-    def load_instance_state(self, saved_state, loop):
-        super(Barrier, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, loop, saved_state, *args):
+        super(Barrier, self).load_instance_state(loop, saved_state, *args)
         if saved_state['is_open']:
             self.open()
 
     @override
     def save_instance_state(self, out_state):
         super(Barrier, self).save_instance_state(out_state)
-        out_state['is_open'] = self.future().done()
+        out_state['is_open'] = self.done()
 
     def open(self):
-        if self._future.done():
+        if self.done():
             raise RuntimeError('Barrier already open')
 
-        self._future.set_result('open')
+        self.set_result('open')

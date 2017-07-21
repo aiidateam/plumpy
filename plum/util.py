@@ -233,6 +233,22 @@ class AttributesFrozendict(frozendict.frozendict):
         return self.keys()
 
 
+class SimpleNamespace(object):
+    """
+    An attempt to emulate python 3's types.SimpleNamespace
+    """
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+    def __repr__(self):
+        keys = sorted(self.__dict__)
+        items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
+        return "{}({})".format(type(self).__name__, ", ".join(items))
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+
 class Savable(object):
     @classmethod
     def create_from(cls, saved_state):
@@ -275,24 +291,31 @@ def load_with_classloader(bundle):
     return proc_class.create_from(bundle)
 
 
-def process_factory(loop, task_class, *args, **kwargs):
+def object_factory(loop, obj_class, *args, **kwargs):
     from plum.persistence import Bundle
 
-    if args and len(args) == 1 and isinstance(args[0], Bundle):
+    if isinstance(obj_class, Bundle):
+        # User just passed in a Bundle and the bundle should contain the class
+        from plum.loop.persistence import load_from
+        return load_from(obj_class, *args, **kwargs)
+    elif args and len(args) == 1 and isinstance(args[0], Bundle):
         if kwargs:
             RuntimeError("Found unexpected kwargs in call to process factory")
-        return task_class.create_from(loop, args[0])
+        return obj_class.create_from(loop, args[0])
     elif kwargs and 'saved_state' in kwargs:
-        return task_class.create_from(loop, kwargs['saved_state'])
+        return obj_class.create_from(loop, kwargs['saved_state'])
     else:
-        return task_class(loop, *args, **kwargs)
+        try:
+            return obj_class(loop, *args, **kwargs)
+        except TypeError as e:
+            raise TypeError("Failed to create '{}', {}".format(obj_class, e.message))
 
 
 def loop_factory(*args, **kwargs):
     from plum.loop import BaseEventLoop
 
     loop = BaseEventLoop(*args, **kwargs)
-    loop.set_task_factory(process_factory)
+    loop.set_object_factory(object_factory)
     return loop
 
 

@@ -1,9 +1,8 @@
 from enum import Enum
 import logging
-import traceback
 from plum.wait import WaitOn
 import plum.util as util
-from plum.loop.objects import Task
+from plum.loop.objects import Awaitable
 
 
 class ProcessState(Enum):
@@ -50,7 +49,6 @@ class State(object):
 
     def execute(self):
         self._process.log_with_pid(logging.DEBUG, "executing state '{}'".format(self.label))
-        return None
 
     def exit(self):
         self._process.log_with_pid(logging.DEBUG, "exiting state '{}'".format(self.label))
@@ -78,9 +76,13 @@ class Created(State):
         self._process._set_state(Running(self._process, self._process.do_run))
 
 
+_NO_RESULT = ()
+
+
 class Running(State):
     LABEL = ProcessState.RUNNING
     EXEC_FUNC = 'exec_func'
+    RESULT = 'result'
 
     @staticmethod
     def _is_wait_retval(retval):
@@ -94,18 +96,18 @@ class Running(State):
         """
         return (isinstance(retval, tuple) and
                 len(retval) == 2 and
-                isinstance(retval[0], WaitOn))
+                isinstance(retval[0], Awaitable))
 
-    def __init__(self, process, exec_func, *args, **kwargs):
+    def __init__(self, process, exec_func, result=_NO_RESULT):
         """
         :param process: The process this state belongs to
         :type process: :class:`plum.process.Process`
-        :param exec_func: The run function to call during this state  
+        :param exec_func: The run function to call during this state
+        :param result: The (optional) result from a waiting state
         """
         super(Running, self).__init__(process)
         self._exec_func = exec_func
-        self._args = args
-        self._kwargs = kwargs
+        self._result = result
 
     def enter(self, previous_state):
         super(Running, self).enter(previous_state)
@@ -124,7 +126,11 @@ class Running(State):
     def execute(self):
         super(Running, self).execute()
 
-        retval = self._exec_func(*self._args, **self._kwargs)
+        if self._result is _NO_RESULT:
+            retval = self._exec_func()
+        else:
+            retval = self._exec_func(self._result)
+
         if Running._is_wait_retval(retval):
             wait_on, callback = retval
             self._process._set_state(Waiting(self._process, wait_on, callback))
@@ -134,10 +140,12 @@ class Running(State):
     def save_instance_state(self, out_state):
         super(Running, self).save_instance_state(out_state)
         out_state[self.EXEC_FUNC] = self._exec_func.__name__
+        out_state[self.RESULT] = self._result
 
     def load_instance_state(self, process, saved_state):
         super(Running, self).load_instance_state(process, saved_state)
         self._exec_func = getattr(self._process, saved_state[self.EXEC_FUNC])
+        self._result = saved_state[self.RESULT]
 
 
 class Waiting(State):
@@ -163,15 +171,16 @@ class Waiting(State):
 
     def execute(self):
         super(Waiting, self).execute()
-        future = self._wait_on.future()
 
-        if future.done():
+        if self._wait_on.done():
             if self._callback is None:
                 self._process._set_state(Stopped(self._process))
             else:
-                self._process._set_state(Running(self._process, self._callback, self._wait_on))
+                self._process._set_state(
+                    Running(self._process, self._callback, self._wait_on.result())
+                )
         else:
-            return futrue
+            return self._wait_on
 
     def save_instance_state(self, out_state):
         super(Waiting, self).save_instance_state(out_state)
@@ -180,11 +189,9 @@ class Waiting(State):
         else:
             out_state[self.CALLBACK] = self._callback.__name__
 
-        out_state[self.WAIT_ON] = self._process.save_wait_on_state(self._wait_on)
-
     def load_instance_state(self, process, saved_state):
         super(Waiting, self).load_instance_state(process, saved_state)
-        self._wait_on = self._process.create_wait_on(saved_state[self.WAIT_ON])
+        self._wait_on = self._process.awaiting()
 
         try:
             self._callback = getattr(self._process, saved_state[self.CALLBACK])
@@ -193,9 +200,6 @@ class Waiting(State):
                 "This process does not have a function with "
                 "the name '{}' as expected from the wait on".
                     format(saved_state[self.CALLBACK]))
-
-    def get_wait_on(self):
-        return self._wait_on
 
 
 class Stopped(State):
@@ -211,7 +215,7 @@ class Stopped(State):
 
         if self._abort:
             self._process._on_abort(self._abort_msg)
-        elif previous_state is ProcessState.RUNNING:
+        elif previous_state in [ProcessState.RUNNING, ProcessState.WAITING]:
             self._process._on_finish()
         else:
             raise RuntimeError("Cannot enter STOPPED from '{}'".format(previous_state))
@@ -221,7 +225,6 @@ class Stopped(State):
     def execute(self):
         super(Stopped, self).execute()
         self._process._terminate()
-        return Task.Terminated(self._process.outputs)
 
     def save_instance_state(self, out_state):
         super(Stopped, self).save_instance_state(out_state)
@@ -259,7 +262,6 @@ class Failed(State):
     def execute(self):
         super(Failed, self).execute()
         self._process._terminate()
-        return Task.Terminated(self._exc_info)
 
     def save_instance_state(self, out_state):
         super(Failed, self).save_instance_state(out_state)

@@ -49,22 +49,13 @@ class ForgetToCallParent(Process):
 class TestProcess(TestCase):
     def setUp(self):
         super(TestProcess, self).setUp()
-
         self.loop = loop_factory()
-
-        self.events_tester = ProcessListenerTester()
-        self.proc = self.loop.create_task(DummyProcessWithOutput)
-        self.proc.add_process_listener(self.events_tester)
-
-    def tearDown(self):
-        self.proc.remove_process_listener(self.events_tester)
-        super(TestProcess, self).tearDown()
 
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
         """
-        dp = self.loop.create_task(DummyProcess)
+        dp = self.loop.create(DummyProcess)
         self.assertIsNot(DummyProcess.spec(), Process.spec())
         self.assertIs(dp.spec(), DummyProcess.spec())
 
@@ -73,7 +64,7 @@ class TestProcess(TestCase):
 
         self.assertIsNot(Proc.spec(), Process.spec())
         self.assertIsNot(Proc.spec(), DummyProcess.spec())
-        p = self.loop.create_task(Proc)
+        p = self.loop.create(Proc)
         self.assertIs(p.spec(), Proc.spec())
 
     def test_dynamic_inputs(self):
@@ -92,9 +83,9 @@ class TestProcess(TestCase):
                 pass
 
         with self.assertRaises(ValueError):
-            NoDynamic.launch(a=5)
+            self.loop.create(NoDynamic, {'a': 5}).run()
 
-        WithDynamic.launch(a=5)
+        self.loop.create(WithDynamic, {'a': 5}).run()
 
     def test_inputs(self):
         class Proc(Process):
@@ -106,7 +97,7 @@ class TestProcess(TestCase):
             def _run(self, a):
                 pass
 
-        p = self.loop.create_task(Proc, {'a': 5})
+        p = self.loop.create(Proc, {'a': 5})
 
         # Check that we can access the inputs after creating
         self.assertEqual(p.raw_inputs.a, 5)
@@ -121,15 +112,15 @@ class TestProcess(TestCase):
                 spec.input("input", default=5, required=False)
 
         # Supply a value
-        p = self.loop.create_task(Proc, inputs={'input': 2})
+        p = self.loop.create(Proc, inputs={'input': 2})
         self.assertEqual(p.inputs['input'], 2)
 
         # Don't supply, use default
-        p = self.loop.create_task(Proc)
+        p = self.loop.create(Proc)
         self.assertEqual(p.inputs['input'], 5)
 
     def test_run(self):
-        p = self.loop.create_task(DummyProcessWithOutput)
+        p = self.loop.create(DummyProcessWithOutput)
         p.run()
 
         self.assertTrue(p.has_finished())
@@ -138,29 +129,29 @@ class TestProcess(TestCase):
 
     def test_run_from_class(self):
         # Test running through class method
-        results = DummyProcessWithOutput.launch()
+        results = self.loop.create(DummyProcessWithOutput).run()
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
         for event in ('start', 'run', 'finish', 'stop'):
             with self.assertRaises(AssertionError):
-                ForgetToCallParent.launch(forget_on=event)
+                self.loop.create(ForgetToCallParent, {'forget_on': event}).run()
 
     def test_pid(self):
         # Test auto generation of pid
-        p = self.loop.create_task(DummyProcessWithOutput)
+        p = self.loop.create(DummyProcessWithOutput)
         self.assertIsNotNone(p.pid)
 
         # Test using integer as pid
-        p = self.loop.create_task(DummyProcessWithOutput, pid=5)
+        p = self.loop.create(DummyProcessWithOutput, pid=5)
         self.assertEquals(p.pid, 5)
 
         # Test using string as pid
-        p = self.loop.create_task(DummyProcessWithOutput, pid='a')
+        p = self.loop.create(DummyProcessWithOutput, pid='a')
         self.assertEquals(p.pid, 'a')
 
     def test_exception(self):
-        proc = self.loop.create_task(ExceptionProcess)
+        proc = self.loop.create(ExceptionProcess)
         with self.assertRaises(RuntimeError):
             proc.run()
         self.assertEqual(proc.state, ProcessState.FAILED)
@@ -182,14 +173,14 @@ class TestProcess(TestCase):
         Check that the bundle after just creating a process is as we expect
         :return:
         """
-        proc = self.loop.create_task(DummyProcessWithOutput)
+        proc = self.loop.create(DummyProcessWithOutput)
         b = Bundle()
         proc.save_instance_state(b)
         self.assertIsNone(b.get('inputs', None))
         self.assertEqual(len(b['outputs']), 0)
 
     def test_instance_state(self):
-        proc = self.loop.create_task(DummyProcessWithOutput)
+        proc = self.loop.create(DummyProcessWithOutput)
 
         saver = ProcessSaver(proc)
         proc.run()
@@ -206,7 +197,7 @@ class TestProcess(TestCase):
 
     def test_saving_each_step(self):
         for ProcClass in TEST_PROCESSES:
-            proc = self.loop.create_task(ProcClass)
+            proc = self.loop.create(ProcClass)
 
             saver = ProcessSaver(proc)
             proc.run()
@@ -216,7 +207,7 @@ class TestProcess(TestCase):
 
     def test_saving_each_step_interleaved(self):
         for ProcClass in TEST_PROCESSES:
-            proc = self.loop.create_task(ProcClass)
+            proc = self.loop.create(ProcClass)
             ps = ProcessSaver(proc)
             try:
                 proc.run()
@@ -231,18 +222,20 @@ class TestProcess(TestCase):
                 self.logger.info("Test")
 
         # TODO: Test giving a custom logger to see if it gets used
-        p = self.loop.create_task(LoggerTester)
+        p = self.loop.create(LoggerTester)
         p.run()
 
     def test_abort(self):
-        proc = self.loop.create_task(DummyProcess)
+        proc = self.loop.create(DummyProcess)
         proc.abort()
-        proc.run()
         self.assertTrue(proc.has_aborted())
         self.assertEqual(proc.state, ProcessState.STOPPED)
 
+        with self.assertRaises(RuntimeError):
+            proc.run()
+
     def test_wait_continue(self):
-        proc = self.loop.create_task(WaitForSignalProcess)
+        proc = self.loop.create(WaitForSignalProcess)
 
         # Wait - Run the process and wait until it is waiting
         run_until(proc, ProcessState.WAITING, self.loop)
@@ -256,22 +249,8 @@ class TestProcess(TestCase):
         self.assertEqual(proc.state, ProcessState.STOPPED)
         self.assertTrue(proc.has_finished())
 
-    def test_wait_play(self):
-        p = self.loop.create_task(WaitForSignalProcess)
-
-        # Wait - Run the process and wait until it is waiting
-        run_until(p, ProcessState.WAITING, self.loop)
-
-        # Play
-        p.play()
-        self.assertTrue(p.is_playing())
-
-        self.loop.tick()
-        # Should have gone back to paused as it's still waiting
-        self.assertFalse(p.is_playing())
-
     def test_exc_info(self):
-        p = self.loop.create_task(ExceptionProcess)
+        p = self.loop.create(ExceptionProcess)
         try:
             p.run()
         except BaseException:
@@ -282,7 +261,7 @@ class TestProcess(TestCase):
             self.assertEqual(p_exc_info[1], exc_info[1])
 
     def test_restart(self):
-        p = self.loop.create_task(_RestartProcess)
+        p = self.loop.create(_RestartProcess)
         run_until(p, ProcessState.WAITING, self.loop)
 
         # Save the state of the process
@@ -291,7 +270,7 @@ class TestProcess(TestCase):
         self.assertTrue(self.loop.remove(p))
 
         # Load a process from the saved state
-        p = self.loop.create_task(_RestartProcess, bundle)
+        p = self.loop.create(_RestartProcess, bundle)
         self.assertEqual(p.state, ProcessState.WAITING)
 
         # Now play it
@@ -300,7 +279,7 @@ class TestProcess(TestCase):
         self.assertEqual(result, {'finished': True})
 
     def test_run_terminated(self):
-        p = self.loop.create_task(DummyProcess)
+        p = self.loop.create(DummyProcess)
         p.run()
         self.assertTrue(p.has_terminated())
 
@@ -332,7 +311,7 @@ class TestProcessEvents(TestCase):
         self.loop = loop_factory()
 
         self.events_tester = ProcessListenerTester()
-        self.proc = self.loop.create_task(DummyProcessWithOutput)
+        self.proc = self.loop.create(DummyProcessWithOutput)
         self.proc.add_process_listener(self.events_tester)
 
     def tearDown(self):
@@ -371,5 +350,5 @@ class _RestartProcess(WaitForSignalProcess):
         super(_RestartProcess, cls).define(spec)
         spec.dynamic_output()
 
-    def finish(self, wait_on):
+    def finish(self, result):
         self.out("finished", True)

@@ -1,23 +1,25 @@
 from abc import ABCMeta, abstractmethod
-from collections import namedtuple
 from uuid import uuid1
+
+from plum import exceptions
+from plum.exceptions import CancelledError
 from . import futures
 
-__all__ = ['LoopObject', 'Ticking', 'Task']
+__all__ = ['LoopObject', 'Ticking', 'Awaitable']
 
 
 class LoopObject(object):
-    def __init__(self, uuid=None):
+    def __init__(self, loop, uuid=None):
         if uuid is None:
-            self.__uuid = uuid1()
+            self._uuid = uuid1()
         else:
-            self.__uuid = uuid
+            self._uuid = uuid
 
-        self.__loop = None
+        self._loop = loop
 
     @property
     def uuid(self):
-        return self.__uuid
+        return self._uuid
 
     def on_loop_inserted(self, loop):
         """
@@ -26,19 +28,16 @@ class LoopObject(object):
         :param loop: The event loop
         :type loop: `plum.event_loop.AbstractEventLoop`
         """
-        if self.__loop is not None:
-            raise RuntimeError("Already in an event loop")
-
-        self.__loop = loop
+        pass
 
     def on_loop_removed(self):
         """
         Called when the object is removed from the event loop.
         """
-        if self.__loop is None:
+        if self._loop is None:
             raise RuntimeError("Not in an event loop")
 
-        self.__loop = None
+        self._loop = None
 
     def loop(self):
         """
@@ -46,99 +45,130 @@ class LoopObject(object):
         :return: The event loop
         :rtype: :class:`plum.loop.event_loop.AbstractEventLoop`
         """
-        return self.__loop
+        return self._loop
+
+    def in_loop(self):
+        try:
+            self.loop().get_object(self.uuid)
+            return True
+        except ValueError:
+            return False
 
 
 class Ticking(object):
     __metaclass__ = ABCMeta
 
-    def on_loop_inserted(self, loop):
-        super(Ticking, self).on_loop_inserted(loop)
-        loop.start_ticking(self)
-
-    def on_loop_removed(self):
-        self.loop().stop_ticking(self)
-        super(Ticking, self).on_loop_removed()
+    def __init__(self, loop):
+        super(Ticking, self).__init__(loop)
+        self._callback_handle = loop.call_soon(self._tick)
 
     @abstractmethod
     def tick(self):
         pass
 
+    def pause(self):
+        self._callback_handle.cancel()
+        self._callback_handle = None
 
-class Await(object):
-    def __init__(self, callback, *args):
-        self.callback = callback
-        self.futures = args
+    def play(self):
+        if self._callback_handle is None:
+            self._callback_handle = self.loop().call_soon(self._tick)
+
+    def _tick(self):
+        self.tick()
+        if self._callback_handle is not None:
+            self._callback_handle = self.loop().call_soon(self._tick)
 
 
-class Continue(object):
-    def __init__(self, callback):
-        self.callback = callback
-
-
-class Task(Ticking, LoopObject):
-    __metaclass__ = ABCMeta
-
-    Terminated = namedtuple("Terminated", ['result'])
-
+class Awaitable(object):
     def __init__(self, loop):
-        super(Task, self).__init__()
-        self._wait_on_future = None
+        """
+        :param loop: :class:`plum.loop.event_loop.AbstractEventLoop` 
+        """
+        super(Awaitable, self).__init__(loop)
         self._future = loop.create_future()
         self._future.add_done_callback(self._future_done)
 
     def future(self):
         return self._future
 
-    def tick(self):
+    def done(self):
+        return self.future().done()
+
+    def result(self):
+        return self.future().result()
+
+    def set_result(self, result):
+        self.future().set_result(result)
         try:
-            result = self.execute()
-        except BaseException as e:
             self.loop().remove(self)
-            self.future().set_exception(e)
-        else:
-            if isinstance(result, futures.Future):
-                self._wait_on_future = result
-                self._wait_on_future.add_done_callback(self._wait_on_future_cb)
-                self.loop().stop_ticking(self)
+        except ValueError:
+            pass
 
-            if isinstance(result, self.Terminated):
-                self.future().set_result(result.result)
-                self.loop().remove(self)
+    def set_exception(self, exception):
+        self.future().set_exception(exception)
+        try:
+            self.loop().remove(self)
+        except ValueError:
+            pass
 
-    def on_loop_removed(self):
-        super(Task, self).on_loop_removed()
-        self._future = None
-        if self._wait_on_future is not None:
-            self._wait_on_future.remove_done_callback(self._wait_on_future_cb)
-            self._wait_on_future = None
+    def cancel(self):
+        return self._future.cancel()
 
-    def play(self):
-        """
-        Play the task, i.e. start ticking if in the loop and not currently ticking.
-        
-        It is an error to call play if not inserted in an event loop or if currently
-        playing.
-        """
-        self.loop().start_ticking(self)
-
-    def pause(self):
-        """
-        Pause a ticking task.
-        """
-        self.loop().stop_ticking(self)
-
-    def is_playing(self):
-        return self.loop().is_ticking(self)
-
-    @abstractmethod
-    def execute(self):
-        pass
-
-    def _wait_on_future_cb(self, future):
-        self.loop().start_ticking(self)
-        self._wait_on_future = None
+    def cancelled(self):
+        return self._future.cancelled()
 
     def _future_done(self, future):
         if future.cancelled():
-            self.loop().remove(self)
+            try:
+                self.loop().remove(self)
+            except ValueError:
+                pass
+
+
+class _GatheringFuture(futures.Future):
+    def __init__(self, children, loop):
+        super(_GatheringFuture, self).__init__(loop)
+        self._children = children
+        self._n_done = 0
+
+        for child in self._children:
+            child.add_done_callback(self._child_done)
+
+    def cancel(self):
+        if self.done():
+            return False
+
+        ret = False
+        for child in self._children:
+            if child.cancel():
+                ret = True
+
+        return ret
+
+    def _child_done(self, future):
+        if self.done():
+            return
+
+        try:
+            if future.exception() is not None:
+                self.set_exception(future.exception())
+                return
+        except CancelledError:
+            self.set_exception(CancelledError())
+            return
+
+        self._n_done += 1
+        if self._n_done == len(self._children):
+            self._all_done()
+
+    def _all_done(self):
+        self.set_result([child.result() for child in self._children])
+
+
+def gather(tasks_or_futures, loop):
+    if isinstance(tasks_or_futures, futures.Future):
+        return tasks_or_futures
+
+    futs = [futures.get_future(task_or_future) for task_or_future in tasks_or_futures]
+    return _GatheringFuture(futs, loop)

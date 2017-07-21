@@ -32,12 +32,10 @@ class TestStatusRequesterAndProvider(TestCase):
             self.fail("Couldn't open connection.  Make sure rmq server is running")
 
         exchange = "{}.{}.status_request".format(self.__class__.__name__, uuid.uuid4())
-        self.requester = ProcessStatusRequester(self._connection, exchange=exchange)
-        self.subscriber = ProcessStatusSubscriber(self._connection, exchange=exchange)
 
         self.loop = loop_factory()
-        self.loop.insert(self.requester)
-        self.loop.insert(self.subscriber)
+        self.requester = self.loop.create(ProcessStatusRequester, self._connection, exchange=exchange)
+        self.subscriber = self.loop.create(ProcessStatusSubscriber, self._connection, exchange=exchange)
 
     def tearDown(self):
         super(TestStatusRequesterAndProvider, self).tearDown()
@@ -46,7 +44,7 @@ class TestStatusRequesterAndProvider(TestCase):
     def test_request(self):
         procs = []
         for i in range(10):
-            procs.append(self.loop.create_task(WaitForSignalProcess))
+            procs.append(self.loop.create(WaitForSignalProcess))
 
         run_until(procs, ProcessState.WAITING, self.loop)
 
@@ -83,10 +81,8 @@ class TestStatusProvider(TestCase):
         self.response_queue = result.method.queue
         self.channel.basic_consume(self._on_response, no_ack=True, queue=self.response_queue)
 
-        self.subscriber = ProcessStatusSubscriber(self._connection, exchange=self.request_exchange)
-
         self.loop = loop_factory()
-        self.loop.insert(self.subscriber)
+        self.subscriber = self.loop.create(ProcessStatusSubscriber, self._connection, exchange=self.request_exchange)
 
     def tearDown(self):
         super(TestStatusProvider, self).tearDown()
@@ -100,20 +96,17 @@ class TestStatusProvider(TestCase):
     def test_status(self):
         procs = []
         for i in range(20):
-            procs.append(self.loop.create_task(WaitForSignalProcess))
+            procs.append(self.loop.create(WaitForSignalProcess))
 
         run_until(procs, ProcessState.WAITING, self.loop)
 
         procs_dict = status_decode(self._send_and_get())[status.PROCS_KEY]
         self.assertEqual(len(procs_dict), len(procs))
-        self.assertSetEqual(
-            set([p.pid for p in procs]),
-            set(procs_dict.keys())
-        )
+        self.assertSetEqual(set([p.pid for p in procs]), set(procs_dict.keys()))
 
-        # Check they are all paused (waiting)
-        playing = set([entry['playing'] for entry in procs_dict.itervalues()])
-        self.assertSetEqual(playing, {False})
+        # Check they are all waiting on the same thing
+        waiting_on = set([entry['waiting_on'] for entry in procs_dict.itervalues()])
+        self.assertSetEqual(waiting_on, {str(procs[0].get_waiting_on())})
 
         for proc in procs:
             proc.abort()

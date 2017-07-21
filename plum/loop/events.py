@@ -1,5 +1,5 @@
-from plum.loop.objects import Task
-
+from . import objects
+from . import tasks
 
 class Handle(object):
     def __init__(self, fn, args, loop):
@@ -18,7 +18,7 @@ class Handle(object):
         self._fn(*self._args)
 
 
-class Timer(Task):
+class Timer(objects.Ticking, objects.Awaitable, objects.LoopObject):
     def __init__(self, loop, when, callback, args):
         super(Timer, self).__init__(loop)
 
@@ -26,9 +26,11 @@ class Timer(Task):
         self._callback = callback
         self._args = args
 
-    def step(self):
-        if self.loop().time() >= self._when:
+    def tick(self):
+        time = self.loop().time()
+        if time >= self._when:
+            self.pause()
             self.loop().call_soon(self._callback, *self._args)
-            return self.Terminated('done')
+            self.set_result(time)
 
 

@@ -41,9 +41,9 @@ class ProcessControlPublisher(Ticking, LoopObject):
     play, pause, abort, etc.
     """
 
-    def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
+    def __init__(self, loop, connection, exchange=Defaults.CONTROL_EXCHANGE,
                  encoder=action_encode, response_decoder=json.loads):
-        super(ProcessControlPublisher, self).__init__()
+        super(ProcessControlPublisher, self).__init__(loop)
 
         self._exchange = exchange
         self._encode = encoder
@@ -59,13 +59,13 @@ class ProcessControlPublisher(Ticking, LoopObject):
         self._callback_queue = result.method.queue
         self._channel.basic_consume(self._on_response, no_ack=True, queue=self._callback_queue)
 
-    def abort(self, pid, msg=None):
+    def abort_process(self, pid, msg=None):
         return self._send_msg({'pid': pid, 'intent': Action.ABORT, 'msg': msg})
 
-    def pause(self, pid):
+    def pause_process(self, pid):
         return self._send_msg({'pid': pid, 'intent': Action.PAUSE})
 
-    def play(self, pid):
+    def play_process(self, pid):
         return self._send_msg({'pid': pid, 'intent': Action.PLAY})
 
     @override
@@ -101,7 +101,7 @@ class ProcessControlPublisher(Ticking, LoopObject):
 
 
 class ProcessControlSubscriber(Ticking, LoopObject):
-    def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
+    def __init__(self, loop, connection, exchange=Defaults.CONTROL_EXCHANGE,
                  decoder=action_decode, response_encoder=json.dumps):
         """
         Subscribes and listens for process control messages and acts on them
@@ -111,7 +111,7 @@ class ProcessControlSubscriber(Ticking, LoopObject):
         :param exchange: The name of the exchange to use
         :param decoder:
         """
-        super(ProcessControlSubscriber, self).__init__()
+        super(ProcessControlSubscriber, self).__init__(loop)
 
         self._decode = decoder
         self._response_encode = response_encoder

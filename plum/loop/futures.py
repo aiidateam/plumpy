@@ -1,5 +1,7 @@
 import plum.util
 
+__all__ = ['get_future']
+
 
 class Future(plum.util.Future):
     def __init__(self, loop):
@@ -34,7 +36,18 @@ class Future(plum.util.Future):
             self._callbacks.append(fn)
 
     def remove_done_callback(self, fn):
-        self._callbacks.remove(fn)
+        """
+        Remove all the instances of the callback function from the call when done list.
+
+        :return: The number of callback instances removed
+        :rtype: int
+        """
+        filtered_callbacks = [f for f in self._callbacks if f != fn]
+        removed_count = len(self._callbacks) - len(filtered_callbacks)
+        if removed_count:
+            self._callbacks[:] = filtered_callbacks
+
+        return removed_count
 
     def _schedule_callbacks(self):
         """
@@ -49,3 +62,10 @@ class Future(plum.util.Future):
         self._callbacks[:] = []
         for callback in callbacks:
             self._loop.call_soon(callback, self)
+
+
+def get_future(task_or_future):
+    if isinstance(task_or_future, Future):
+        return task_or_future
+    else:
+        return task_or_future.future()

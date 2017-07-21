@@ -3,7 +3,7 @@ import json
 import pika
 import uuid
 
-from plum.loop.objects import Ticking, LoopObject
+from plum import loop
 from plum.process_listener import ProcessListener
 from plum.rmq.defaults import Defaults
 from plum.util import override, load_class, fullname
@@ -28,7 +28,7 @@ def launched_encode(msg):
     return json.dumps(d)
 
 
-class ProcessLaunchSubscriber(Ticking, LoopObject, ProcessListener):
+class ProcessLaunchSubscriber(loop.Ticking, loop.LoopObject, ProcessListener):
     """
     Run tasks as they come form the RabbitMQ task queue
 
@@ -37,7 +37,7 @@ class ProcessLaunchSubscriber(Ticking, LoopObject, ProcessListener):
         as the start method is called.
     """
 
-    def __init__(self, connection, queue=Defaults.TASK_QUEUE, decoder=json.loads,
+    def __init__(self, loop, connection, queue=Defaults.TASK_QUEUE, decoder=json.loads,
                  response_encoder=launched_encode):
         """
         :param connection: The pika RabbitMQ connection
@@ -45,7 +45,7 @@ class ProcessLaunchSubscriber(Ticking, LoopObject, ProcessListener):
         :param queue: The queue name to use
         :param decoder: A function to deserialise incoming messages
         """
-        super(ProcessLaunchSubscriber, self).__init__()
+        super(ProcessLaunchSubscriber, self).__init__(loop)
 
         self._decode = decoder
         self._response_encode = response_encoder
@@ -80,7 +80,7 @@ class ProcessLaunchSubscriber(Ticking, LoopObject, ProcessListener):
         task = self._decode(body)
         proc_class = load_class(task['proc_class'])
 
-        proc = self.loop().create_task(proc_class, inputs=task['inputs'])
+        proc = self.loop().create(proc_class, inputs=task['inputs'])
         proc.add_process_listener(self)
 
         self._running_processes[proc.pid] = _RunningTaskInfo(proc.pid, ch, method.delivery_tag)
@@ -103,14 +103,13 @@ class ProcessLaunchSubscriber(Ticking, LoopObject, ProcessListener):
         info.ch.basic_ack(delivery_tag=info.delivery_tag)
 
 
-class ProcessLaunchPublisher(Ticking, LoopObject):
+class ProcessLaunchPublisher(loop.Ticking, loop.LoopObject):
     """
     Class used to publishes messages requesting a process to be launched
     """
-
-    def __init__(self, connection, queue=Defaults.TASK_QUEUE, encoder=json.dumps,
+    def __init__(self, loop, connection, queue=Defaults.TASK_QUEUE, encoder=json.dumps,
                  response_decoder=launched_decode):
-        super(ProcessLaunchPublisher, self).__init__()
+        super(ProcessLaunchPublisher, self).__init__(loop)
 
         self._queue = queue
         self._encode = encoder
@@ -124,13 +123,15 @@ class ProcessLaunchPublisher(Ticking, LoopObject):
         self._callback_queue = result.method.queue
         self._channel.basic_consume(self._on_response, no_ack=True, queue=self._callback_queue)
 
-    def launch(self, proc_class, inputs=None):
+    def launch(self, proc_class, inputs=None, launch_timeout=None):
         """
-        Send a Process task to be executed by a runner.
+        Send a request to launch a Process.
 
         :param proc_class: The Process class to run
         :param inputs: The inputs to supply
         """
+        future = self.loop().create_future()
+
         correlation_id = str(uuid.uuid4())
         task = {'proc_class': fullname(proc_class), 'inputs': inputs}
         delivered = self._channel.basic_publish(
@@ -142,13 +143,10 @@ class ProcessLaunchPublisher(Ticking, LoopObject):
             )
         )
 
-        if not delivered:
-            return None
-
-        future = None
-        if self.loop() is not None:
-            future = self.loop().create_future()
+        if delivered:
             self._responses[correlation_id] = future
+        else:
+            return future.cancel()
 
         return future
 

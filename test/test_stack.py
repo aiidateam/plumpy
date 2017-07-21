@@ -1,5 +1,5 @@
 from test.util import TestCase
-from plum import Process
+from plum import Process, loop_factory
 import plum.stack as stack
 
 
@@ -17,5 +17,5 @@ class StackTest(Process):
 
 class TestStack(TestCase):
     def test_simple(self):
-        StackTest.launch()
-
+        loop = loop_factory()
+        loop.create(StackTest).run()

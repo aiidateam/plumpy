@@ -53,8 +53,9 @@ class ProcessStatusRequester(Ticking, LoopObject):
     This class can be used to request the status of processes
     """
 
-    def __init__(self, connection, exchange=Defaults.STATUS_REQUEST_EXCHANGE, decoder=status_decode):
-        super(ProcessStatusRequester, self).__init__()
+    def __init__(self, loop, connection,
+                 exchange=Defaults.STATUS_REQUEST_EXCHANGE, decoder=status_decode):
+        super(ProcessStatusRequester, self).__init__(loop)
 
         self._exchange = exchange
         self._decode = decoder
@@ -118,10 +119,10 @@ class ProcessStatusSubscriber(Ticking, LoopObject):
     processes.
     """
 
-    def __init__(self, connection,
+    def __init__(self, loop, connection,
                  exchange=Defaults.STATUS_REQUEST_EXCHANGE,
                  decoder=status_request_decode, encoder=status_encode):
-        super(ProcessStatusSubscriber, self).__init__()
+        super(ProcessStatusSubscriber, self).__init__(loop)
 
         self._decode = decoder
         self._encode = encoder
@@ -169,6 +170,5 @@ class ProcessStatusSubscriber(Ticking, LoopObject):
         return {
             'creation_time': process.creation_time,
             'state': process.state,
-            'playing': process.is_playing(),
             'waiting_on': str(process.get_waiting_on())
         }

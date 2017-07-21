@@ -18,14 +18,13 @@ class TestControl(TestCase):
     def setUp(self):
         super(TestControl, self).setUp()
 
+        self.loop = loop_factory()
+
         self._connection = self._create_connection()
         self.exchange = "{}.{}.control".format(self.__class__, uuid.uuid4())
-        self.publisher = ProcessControlPublisher(self._connection, exchange=self.exchange)
-        self.subscriber = ProcessControlSubscriber(self._connection, exchange=self.exchange)
 
-        self.loop = loop_factory()
-        self.loop.insert(self.publisher)
-        self.loop.insert(self.subscriber)
+        self.publisher = self.loop.create(ProcessControlPublisher, self._connection, exchange=self.exchange)
+        self.subscriber = self.loop.create(ProcessControlSubscriber, self._connection, exchange=self.exchange)
 
     def tearDown(self):
         super(TestControl, self).tearDown()
@@ -33,37 +32,37 @@ class TestControl(TestCase):
 
     def test_pause(self):
         # Create the process and wait until it is waiting
-        p = self.loop.create_task(WaitForSignalProcess)
+        p = self.loop.create(WaitForSignalProcess)
 
         run_until(p, ProcessState.WAITING, self.loop)
 
         # Send a message asking the process to pause
-        self.loop.run_until_complete(self.publisher.pause(p.pid))
+        self.loop.run_until_complete(self.publisher.pause_process(p.pid))
         self.assertFalse(p.is_playing())
 
     def test_pause_play(self):
         # Create the process and wait until it is waiting
-        p = self.loop.create_task(WaitForSignalProcess)
+        p = self.loop.create(WaitForSignalProcess)
 
         # Playing
         self.assertTrue(p.is_playing())
 
         # Pause
         # Send a message asking the process to pause
-        self.loop.run_until_complete(self.publisher.pause(p.pid))
+        self.loop.run_until_complete(self.publisher.pause_process(p.pid))
         self.assertFalse(p.is_playing())
 
         # Now ask it to continue
-        self.loop.run_until_complete(self.publisher.play(p.pid))
+        self.loop.run_until_complete(self.publisher.play_process(p.pid))
         self.assertTrue(p.is_playing())
 
     def test_abort(self):
         # Create the process and wait until it is waiting
-        p = self.loop.create_task(WaitForSignalProcess)
+        p = self.loop.create(WaitForSignalProcess)
         run_until(p, ProcessState.WAITING, self.loop)
 
         # Send a message asking the process to abort
-        self.loop.run_until_complete(self.publisher.abort(p.pid, msg='Farewell'))
+        self.loop.run_until_complete(self.publisher.abort_process(p.pid, msg='Farewell'))
 
         # Now tick the loop to action the abort
         self.loop.tick()

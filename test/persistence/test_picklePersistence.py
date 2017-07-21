@@ -29,14 +29,14 @@ class TestPicklePersistence(TestCase):
         self.assertEqual(self.store_dir, self.pickle_persistence.store_directory)
 
     def test_on_create_process(self):
-        proc = self.loop.create_task(ProcessWithCheckpoint)
+        proc = self.loop.create(ProcessWithCheckpoint)
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
         self.assertTrue(os.path.isfile(save_path))
 
     def test_on_waiting_process(self):
-        proc = self.loop.create_task(WaitForSignalProcess)
+        proc = self.loop.create(WaitForSignalProcess)
         self.pickle_persistence.persist_process(proc)
         save_path = self.pickle_persistence.get_running_path(proc.pid)
 
@@ -47,7 +47,7 @@ class TestPicklePersistence(TestCase):
         self.assertTrue(os.path.isfile(save_path))
 
     def test_on_finishing_process(self):
-        proc = self.loop.create_task(ProcessWithCheckpoint)
+        proc = self.loop.create(ProcessWithCheckpoint)
         pid = proc.pid
         self.pickle_persistence.persist_process(proc)
         running_path = self.pickle_persistence.get_running_path(proc.pid)
@@ -66,7 +66,7 @@ class TestPicklePersistence(TestCase):
         self._empty_directory()
         # Create some processes
         for i in range(0, 3):
-            proc = self.loop.create_task(ProcessWithCheckpoint, pid=i)
+            proc = self.loop.create(ProcessWithCheckpoint, pid=i)
             self.pickle_persistence.save(proc)
 
         # Check that the number of checkpoints matches we expected
@@ -74,13 +74,13 @@ class TestPicklePersistence(TestCase):
         self.assertEqual(num_cps, 3)
 
     def test_save(self):
-        proc = self.loop.create_task(ProcessWithCheckpoint)
+        proc = self.loop.create(ProcessWithCheckpoint)
         running_path = self.pickle_persistence.get_running_path(proc.pid)
         self.pickle_persistence.save(proc)
         self.assertTrue(os.path.isfile(running_path))
 
     def test_persist_twice(self):
-        proc = self.loop.create_task(WaitForSignalProcess)
+        proc = self.loop.create(WaitForSignalProcess)
         self.pickle_persistence.persist_process(proc)
 
         # Try persisting the process again using another persistence manager

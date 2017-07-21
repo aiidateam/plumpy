@@ -21,13 +21,13 @@ class TestWaitOnProcessEvent(TestCase):
 
     def test_finished_stopped(self):
         for event in ("finish", "stop"):
-            p = self.loop.create_task(DummyProcess)
+            p = self.loop.create(DummyProcess)
 
             wait_on = wait_on_process_event(self.loop, p.pid, event)
             self.loop.run_until_complete(wait_on.future())
 
     def test_failed(self):
-        p = self.loop.create_task(ExceptionProcess)
+        p = self.loop.create(ExceptionProcess)
         wait_on = wait_on_process_event(self.loop, p.pid, 'fail')
         self.loop.run_until_complete(wait_on.future())
 
