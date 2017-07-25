@@ -3,12 +3,11 @@ import time
 from abc import ABCMeta, abstractmethod
 from collections import deque
 import logging
+import heapq
 
 from . import futures
 from . import events
-from plum.loop.direct_executor import DirectExecutor as _DirectExecutor
 from plum.loop.messages import Mailman
-from plum.loop.tasks import Task
 from plum.util import EventHelper
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,10 +62,6 @@ class AbstractEventLoop(object):
         pass
 
     @abstractmethod
-    def insert(self, loop_object):
-        pass
-
-    @abstractmethod
     def remove(self, loop_object):
         pass
 
@@ -101,13 +96,13 @@ class AbstractEventLoop(object):
         """
         pass
 
-    # region Tasks
+    # region Objects
     @abstractmethod
-    def create(self, task, *args, **kwargs):
+    def create(self, object_type, *args, **kwargs):
         """
-        Create a task.
+        Create a task and schedule it to be inserted into the loop.
         
-        :param task: The task identifier 
+        :param object_type: The task identifier 
         :param args: (optional) positional arguments to the task
         :param kwargs: (optional) keyword arguments to the task
         
@@ -148,20 +143,72 @@ class AbstractEventLoop(object):
         pass
 
 
+class _EventLoop(object):
+    def __init__(self, engine):
+        self._engine = engine
+        self._ready = deque()
+        self._scheduled = []
+        self._closed = False
+
+    def _tick(self):
+
+        # Handle scheduled callbacks that are ready
+        end_time = self._engine.time() + self._engine.clock_resolution
+        while self._scheduled:
+            handle = self._scheduled[0]
+            if handle._when >= end_time:
+                break
+            handle = heapq.heappop(self._scheduled)
+            handle._scheduled = False
+            self._ready.append(handle)
+
+        # Call ready callbacks
+        todo = len(self._ready)
+        for i in range(todo):
+            handle = self._ready.popleft()
+            if handle._cancelled:
+                continue
+
+            handle._run()
+
+    def call_soon(self, fn, *args):
+        handle = events.Handle(fn, args, self)
+        self._ready.append(handle)
+        return handle
+
+    def call_later(self, delay, fn, *args):
+        return self.call_at(self._engine.time() + delay, fn, *args)
+
+    def call_at(self, when, fn, *args):
+        timer = events.TimerHandle(when, fn, args, self)
+        heapq.heappush(self._scheduled, timer)
+        return timer
+
+    def _close(self):
+        if self._closed:
+            return
+
+        self._closed = True
+        self._ready.clear()
+        del self._scheduled[:]
+
+
 class BaseEventLoop(AbstractEventLoop):
     def __init__(self):
         self._stopping = False
-        self._callbacks = deque()
+        self._event_loop = _EventLoop(self)
 
         self._objects = {}
         self._object_factory = None
 
-        self._to_insert = []
-        self._to_remove = set()
         self._thread_id = None
 
         self.__mailman = Mailman(self)
         self.__event_helper = EventHelper(LoopListener)
+
+    @property
+    def clock_resolution(self):
+        return 0.1
 
     def is_running(self):
         """
@@ -208,48 +255,21 @@ class BaseEventLoop(AbstractEventLoop):
         :return: A callback handle
         :rtype: :class:`plum.loop.events.Handle`
         """
-        handle = events.Handle(fn, args, self)
-        self._callbacks.append(handle)
-        return handle
+        return self._event_loop.call_soon(fn, *args)
 
-    def call_later(self, delay, callback, *args):
-        timer = self.create(events.Timer, self.time() + delay, callback, args)
-        self.insert(timer)
-        return timer
-
-    def insert(self, loop_object):
-        if loop_object.uuid in self._objects:
-            return
-
-        self._do_insert(loop_object)
-
-    def _do_insert(self, loop_object):
-        if self.is_running():
-            self._to_insert.append(loop_object)
-        else:
-            self._insert(loop_object)
+    def call_later(self, delay, fn, *args):
+        return self._event_loop.call_later(delay, fn, *args)
 
     def remove(self, loop_object):
         """
-        Remove an object from the event loop.  If the event loop is not running
-        the object is removed immediately, otherwise it is scheduled to be
-        removed at the end of the next tick.
+        Remove an object from the event loop.
         
         :param loop_object: The object to remove 
-        :return: True if it was removed, False if it was scheduled to be removed
-        :rtype: bool
+        :return: A future corresponding to the removal of the object
         """
-        if loop_object.uuid not in self._objects:
-            raise ValueError("Unknown loop object")
-        if loop_object.uuid in self._to_remove:
-            raise ValueError("Loop object already scheduled to be removed")
-
-        if self.is_running():
-            self._to_remove.add(loop_object.uuid)
-            return False
-        else:
-            self._remove(loop_object.uuid)
-            return True
+        fut = self.create_future()
+        self._event_loop.call_soon(self._remove, loop_object, fut)
+        return fut
 
     def objects(self, obj_type=None):
         # Filter the type if necessary
@@ -263,10 +283,6 @@ class BaseEventLoop(AbstractEventLoop):
             return self._objects[uuid]
         except KeyError:
             pass
-
-        for obj in self._to_insert:
-            if obj.uuid == uuid:
-                return obj
 
         raise ValueError("Unknown uuid")
 
@@ -295,15 +311,16 @@ class BaseEventLoop(AbstractEventLoop):
     def messages(self):
         return self.__mailman
 
-    # region Tasks
+    # region Objects
     def create(self, object_type, *args, **kwargs):
         if self._object_factory is None:
-            object_type = object_type(self, *args, **kwargs)
+            loop_object = object_type(self, *args, **kwargs)
         else:
-            object_type = self._object_factory(self, object_type, *args, **kwargs)
+            loop_object = self._object_factory(self, object_type, *args, **kwargs)
 
-        self.insert(object_type)
-        return object_type
+        self._event_loop.call_soon(self._insert, loop_object)
+
+        return loop_object
 
     def set_object_factory(self, factory):
         self._object_factory = factory
@@ -317,60 +334,39 @@ class BaseEventLoop(AbstractEventLoop):
         assert not self.is_running(), "Can't close a running loop"
 
         self._stopping = False
-        self._callbacks = None
+        self._event_loop._close()
 
         self._objects = None
         self._object_factory = None
 
-        self._to_insert = None
-        self._to_remove = None
         self._thread_id = None
 
         self.__mailman = None
         self.__event_helper = None
 
     def _tick(self):
-        # Insert any new processes
-        for loop_object in self._to_insert:
-            self._insert(loop_object)
-        del self._to_insert[:]
-
-        # Call all the callbacks
-        todo = len(self._callbacks)
-        for i in range(todo):
-            handle = self._callbacks.popleft()
-            if handle._cancelled:
-                continue
-
-            handle._run()
-
-        # Finally deal with processes to be removed
-        for pid in self._to_remove:
-            self._remove(pid)
-        self._to_remove.clear()
+        self._event_loop._tick()
 
     def _run_until_complete_cb(self, fut):
         self.stop()
 
-    def _insert(self, loop_object):
-        self._objects[loop_object.uuid] = loop_object
-        loop_object.on_loop_inserted(self)
+    def _insert(self, obj):
+        uuid = obj.uuid
+        self._objects[uuid] = obj
+        obj.on_loop_inserted(self)
 
-        self.messages().send("loop.object.{}.inserted".format(loop_object.uuid))
-        self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_inserted, self, loop_object)
+        self.messages().send("loop.object.{}.inserted".format(uuid))
+        self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_inserted, self, obj)
 
-    def _remove(self, uuid):
-        try:
-            loop_object = self._objects.pop(uuid)
-        except KeyError:
+    def _remove(self, obj, fut):
+        uuid = obj.uuid
+        if uuid not in self._objects:
             raise ValueError("Unknown uuid")
-        else:
-            try:
-                loop_object.on_loop_removed()
-            except BaseException as e:
-                _LOGGER.warning(
-                    "Object '{}' produced exception '{}' during on_loop_removed".format(loop_object, e)
-                )
 
-            self.messages().send("loop.object.{}.removed".format(uuid))
-            self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_removed, self, loop_object)
+        obj.on_loop_removed()
+        self._objects.pop(uuid)
+
+        self.messages().send("loop.object.{}.removed".format(uuid))
+        self.call_soon(self.__event_helper.fire_event, LoopListener.on_object_removed, self, obj)
+
+        fut.set_result(uuid)

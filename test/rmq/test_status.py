@@ -88,6 +88,7 @@ class TestStatusProvider(TestCase):
         super(TestStatusProvider, self).tearDown()
         self.channel.close()
         self._connection.close()
+        self.loop.close()
 
     def test_no_processes(self):
         response = status_decode(self._send_and_get())
@@ -121,7 +122,7 @@ class TestStatusProvider(TestCase):
         return self._response
 
     def _send_request(self):
-        self._response = None
+        self._response_future = self.loop.create_future()
         self._corr_id = str(uuid.uuid4())
         self.channel.basic_publish(
             exchange=self.request_exchange, routing_key='',
@@ -131,9 +132,14 @@ class TestStatusProvider(TestCase):
         )
 
     def _get_response(self):
-        self.loop.tick()
+        self.loop.call_soon(self._keep_polling)
+        self._response = self.loop.run_until_complete(self._response_future)
+
+    def _keep_polling(self):
         self.channel.connection.process_data_events(time_limit=0.1)
+        if not self._response_future.done():
+            self.loop.call_soon(self._keep_polling)
 
     def _on_response(self, ch, method, props, body):
         if self._corr_id == props.correlation_id:
-            self._response = body
+            self._response_future.set_result(body)

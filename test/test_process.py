@@ -267,7 +267,7 @@ class TestProcess(TestCase):
         # Save the state of the process
         bundle = Bundle()
         p.save_instance_state(bundle)
-        self.assertTrue(self.loop.remove(p))
+        self.loop.remove(p)
 
         # Load a process from the saved state
         p = self.loop.create(_RestartProcess, bundle)

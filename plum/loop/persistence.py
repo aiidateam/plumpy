@@ -54,7 +54,7 @@ def load_from(loop, saved_state, *args):
     # Get the class using the class loader and instantiate it
     class_name = saved_state[Persistable.CLASS_NAME]
     task_class = saved_state.get_class_loader().load_class(class_name)
-    return task_class.create_from(loop, saved_state, *args)
+    return loop.create(task_class, saved_state, *args)
 
 
 class PersistableLoopObjectMixin(Persistable):

@@ -58,8 +58,8 @@ class LoopObject(object):
 class Ticking(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, loop):
-        super(Ticking, self).__init__(loop)
+    def on_loop_inserted(self, loop):
+        super(Ticking, self).on_loop_inserted(loop)
         self._callback_handle = loop.call_soon(self._tick)
 
     @abstractmethod

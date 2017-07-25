@@ -407,16 +407,6 @@ class Process(plum.loop.persistence.PersistableTask):
     def log_with_pid(self, level, msg):
         self.logger.log(level, "{}: {}".format(self.pid, msg))
 
-    def on_loop_inserted(self, loop):
-        super(Process, self).on_loop_inserted(loop)
-
-        # Load the state, needed to wait till here to do it because at the time
-        # of load_instance_state we don't have the loop yet which may be needed
-        # by the state
-        if self._state_bundle is not None:
-            self._state = load_state(self, self._state_bundle)
-            self._state_bundle = None
-
     # region Process messages
     # Make sure to call the superclass method if your override any of these
     @protected
@@ -577,6 +567,12 @@ class Process(plum.loop.persistence.PersistableTask):
         self._finished = saved_state[self.BundleKeys.FINISHED.value]
         self._terminated = saved_state[self.BundleKeys.TERMINATED.value]
         self._state_bundle = saved_state[self.BundleKeys.STATE.value]
+        # Load the state, needed to wait till here to do it because at the time
+        # of load_instance_state we don't have the loop yet which may be needed
+        # by the state
+        if self._state_bundle is not None:
+            self._state = load_state(self, self._state_bundle)
+            self._state_bundle = None
 
         # Inputs/outputs
         try:
