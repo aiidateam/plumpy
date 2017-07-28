@@ -23,8 +23,12 @@ class TestControl(TestCase):
         self._connection = self._create_connection()
         self.exchange = "{}.{}.control".format(self.__class__, uuid.uuid4())
 
-        self.publisher = self.loop.create(ProcessControlPublisher, self._connection, exchange=self.exchange)
-        self.subscriber = self.loop.create(ProcessControlSubscriber, self._connection, exchange=self.exchange)
+        self.publisher = self.loop.run_until_complete(
+            self.loop.create_inserted(ProcessControlPublisher, self._connection, exchange=self.exchange)
+        )
+        self.subscriber = self.loop.run_until_complete(
+            self.loop.create_inserted(ProcessControlSubscriber, self._connection, exchange=self.exchange)
+        )
 
     def tearDown(self):
         super(TestControl, self).tearDown()
@@ -63,9 +67,6 @@ class TestControl(TestCase):
 
         # Send a message asking the process to abort
         self.loop.run_until_complete(self.publisher.abort_process(p.pid, msg='Farewell'))
-
-        # Now tick the loop to action the abort
-        self.loop.tick()
 
         # Check the resulting state
         self.assertTrue(p.has_aborted())

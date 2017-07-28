@@ -1,6 +1,4 @@
-
-
-from plum.port import InputPort, InputGroupPort, OutputPort,\
+from plum.port import InputPort, InputGroupPort, OutputPort, \
     DynamicOutputPort, DynamicInputPort
 from plum._base import LOGGER
 from plum.util import protected
@@ -126,6 +124,7 @@ class ProcessSpec(object):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._inputs.pop(name)
+
     # endregion
 
     # region Outputs
@@ -175,6 +174,7 @@ class ProcessSpec(object):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._outputs.pop(name)
+
     # end region
 
     def validator(self, fn):

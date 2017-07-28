@@ -9,7 +9,6 @@ from plum import Process
 from plum.process_listener import ProcessListener
 from plum.util import override, protected, ListenContext
 from plum.wait import WaitOn
-from plum.loop.objects import LoopObject
 
 _LOGGER = logging.getLogger(__name__)
 

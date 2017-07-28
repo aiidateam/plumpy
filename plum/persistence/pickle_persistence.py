@@ -1,3 +1,5 @@
+
+import apricotpy
 import glob
 import os
 import os.path as path
@@ -7,10 +9,7 @@ from shutil import copyfile
 import tempfile
 import traceback
 import pickle
-from plum.persistence.bundle import Bundle
-from plum.process_listener import ProcessListener
 from plum.process import Process
-from plum.loop import LoopListener
 from plum.util import override, protected
 from plum.exceptions import LockError
 from plum.persistence._base import LOGGER
@@ -57,7 +56,7 @@ class RLock(portalocker.Lock):
         self._acquire_count -= 1
 
 
-class PicklePersistence(ProcessListener, LoopListener):
+class PicklePersistence(apricotpy.LoopObject):
     """
     Class that uses pickles stored in particular directories to persist the
     instance state of Processes.
@@ -95,7 +94,7 @@ class PicklePersistence(ProcessListener, LoopListener):
         kwargs['failed_directory'] = path.join(basedir, "failed")
         return cls(**kwargs)
 
-    def __init__(self, running_directory=_RUNNING_DIRECTORY,
+    def __init__(self, loop, running_directory=_RUNNING_DIRECTORY,
                  finished_directory=_FINISHED_DIRECTORY,
                  failed_directory=_FAILED_DIRECTORY):
         """
@@ -120,10 +119,13 @@ class PicklePersistence(ProcessListener, LoopListener):
             Process pickles in.  If None they will be deleted on fail.
         :type failed_directory: str
         """
+        super(PicklePersistence, self).__init__(loop)
+
         self._running_directory = running_directory
         self._finished_directory = finished_directory
         self._failed_directory = failed_directory
         self._filelocks = {}
+        self._persisting = False
 
     def load_checkpoint(self, pid):
         for check_dir in [self._running_directory, self._failed_directory,
@@ -157,19 +159,25 @@ class PicklePersistence(ProcessListener, LoopListener):
 
         return checkpoints
 
-    def start_persisting(self, loop):
+    def start_persisting(self):
         """      
-        :param loop: The event loop
-        :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
+        Start persisting `Processes`s in  the loop.
         """
-        loop.add_loop_listener(self)
+        if self._persisting:
+            return
 
-    def stop_persisting(self, loop):
-        """      
-        :param loop: The event loop
-        :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
+        self.loop().messages().add_listener(self._process_message, 'process.*.*')
+        self._persisting = True
+
+    def stop_persisting(self):
         """
-        loop.remove_loop_listener(self)
+        Stop persisting `Processe`s in the loop.
+        """
+        if not self._persisting:
+            return
+
+        self.loop().messages().remove_listener(self._process_message)
+        self._persisting = False
 
     @property
     def store_directory(self):
@@ -209,13 +217,6 @@ class PicklePersistence(ProcessListener, LoopListener):
             # Happens if we're already listening
             pass
 
-    def unpersist_process(self, process):
-        if process.pid not in self._filelocks:
-            return
-
-        self._filelocks.pop(process.pid).release()
-        process.remove_process_listener(self)
-
     def clear_all_persisted(self):
         for pid in self._filelocks.keys():
             self._release_process(pid)
@@ -251,6 +252,28 @@ class PicklePersistence(ProcessListener, LoopListener):
             f.flush()
 
     # region ProcessListener messages
+
+    def _process_message(self, loop, subject, body):
+        uuid = body['uuid']
+        process = loop.get_object(uuid)
+        self._save_noraise(process)
+
+        event = subject.split('.')[2]
+        if event == 'stop' or even == 'fail':
+            if event == 'stop':
+                move_to = self.finished_directory
+            else:
+                move_to = self.failed_directory
+
+            try:
+                self._release_process(process.pid, move_to)
+            except ValueError:
+                pass
+
+
+
+
+
     @override
     def on_process_playing(self, process):
         try:
@@ -296,7 +319,7 @@ class PicklePersistence(ProcessListener, LoopListener):
 
     @protected
     def create_bundle(self, process):
-        checkpoint = Bundle()
+        checkpoint = apricotpy.Bundle()
         process.save_instance_state(checkpoint)
         return checkpoint
 

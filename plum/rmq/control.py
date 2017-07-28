@@ -1,9 +1,9 @@
+import apricotpy
 import json
 import pika
 import pika.exceptions
 import uuid
 
-from plum.loop.objects import Ticking, LoopObject
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.util import override
@@ -35,7 +35,7 @@ def action_encode(msg):
 RESULT_KEY = 'result'
 
 
-class ProcessControlPublisher(Ticking, LoopObject):
+class ProcessControlPublisher(apricotpy.TickingLoopObject):
     """
     This class is responsible for sending control messages to processes e.g.
     play, pause, abort, etc.
@@ -73,6 +73,8 @@ class ProcessControlPublisher(Ticking, LoopObject):
         self._channel.connection.process_data_events(time_limit=0.1)
 
     def _send_msg(self, msg):
+        self._check_in_loop()
+
         correlation_id = str(uuid.uuid4())
 
         delivered = self._channel.basic_publish(
@@ -87,10 +89,8 @@ class ProcessControlPublisher(Ticking, LoopObject):
         if not delivered:
             return None
 
-        future = None
-        if self.loop() is not None:
-            future = self.loop().create_future()
-            self._responses[correlation_id] = future
+        future = self.loop().create_future()
+        self._responses[correlation_id] = future
 
         return future
 
@@ -99,8 +99,11 @@ class ProcessControlPublisher(Ticking, LoopObject):
             future = self._responses.pop(props.correlation_id)
             future.set_result(self._response_decode(body))
 
+    def _check_in_loop(self):
+        assert self.in_loop(), "Object is not in the event loop"
 
-class ProcessControlSubscriber(Ticking, LoopObject):
+
+class ProcessControlSubscriber(apricotpy.TickingLoopObject):
     def __init__(self, loop, connection, exchange=Defaults.CONTROL_EXCHANGE,
                  decoder=action_decode, response_encoder=json.dumps):
         """
@@ -158,4 +161,3 @@ class ProcessControlSubscriber(Ticking, LoopObject):
                 properties=pika.BasicProperties(correlation_id=props.correlation_id),
                 body=self._response_encode(response)
             )
-

@@ -17,8 +17,10 @@ class TestPicklePersistence(TestCase):
         self.loop = loop_factory()
 
         self.store_dir = tempfile.mkdtemp()
-        self.pickle_persistence = PicklePersistence(running_directory=self.store_dir)
-        self.pickle_persistence.start_persisting(self.loop)
+        self.pickle_persistence = self.loop.run_until_complete(
+            self.loop.create_inserted(PicklePersistence, running_directory=self.store_dir)
+        )
+        self.pickle_persistence.start_persisting()
 
     def tearDown(self):
         super(TestPicklePersistence, self).tearDown()
@@ -53,7 +55,7 @@ class TestPicklePersistence(TestCase):
         running_path = self.pickle_persistence.get_running_path(proc.pid)
 
         self.assertTrue(os.path.isfile(running_path))
-        proc.run()
+        self.loop.run_until_complete(proc)
         self.assertFalse(os.path.isfile(running_path))
         finished_path = \
             os.path.join(self.store_dir,

@@ -1,10 +1,9 @@
+import apricotpy
 import unittest
 import uuid
-
 import pika
 
 from plum import loop_factory
-from plum.exceptions import CancelledError
 from plum.rmq import ProcessLaunchPublisher, ProcessLaunchSubscriber
 from plum.test_utils import TEST_PROCESSES
 from test.test_rmq import _HAS_PIKA
@@ -30,8 +29,16 @@ class TestTaskControllerAndRunner(TestCase):
         self.loop = loop_factory()
 
         queue = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
-        self.publisher = self.loop.create(ProcessLaunchPublisher, self._connection, queue=queue)
-        self.subscriber = self.loop.create(ProcessLaunchSubscriber, self._connection, queue=queue)
+
+        loop = self.loop
+        insert = (
+            loop.create_inserted(ProcessLaunchPublisher, self._connection, queue=queue),
+            loop.create_inserted(ProcessLaunchSubscriber, self._connection, queue=queue)
+        )
+
+        self.publisher, self.subscriber = loop.run_until_complete(
+            apricotpy.gather(insert, loop)
+        )
 
     def tearDown(self):
         self._connection.close()

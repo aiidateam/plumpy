@@ -1,5 +1,5 @@
+import apricotpy
 import threading
-from plum.persistence import Bundle
 from plum.process_listener import ProcessListener
 
 
@@ -8,7 +8,7 @@ class SaveOnTransition(ProcessListener):
     A class to save the process instance state during a state transition message.
     """
     def __init__(self):
-        self._bundle = Bundle()
+        self._bundle = apricotpy.Bundle()
         self._callbacks = []
 
     def add_save_callback(self, fn):
@@ -74,6 +74,6 @@ def save_on_next_transition(process):
 
     :param process: The process to wait on
     :return: The saved state
-    :rtype: :class:`plum.persistence.Bundle`
+    :rtype: :class:`apricotpy.Bundle`
     """
     return _SaveAsSoonAsPossible(process).get_saved_state()

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import abstractmethod
+import apricotpy
 import frozendict
 import importlib
 import inspect
@@ -237,6 +238,7 @@ class SimpleNamespace(object):
     """
     An attempt to emulate python 3's types.SimpleNamespace
     """
+
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
@@ -291,30 +293,11 @@ def load_with_classloader(bundle):
     return proc_class.create_from(bundle)
 
 
-def object_factory(loop, obj_class, *args, **kwargs):
-    from plum.persistence import Bundle
-
-    if isinstance(obj_class, Bundle):
-        # User just passed in a Bundle and the bundle should contain the class
-        from plum.loop.persistence import load_from
-        return load_from(obj_class, *args, **kwargs)
-    elif args and len(args) == 1 and isinstance(args[0], Bundle):
-        if kwargs:
-            RuntimeError("Found unexpected kwargs in call to process factory")
-        return obj_class.create_from(loop, args[0])
-    elif kwargs and 'saved_state' in kwargs:
-        return obj_class.create_from(loop, kwargs['saved_state'])
-    else:
-        try:
-            return obj_class(loop, *args, **kwargs)
-        except TypeError as e:
-            raise TypeError("Failed to create '{}', {}".format(obj_class, e.message))
+object_factory = apricotpy.persistable_object_factory
 
 
 def loop_factory(*args, **kwargs):
-    from plum.loop import BaseEventLoop
-
-    loop = BaseEventLoop(*args, **kwargs)
+    loop = apricotpy.BaseEventLoop()
     loop.set_object_factory(object_factory)
     return loop
 
@@ -325,3 +308,16 @@ def get_default_loop():
         _default_loop = loop_factory()
 
     return _default_loop
+
+
+def set_if_not_none(mapping, key, value):
+    """
+    Set the given value in a mapping only if the value is not `None`,
+    otherwise the mapping is left untouched
+    
+    :param mapping: The mapping to set the value for 
+    :param key: The mapping key
+    :param value: The mapping value
+    """
+    if value is not None:
+        mapping[key] = value

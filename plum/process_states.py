@@ -1,8 +1,7 @@
+import apricotpy
 from enum import Enum
 import logging
-from plum.wait import WaitOn
-import plum.util as util
-from plum.loop.objects import Awaitable
+from . import util
 
 
 class ProcessState(Enum):
@@ -47,7 +46,7 @@ class State(object):
     def enter(self, previous_state):
         self._process.log_with_pid(logging.DEBUG, "entering state '{}'".format(self.label))
 
-    def execute(self):
+    def execute(self, result):
         self._process.log_with_pid(logging.DEBUG, "executing state '{}'".format(self.label))
 
     def exit(self):
@@ -70,8 +69,8 @@ class Created(State):
         super(Created, self).enter(previous_state)
         self._process._on_create()
 
-    def execute(self):
-        super(Created, self).execute()
+    def execute(self, result):
+        super(Created, self).execute(result)
         # Move to the running state
         self._process._set_state(Running(self._process, self._process.do_run))
 
@@ -96,7 +95,7 @@ class Running(State):
         """
         return (isinstance(retval, tuple) and
                 len(retval) == 2 and
-                isinstance(retval[0], Awaitable))
+                isinstance(retval[0], apricotpy.Awaitable))
 
     def __init__(self, process, exec_func, result=_NO_RESULT):
         """
@@ -123,17 +122,19 @@ class Running(State):
 
         self._process._on_run()
 
-    def execute(self):
-        super(Running, self).execute()
+    def execute(self, result):
+        super(Running, self).execute(result)
 
-        if self._result is _NO_RESULT:
-            retval = self._exec_func()
-        else:
-            retval = self._exec_func(self._result)
+        args = []
+        if self._result is not _NO_RESULT:
+            args.append(self._result)
 
+        # Run the next function
+        retval = self._exec_func(*args)
         if Running._is_wait_retval(retval):
-            wait_on, callback = retval
-            self._process._set_state(Waiting(self._process, wait_on, callback))
+            awaitable, callback = retval
+            self._process._set_state(Waiting(self._process, awaitable.uuid, callback))
+            return awaitable
         else:
             self._process._set_state(Stopped(self._process))
 
@@ -150,10 +151,10 @@ class Running(State):
 
 class Waiting(State):
     LABEL = ProcessState.WAITING
-    WAIT_ON = 'wait_on'
-    CALLBACK = 'callback'
+    CALLBACK = 'CALLBACK'
+    AWAITING_UUID = 'AWAITING_UUID'
 
-    def __init__(self, process, wait_on, callback):
+    def __init__(self, process, awaiting_uuid, callback):
         """
         :param process: The process this state belongs to
         :type process: :class:`plum.process.Process`
@@ -162,25 +163,22 @@ class Waiting(State):
             STOPPED.
         """
         super(Waiting, self).__init__(process)
-        self._wait_on = wait_on
+        self._awaiting_uuid = awaiting_uuid
         self._callback = callback
 
     def enter(self, previous_state):
         super(Waiting, self).enter(previous_state)
-        self._process._on_wait(self._wait_on)
+        self._process._on_wait(self._awaiting_uuid)
 
-    def execute(self):
-        super(Waiting, self).execute()
+    def execute(self, result):
+        super(Waiting, self).execute(result)
 
-        if self._wait_on.done():
-            if self._callback is None:
-                self._process._set_state(Stopped(self._process))
-            else:
-                self._process._set_state(
-                    Running(self._process, self._callback, self._wait_on.result())
-                )
+        if self._callback is None:
+            self._process._set_state(Stopped(self._process))
         else:
-            return self._wait_on
+            self._process._set_state(
+                Running(self._process, self._callback, result)
+            )
 
     def save_instance_state(self, out_state):
         super(Waiting, self).save_instance_state(out_state)
@@ -188,10 +186,10 @@ class Waiting(State):
             out_state[self.CALLBACK] = None
         else:
             out_state[self.CALLBACK] = self._callback.__name__
+        out_state[self.AWAITING_UUID] = self._awaiting_uuid
 
     def load_instance_state(self, process, saved_state):
         super(Waiting, self).load_instance_state(process, saved_state)
-        self._wait_on = self._process.awaiting()
 
         try:
             self._callback = getattr(self._process, saved_state[self.CALLBACK])
@@ -199,7 +197,8 @@ class Waiting(State):
             raise ValueError(
                 "This process does not have a function with "
                 "the name '{}' as expected from the wait on".
-                    format(saved_state[self.CALLBACK]))
+                format(saved_state[self.CALLBACK]))
+        self._awaiting_uuid = saved_state[self.AWAITING_UUID]
 
 
 class Stopped(State):
@@ -222,8 +221,8 @@ class Stopped(State):
 
         self._process._on_stop(self._abort_msg)
 
-    def execute(self):
-        super(Stopped, self).execute()
+    def execute(self, result):
+        super(Stopped, self).execute(result)
         self._process._terminate()
 
     def save_instance_state(self, out_state):
@@ -259,8 +258,8 @@ class Failed(State):
             self._process.log_with_pid(
                 logging.ERROR, "exception entering failed state:\n{}".format(traceback.format_exc()))
 
-    def execute(self):
-        super(Failed, self).execute()
+    def execute(self, result):
+        super(Failed, self).execute(result)
         self._process._terminate()
 
     def save_instance_state(self, out_state):
@@ -281,5 +280,5 @@ class Failed(State):
 def load_state(process, state_bundle):
     # Get the class using the class loader and instantiate it
     class_name = state_bundle['class_name']
-    proc_class = state_bundle.get_class_loader().load_class(class_name)
+    proc_class = util.load_class(class_name)
     return proc_class.create_from(process, state_bundle)

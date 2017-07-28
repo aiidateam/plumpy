@@ -1,5 +1,5 @@
+import apricotpy
 from plum import loop_factory
-from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, \
     check_process_against_snapshots, \
@@ -83,9 +83,9 @@ class TestProcess(TestCase):
                 pass
 
         with self.assertRaises(ValueError):
-            self.loop.create(NoDynamic, {'a': 5}).run()
+            self.loop.run_until_complete(self.loop.create(NoDynamic, {'a': 5}))
 
-        self.loop.create(WithDynamic, {'a': 5}).run()
+        self.loop.run_until_complete(self.loop.create(WithDynamic, {'a': 5}))
 
     def test_inputs(self):
         class Proc(Process):
@@ -121,7 +121,7 @@ class TestProcess(TestCase):
 
     def test_run(self):
         p = self.loop.create(DummyProcessWithOutput)
-        p.run()
+        self.loop.run_until_complete(p)
 
         self.assertTrue(p.has_finished())
         self.assertEqual(p.state, ProcessState.STOPPED)
@@ -129,13 +129,18 @@ class TestProcess(TestCase):
 
     def test_run_from_class(self):
         # Test running through class method
-        results = self.loop.create(DummyProcessWithOutput).run()
+
+        results = self.loop.run_until_complete(
+            self.loop.create(DummyProcessWithOutput)
+        )
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
         for event in ('start', 'run', 'finish', 'stop'):
             with self.assertRaises(AssertionError):
-                self.loop.create(ForgetToCallParent, {'forget_on': event}).run()
+                self.loop.run_until_complete(
+                    self.loop.create(ForgetToCallParent, {'forget_on': event})
+                )
 
     def test_pid(self):
         # Test auto generation of pid
@@ -153,7 +158,7 @@ class TestProcess(TestCase):
     def test_exception(self):
         proc = self.loop.create(ExceptionProcess)
         with self.assertRaises(RuntimeError):
-            proc.run()
+            self.loop.run_until_complete(proc)
         self.assertEqual(proc.state, ProcessState.FAILED)
 
     def test_get_description(self):
@@ -174,7 +179,7 @@ class TestProcess(TestCase):
         :return:
         """
         proc = self.loop.create(DummyProcessWithOutput)
-        b = Bundle()
+        b = apricotpy.Bundle()
         proc.save_instance_state(b)
         self.assertIsNone(b.get('inputs', None))
         self.assertEqual(len(b['outputs']), 0)
@@ -183,14 +188,14 @@ class TestProcess(TestCase):
         proc = self.loop.create(DummyProcessWithOutput)
 
         saver = ProcessSaver(proc)
-        proc.run()
+        self.loop.run_until_complete(proc)
 
         for info, outputs in zip(saver.snapshots, saver.outputs):
             state, bundle = info
             # Check that it is a copy
-            self.assertIsNot(outputs, bundle[Process.BundleKeys.OUTPUTS.value].get_dict())
+            self.assertIsNot(outputs, bundle[Process.BundleKeys.OUTPUTS.value])
             # Check the contents are the same
-            self.assertEqual(outputs, bundle[Process.BundleKeys.OUTPUTS.value].get_dict())
+            self.assertEqual(outputs, bundle[Process.BundleKeys.OUTPUTS.value])
 
         self.assertIsNot(
             proc.outputs, saver.snapshots[-1][1][Process.BundleKeys.OUTPUTS.value])
@@ -200,7 +205,7 @@ class TestProcess(TestCase):
             proc = self.loop.create(ProcClass)
 
             saver = ProcessSaver(proc)
-            proc.run()
+            self.loop.run_until_complete(proc)
 
             self.assertEqual(proc.state, ProcessState.STOPPED)
             self.assertTrue(check_process_against_snapshots(self.loop, ProcClass, saver.snapshots))
@@ -210,7 +215,7 @@ class TestProcess(TestCase):
             proc = self.loop.create(ProcClass)
             ps = ProcessSaver(proc)
             try:
-                proc.run()
+                self.loop.run_until_complete(proc)
             except BaseException:
                 pass
 
@@ -222,17 +227,13 @@ class TestProcess(TestCase):
                 self.logger.info("Test")
 
         # TODO: Test giving a custom logger to see if it gets used
-        p = self.loop.create(LoggerTester)
-        p.run()
+        self.loop.run_until_complete(self.loop.create(LoggerTester))
 
     def test_abort(self):
-        proc = self.loop.create(DummyProcess)
-        proc.abort()
+        proc = self.loop.run_until_complete(self.loop.create_inserted(DummyProcess))
+        self.loop.run_until_complete(proc.abort())
         self.assertTrue(proc.has_aborted())
         self.assertEqual(proc.state, ProcessState.STOPPED)
-
-        with self.assertRaises(RuntimeError):
-            proc.run()
 
     def test_wait_continue(self):
         proc = self.loop.create(WaitForSignalProcess)
@@ -252,7 +253,7 @@ class TestProcess(TestCase):
     def test_exc_info(self):
         p = self.loop.create(ExceptionProcess)
         try:
-            p.run()
+            self.loop.run_until_complete(p)
         except BaseException:
             import sys
             exc_info = sys.exc_info()
@@ -265,12 +266,14 @@ class TestProcess(TestCase):
         run_until(p, ProcessState.WAITING, self.loop)
 
         # Save the state of the process
-        bundle = Bundle()
+        bundle = apricotpy.Bundle()
         p.save_instance_state(bundle)
         self.loop.remove(p)
 
         # Load a process from the saved state
-        p = self.loop.create(_RestartProcess, bundle)
+        p = self.loop.run_until_complete(
+            self.loop.create_inserted(_RestartProcess, bundle)
+        )
         self.assertEqual(p.state, ProcessState.WAITING)
 
         # Now play it
@@ -280,16 +283,13 @@ class TestProcess(TestCase):
 
     def test_run_terminated(self):
         p = self.loop.create(DummyProcess)
-        p.run()
+        self.loop.run_until_complete(p)
         self.assertTrue(p.has_terminated())
-
-        with self.assertRaises(RuntimeError):
-            p.run()
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
-        new_bundle = Bundle()
+        new_bundle = apricotpy.Bundle()
         proc.save_instance_state(new_bundle)
         self.assertEqual(snapshot.bundle, new_bundle,
                          "Bundle mismatch with process class {}\n"
@@ -319,23 +319,23 @@ class TestProcessEvents(TestCase):
         super(TestProcessEvents, self).tearDown()
 
     def test_on_start(self):
-        self.proc.run()
+        self.loop.run_until_complete(self.proc)
         self.assertTrue(self.events_tester.start)
 
     def test_on_run(self):
-        self.proc.run()
+        self.loop.run_until_complete(self.proc)
         self.assertTrue(self.events_tester.run)
 
     def test_on_output_emitted(self):
-        self.proc.run()
+        self.loop.run_until_complete(self.proc)
         self.assertTrue(self.events_tester.emitted)
 
     def test_on_finished(self):
-        self.proc.run()
+        self.loop.run_until_complete(self.proc)
         self.assertTrue(self.events_tester.finish)
 
     def test_events_run_through(self):
-        self.proc.run()
+        self.loop.run_until_complete(self.proc)
         self.assertTrue(self.events_tester.start)
         self.assertTrue(self.events_tester.run)
         self.assertTrue(self.events_tester.emitted)

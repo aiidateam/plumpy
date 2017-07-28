@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-from plum.persistence.bundle import Bundle
+import apricotpy
 from plum.process import Process
 from plum.process_listener import ProcessListener
 from plum.util import override
@@ -10,7 +10,7 @@ Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
 
 def create_snapshot(proc):
-    b = Bundle()
+    b = apricotpy.Bundle()
     proc.save_instance_state(b)
     return Snapshot(proc.state, b, proc.outputs.copy())
 
@@ -227,7 +227,7 @@ class Saver(object):
         self.outputs = []
 
     def _save(self, p):
-        b = Bundle()
+        b = apricotpy.Bundle()
         p.save_instance_state(b)
         self.snapshots.append((p.state, b))
         self.outputs.append(p.outputs.copy())

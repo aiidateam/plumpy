@@ -38,12 +38,12 @@ class TestWaitOnProcessStateEvent(TestCase):
         wait_ons.run_until(p, ProcessState.WAITING, self.loop)
 
 
-class TestWaitOns(TestCase):
-    def setUp(self):
-        super(TestWaitOns, self).setUp()
-        self.loop = loop_factory()
-
-    def test_wait_on_all(self):
-        waits = [self.loop.create(wait_ons.Checkpoint) for _ in range(20)]
-        wait_on = self.loop.create(wait_ons.WaitOnAll, waits)
-        self.loop.run_until_complete(wait_on)
+# class TestWaitOns(TestCase):
+#     def setUp(self):
+#         super(TestWaitOns, self).setUp()
+#         self.loop = loop_factory()
+#
+#     def test_wait_on_all(self):
+#         waits = [self.loop.create(wait_ons.Checkpoint) for _ in range(20)]
+#         wait_on = self.loop.create(wait_ons.WaitOnAll, waits)
+#         self.loop.run_until_complete(wait_on)

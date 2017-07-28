@@ -1,5 +1,5 @@
+import apricotpy
 from plum import loop_factory
-from plum.persistence.bundle import Bundle
 from plum.process import Process, ProcessState
 from plum.test_utils import TwoCheckpoint, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
@@ -19,7 +19,7 @@ class TestWaitingProcess(TestCase):
     def test_instance_state(self):
         proc = self.loop.create(TwoCheckpoint)
         wl = ProcessSaver(proc)
-        proc.run()
+        self.loop.run_until_complete(proc)
 
         for snapshot, outputs in zip(wl.snapshots, wl.outputs):
             state, bundle = snapshot
@@ -30,7 +30,7 @@ class TestWaitingProcess(TestCase):
             proc = self.loop.create(proc_class)
             saver = ProcessSaver(proc)
             try:
-                proc.run()
+                self.loop.run_until_complete(proc)
             except BaseException:
                 pass
 
@@ -52,7 +52,7 @@ class TestWaitingProcess(TestCase):
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
-        new_bundle = Bundle()
+        new_bundle = apricotpy.Bundle()
         proc.save_instance_state(new_bundle)
         self.assertEqual(snapshot.bundle, new_bundle,
                          "Bundle mismatch with process class {}\n"

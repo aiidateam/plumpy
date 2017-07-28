@@ -1,9 +1,10 @@
+
+import apricotpy
 from collections import namedtuple
 import json
 import pika
 import uuid
 
-from plum import loop
 from plum.process_listener import ProcessListener
 from plum.rmq.defaults import Defaults
 from plum.util import override, load_class, fullname
@@ -28,7 +29,7 @@ def launched_encode(msg):
     return json.dumps(d)
 
 
-class ProcessLaunchSubscriber(loop.Ticking, loop.LoopObject, ProcessListener):
+class ProcessLaunchSubscriber(apricotpy.TickingLoopObject, ProcessListener):
     """
     Run tasks as they come form the RabbitMQ task queue
 
@@ -103,7 +104,7 @@ class ProcessLaunchSubscriber(loop.Ticking, loop.LoopObject, ProcessListener):
         info.ch.basic_ack(delivery_tag=info.delivery_tag)
 
 
-class ProcessLaunchPublisher(loop.Ticking, loop.LoopObject):
+class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
     """
     Class used to publishes messages requesting a process to be launched
     """
@@ -130,6 +131,8 @@ class ProcessLaunchPublisher(loop.Ticking, loop.LoopObject):
         :param proc_class: The Process class to run
         :param inputs: The inputs to supply
         """
+        self._check_in_loop()
+
         future = self.loop().create_future()
 
         correlation_id = str(uuid.uuid4())
@@ -158,3 +161,6 @@ class ProcessLaunchPublisher(loop.Ticking, loop.LoopObject):
         if props.correlation_id in self._responses:
             future = self._responses.pop(props.correlation_id)
             future.set_result(self._response_decode(body))
+
+    def _check_in_loop(self):
+        assert self.in_loop(), "Object is not in the event loop"

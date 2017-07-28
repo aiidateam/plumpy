@@ -1,6 +1,8 @@
+
+
 from util import TestCase
+import apricotpy
 from plum.util import Savable
-from plum.persistence import Bundle
 
 
 class TestSavable(TestCase):
@@ -17,7 +19,7 @@ class TestSavable(TestCase):
 
         a = A(5)
         self.assertEqual(a.value, 5)
-        state = Bundle()
+        state = apricotpy.Bundle()
         a.save_instance_state(state)
 
         a2 = A.create_from(state)

@@ -1,6 +1,6 @@
+import apricotpy
 from plum import loop_factory
 from plum.wait import WaitOn
-from plum.persistence import Bundle
 from util import TestCase
 
 
@@ -27,7 +27,7 @@ class TestWaitOn(TestCase):
         loop = loop_factory()
 
         w = loop.create(_DummyWait, 5)
-        saved_state = Bundle()
+        saved_state = apricotpy.Bundle()
         w.save_instance_state(saved_state)
         w_ = loop.create(_DummyWait, saved_state)
 

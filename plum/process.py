@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
 
+from abc import ABCMeta, abstractmethod
+import apricotpy
+import copy
 import logging
 import sys
 import time
-from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 
-import plum.loop.persistence
 import plum.stack as _stack
-from plum.persistence.bundle import Bundle
 from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.process_states import *
-from plum.util import protected, get_default_loop
+from plum.util import protected
 from plum.wait import WaitOn
-from plum.loop import tasks
 
 __all__ = ['Process']
 
@@ -24,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 Wait = namedtuple('Wait', ['on', 'callback'])
 
 
-class Process(plum.loop.persistence.PersistableTask):
+class Process(apricotpy.PersistableTask):
     """
     The Process class is the base for any unit of work in plum.
 
@@ -277,7 +276,7 @@ class Process(plum.loop.persistence.PersistableTask):
         Get the awaitable this process is waiting on, or None.
 
         :return: The awaitable or None
-        :rtype: :class:`plum.loop.object.Awaitable`
+        :rtype: :class:`apricotpy.Awaitable` or None
         """
         return self.awaiting()
 
@@ -302,35 +301,43 @@ class Process(plum.loop.persistence.PersistableTask):
         except AttributeError:
             return None
 
-    def save_instance_state(self, bundle):
+    def save_instance_state(self, out_state):
         """
         Ask the process to save its current instance state.
 
-        :param bundle: A bundle to save the state to
-        :type bundle: :class:`plum.persistence.Bundle`
+        :param out_state: A bundle to save the state to
+        :type out_state: :class:`apricotpy.Bundle`
         """
-        super(Process, self).save_instance_state(bundle)
+        super(Process, self).save_instance_state(out_state)
         # Immutables first
-        bundle[self.BundleKeys.CREATION_TIME.value] = self.creation_time
-        bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
-        bundle[self.BundleKeys.PID.value] = self.pid
+        out_state[self.BundleKeys.CREATION_TIME.value] = self.creation_time
+        out_state[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
+        out_state[self.BundleKeys.PID.value] = self.pid
 
         # Now state stuff
-        state_bundle = Bundle()
+        state_bundle = apricotpy.Bundle()
         self._state.save_instance_state(state_bundle)
-        bundle[self.BundleKeys.STATE.value] = state_bundle
+        out_state[self.BundleKeys.STATE.value] = state_bundle
 
-        bundle[self.BundleKeys.FINISHED.value] = self._finished
-        bundle[self.BundleKeys.TERMINATED.value] = self._terminated
+        out_state[self.BundleKeys.FINISHED.value] = self._finished
+        out_state[self.BundleKeys.TERMINATED.value] = self._terminated
 
         # Inputs/outputs
-        bundle.set_if_not_none(self.BundleKeys.INPUTS.value, self.raw_inputs)
-        bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
+        out_state[self.BundleKeys.INPUTS.value] = self.raw_inputs
+        out_state[self.BundleKeys.OUTPUTS.value] = apricotpy.Bundle(self._outputs)
+
+    def on_loop_inserted(self, loop):
+        super(Process, self).on_loop_inserted(loop)
+        if self._abort_future is None:
+            self._abort_future = loop.create_future()
 
     def execute(self):
         return self._tick()
 
-    def _tick(self, wait_on=None):
+    def _tick(self, awaitable_result=None):
+        if self.has_terminated():
+            raise RuntimeError("Cannot run a terminated process")
+
         try:
             _stack.push(self)
             MONITOR.register_process(self)
@@ -340,14 +347,14 @@ class Process(plum.loop.persistence.PersistableTask):
                 self.__aborting, self.__abort_msg = False, None
 
             # Perform the actions of this state
-            result = self._state.execute()
+            result = self._state.execute(awaitable_result)
 
-            if isinstance(result, Awaitable):
-                return tasks.Await(self._tick, result)
+            if isinstance(result, apricotpy.Awaitable):
+                return apricotpy.Await(result, self._tick)
             elif self.has_terminated():
                 return self.outputs
             else:
-                return tasks.Continue(self._tick)
+                return apricotpy.Continue(self._tick)
 
         except BaseException:
             self._set_state(Failed(self, sys.exc_info()))
@@ -357,15 +364,6 @@ class Process(plum.loop.persistence.PersistableTask):
             MONITOR.deregister_process(self)
             _stack.pop(self)
 
-    def run(self):
-        """
-        Run the process until it is finished.
-        """
-        if self.has_terminated():
-            raise RuntimeError("Cannot run, already terminated")
-
-        return self.loop().run_until_complete(self)
-
     def abort(self, msg=None):
         """
         Abort a playing process.  Can optionally provide a message with
@@ -374,20 +372,17 @@ class Process(plum.loop.persistence.PersistableTask):
         :param msg: The abort message
         :type msg: str
         """
+        self._loop_check()
+
         self.log_with_pid(logging.INFO, "aborting")
         if self.has_terminated():
-            return False
+            return self._abort_future
 
-        self.__aborting = True
-        self.__abort_msg = msg
-        if super(Process, self).cancel():
-            # Tick ourselves to make the transition to the ABORTED state
-            self._tick()
+        if not self.__aborting:
+            self.__aborting = True
+            self.__abort_msg = msg
 
-        return True
-
-    def cancel(self):
-        return self.abort(msg="Task cancelled")
+        return self._abort_future
 
     def add_process_listener(self, listener):
         assert (listener != self), "Cannot listen to yourself!"
@@ -450,12 +445,12 @@ class Process(plum.loop.persistence.PersistableTask):
         self.__called = True
 
     @protected
-    def on_wait(self, wait_on):
+    def on_wait(self, awaiting_uuid):
         """
         Called when the process is about to enter the WAITING state
         """
         self._fire_event(ProcessListener.on_process_wait)
-        self._send_message('wait', wait_on)
+        self._send_message('wait', {'awaiting': awaiting_uuid})
 
         self.__called = True
 
@@ -473,8 +468,7 @@ class Process(plum.loop.persistence.PersistableTask):
         """
         self._fire_event(ProcessListener.on_process_abort)
         self._send_message('abort', abort_msg)
-        if not self.cancelled():
-            super(Process, self).cancel()
+        self._abort_future.set_result('done')
 
         self.__called = True
 
@@ -566,21 +560,15 @@ class Process(plum.loop.persistence.PersistableTask):
         # State stuff
         self._finished = saved_state[self.BundleKeys.FINISHED.value]
         self._terminated = saved_state[self.BundleKeys.TERMINATED.value]
-        self._state_bundle = saved_state[self.BundleKeys.STATE.value]
-        # Load the state, needed to wait till here to do it because at the time
-        # of load_instance_state we don't have the loop yet which may be needed
-        # by the state
-        if self._state_bundle is not None:
-            self._state = load_state(self, self._state_bundle)
-            self._state_bundle = None
+        self._state = load_state(self, saved_state[self.BundleKeys.STATE.value])
 
         # Inputs/outputs
-        try:
+        if saved_state[self.BundleKeys.INPUTS.value] is not None:
             self._raw_inputs = util.AttributesFrozendict(saved_state[self.BundleKeys.INPUTS.value])
-        except KeyError:
+        else:
             self._raw_inputs = None
         self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
-        self._outputs = saved_state[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
+        self._outputs = copy.deepcopy(saved_state[self.BundleKeys.OUTPUTS.value])
 
     @protected
     def create_input_args(self, inputs):
@@ -620,6 +608,7 @@ class Process(plum.loop.persistence.PersistableTask):
         self.__logger = logger
         self.__aborting = None
         self.__abort_msg = None
+        self._abort_future = None
 
         # Events and running
         self.__event_helper = util.EventHelper(ProcessListener)
@@ -658,8 +647,8 @@ class Process(plum.loop.persistence.PersistableTask):
     def _on_run(self):
         self._call_with_super_check(self.on_run)
 
-    def _on_wait(self, wait_on):
-        self._call_with_super_check(self.on_wait, wait_on)
+    def _on_wait(self, awaiting_uuid):
+        self._call_with_super_check(self.on_wait, awaiting_uuid)
 
     def _on_finish(self):
         self._call_with_super_check(self.on_finish)
@@ -676,7 +665,10 @@ class Process(plum.loop.persistence.PersistableTask):
     def _fire_event(self, event):
         self.loop().call_soon(self.__event_helper.fire_event, event, self)
 
-    def _send_message(self, subject, body=None):
+    def _send_message(self, subject, body_=None):
+        body = {'uuid': self.uuid}
+        if body_ is not None:
+            body.update(body_)
         self.loop().messages().send('process.{}.{}'.format(self.pid, subject), body)
 
     def _terminate(self):
@@ -711,6 +703,9 @@ class Process(plum.loop.persistence.PersistableTask):
         self._state.exit()
         self._state = state
         self._state.enter(previous_state)
+
+    def _loop_check(self):
+        assert self.in_loop(), "The process is not in the event loop"
 
     @abstractmethod
     def _run(self, **kwargs):

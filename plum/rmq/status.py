@@ -1,10 +1,10 @@
+import apricotpy
 import collections
 import json
 import pika
 import uuid
 
 from plum import Process
-from plum.loop.objects import LoopObject, Ticking
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.util import override
@@ -48,7 +48,7 @@ def status_request_decode(msg):
 RequestInfo = collections.namedtuple('RequestInfo', ['future', 'responses', 'callback'])
 
 
-class ProcessStatusRequester(Ticking, LoopObject):
+class ProcessStatusRequester(apricotpy.TickingLoopObject):
     """
     This class can be used to request the status of processes
     """
@@ -113,7 +113,7 @@ class ProcessStatusRequester(Ticking, LoopObject):
         rinfo.future.set_result(rinfo.responses)
 
 
-class ProcessStatusSubscriber(Ticking, LoopObject):
+class ProcessStatusSubscriber(apricotpy.TickingLoopObject):
     """
     This class listens for messages asking for a status update from a group of 
     processes.

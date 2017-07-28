@@ -2,14 +2,13 @@
 
 from abc import ABCMeta
 
+import apricotpy
 from collections import Sequence
-from plum.persistence.bundle import Bundle
 from plum.event import WaitOnEvent, wait_on_process_event
 from plum.wait import WaitOn
 from plum.util import override
 from plum.process_listener import ProcessListener
 from plum.process import ProcessState
-from plum.loop import objects
 
 
 class Checkpoint(WaitOn):
@@ -17,6 +16,7 @@ class Checkpoint(WaitOn):
     This WaitOn doesn't actually wait, it's just a way to ask the engine to
     create a checkpoint at this point in the execution of a Process.
     """
+
     def on_loop_inserted(self, loop):
         self.set_result(None)
 
@@ -29,7 +29,7 @@ class _CompoundWaitOn(WaitOn):
     def __init__(self, loop, wait_list):
         super(_CompoundWaitOn, self).__init__(loop)
         for w in wait_list:
-            if not isinstance(w, objects.Awaitable):
+            if not isinstance(w, apricotpy.Awaitable):
                 raise ValueError(
                     "Must provide objects of type Awaitable, got '{}'.".format(w.__class__.__name__))
 
@@ -41,7 +41,7 @@ class _CompoundWaitOn(WaitOn):
         # Save all the waits lists
         waits = []
         for w in self._wait_list:
-            b = Bundle()
+            b = apricotpy.Bundle()
             w.save_instance_state(b)
             waits.append(b)
 
@@ -57,31 +57,31 @@ class WaitOnAll(_CompoundWaitOn):
     def __init__(self, loop, wait_list):
         super(WaitOnAll, self).__init__(loop, wait_list)
         self._num_finished = 0
+
+    def on_loop_inserted(self, loop):
+        super(WaitOnAll, self).on_loop_inserted(loop)
         for wait_on in self._wait_list:
-            wait_on.future().add_done_callback(self._wait_done)
+            wait_on.add_done_callback(self._wait_done)
 
     def load_instance_state(self, loop, saved_state, *args):
         super(WaitOnAll, self).load_instance_state(loop, saved_state)
         self._num_finished = 0
-        for wait_on in self._wait_list:
-            wait_on.future().add_done_callback(self._wait_done)
 
     def _wait_done(self, future):
         self._num_finished += 1
         if self._num_finished == len(self._wait_list):
-            self._future.set_result([w.future().result() for w in self._wait_list])
+            self.set_result([w.result() for w in self._wait_list])
 
 
 class WaitOnAny(_CompoundWaitOn):
-    def __init__(self, loop, wait_list):
-        super(WaitOnAny, self).__init__(loop, wait_list)
-
+    def on_loop_inserted(self, loop):
+        super(WaitOnAny, self).on_loop_inserted(loop)
         for wait_on in self._wait_list:
-            wait_on.future(loop).add_done_callback(self._wait_done)
+            wait_on.add_done_callback(self._wait_done)
 
     def _wait_done(self, future):
-        if not self._future.done():
-            self._future.set_result(None)
+        if not self.done():
+            self.set_result(None)
 
 
 class WaitOnProcessState(WaitOn, ProcessListener):
@@ -184,7 +184,7 @@ def run_until(proc, state, loop):
     else:
         wait_for = loop.create(WaitOnProcessState, proc, state)
 
-    results = loop.run_until_complete(wait_for.future())
+    results = loop.run_until_complete(wait_for)
 
     if any(result is WaitOnProcessState.STATE_UNREACHABLE for result in results):
         raise RuntimeError("State '{}' could not be reached for at least one process".format(state))
@@ -212,7 +212,7 @@ class WaitOnProcessOutput(WaitOn):
         self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
     def save_instance_state(self, out_state):
-        event_state = Bundle()
+        event_state = apricotpy.Bundle()
         self._wait_on_event.save_instance_state(event_state)
         out_state['output_event'] = event_state
 

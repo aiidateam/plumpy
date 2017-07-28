@@ -18,4 +18,4 @@ class StackTest(Process):
 class TestStack(TestCase):
     def test_simple(self):
         loop = loop_factory()
-        loop.create(StackTest).run()
+        loop.run_until_complete(loop.create(StackTest))

@@ -1,7 +1,7 @@
+import apricotpy
 import logging
 import json
 
-from plum.loop.objects import Ticking, LoopObject
 from plum.process_listener import ProcessListener
 from plum.process_monitor import ProcessMonitorListener, MONITOR
 from plum.rmq.defaults import Defaults
@@ -133,7 +133,7 @@ class ProcessEventPublisher(ProcessListener, ProcessMonitorListener):
         msg[PROC_INFO_KEY] = {'type': fullname(process)}
 
 
-class ProcessEventSubscriber(Ticking, LoopObject):
+class ProcessEventSubscriber(apricotpy.TickingLoopObject):
     def __init__(self, connection, exchange=Defaults.EVENT_EXCHANGE, decoder=json.loads):
         super(ProcessEventSubscriber, self).__init__()
 
