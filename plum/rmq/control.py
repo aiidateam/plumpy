@@ -6,7 +6,7 @@ import uuid
 
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
-from plum.util import override
+from plum.utils import override
 
 
 class Action(object):

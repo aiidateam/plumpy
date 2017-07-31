@@ -5,7 +5,7 @@ from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutp
     check_process_against_snapshots, \
     WaitForSignalProcess
 from plum.test_utils import ProcessListenerTester
-from plum.util import override
+from plum.utils import override
 from plum.wait_ons import run_until, WaitOnProcessState
 from util import TestCase
 
@@ -178,7 +178,7 @@ class TestProcess(TestCase):
         Check that the bundle after just creating a process is as we expect
         :return:
         """
-        proc = self.loop.create(DummyProcessWithOutput)
+        proc = ~self.loop.create_inserted(DummyProcessWithOutput)
         b = apricotpy.Bundle()
         proc.save_instance_state(b)
         self.assertIsNone(b.get('inputs', None))
@@ -230,7 +230,8 @@ class TestProcess(TestCase):
         self.loop.run_until_complete(self.loop.create(LoggerTester))
 
     def test_abort(self):
-        proc = self.loop.run_until_complete(self.loop.create_inserted(DummyProcess))
+        proc = ~self.loop.create_inserted(DummyProcess)
+
         self.loop.run_until_complete(proc.abort())
         self.assertTrue(proc.has_aborted())
         self.assertEqual(proc.state, ProcessState.STOPPED)

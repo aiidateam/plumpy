@@ -4,7 +4,7 @@ from plum.process import Process, ProcessState
 from plum.test_utils import TwoCheckpoint, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plum.test_utils import check_process_against_snapshots
-from plum.util import override
+from plum.utils import override
 from plum.test_utils import ProcessSaver
 from plum.wait_ons import run_until
 from util import TestCase
@@ -17,13 +17,13 @@ class TestWaitingProcess(TestCase):
         self.loop = loop_factory()
 
     def test_instance_state(self):
-        proc = self.loop.create(TwoCheckpoint)
+        proc = ~self.loop.create_inserted(TwoCheckpoint)
         wl = ProcessSaver(proc)
         self.loop.run_until_complete(proc)
 
         for snapshot, outputs in zip(wl.snapshots, wl.outputs):
             state, bundle = snapshot
-            self.assertEqual(outputs, bundle[Process.BundleKeys.OUTPUTS.value].get_dict())
+            self.assertEqual(outputs, bundle[Process.BundleKeys.OUTPUTS.value])
 
     def test_saving_each_step(self):
         for proc_class in TEST_WAITING_PROCESSES:

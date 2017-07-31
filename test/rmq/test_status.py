@@ -110,13 +110,11 @@ class TestStatusProvider(TestCase):
         waiting_on = set([entry['waiting_on'] for entry in procs_dict.itervalues()])
         self.assertSetEqual(waiting_on, {str(procs[0].get_waiting_on())})
 
-        # TODO: Put the following back
-        # self.loop.run_until_complete(
-        #     apricotpy.gather([proc.abort() for proc in procs], self.loop)
-        # )
-        #
-        # response = status_decode(self._send_and_get())
-        # self.assertEqual(len(response[status.PROCS_KEY]), 0)
+
+        ~apricotpy.gather([proc.abort() for proc in procs], self.loop)
+
+        response = status_decode(self._send_and_get())
+        self.assertEqual(len(response[status.PROCS_KEY]), 0)
 
     def _send_and_get(self):
         self._send_request()

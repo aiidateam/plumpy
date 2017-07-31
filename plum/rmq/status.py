@@ -7,7 +7,7 @@ import uuid
 from plum import Process
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
-from plum.util import override
+from plum.utils import override
 
 PROCS_KEY = 'procs'
 

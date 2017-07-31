@@ -5,7 +5,7 @@ import json
 from plum.process_listener import ProcessListener
 from plum.process_monitor import ProcessMonitorListener, MONITOR
 from plum.rmq.defaults import Defaults
-from plum.util import fullname, override
+from plum.utils import fullname, override
 
 PROC_INFO_KEY = 'proc_info'
 DETAILS_KEY = 'details'

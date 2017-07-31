@@ -19,17 +19,21 @@ class TestWaitOnProcessEvent(TestCase):
         super(TestWaitOnProcessEvent, self).setUp()
         self.loop = loop_factory()
 
+    def tearDown(self):
+        self.loop.close()
+        self.loop = None
+
     def test_finished_stopped(self):
         for event in ("finish", "stop"):
             p = self.loop.create(DummyProcess)
 
             wait_on = wait_on_process_event(self.loop, p.pid, event)
-            self.loop.run_until_complete(wait_on.future())
+            self.loop.run_until_complete(wait_on)
 
     def test_failed(self):
         p = self.loop.create(ExceptionProcess)
         wait_on = wait_on_process_event(self.loop, p.pid, 'fail')
-        self.loop.run_until_complete(wait_on.future())
+        self.loop.run_until_complete(wait_on)
 
 
 class _EmitterTester(EventEmitter):

@@ -1,5 +1,5 @@
 from plum.knowledge_provider import KnowledgeProvider, NotKnown
-from plum.util import override
+from plum.utils import override
 
 
 class KnowledgeBase(KnowledgeProvider):

@@ -5,7 +5,7 @@ import threading
 from abc import ABCMeta, abstractmethod
 from collections import Sequence
 
-from plum.util import override
+from plum.utils import override
 
 # The key used in messages to give information about the host that send a message
 HOST_KEY = 'host'

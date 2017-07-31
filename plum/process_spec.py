@@ -1,7 +1,7 @@
 from plum.port import InputPort, InputGroupPort, OutputPort, \
     DynamicOutputPort, DynamicInputPort
 from plum._base import LOGGER
-from plum.util import protected
+from plum.utils import protected
 
 
 class ProcessSpec(object):

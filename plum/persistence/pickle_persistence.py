@@ -10,7 +10,7 @@ import tempfile
 import traceback
 import pickle
 from plum.process import Process
-from plum.util import override, protected
+from plum.utils import override, protected
 from plum.exceptions import LockError
 from plum.persistence._base import LOGGER
 
@@ -259,7 +259,7 @@ class PicklePersistence(apricotpy.LoopObject):
         self._save_noraise(process)
 
         event = subject.split('.')[2]
-        if event == 'stop' or even == 'fail':
+        if event == 'stop' or event == 'fail':
             if event == 'stop':
                 move_to = self.finished_directory
             else:

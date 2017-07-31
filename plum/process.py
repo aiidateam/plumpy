@@ -13,7 +13,7 @@ from plum.process_listener import ProcessListener
 from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.process_states import *
-from plum.util import protected
+from plum.utils import protected
 from plum.wait import WaitOn
 
 __all__ = ['Process']
@@ -23,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 Wait = namedtuple('Wait', ['on', 'callback'])
 
 
-class Process(apricotpy.PersistableTask):
+class Process(apricotpy.PersistableAwaitableLoopObject):
     """
     The Process class is the base for any unit of work in plum.
 
@@ -162,8 +162,8 @@ class Process(apricotpy.PersistableTask):
 
         # Input/output
         self._check_inputs(inputs)
-        self._raw_inputs = None if inputs is None else util.AttributesFrozendict(inputs)
-        self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
+        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
         self._outputs = {}
 
         # Set up a process ID
@@ -176,11 +176,7 @@ class Process(apricotpy.PersistableTask):
         self._CREATION_TIME = time.time()
         self._finished = False
         self._terminated = False
-        self._state_bundle = None
-
-        # Finally enter the CREATED state
-        self._state = Created(self)
-        self._state.enter(None)
+        self.__state_bundle = None
 
     @property
     def creation_time(self):
@@ -278,7 +274,10 @@ class Process(apricotpy.PersistableTask):
         :return: The awaitable or None
         :rtype: :class:`apricotpy.Awaitable` or None
         """
-        return self.awaiting()
+        try:
+            return self._state.awaiting()
+        except AttributeError:
+            return None
 
     def get_exception(self):
         exc_info = self.get_exc_info()
@@ -311,7 +310,7 @@ class Process(apricotpy.PersistableTask):
         super(Process, self).save_instance_state(out_state)
         # Immutables first
         out_state[self.BundleKeys.CREATION_TIME.value] = self.creation_time
-        out_state[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
+        out_state[self.BundleKeys.CLASS_NAME.value] = utils.fullname(self)
         out_state[self.BundleKeys.PID.value] = self.pid
 
         # Now state stuff
@@ -326,43 +325,45 @@ class Process(apricotpy.PersistableTask):
         out_state[self.BundleKeys.INPUTS.value] = self.raw_inputs
         out_state[self.BundleKeys.OUTPUTS.value] = apricotpy.Bundle(self._outputs)
 
+    @protected
+    def load_instance_state(self, loop, saved_state, logger=None):
+        super(Process, self).load_instance_state(loop, saved_state)
+        self.__init(logger)
+
+        # Immutable stuff
+        self._CREATION_TIME = saved_state[self.BundleKeys.CREATION_TIME.value]
+        self._pid = saved_state[self.BundleKeys.PID.value]
+
+        # State stuff
+        self._finished = saved_state[self.BundleKeys.FINISHED.value]
+        self._terminated = saved_state[self.BundleKeys.TERMINATED.value]
+        self.__saved_state = saved_state[self.BundleKeys.STATE.value]
+
+        # Inputs/outputs
+        if saved_state[self.BundleKeys.INPUTS.value] is not None:
+            self._raw_inputs = utils.AttributesFrozendict(saved_state[self.BundleKeys.INPUTS.value])
+        else:
+            self._raw_inputs = None
+        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        self._outputs = copy.deepcopy(saved_state[self.BundleKeys.OUTPUTS.value])
+
     def on_loop_inserted(self, loop):
         super(Process, self).on_loop_inserted(loop)
-        if self._abort_future is None:
-            self._abort_future = loop.create_future()
 
-    def execute(self):
-        return self._tick()
+        if self.__saved_state is None:
+            self._set_state(Created(self))
+        else:
+            self._set_state(load_state(self, self.__saved_state))
 
-    def _tick(self, awaitable_result=None):
-        if self.has_terminated():
-            raise RuntimeError("Cannot run a terminated process")
-
+    def _execute_state(self, fut=None):
         try:
             _stack.push(self)
-            MONITOR.register_process(self)
-
-            if self.__aborting:
-                self._set_state(Stopped(self, abort=True, abort_msg=self.__abort_msg))
-                self.__aborting, self.__abort_msg = False, None
-
-            # Perform the actions of this state
-            result = self._state.execute(awaitable_result)
-
-            if isinstance(result, apricotpy.Awaitable):
-                return apricotpy.Await(result, self._tick)
-            elif self.has_terminated():
-                return self.outputs
-            else:
-                return apricotpy.Continue(self._tick)
-
-        except BaseException:
-            self._set_state(Failed(self, sys.exc_info()))
-            raise
-
+            self._state.execute()
         finally:
-            MONITOR.deregister_process(self)
             _stack.pop(self)
+
+            if fut is not None:
+                fut.set_result(self._state.label)
 
     def abort(self, msg=None):
         """
@@ -372,17 +373,42 @@ class Process(apricotpy.PersistableTask):
         :param msg: The abort message
         :type msg: str
         """
+        self.log_with_pid(logging.INFO, "aborting")
+
         self._loop_check()
 
-        self.log_with_pid(logging.INFO, "aborting")
+        fut = self.loop().create_future()
+        self.loop().call_soon(self._do_abort, fut, msg)
+        return fut
+
+    def _do_abort(self, fut, msg=None):
         if self.has_terminated():
-            return self._abort_future
+            fut.set_result(False)
+            return
 
-        if not self.__aborting:
-            self.__aborting = True
-            self.__abort_msg = msg
+        # Abort the current state
+        self._state.abort()
+        self._set_state(Stopped(self, abort=True, abort_msg=msg))
+        self._state.execute()
 
-        return self._abort_future
+        fut.set_result(True)
+
+    def play(self):
+        if self.is_playing():
+            return
+
+        self._state.enter(self._state.label)
+        self.__paused = False
+
+    def pause(self):
+        if not self.is_playing():
+            return
+
+        self._state.abort()
+        self.__paused = True
+
+    def is_playing(self):
+        return not self.__paused
 
     def add_process_listener(self, listener):
         assert (listener != self), "Cannot listen to yourself!"
@@ -467,8 +493,7 @@ class Process(apricotpy.PersistableTask):
         Called when the process has been asked to abort itself.
         """
         self._fire_event(ProcessListener.on_process_abort)
-        self._send_message('abort', abort_msg)
-        self._abort_future.set_result('done')
+        self._send_message('abort', {'msg': abort_msg})
 
         self.__called = True
 
@@ -549,28 +574,6 @@ class Process(apricotpy.PersistableTask):
         self.on_output_emitted(output_port, value, dynamic)
 
     @protected
-    def load_instance_state(self, loop, saved_state, logger=None):
-        super(Process, self).load_instance_state(loop, saved_state)
-        self.__init(logger)
-
-        # Immutable stuff
-        self._CREATION_TIME = saved_state[self.BundleKeys.CREATION_TIME.value]
-        self._pid = saved_state[self.BundleKeys.PID.value]
-
-        # State stuff
-        self._finished = saved_state[self.BundleKeys.FINISHED.value]
-        self._terminated = saved_state[self.BundleKeys.TERMINATED.value]
-        self._state = load_state(self, saved_state[self.BundleKeys.STATE.value])
-
-        # Inputs/outputs
-        if saved_state[self.BundleKeys.INPUTS.value] is not None:
-            self._raw_inputs = util.AttributesFrozendict(saved_state[self.BundleKeys.INPUTS.value])
-        else:
-            self._raw_inputs = None
-        self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
-        self._outputs = copy.deepcopy(saved_state[self.BundleKeys.OUTPUTS.value])
-
-    @protected
     def create_input_args(self, inputs):
         """
         Take the passed input arguments and fill in any default values for
@@ -605,13 +608,13 @@ class Process(apricotpy.PersistableTask):
         to be persisted.  This can be called from the constructor or
         load_instance_state.
         """
+        self._state = None
         self.__logger = logger
-        self.__aborting = None
-        self.__abort_msg = None
-        self._abort_future = None
+        self.__saved_state = None
+        self.__paused = False
 
         # Events and running
-        self.__event_helper = util.EventHelper(ProcessListener)
+        self.__event_helper = utils.EventHelper(ProcessListener)
 
         # Flag to make sure all the necessary event methods were called
         self.__called = False
@@ -699,8 +702,12 @@ class Process(apricotpy.PersistableTask):
                                    format(self.get_name(), msg))
 
     def _set_state(self, state):
-        previous_state = self._state.label
-        self._state.exit()
+        if self._state is None:
+            previous_state = None
+        else:
+            previous_state = self._state.label
+            self._state.exit()
+
         self._state = state
         self._state.enter(previous_state)
 

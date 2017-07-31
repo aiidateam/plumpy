@@ -3,7 +3,7 @@ from collections import namedtuple
 import apricotpy
 from plum.process import Process
 from plum.process_listener import ProcessListener
-from plum.util import override
+from plum.utils import override
 from plum.wait_ons import Checkpoint, Barrier
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])

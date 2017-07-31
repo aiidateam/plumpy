@@ -1,7 +1,7 @@
 
 import importlib
 from plum.exceptions import ClassNotFoundException
-from plum.util import load_class
+from plum.utils import load_class
 
 
 class ClassLoader(object):

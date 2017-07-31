@@ -46,7 +46,7 @@ class TestControl(TestCase):
 
     def test_pause_play(self):
         # Create the process and wait until it is waiting
-        p = self.loop.create(WaitForSignalProcess)
+        p = ~self.loop.create_inserted(WaitForSignalProcess)
 
         # Playing
         self.assertTrue(p.is_playing())

@@ -7,7 +7,7 @@ import uuid
 
 from plum.process_listener import ProcessListener
 from plum.rmq.defaults import Defaults
-from plum.util import override, load_class, fullname
+from plum.utils import override, load_class, fullname
 
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
 

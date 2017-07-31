@@ -12,7 +12,7 @@ import threading
 from plum.port import DynamicOutputPort
 from plum.process import Process, ProcessSpec
 from plum.process_listener import ProcessListener
-import plum.util as util
+import plum.utils as util
 
 
 class ProcessLink(object):

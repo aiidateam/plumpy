@@ -6,7 +6,7 @@ import apricotpy
 from collections import Sequence
 from plum.event import WaitOnEvent, wait_on_process_event
 from plum.wait import WaitOn
-from plum.util import override
+from plum.utils import override
 from plum.process_listener import ProcessListener
 from plum.process import ProcessState
 
@@ -18,6 +18,7 @@ class Checkpoint(WaitOn):
     """
 
     def on_loop_inserted(self, loop):
+        super(Checkpoint, self).on_loop_inserted(loop)
         self.set_result(None)
 
 

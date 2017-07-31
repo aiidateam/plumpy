@@ -7,7 +7,7 @@ import traceback
 
 from plum import Process
 from plum.process_listener import ProcessListener
-from plum.util import override, protected, ListenContext
+from plum.utils import override, protected, ListenContext
 from plum.wait import WaitOn
 
 _LOGGER = logging.getLogger(__name__)
@@ -222,9 +222,9 @@ class WaitOnEvent(WaitOn):
     def _event_occurred(self, loop, event, body):
         self._event = event
         self._body = body
-        self._future.set_result((self._event, self._body))
+        self.set_result((self._event, self._body))
         loop.messages().remove_listener(self._event_occurred)
 
 
 def wait_on_process_event(loop, pid='*', event='*'):
-    return WaitOnEvent(loop, "process.{}.{}".format(pid, event))
+    return loop.create(WaitOnEvent, "process.{}.{}".format(pid, event))

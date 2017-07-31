@@ -2,7 +2,7 @@
 
 from util import TestCase
 import apricotpy
-from plum.util import Savable
+from plum.utils import Savable
 
 
 class TestSavable(TestCase):

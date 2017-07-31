@@ -1,7 +1,18 @@
 import apricotpy
 from enum import Enum
+import sys
 import logging
-from . import util
+from . import utils
+
+
+def _get_member_function(process, name):
+    try:
+        return getattr(process, name)
+    except AttributeError:
+        raise ValueError(
+            "This process does not have a function with "
+            "the name '{}' as expected from the wait on".format(name)
+        )
 
 
 class ProcessState(Enum):
@@ -38,6 +49,7 @@ class State(object):
         :type: :class:`threading.Lock`
         """
         self._process = process
+        self._execute_callback = None
 
     @property
     def label(self):
@@ -46,17 +58,29 @@ class State(object):
     def enter(self, previous_state):
         self._process.log_with_pid(logging.DEBUG, "entering state '{}'".format(self.label))
 
-    def execute(self, result):
+    def execute(self):
+        self._execute_callback = None
         self._process.log_with_pid(logging.DEBUG, "executing state '{}'".format(self.label))
 
     def exit(self):
         self._process.log_with_pid(logging.DEBUG, "exiting state '{}'".format(self.label))
 
+    def abort(self):
+        if self._execute_callback is not None:
+            self._execute_callback.cancel()
+            self._execute_callback = None
+
     def save_instance_state(self, out_state):
-        out_state['class_name'] = util.fullname(self)
+        out_state['class_name'] = utils.fullname(self)
 
     def load_instance_state(self, process, saved_state):
         self._process = process
+        self._execute_callback = None
+
+    def _schedule_execute(self):
+        """Schedule execution of the current Process state"""
+        self._execute_callback = \
+            self._process.loop().call_soon(self._process._execute_state)
 
 
 class Created(State):
@@ -68,9 +92,10 @@ class Created(State):
     def enter(self, previous_state):
         super(Created, self).enter(previous_state)
         self._process._on_create()
+        self._schedule_execute()
 
-    def execute(self, result):
-        super(Created, self).execute(result)
+    def execute(self):
+        super(Created, self).execute()
         # Move to the running state
         self._process._set_state(Running(self._process, self._process.do_run))
 
@@ -80,8 +105,8 @@ _NO_RESULT = ()
 
 class Running(State):
     LABEL = ProcessState.RUNNING
-    EXEC_FUNC = 'exec_func'
-    RESULT = 'result'
+    NEXT_STEP = 'NEXT_STEP'
+    RESULT = 'RESULT'
 
     @staticmethod
     def _is_wait_retval(retval):
@@ -105,7 +130,7 @@ class Running(State):
         :param result: The (optional) result from a waiting state
         """
         super(Running, self).__init__(process)
-        self._exec_func = exec_func
+        self._next_step = exec_func
         self._result = result
 
     def enter(self, previous_state):
@@ -121,84 +146,96 @@ class Running(State):
             raise RuntimeError("Cannot enter RUNNING from '{}'".format(previous_state))
 
         self._process._on_run()
+        self._schedule_execute()
 
-    def execute(self, result):
-        super(Running, self).execute(result)
+    def execute(self):
+        super(Running, self).execute()
 
         args = []
         if self._result is not _NO_RESULT:
             args.append(self._result)
 
         # Run the next function
-        retval = self._exec_func(*args)
-        if Running._is_wait_retval(retval):
-            awaitable, callback = retval
-            self._process._set_state(Waiting(self._process, awaitable.uuid, callback))
-            return awaitable
+        try:
+            retval = self._next_step(*args)
+        except BaseException:
+            self._process._set_state(Failed(self._process, sys.exc_info()))
         else:
-            self._process._set_state(Stopped(self._process))
+            if Running._is_wait_retval(retval):
+                awaitable, callback = retval
+                self._process._set_state(Waiting(self._process, awaitable, callback))
+            else:
+                self._process._set_state(Stopped(self._process))
 
     def save_instance_state(self, out_state):
         super(Running, self).save_instance_state(out_state)
-        out_state[self.EXEC_FUNC] = self._exec_func.__name__
+        out_state[self.NEXT_STEP] = self._next_step.__name__
         out_state[self.RESULT] = self._result
 
     def load_instance_state(self, process, saved_state):
         super(Running, self).load_instance_state(process, saved_state)
-        self._exec_func = getattr(self._process, saved_state[self.EXEC_FUNC])
+        self._next_step = _get_member_function(self._process, saved_state[self.NEXT_STEP])
         self._result = saved_state[self.RESULT]
 
 
 class Waiting(State):
     LABEL = ProcessState.WAITING
-    CALLBACK = 'CALLBACK'
-    AWAITING_UUID = 'AWAITING_UUID'
+    NEXT_STEP = 'NEXT_STEP'
+    AWAITING = 'AWAITING'
 
-    def __init__(self, process, awaiting_uuid, callback):
+    def __init__(self, process, awaiting, fn):
         """
         :param process: The process this state belongs to
         :type process: :class:`plum.process.Process`
-        :param callback: A callback function for the next Running state after
+        :param fn: A callback function for the next Running state after
             finished waiting.  Can be None in which case next state will be
             STOPPED.
         """
         super(Waiting, self).__init__(process)
-        self._awaiting_uuid = awaiting_uuid
-        self._callback = callback
+        self._awaiting = awaiting
+        self._next_step = fn
+        self._await_cb_handle = None
 
     def enter(self, previous_state):
         super(Waiting, self).enter(previous_state)
-        self._process._on_wait(self._awaiting_uuid)
+        self._process._on_wait(self._awaiting)
+        self._schedule_execute()
 
-    def execute(self, result):
-        super(Waiting, self).execute(result)
+    def execute(self):
+        super(Waiting, self).execute()
+        self._await_cb_handle = self._awaiting.add_done_callback(self._await_done)
 
-        if self._callback is None:
-            self._process._set_state(Stopped(self._process))
-        else:
-            self._process._set_state(
-                Running(self._process, self._callback, result)
-            )
+    def abort(self):
+        super(Waiting, self).abort()
+        if self._await_cb_handle is not None:
+            self._await_cb_handle.cancel()
+            self._await_cb_handle = None
 
     def save_instance_state(self, out_state):
         super(Waiting, self).save_instance_state(out_state)
-        if self._callback is None:
-            out_state[self.CALLBACK] = None
+        if self._next_step is None:
+            out_state[self.NEXT_STEP] = None
         else:
-            out_state[self.CALLBACK] = self._callback.__name__
-        out_state[self.AWAITING_UUID] = self._awaiting_uuid
+            out_state[self.NEXT_STEP] = self._next_step.__name__
+        out_state[self.AWAITING] = self._awaiting
 
     def load_instance_state(self, process, saved_state):
         super(Waiting, self).load_instance_state(process, saved_state)
 
-        try:
-            self._callback = getattr(self._process, saved_state[self.CALLBACK])
-        except AttributeError:
-            raise ValueError(
-                "This process does not have a function with "
-                "the name '{}' as expected from the wait on".
-                format(saved_state[self.CALLBACK]))
-        self._awaiting_uuid = saved_state[self.AWAITING_UUID]
+        self._next_step = _get_member_function(self._process, saved_state[self.NEXT_STEP])
+        self._awaiting = saved_state[self.AWAITING]
+        self._await_cb_handle = None
+
+    def awaiting(self):
+        return self._awaiting
+
+    def _await_done(self, awaitable):
+        self._await_cb_handle = None
+
+        if self._next_step is None:
+            self._process._set_state(Stopped(self._process))
+        else:
+            self._process._set_state(Running(self._process, self._next_step, awaitable.result()))
 
 
 class Stopped(State):
@@ -220,10 +257,15 @@ class Stopped(State):
             raise RuntimeError("Cannot enter STOPPED from '{}'".format(previous_state))
 
         self._process._on_stop(self._abort_msg)
+        self._schedule_execute()
 
-    def execute(self, result):
-        super(Stopped, self).execute(result)
+    def execute(self):
+        super(Stopped, self).execute()
         self._process._terminate()
+        if self._abort:
+            self._process.cancel()
+        else:
+            self._process.set_result(self._process.outputs)
 
     def save_instance_state(self, out_state):
         super(Stopped, self).save_instance_state(out_state)
@@ -257,10 +299,12 @@ class Failed(State):
             import traceback
             self._process.log_with_pid(
                 logging.ERROR, "exception entering failed state:\n{}".format(traceback.format_exc()))
+        self._schedule_execute()
 
-    def execute(self, result):
-        super(Failed, self).execute(result)
+    def execute(self):
+        super(Failed, self).execute()
         self._process._terminate()
+        self._process.set_exception(self._exc_info[1])
 
     def save_instance_state(self, out_state):
         super(Failed, self).save_instance_state(out_state)
@@ -280,5 +324,5 @@ class Failed(State):
 def load_state(process, state_bundle):
     # Get the class using the class loader and instantiate it
     class_name = state_bundle['class_name']
-    proc_class = util.load_class(class_name)
+    proc_class = utils.load_class(class_name)
     return proc_class.create_from(process, state_bundle)

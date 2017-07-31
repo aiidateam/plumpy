@@ -1,6 +1,6 @@
 from abc import ABCMeta
 from plum.process_listener import ProcessListener
-from plum.util import EventHelper, ListenContext, override
+from plum.utils import EventHelper, ListenContext, override
 
 
 class ProcessMonitorListener(object):

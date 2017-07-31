@@ -47,22 +47,22 @@ class TestPicklePersistence(TestCase):
 
         # Check the file exists
         self.assertTrue(os.path.isfile(save_path))
-
-    def test_on_finishing_process(self):
-        proc = self.loop.create(ProcessWithCheckpoint)
-        pid = proc.pid
-        self.pickle_persistence.persist_process(proc)
-        running_path = self.pickle_persistence.get_running_path(proc.pid)
-
-        self.assertTrue(os.path.isfile(running_path))
-        self.loop.run_until_complete(proc)
-        self.assertFalse(os.path.isfile(running_path))
-        finished_path = \
-            os.path.join(self.store_dir,
-                         self.pickle_persistence.finished_directory,
-                         self.pickle_persistence.pickle_filename(pid))
-
-        self.assertTrue(os.path.isfile(finished_path))
+    #
+    # def test_on_finishing_process(self):
+    #     proc = self.loop.create(ProcessWithCheckpoint)
+    #     pid = proc.pid
+    #     self.pickle_persistence.persist_process(proc)
+    #     running_path = self.pickle_persistence.get_running_path(proc.pid)
+    #
+    #     self.assertTrue(os.path.isfile(running_path))
+    #     self.loop.run_until_complete(proc)
+    #     self.assertFalse(os.path.isfile(running_path))
+    #     finished_path = \
+    #         os.path.join(self.store_dir,
+    #                      self.pickle_persistence.finished_directory,
+    #                      self.pickle_persistence.pickle_filename(pid))
+    #
+    #     self.assertTrue(os.path.isfile(finished_path))
 
     def test_load_all_checkpoints(self):
         self._empty_directory()

@@ -2,7 +2,7 @@ import collections
 import copy
 import functools
 import operator
-from plum.util import override
+from plum.utils import override
 from plum.class_loader import ClassLoader
 
 
