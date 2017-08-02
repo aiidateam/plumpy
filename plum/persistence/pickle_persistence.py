@@ -1,18 +1,17 @@
-
 import apricotpy
 import glob
 import os
 import os.path as path
 import portalocker
 import portalocker.utils
-from shutil import copyfile
+import shutil
 import tempfile
 import traceback
 import pickle
 from plum.process import Process
-from plum.utils import override, protected
-from plum.exceptions import LockError
 from plum.persistence._base import LOGGER
+
+LockException = portalocker.exceptions.LockException
 
 _RUNNING_DIRECTORY = path.join(tempfile.gettempdir(), "running")
 _FINISHED_DIRECTORY = path.join(_RUNNING_DIRECTORY, "finished")
@@ -56,6 +55,123 @@ class RLock(portalocker.Lock):
         self._acquire_count -= 1
 
 
+def _ensure_directory(dir_path):
+    if not path.isdir(dir_path):
+        os.makedirs(dir_path)
+
+
+def _create_saved_instance_state(process):
+    """
+    Create a saved instance state bundle for a process.
+    
+    :param process: The process
+    :type process: :class:`plum.Process`
+    :return: The saved state bundle
+    :rtype: :class:`apricotpy.Bundle`
+    """
+    saved_state = apricotpy.Bundle()
+    process.save_instance_state(saved_state)
+    return saved_state
+
+
+def _clear(fileobj):
+    """
+    Clear the contents of an open file.
+
+    :param fileobj: The (open) file object
+    """
+    fileobj.seek(0)
+    fileobj.truncate()
+
+
+def save(process, save_file):
+    _ensure_directory(path.dirname(save_file))
+    with RLock(save_file, 'w+b', timeout=0) as lock:
+        _save_locked(process, lock)
+
+
+def _save_locked(process, lock):
+    with lock as f:
+        checkpoint = _create_saved_instance_state(process)
+        with tempfile.NamedTemporaryFile('w+b') as tmp:
+            pickle.dump(checkpoint, tmp)
+            tmp.seek(0)
+            # Now copy everything over
+            _clear(f)
+            shutil.copyfileobj(tmp, f)
+            f.flush()
+
+
+class Saver(object):
+    """
+    This object will save the process class every time a state message is received
+    until it is asked to stop.
+    """
+
+    def __init__(self, loop, process, save_file, finish_directory=None, fail_directory=None):
+        # Create a lock for the pickle
+        try:
+            self._lock = RLock(save_file, 'w+b', timeout=0)
+            self._lock.acquire()
+        except portalocker.LockException as e:
+            e.message = "Unable to lock pickle '{}' someone else must have locked it.\n" + e.message
+            raise e
+
+        self._save_file = save_file
+        self._loop = loop
+        self._loop.messages().add_listener(
+            self._process_message, 'process.{}.*'.format(process.uuid))
+        self._stopped = False
+
+        self._fail_directory = fail_directory
+        self._finish_directory = finish_directory
+
+        self._save(process)
+
+    def stop(self, delete=False, copy_to=None):
+        if self._stopped:
+            return False
+
+        self._loop.messages().remove_listener(self._process_message)
+        self._loop = None
+
+        if copy_to is not None:
+            _ensure_directory(copy_to)
+            dest = path.join(copy_to, path.basename(self._save_file))
+            shutil.copyfile(self._save_file, dest)
+
+        if delete:
+            os.remove(self._save_file)
+
+        self._lock.release()
+        self._lock = None
+        self._stopped = True
+
+        return True
+
+    def get_save_file(self):
+        return self._save_file
+
+    def _process_message(self, loop, subject, body, uuid):
+        process = loop.get_object(uuid)
+        if process.has_finished():
+            self.stop(delete=self._finish_directory is not None, copy_to=self._finish_directory)
+        elif process.has_failed():
+            self.stop(delete=self._fail_directory is not None, copy_to=self._fail_directory)
+        else:
+            self._save(process)
+
+    def _save(self, process):
+        assert not self._stopped, "Cannot save state, stopped"
+        try:
+            _save_locked(process, self._lock)
+        except BaseException as e:
+            LOGGER.debug(
+                "Failed trying to save pickle for process '{}': "
+                    .format(process.uuid, e.message)
+            )
+
+
 class PicklePersistence(apricotpy.LoopObject):
     """
     Class that uses pickles stored in particular directories to persist the
@@ -63,8 +179,8 @@ class PicklePersistence(apricotpy.LoopObject):
     """
 
     @staticmethod
-    def pickle_filename(pid):
-        return "{}.pickle".format(pid)
+    def pickle_filename(process):
+        return "{}.pickle".format(process.uuid)
 
     @staticmethod
     def load_checkpoint_from_file(filepath):
@@ -124,12 +240,12 @@ class PicklePersistence(apricotpy.LoopObject):
         self._running_directory = running_directory
         self._finished_directory = finished_directory
         self._failed_directory = failed_directory
-        self._filelocks = {}
+        self._savers = {}
         self._persisting = False
 
     def load_checkpoint(self, pid):
-        for check_dir in [self._running_directory, self._failed_directory,
-                          self._finished_directory]:
+        for check_dir in (self._running_directory, self._failed_directory,
+                          self._finished_directory):
             p = path.join(check_dir, str(pid) + ".pickle")
             if path.isfile(p):
                 return self.load_checkpoint_from_file(p)
@@ -161,22 +277,27 @@ class PicklePersistence(apricotpy.LoopObject):
 
     def start_persisting(self):
         """      
-        Start persisting `Processes`s in  the loop.
+        Any new processes inserted into the event loop will be persisted at each state transition.
         """
         if self._persisting:
             return
 
-        self.loop().messages().add_listener(self._process_message, 'process.*.*')
+        self.loop().messages().add_listener(
+            self._on_object_inserting, 'loop.object.*.inserting')
+        self.loop().messages().add_listener(
+            self._on_object_removing, 'loop.object.*.removing')
+
         self._persisting = True
 
     def stop_persisting(self):
         """
-        Stop persisting `Processe`s in the loop.
+        Stop automatically persisting processes.
         """
         if not self._persisting:
             return
 
-        self.loop().messages().remove_listener(self._process_message)
+        self.loop().messages().remove_listener(self._on_object_inserting)
+        self.loop().messages().remove_listener(self._on_object_removing)
         self._persisting = False
 
     @property
@@ -192,181 +313,47 @@ class PicklePersistence(apricotpy.LoopObject):
         return self._finished_directory
 
     def persist_process(self, process):
-        if process.pid in self._filelocks:
+        """
+        Start saving the state of the given process.
+        :param process: The process to persist
+        """
+        if process.uuid in self._savers:
             # Already persisted
             return
 
-        save_file = self.get_running_path(process.pid)
-        self._ensure_directory(self._running_directory)
+        save_file = self.get_save_file(process)
+        self._savers[process.uuid] = Saver(
+            self._loop, process, save_file,
+            self.finished_directory, self.failed_directory
+        )
 
-        # Create a lock for the pickle
-        try:
-            lock = RLock(save_file, 'w+b', timeout=0)
-            lock.acquire()
-            self._filelocks[process.pid] = lock
-        except portalocker.LockException:
-            raise LockError(
-                "Unable to lock pickle '{}' someone else must have locked it.".format(save_file))
+    def reset_persisted(self, delete=False):
+        for saver in self._savers.itervalues():
+            saver.stop(delete=delete)
 
-        self._save_noraise(process)
+        self._savers.clear()
 
-        try:
-            # Listen to the process - state transitions will trigger pickling
-            process.add_process_listener(self)
-        except AssertionError:
-            # Happens if we're already listening
-            pass
-
-    def clear_all_persisted(self):
-        for pid in self._filelocks.keys():
-            self._release_process(pid)
-
-    def get_running_path(self, pid):
+    def get_save_file(self, process):
         """
-        Get the path where the pickle for a process with pid will be stored
-        while it's running.
+        Get the path where the pickle for a process will be stored.
 
-        :param pid: The process pid
+        :param process: The process
         :return: A string to the absolute path of where the pickle is stored.
         :rtype: str
         """
-        return path.join(self._running_directory, self.pickle_filename(pid))
+        return path.join(self._running_directory, self.pickle_filename(process))
 
     def save(self, process):
-        self._ensure_directory(self._running_directory)
-        filename = self.get_running_path(process.pid)
-        lock = self._filelocks.get(process.pid, RLock(filename, 'w+b', timeout=0))
+        save_file = self.get_save_file(process)
+        save(process, save_file)
 
-        with lock as f:
-            checkpoint = self.create_bundle(process)
-            self._clear(f)
-            try:
-                pickle.dump(checkpoint, f)
-            except BaseException as exception:
-                LOGGER.debug("Failed to save the pickle\n{}: {}\n"
-                             "Pickle contents: {}".format(type(exception), exception, checkpoint))
-                # Don't leave a half-baked pickle around
-                if path.isfile(filename):
-                    os.remove(filename)
-                raise
-            f.flush()
+    def _on_object_inserting(self, loop, subject, uuid, sender_id):
+        obj = loop.get_object(uuid)
+        if isinstance(obj, Process):
+            self._savers[obj.uuid] = Saver(loop, obj, self.get_save_file(obj))
+            self.persist_process(obj)
 
-    # region ProcessListener messages
-
-    def _process_message(self, loop, subject, body):
-        uuid = body['uuid']
-        process = loop.get_object(uuid)
-        self._save_noraise(process)
-
-        event = subject.split('.')[2]
-        if event == 'stop' or event == 'fail':
-            if event == 'stop':
-                move_to = self.finished_directory
-            else:
-                move_to = self.failed_directory
-
-            try:
-                self._release_process(process.pid, move_to)
-            except ValueError:
-                pass
-
-
-
-
-
-    @override
-    def on_process_playing(self, process):
-        try:
-            self._filelocks[process.pid].acquire()
-        except portalocker.LockException:
-            LOGGER.warning(
-                "Couldn't acquire file lock for '{}', not persisting.".format(
-                    self.get_running_path(process.pid)))
-            del self._filelocks[process.pid]
-
-    @override
-    def on_process_run(self, process):
-        self._save_noraise(process)
-
-    @override
-    def on_process_wait(self, process):
-        self._save_noraise(process)
-
-    @override
-    def on_process_stop(self, process):
-        self._save_noraise(process)
-        try:
-            self._release_process(process.pid, self.finished_directory)
-        except ValueError:
-            pass
-
-    @override
-    def on_process_fail(self, process):
-        try:
-            self._release_process(process.pid, self.failed_directory)
-        except ValueError:
-            pass
-
-    # endregion
-
-    # region LoopListener messages
-    @override
-    def on_object_inserted(self, loop, loop_object):
-        if isinstance(loop_object, Process):
-            self.persist_process(loop_object)
-
-    # endregion
-
-    @protected
-    def create_bundle(self, process):
-        checkpoint = apricotpy.Bundle()
-        process.save_instance_state(checkpoint)
-        return checkpoint
-
-    @staticmethod
-    def _ensure_directory(dir_path):
-        if not path.isdir(dir_path):
-            os.makedirs(dir_path)
-
-    def _release_process(self, pid, save_dir=None):
-        """
-        Move a running process pickle to the given save directory, this is
-        typically used if the process has finished or failed.
-
-        :param pid: The process ID
-        :param save_dir: The directory to move to pickle to, can be None
-            indicating that the pickle should be deleted.
-        :type save_dir: str or None
-        """
-        # Get the current location of the pickle
-        pickle_path = self.get_running_path(pid)
-        lock = self._filelocks.pop(pid)
-
-        try:
-            if path.isfile(pickle_path):
-                if save_dir is not None:
-                    self._ensure_directory(save_dir)
-                    to = path.join(save_dir, self.pickle_filename(pid))
-                    copyfile(pickle_path, to)
-                os.remove(pickle_path)
-            else:
-                raise ValueError(
-                    "Cannot find pickle for process with pid '{}'".format(pid))
-        finally:
-            lock.release()
-
-    def _save_noraise(self, process):
-        try:
-            self.save(process)
-        except BaseException:
-            LOGGER.error("Exception raised trying to pickle process (pid={})\n{}"
-                         .format(process.pid, traceback.format_exc()))
-
-    def _clear(self, fileobj):
-        """
-        Clear the contents of an open file.
-
-        :param fileobj: The (open) file object
-        """
-        fileobj.seek(0)
-        fileobj.truncate()
+    def _on_object_removing(self, loop, subject, uuid, sender_id):
+        if uuid in self._savers:
+            saver = self._savers.pop(uuid)
+            saver.stop()

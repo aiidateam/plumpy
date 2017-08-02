@@ -126,5 +126,5 @@ class TestEventEmitter(TestCase):
         self.loop.tick()
         self.assertIsNone(self.last)
 
-    def _receive(self, emitter, evt, body):
-        self.last = emitter, evt, body
+    def _receive(self, emitter, evt, body, sender_id):
+        self.last = emitter, evt, body, sender_id

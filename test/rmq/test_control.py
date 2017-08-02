@@ -1,19 +1,19 @@
 import unittest
 import uuid
 
-import pika
-import pika.exceptions
-
 from plum import loop_factory
 from plum.process import ProcessState
-from plum.rmq.control import ProcessControlPublisher, ProcessControlSubscriber
 from plum.test_utils import WaitForSignalProcess
 from plum.wait_ons import run_until
-from test.test_rmq import _HAS_PIKA
 from test.util import TestCase
+from . import utils
+
+if utils._HAS_PIKA:
+    import pika
+    from plum.rmq.control import ProcessControlPublisher, ProcessControlSubscriber
 
 
-@unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
+@unittest.skipIf(not utils._HAS_PIKA, "Requires pika library and RabbitMQ")
 class TestControl(TestCase):
     def setUp(self):
         super(TestControl, self).setUp()

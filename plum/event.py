@@ -219,10 +219,10 @@ class WaitOnEvent(WaitOn):
     def get_body(self):
         return self._body
 
-    def _event_occurred(self, loop, event, body):
+    def _event_occurred(self, loop, event, body, sender_id):
         self._event = event
         self._body = body
-        self.set_result((self._event, self._body))
+        self.set_result((self._event, self._body, sender_id))
         loop.messages().remove_listener(self._event_occurred)
 
 

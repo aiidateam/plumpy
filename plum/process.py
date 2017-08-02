@@ -3,8 +3,8 @@
 from abc import ABCMeta, abstractmethod
 import apricotpy
 import copy
+from enum import Enum
 import logging
-import sys
 import time
 from collections import namedtuple
 
@@ -15,6 +15,7 @@ from plum.process_spec import ProcessSpec
 from plum.process_states import *
 from plum.utils import protected
 from plum.wait import WaitOn
+from . import utils
 
 __all__ = ['Process']
 
@@ -315,8 +316,11 @@ class Process(apricotpy.PersistableAwaitableLoopObject):
 
         # Now state stuff
         state_bundle = apricotpy.Bundle()
-        self._state.save_instance_state(state_bundle)
-        out_state[self.BundleKeys.STATE.value] = state_bundle
+        if self._state is None:
+            out_state[self.BundleKeys.STATE.value] = None
+        else:
+            self._state.save_instance_state(state_bundle)
+            out_state[self.BundleKeys.STATE.value] = state_bundle
 
         out_state[self.BundleKeys.FINISHED.value] = self._finished
         out_state[self.BundleKeys.TERMINATED.value] = self._terminated
@@ -672,7 +676,7 @@ class Process(apricotpy.PersistableAwaitableLoopObject):
         body = {'uuid': self.uuid}
         if body_ is not None:
             body.update(body_)
-        self.loop().messages().send('process.{}.{}'.format(self.pid, subject), body)
+        self.send_message('process.{}.{}'.format(self.pid, subject), body)
 
     def _terminate(self):
         self._terminated = True

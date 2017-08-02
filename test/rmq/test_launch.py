@@ -1,13 +1,15 @@
 import apricotpy
 import unittest
 import uuid
-import pika
 
 from plum import loop_factory
-from plum.rmq import ProcessLaunchPublisher, ProcessLaunchSubscriber
 from plum.test_utils import TEST_PROCESSES
 from test.test_rmq import _HAS_PIKA
 from test.util import TestCase
+
+if _HAS_PIKA:
+    import pika.exceptions
+    from plum.rmq import ProcessLaunchPublisher, ProcessLaunchSubscriber
 
 
 def _create_temporary_queue(connection):
