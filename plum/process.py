@@ -361,9 +361,12 @@ class Process(object):
         assert self._called, \
             "on_create was not called\n" \
             "Hint: Did you forget to call the superclass method?"
-        MONITOR.process_created(self)
 
-        self._state = ProcessState.CREATED
+        # Enables fast-forwarding in the on_create method, by explicitly setting
+        # the _state
+        if self._state is None:
+            MONITOR.process_created(self)
+            self._state = ProcessState.CREATED
 
     def perform_start(self):
         """
