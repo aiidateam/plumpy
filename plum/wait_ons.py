@@ -44,7 +44,7 @@ class _CompoundWaitOn(WaitOn):
 
     @override
     def save_instance_state(self, out_state):
-        super(self.__class__, self).save_instance_state(out_state)
+        super(_CompoundWaitOn, self).save_instance_state(out_state)
         # Save all the waits lists
         waits = []
         for w in self._wait_list:
