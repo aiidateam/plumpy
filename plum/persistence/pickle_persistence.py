@@ -69,9 +69,7 @@ def _create_saved_instance_state(process):
     :return: The saved state bundle
     :rtype: :class:`apricotpy.Bundle`
     """
-    saved_state = apricotpy.Bundle()
-    process.save_instance_state(saved_state)
-    return saved_state
+    return apricotpy.persistable.Bundle(process)
 
 
 def _clear(fileobj):
@@ -208,9 +206,10 @@ class PicklePersistence(apricotpy.LoopObject):
         kwargs['running_directory'] = path.join(basedir, "running")
         kwargs['finished_directory'] = path.join(basedir, "finished")
         kwargs['failed_directory'] = path.join(basedir, "failed")
+
         return cls(**kwargs)
 
-    def __init__(self, loop, running_directory=_RUNNING_DIRECTORY,
+    def __init__(self, running_directory=_RUNNING_DIRECTORY,
                  finished_directory=_FINISHED_DIRECTORY,
                  failed_directory=_FAILED_DIRECTORY):
         """
@@ -235,7 +234,7 @@ class PicklePersistence(apricotpy.LoopObject):
             Process pickles in.  If None they will be deleted on fail.
         :type failed_directory: str
         """
-        super(PicklePersistence, self).__init__(loop)
+        super(PicklePersistence, self).__init__()
 
         self._running_directory = running_directory
         self._finished_directory = finished_directory

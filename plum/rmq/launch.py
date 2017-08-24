@@ -38,7 +38,7 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject, ProcessListener):
         as the start method is called.
     """
 
-    def __init__(self, loop, connection, queue=Defaults.TASK_QUEUE, decoder=json.loads,
+    def __init__(self, connection, queue=Defaults.TASK_QUEUE, decoder=json.loads,
                  response_encoder=launched_encode):
         """
         :param connection: The pika RabbitMQ connection
@@ -46,7 +46,7 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject, ProcessListener):
         :param queue: The queue name to use
         :param decoder: A function to deserialise incoming messages
         """
-        super(ProcessLaunchSubscriber, self).__init__(loop)
+        super(ProcessLaunchSubscriber, self).__init__()
 
         self._decode = decoder
         self._response_encode = response_encoder
@@ -108,9 +108,9 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
     """
     Class used to publishes messages requesting a process to be launched
     """
-    def __init__(self, loop, connection, queue=Defaults.TASK_QUEUE, encoder=json.dumps,
+    def __init__(self, connection, queue=Defaults.TASK_QUEUE, encoder=json.dumps,
                  response_decoder=launched_decode):
-        super(ProcessLaunchPublisher, self).__init__(loop)
+        super(ProcessLaunchPublisher, self).__init__()
 
         self._queue = queue
         self._encode = encoder

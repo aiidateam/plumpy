@@ -27,8 +27,8 @@ class _CompoundWaitOn(WaitOn):
 
     WAIT_LIST = 'wait_list'
 
-    def __init__(self, loop, wait_list):
-        super(_CompoundWaitOn, self).__init__(loop)
+    def __init__(self, wait_list):
+        super(_CompoundWaitOn, self).__init__()
         for w in wait_list:
             if not isinstance(w, apricotpy.Awaitable):
                 raise ValueError(
@@ -49,14 +49,14 @@ class _CompoundWaitOn(WaitOn):
         out_state[self.WAIT_LIST] = waits
 
     @override
-    def load_instance_state(self, loop, saved_state, *args):
+    def load_instance_state(self, saved_state, loop):
         super(_CompoundWaitOn, self).load_instance_state(saved_state, loop)
         self._wait_list = [self.loop().create(b) for b in saved_state[self.WAIT_LIST]]
 
 
 class WaitOnAll(_CompoundWaitOn):
-    def __init__(self, loop, wait_list):
-        super(WaitOnAll, self).__init__(loop, wait_list)
+    def __init__(self, wait_list):
+        super(WaitOnAll, self).__init__(wait_list)
         self._num_finished = 0
 
     def on_loop_inserted(self, loop):
@@ -64,8 +64,8 @@ class WaitOnAll(_CompoundWaitOn):
         for wait_on in self._wait_list:
             wait_on.add_done_callback(self._wait_done)
 
-    def load_instance_state(self, loop, saved_state, *args):
-        super(WaitOnAll, self).load_instance_state(loop, saved_state)
+    def load_instance_state(self, saved_state, loop):
+        super(WaitOnAll, self).load_instance_state(saved_state, loop)
         self._num_finished = 0
 
     def _wait_done(self, future):
@@ -90,7 +90,7 @@ class WaitOnProcessState(WaitOn, ProcessListener):
     STATE_UNREACHABLE = 'state_unreachable'
 
     @override
-    def __init__(self, loop, proc, target_state):
+    def __init__(self, proc, target_state):
         """
         Create the WaitOnState.
 
@@ -100,7 +100,7 @@ class WaitOnProcessState(WaitOn, ProcessListener):
         :type target_state: :class:`plum.process.ProcessState`
         """
         assert target_state in ProcessState, "Must supply a valid process state"
-        super(WaitOnProcessState, self).__init__(loop)
+        super(WaitOnProcessState, self).__init__()
 
         self._pid = proc.pid
         self._target_state = target_state
@@ -114,8 +114,8 @@ class WaitOnProcessState(WaitOn, ProcessListener):
         out_state['calc_pid'] = self._pid
         out_state['target_state'] = self._target_state
 
-    def load_instance_state(self, loop, saved_state, *args):
-        super(WaitOnProcessState, self).load_instance_state(loop, saved_state, *args)
+    def load_instance_state(self, saved_state, loop):
+        super(WaitOnProcessState, self).load_instance_state(saved_state, loop)
         self._pid = saved_state['calc_pid']
         self._target_state = saved_state['target_state']
 
@@ -207,8 +207,8 @@ class WaitOnProcessOutput(WaitOn):
         self._wait_on_event = wait_on_process_event(loop, pid, 'output_emitted.{}'.format(port))
         self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
-    def load_instance_state(self, saved_state, loop, *args):
-        super(WaitOnProcessOutput, self).load_instance_state(saved_state, loop, *args)
+    def load_instance_state(self, saved_state, loop):
+        super(WaitOnProcessOutput, self).load_instance_state(saved_state, loop)
         self._wait_on_event = self.loop().create(WaitOnEvent, saved_state['output_event'])
         self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
@@ -235,8 +235,8 @@ def wait_until_stopped(proc, timeout=None):
 
 class Barrier(WaitOn):
     @override
-    def load_instance_state(self, loop, saved_state, *args):
-        super(Barrier, self).load_instance_state(loop, saved_state, *args)
+    def load_instance_state(self, saved_state, loop):
+        super(Barrier, self).load_instance_state(saved_state, loop)
         if saved_state['is_open']:
             self.open()
 

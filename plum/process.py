@@ -24,7 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 Wait = namedtuple('Wait', ['on', 'callback'])
 
 
-class Process(apricotpy.PersistableAwaitableLoopObject):
+class Process(apricotpy.persistable.AwaitableLoopObject):
     """
     The Process class is the base for any unit of work in plum.
 
@@ -142,7 +142,7 @@ class Process(apricotpy.PersistableAwaitableLoopObject):
 
         return "\n".join(desc)
 
-    def __init__(self, loop, inputs=None, pid=None, logger=None):
+    def __init__(self, inputs=None, pid=None, logger=None):
         """
         The signature of the constructor should not be changed by subclassing
         processes.
@@ -153,7 +153,7 @@ class Process(apricotpy.PersistableAwaitableLoopObject):
         :param logger: An optional logger for the process to use
         :type logger: :class:`logging.Logger`
         """
-        super(Process, self).__init__(loop)
+        super(Process, self).__init__()
 
         # Don't allow the spec to be changed anymore
         self.spec().seal()
@@ -315,7 +315,7 @@ class Process(apricotpy.PersistableAwaitableLoopObject):
         out_state[self.BundleKeys.PID.value] = self.pid
 
         # Now state stuff
-        state_bundle = apricotpy.Bundle()
+        state_bundle = {}
         if self._state is None:
             out_state[self.BundleKeys.STATE.value] = None
         else:
@@ -327,12 +327,12 @@ class Process(apricotpy.PersistableAwaitableLoopObject):
 
         # Inputs/outputs
         out_state[self.BundleKeys.INPUTS.value] = self.raw_inputs
-        out_state[self.BundleKeys.OUTPUTS.value] = apricotpy.Bundle(self._outputs)
+        out_state[self.BundleKeys.OUTPUTS.value] = self._outputs
 
     @protected
-    def load_instance_state(self, loop, saved_state, logger=None):
-        super(Process, self).load_instance_state(loop, saved_state)
-        self.__init(logger)
+    def load_instance_state(self, saved_state, loop):
+        super(Process, self).load_instance_state(saved_state, loop)
+        self.__init(None)
 
         # Immutable stuff
         self._CREATION_TIME = saved_state[self.BundleKeys.CREATION_TIME.value]

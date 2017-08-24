@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import abstractmethod
-import apricotpy
+import apricotpy.persistable as apricotpy
 import frozendict
 import importlib
 import inspect
@@ -117,63 +117,6 @@ _CANCELLED = 'CANCELLED'
 _FINISHED = 'FINISHED'
 
 
-class Future(object):
-    """
-    A generic future object.  Can be used as is or subclassed.
-    """
-    _UNSET = ()
-
-    def __init__(self):
-        self._state = _PENDING
-        self._result = self._UNSET
-        self._exception = None
-
-    def cancel(self):
-        if self.done():
-            return False
-
-        self._state = _CANCELLED
-        return True
-
-    def cancelled(self):
-        return self._state is _CANCELLED
-
-    def done(self):
-        return self._state != _PENDING
-
-    def result(self):
-        if self.cancelled():
-            raise CancelledError()
-        elif self._state is not _FINISHED:
-            raise InvalidStateError("The future has not completed yet")
-        elif self._exception is not None:
-            raise self._exception
-
-        return self._result
-
-    def set_result(self, result):
-        if self.done():
-            raise InvalidStateError("The future is already done")
-
-        self._result = result
-        self._state = _FINISHED
-
-    def exception(self):
-        if self.cancelled():
-            raise CancelledError()
-        if self._state is not _FINISHED:
-            raise InvalidStateError("Exception not set")
-
-        return self._exception
-
-    def set_exception(self, exception):
-        if self.done():
-            raise InvalidStateError("The future is already done")
-
-        self._exception = exception
-        self._state = _FINISHED
-
-
 def fullname(object):
     """
     Get the fully qualified name of an object.
@@ -251,34 +194,6 @@ class SimpleNamespace(object):
         return self.__dict__ == other.__dict__
 
 
-class Savable(object):
-    @classmethod
-    def create_from(cls, saved_state):
-        """
-        Create the wait on from a save instance state.
-
-        :param saved_state: The saved instance state
-        :type saved_state: :class:`plum.persistence.Bundle`
-        :return: The wait on with its state as it was when it was saved
-        """
-        obj = cls.__new__(cls)
-        obj.load_instance_state(saved_state)
-        return obj
-
-    @abstractmethod
-    def save_instance_state(self, out_state):
-        pass
-
-    @abstractmethod
-    def load_instance_state(self, saved_state):
-        pass
-
-
-class SavableWithClassloader(Savable):
-    def save_instance_state(self, out_state):
-        pass
-
-
 def load_with_classloader(bundle):
     """
     Load a process from a saved instance state
@@ -293,12 +208,8 @@ def load_with_classloader(bundle):
     return proc_class.create_from(bundle)
 
 
-object_factory = apricotpy.persistable_object_factory
-
-
 def loop_factory(*args, **kwargs):
     loop = apricotpy.BaseEventLoop()
-    loop.set_object_factory(object_factory)
     return loop
 
 

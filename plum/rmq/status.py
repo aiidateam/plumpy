@@ -53,9 +53,9 @@ class ProcessStatusRequester(apricotpy.TickingLoopObject):
     This class can be used to request the status of processes
     """
 
-    def __init__(self, loop, connection,
-                 exchange=Defaults.STATUS_REQUEST_EXCHANGE, decoder=status_decode):
-        super(ProcessStatusRequester, self).__init__(loop)
+    def __init__(self, connection, exchange=Defaults.STATUS_REQUEST_EXCHANGE,
+                 decoder=status_decode):
+        super(ProcessStatusRequester, self).__init__()
 
         self._exchange = exchange
         self._decode = decoder
@@ -119,10 +119,10 @@ class ProcessStatusSubscriber(apricotpy.TickingLoopObject):
     processes.
     """
 
-    def __init__(self, loop, connection,
+    def __init__(self, connection,
                  exchange=Defaults.STATUS_REQUEST_EXCHANGE,
                  decoder=status_request_decode, encoder=status_encode):
-        super(ProcessStatusSubscriber, self).__init__(loop)
+        super(ProcessStatusSubscriber, self).__init__()
 
         self._decode = decoder
         self._encode = encoder

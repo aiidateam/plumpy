@@ -186,20 +186,23 @@ class EventEmitter(object):
 
 
 class WaitOnEvent(WaitOn):
-    def __init__(self, loop, subject):
+    def __init__(self, subject):
         """
         :param loop: The event loop
         :param subject: The subject to listen for
         :type subject: str or unicode
         """
-        super(WaitOnEvent, self).__init__(loop)
+        super(WaitOnEvent, self).__init__()
         self._event = subject
         self._body = None
 
-        loop.messages().add_listener(self._event_occurred, self._event)
-
     def __str__(self):
         return "waiting on: {}".format(self._event)
+
+    def on_loop_inserted(self, loop):
+        super(WaitOnEvent, self).on_loop_inserted(loop)
+
+        loop.messages().add_listener(self._event_occurred, self._event)
 
     @override
     def load_instance_state(self, saved_state, loop):

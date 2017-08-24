@@ -227,8 +227,8 @@ class Saver(object):
         self.outputs = []
 
     def _save(self, p):
-        b = apricotpy.Bundle()
-        p.save_instance_state(b)
+        b = apricotpy.persistable.Bundle(p)
+
         self.snapshots.append((p.state, b))
         self.outputs.append(p.outputs.copy())
 
@@ -296,7 +296,9 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     :rtype: bool
     """
     for i, info in zip(range(0, len(snapshots)), snapshots):
-        loaded = loop.create(proc_class, info[1])
+
+        bundle = info[1]
+        loaded = bundle.unbundle(loop)
         ps = ProcessSaver(loaded)
         try:
             loop.run_until_complete(loaded)

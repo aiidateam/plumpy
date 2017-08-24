@@ -179,8 +179,8 @@ class TestProcess(TestCase):
         :return:
         """
         proc = ~self.loop.create_inserted(DummyProcessWithOutput)
-        b = apricotpy.Bundle()
-        proc.save_instance_state(b)
+        b = apricotpy.persistable.Bundle(proc)
+
         self.assertIsNone(b.get('inputs', None))
         self.assertEqual(len(b['outputs']), 0)
 
