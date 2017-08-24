@@ -82,21 +82,6 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         STATE = 'state'
         FINISHED = 'finished'
         TERMINATED = 'terminated'
-        WAIT_ON = 'wait_on'
-
-    @staticmethod
-    def _is_wait_retval(retval):
-        """
-        Determine if the value provided is a valid Wait retval which consists
-        of a 2-tuple of a WaitOn and a callback function (or None) to be called
-        after the wait on is ready
-
-        :param retval: The return value from a step to check
-        :return: True if it is a valid wait object, False otherwise
-        """
-        return (isinstance(retval, tuple) and
-                len(retval) == 2 and
-                isinstance(retval[0], WaitOn))
 
     @classmethod
     def spec(cls):
@@ -341,7 +326,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         # State stuff
         self._finished = saved_state[self.BundleKeys.FINISHED.value]
         self._terminated = saved_state[self.BundleKeys.TERMINATED.value]
-        self.__saved_state = saved_state[self.BundleKeys.STATE.value]
+        self._state = load_state(self, saved_state[self.BundleKeys.STATE.value])
 
         # Inputs/outputs
         if saved_state[self.BundleKeys.INPUTS.value] is not None:
@@ -353,11 +338,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     def on_loop_inserted(self, loop):
         super(Process, self).on_loop_inserted(loop)
-
-        if self.__saved_state is None:
-            self._set_state(Created(self))
-        else:
-            self._set_state(load_state(self, self.__saved_state))
+        self._set_state(Created(self))
 
     def _execute_state(self, fut=None):
         try:
