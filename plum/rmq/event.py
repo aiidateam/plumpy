@@ -110,7 +110,7 @@ class ProcessEventPublisher(ProcessListener, ProcessMonitorListener):
 
     def on_process_fail(self, process):
         key = "{}.fail".format(process.pid)
-        exception = process.get_exception()
+        exception = process.exception()
         evt_details = {'exception_type': fullname(exception), 'exception_msg': exception.message}
         self._send_event_msg(process, key, {DETAILS_KEY: evt_details})
         self.remove_process(process)

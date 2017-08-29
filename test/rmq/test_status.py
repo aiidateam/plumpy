@@ -10,7 +10,7 @@ try:
     _HAS_PIKA = True
 except ImportError:
     _HAS_PIKA = False
-import apricotpy
+import apricotpy.persistable
 import uuid
 
 from plum import loop_factory
@@ -111,7 +111,7 @@ class TestStatusProvider(TestCase):
         self.assertSetEqual(waiting_on, {str(procs[0].get_waiting_on())})
 
 
-        ~apricotpy.gather([proc.abort() for proc in procs], self.loop)
+        ~apricotpy.persistable.gather([proc.abort() for proc in procs], self.loop)
 
         response = status_decode(self._send_and_get())
         self.assertEqual(len(response[status.PROCS_KEY]), 0)

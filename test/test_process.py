@@ -1,6 +1,7 @@
 import apricotpy
+import plum
 from plum import loop_factory
-from plum.process import Process, ProcessState
+from plum import Process, ProcessState
 from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, \
     check_process_against_snapshots, \
     WaitForSignalProcess
@@ -181,10 +182,12 @@ class TestProcess(TestCase):
         proc = ~self.loop.create_inserted(DummyProcessWithOutput)
         b = apricotpy.persistable.Bundle(proc)
 
-        self.assertIsNone(b.get('inputs', None))
-        self.assertEqual(len(b['outputs']), 0)
+        self.assertIsNone(b.get(plum.process.BundleKeys.INPUTS, None))
+        self.assertEqual(len(b[plum.process.BundleKeys.OUTPUTS]), 0)
 
     def test_instance_state(self):
+        BundleKeys = plum.process.BundleKeys
+
         proc = self.loop.create(DummyProcessWithOutput)
 
         saver = ProcessSaver(proc)
@@ -193,12 +196,12 @@ class TestProcess(TestCase):
         for info, outputs in zip(saver.snapshots, saver.outputs):
             state, bundle = info
             # Check that it is a copy
-            self.assertIsNot(outputs, bundle[Process.BundleKeys.OUTPUTS.value])
+            self.assertIsNot(outputs, bundle[BundleKeys.OUTPUTS])
             # Check the contents are the same
-            self.assertEqual(outputs, bundle[Process.BundleKeys.OUTPUTS.value])
+            self.assertEqual(outputs, bundle[BundleKeys.OUTPUTS])
 
         self.assertIsNot(
-            proc.outputs, saver.snapshots[-1][1][Process.BundleKeys.OUTPUTS.value])
+            proc.outputs, saver.snapshots[-1][1][BundleKeys.OUTPUTS])
 
     def test_saving_each_step(self):
         for ProcClass in TEST_PROCESSES:
@@ -232,7 +235,8 @@ class TestProcess(TestCase):
     def test_abort(self):
         proc = ~self.loop.create_inserted(DummyProcess)
 
-        self.loop.run_until_complete(proc.abort())
+        aborted = ~proc.abort()
+        self.assertTrue(aborted)
         self.assertTrue(proc.has_aborted())
         self.assertEqual(proc.state, ProcessState.STOPPED)
 
@@ -255,30 +259,24 @@ class TestProcess(TestCase):
         p = self.loop.create(ExceptionProcess)
         try:
             self.loop.run_until_complete(p)
-        except BaseException:
-            import sys
-            exc_info = sys.exc_info()
-            p_exc_info = p.get_exc_info()
-            self.assertEqual(p_exc_info[0], exc_info[0])
-            self.assertEqual(p_exc_info[1], exc_info[1])
+        except RuntimeError as e:
+            self.assertEqual(p.exception(), e)
 
     def test_restart(self):
-        p = self.loop.create(_RestartProcess)
-        run_until(p, ProcessState.WAITING, self.loop)
+        process = self.loop.create(_RestartProcess)
+        run_until(process, ProcessState.WAITING, self.loop)
 
         # Save the state of the process
-        bundle = apricotpy.persistable.Bundle(p)
-        self.loop.remove(p)
+        saved_state = apricotpy.persistable.Bundle(process)
+        ~self.loop.remove(process)
 
         # Load a process from the saved state
-        p = self.loop.run_until_complete(
-            self.loop.create_inserted(_RestartProcess, bundle)
-        )
-        self.assertEqual(p.state, ProcessState.WAITING)
+        process = saved_state.unbundle(self.loop)
+        self.assertEqual(process.state, ProcessState.WAITING)
 
         # Now play it
-        p.continue_()
-        result = self.loop.run_until_complete(p)
+        process.continue_()
+        result = ~process
         self.assertEqual(result, {'finished': True})
 
     def test_run_terminated(self):

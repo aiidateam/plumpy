@@ -1,6 +1,7 @@
 import apricotpy
+import plum
 from plum import loop_factory
-from plum.process import Process, ProcessState
+from plum import Process, ProcessState
 from plum.test_utils import TwoCheckpoint, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plum.test_utils import check_process_against_snapshots
@@ -23,7 +24,7 @@ class TestWaitingProcess(TestCase):
 
         for snapshot, outputs in zip(wl.snapshots, wl.outputs):
             state, bundle = snapshot
-            self.assertEqual(outputs, bundle[Process.BundleKeys.OUTPUTS.value])
+            self.assertEqual(outputs, bundle[plum.process.BundleKeys.OUTPUTS])
 
     def test_saving_each_step(self):
         for proc_class in TEST_WAITING_PROCESSES:
