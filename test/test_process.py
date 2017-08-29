@@ -267,8 +267,7 @@ class TestProcess(TestCase):
         run_until(p, ProcessState.WAITING, self.loop)
 
         # Save the state of the process
-        bundle = apricotpy.Bundle()
-        p.save_instance_state(bundle)
+        bundle = apricotpy.persistable.Bundle(p)
         self.loop.remove(p)
 
         # Load a process from the saved state
