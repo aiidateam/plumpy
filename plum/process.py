@@ -595,6 +595,40 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
         return ins
 
+    def exposed_inputs(self, process_class, namespace=None, agglomerate=True):
+        """
+        Gather a dictionary of the inputs that were exposed for a given Process
+        class under an optional namespace.
+
+        :param process_class: Process class whose inputs to try and retrieve
+        :param namespace: PortNamespace in which to look for the inputs
+        """
+        exposed_inputs = {}
+        namespaces = [namespace]
+
+        # If inputs are to be agglomerated, we prepend the lower lying namespace
+        if agglomerate:
+            namespaces.insert(0, None)
+
+        for namespace in namespaces:
+
+            # The namespace None indicates the base level namespace
+            if namespace is None:
+                inputs = self.inputs
+                port_namespace = self.spec().inputs
+            else:
+                inputs = self.inputs[namespace]
+                try:
+                    port_namespace = self.spec().get_input(namespace)
+                except KeyError:
+                    raise ValueError('this process does not contain the "{}" input namespace'.format(namespace))
+
+            for name, port in port_namespace.ports.iteritems():
+                if name in inputs and name in process_class.spec().inputs:
+                    exposed_inputs[name] = inputs[name]
+
+        return exposed_inputs
+
     def __init(self, logger):
         """
         Common place to put all runtime state variables i.e. those that don't need

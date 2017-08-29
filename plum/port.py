@@ -213,3 +213,52 @@ class DynamicOutputPort(OutputPort):
     def __init__(self, valid_type=None):
         super(DynamicOutputPort, self).__init__(
             self.NAME, valid_type=valid_type, required=False)
+
+
+class PortNamespace(collections.MutableMapping, Port):
+    """
+    A container for Ports. Effectively it maintains a dictionary whose members are
+    either a Port or yet another PortNamespace. This allows for the nesting of ports
+    """
+
+    def __init__(self, namespace=None, help=None, required=True, validator=None, valid_type=None):
+        super(PortNamespace, self).__init__(
+            name=namespace, help=help, required=required, validator=validator, valid_type=valid_type
+        )
+        self._ports = {}
+
+    @property
+    def ports(self):
+        return self._ports
+
+    def __iter__(self):
+        return self._ports.__iter__()
+
+    def __len__(self):
+        return len(self._ports)
+
+    def __delitem__(self, key):
+        del self._ports[key]
+
+    def __getitem__(self, key):
+        return self._ports[key]
+
+    def __setitem__(self, key, value):
+        self._ports[key] = value
+
+    def validate(self, inputs):
+        """
+        Validate the namespace port itself and subsequently all the ports it contains
+
+        :param inputs: a arbitrarily nested dictionary of parsed inputs
+        """
+        if inputs is None and self.required:
+            return False, "required value was not provided for '{}'".format(self.name)
+
+        for name, port in self._ports.iteritems():
+            valid, message = port.validate(inputs.get(name, None))
+
+            if not valid:
+                return False, message
+
+        return True, None

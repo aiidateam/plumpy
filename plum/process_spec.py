@@ -19,8 +19,8 @@ class ProcessSpec(object):
     INPUT_GROUP_PORT_TYPE = InputGroupPort
 
     def __init__(self):
-        self._inputs = {}
-        self._outputs = {}
+        self._inputs = PortNamespace()
+        self._outputs = PortNamespace()
         self._validator = None
         self._sealed = False
 
@@ -226,3 +226,34 @@ class ProcessSpec(object):
                 return False, msg
 
         return True, None
+
+    def expose_inputs(self, process_class, namespace=None, exclude=(), include=()):
+        """
+        This method allows one to automatically add the inputs from another
+        Process to this ProcessSpec. The optional namespace argument can be
+        used to group the exposed inputs in a separated PortNamespace
+
+        :param process_class: the Process class whose inputs to expose
+        :param namespace: a namespace in which to place the exposed inputs
+        :param exclude: list or tuple of input keys to exclude from being exposed
+        """
+        if exclude and include:
+            raise ValueError('exclude and include are mutually exclusive')
+
+        if namespace:
+            self._inputs[namespace] = PortNamespace(namespace)
+            port_namespace = self._inputs[namespace]
+        else:
+            port_namespace = self._inputs
+
+        for name, port in process_class.spec().inputs.iteritems():
+
+            if name.startswith('_') or name == 'dynamic':
+                continue
+
+            if not exclude and not include:
+                port_namespace[name] = port
+            elif include and name in include:
+                port_namespace[name] = port
+            elif exclude and name not in exclude:
+                port_namespace[name] = port
