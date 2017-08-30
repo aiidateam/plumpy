@@ -1,5 +1,5 @@
 from plum.port import InputPort, InputGroupPort, OutputPort, \
-    DynamicOutputPort, DynamicInputPort
+    DynamicOutputPort, DynamicInputPort, PortNamespace
 from plum._base import LOGGER
 from plum.utils import protected
 
