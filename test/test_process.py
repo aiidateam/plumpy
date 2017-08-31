@@ -395,3 +395,517 @@ class _RestartProcess(WaitForSignalProcess):
 
     def finish(self, result):
         self.out("finished", True)
+
+
+class TestExposeProcess(TestCase):
+
+    def setUp(self):
+        super(TestExposeProcess, self).setUp()
+
+        class SimpleProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(SimpleProcess, cls).define(spec)
+                spec.input('a', valid_type=int, required=True)
+                spec.input('b', valid_type=int, required=True)
+
+            @override
+            def _run(self, **kwargs):
+                pass
+
+        self.loop = loop_factory()
+        self.SimpleProcess = SimpleProcess
+
+    def test_expose_duplicate_unnamespaced(self):
+        """
+        As long as separate namespaces are used, the same Process should be
+        able to be exposed more than once
+        """
+        loop = self.loop
+        SimpleProcess = self.SimpleProcess
+
+        class ExposeProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeProcess, cls).define(spec)
+                spec.expose_inputs(SimpleProcess)
+                spec.expose_inputs(SimpleProcess, namespace='beta')
+
+            @override
+            def _run(self, **kwargs):
+                assert 'a' in self.inputs
+                assert 'b' in self.inputs
+                assert 'a' in self.inputs.beta
+                assert 'b' in self.inputs.beta
+                assert self.inputs['a'] == 1
+                assert self.inputs['b'] == 2
+                assert self.inputs.beta['a'] == 3
+                assert self.inputs.beta['b'] == 4
+                loop.create(SimpleProcess, self.exposed_inputs(SimpleProcess))
+                loop.create(SimpleProcess, self.exposed_inputs(SimpleProcess, namespace='beta'))
+
+        loop_object = loop.create(ExposeProcess, {'a': 1, 'b': 2, 'beta': {'a': 3, 'b': 4}})
+        loop.run_until_complete(loop_object)
+
+    def test_expose_duplicate_namespaced(self):
+        """
+        As long as separate namespaces are used, the same Process should be
+        able to be exposed more than once
+        """
+        loop = self.loop
+        SimpleProcess = self.SimpleProcess
+
+        class ExposeProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeProcess, cls).define(spec)
+                spec.expose_inputs(SimpleProcess, namespace='alef')
+                spec.expose_inputs(SimpleProcess, namespace='beta')
+
+            @override
+            def _run(self, **kwargs):
+                assert 'a' in self.inputs.alef
+                assert 'b' in self.inputs.alef
+                assert 'a' in self.inputs.beta
+                assert 'b' in self.inputs.beta
+                assert self.inputs.alef['a'] == 1
+                assert self.inputs.alef['b'] == 2
+                assert self.inputs.beta['a'] == 3
+                assert self.inputs.beta['b'] == 4
+                loop.create(SimpleProcess, self.exposed_inputs(SimpleProcess, namespace='alef'))
+                loop.create(SimpleProcess, self.exposed_inputs(SimpleProcess, namespace='beta'))
+
+        loop_object = loop.create(ExposeProcess, {'alef': {'a': 1, 'b': 2}, 'beta': {'a': 3, 'b': 4}})
+        loop.run_until_complete(loop_object)
+
+
+class TestNestedUnnamespacedExposedProcess(TestCase):
+
+    def setUp(self):
+        super(TestNestedUnnamespacedExposedProcess, self).setUp()
+
+        loop = loop_factory()
+
+        class BaseProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(BaseProcess, cls).define(spec)
+                spec.input('a', valid_type=int, required=True)
+                spec.input('b', valid_type=int, default=0)
+
+            @override
+            def _run(self, **kwargs):
+                pass
+
+        class SubProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(SubProcess, cls).define(spec)
+                spec.expose_inputs(BaseProcess)
+                spec.input('c', valid_type=int, required=True)
+                spec.input('d', valid_type=int, default=0)
+
+            @override
+            def _run(self, **kwargs):
+                loop_object = loop.create(BaseProcess, self.exposed_inputs(BaseProcess))
+                loop.run_until_complete(loop_object)
+
+        class ParentProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ParentProcess, cls).define(spec)
+                spec.expose_inputs(SubProcess)
+                spec.input('e', valid_type=int, required=True)
+                spec.input('f', valid_type=int, default=0)
+
+            @override
+            def _run(self, **kwargs):
+                loop_object = loop.create(SubProcess, self.exposed_inputs(SubProcess))
+                loop.run_until_complete(loop_object)
+
+        self.loop = loop
+        self.BaseProcess = BaseProcess
+        self.SubProcess = SubProcess
+        self.ParentProcess = ParentProcess
+
+    def test_base_process_valid_input(self):
+        loop_object = self.loop.create(self.BaseProcess,
+            {'a': 0, 'b': 1}
+        )
+        self.loop.run_until_complete(loop_object)
+
+    def test_sub_process_valid_input(self):
+        loop_object = self.loop.create(self.SubProcess,
+            {'a': 0, 'b': 1, 'c': 2, 'd': 3}
+        )
+        self.loop.run_until_complete(loop_object)
+
+    def test_parent_process_valid_input(self):
+        loop_object = self.loop.create(self.ParentProcess,
+            {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5}
+        )
+        self.loop.run_until_complete(loop_object)
+
+    def test_base_process_missing_input(self):
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.BaseProcess,
+                {'b': 1}
+            )
+            self.loop.run_until_complete(loop_object)
+
+    def test_sub_process_missing_input(self):
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.SubProcess,
+                {'b': 1}
+            )
+            self.loop.run_until_complete(loop_object)
+
+    def test_parent_process_missing_input(self):
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.ParentProcess,
+                {'b': 1}
+            )
+            self.loop.run_until_complete(loop_object)
+
+    def test_base_process_invalid_type_input(self):
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.BaseProcess,
+                {'a': 0, 'b': 'string'}
+            )
+            self.loop.run_until_complete(loop_object)
+
+    def test_sub_process_invalid_type_input(self):
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.SubProcess,
+                {'a': 0, 'b': 1, 'c': 2, 'd': 'string'}
+            )
+            self.loop.run_until_complete(loop_object)
+
+    def test_parent_process_invalid_type_input(self):
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.ParentProcess,
+                {'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 'string'}
+            )
+            self.loop.run_until_complete(loop_object)
+
+
+class TestNestedNamespacedExposedProcess(TestCase):
+
+    def setUp(self):
+        super(TestNestedNamespacedExposedProcess, self).setUp()
+
+        loop = loop_factory()
+
+        class BaseProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(BaseProcess, cls).define(spec)
+                spec.input('a', valid_type=int, required=True)
+                spec.input('b', valid_type=int, default=0)
+
+            @override
+            def _run(self, **kwargs):
+                pass
+
+        class SubProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(SubProcess, cls).define(spec)
+                spec.expose_inputs(BaseProcess, namespace='base')
+                spec.input('c', valid_type=int, required=True)
+                spec.input('d', valid_type=int, default=0)
+
+            @override
+            def _run(self, **kwargs):
+                loop_object = loop.create(BaseProcess, self.exposed_inputs(BaseProcess, namespace='base'))
+                loop.run_until_complete(loop_object)
+
+        class ParentProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ParentProcess, cls).define(spec)
+                spec.expose_inputs(SubProcess, namespace='sub')
+                spec.input('e', valid_type=int, required=True)
+                spec.input('f', valid_type=int, default=0)
+
+            @override
+            def _run(self, **kwargs):
+                loop_object = loop.create(SubProcess, self.exposed_inputs(SubProcess, namespace='sub'))
+                loop.run_until_complete(loop_object)
+
+        self.loop = loop
+        self.BaseProcess = BaseProcess
+        self.SubProcess = SubProcess
+        self.ParentProcess = ParentProcess
+
+    def test_sub_process_valid_input(self):
+        loop_object = self.loop.create(self.SubProcess,
+            {'base': {'a': 0, 'b': 1}, 'c': 2}
+        )
+        self.loop.run_until_complete(loop_object)
+
+    def test_parent_process_valid_input(self):
+        loop_object = self.loop.create(self.ParentProcess,
+            {'sub': {'base': {'a': 0, 'b': 1}, 'c': 2}, 'e': 4}
+        )
+        self.loop.run_until_complete(loop_object)
+
+    def test_sub_process_missing_input(self):
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.SubProcess, {'c': 2})
+            self.loop.run_until_complete(loop_object)
+
+    def test_parent_process_missing_input(self):
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.ParentProcess, {'e': 4})
+            self.loop.run_until_complete(loop_object)
+
+
+class TestExcludeExposeProcess(TestCase):
+
+    def setUp(self):
+        super(TestExcludeExposeProcess, self).setUp()
+
+        class SimpleProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(SimpleProcess, cls).define(spec)
+                spec.input('a', valid_type=int, required=True)
+                spec.input('b', valid_type=int, required=False)
+
+            @override
+            def _run(self, **kwargs):
+                pass
+
+        self.loop = loop_factory()
+        self.SimpleProcess = SimpleProcess
+
+    def test_exclude_valid(self):
+        loop = self.loop
+        SimpleProcess = self.SimpleProcess
+
+        class ExposeProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeProcess, cls).define(spec)
+                spec.expose_inputs(SimpleProcess, exclude=('b',))
+                spec.input('c', valid_type=int, required=True)
+
+            @override
+            def _run(self, **kwargs):
+                loop.create(SimpleProcess, self.exposed_inputs(SimpleProcess))
+
+        loop_object = loop.create(ExposeProcess, {'a': 1, 'c': 3})
+        loop.run_until_complete(loop_object)
+
+    def test_exclude_invalid(self):
+        loop = self.loop
+        SimpleProcess = self.SimpleProcess
+
+        class ExposeProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeProcess, cls).define(spec)
+                spec.expose_inputs(SimpleProcess, exclude=('a',))
+
+            @override
+            def _run(self, **kwargs):
+                loop.create(SimpleProcess, self.exposed_inputs(SimpleProcess))
+
+        with self.assertRaises(ValueError):
+            loop_object = loop.create(ExposeProcess, {'b': 2, 'c': 3})
+            loop.run_until_complete(loop_object)
+
+
+class TestUnionInputsExposeProcess(TestCase):
+
+    def setUp(self):
+        super(TestUnionInputsExposeProcess, self).setUp()
+
+        loop = loop_factory()
+
+        class SubOneProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(SubOneProcess, cls).define(spec)
+                spec.input('common', valid_type=int, required=True)
+                spec.input('sub_one', valid_type=int, required=True)
+
+            @override
+            def _run(self, **kwargs):
+                assert self.inputs['common'] == 1
+                assert self.inputs['sub_one'] == 2
+
+        class SubTwoProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(SubTwoProcess, cls).define(spec)
+                spec.input('common', valid_type=int, required=True)
+                spec.input('sub_two', valid_type=int, required=True)
+
+            @override
+            def _run(self, **kwargs):
+                assert self.inputs['common'] == 1
+                assert self.inputs['sub_two'] == 3
+
+        class ExposeProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeProcess, cls).define(spec)
+                spec.expose_inputs(SubOneProcess)
+                spec.expose_inputs(SubTwoProcess)
+
+            @override
+            def _run(self, **kwargs):
+                loop_object = loop.create(SubOneProcess, self.exposed_inputs(SubOneProcess))
+                loop.run_until_complete(loop_object)
+                loop_object = loop.create(SubTwoProcess, self.exposed_inputs(SubTwoProcess))
+                loop.run_until_complete(loop_object)
+
+        self.loop = loop
+        self.SubOneProcess = SubOneProcess
+        self.SubTwoProcess = SubTwoProcess
+        self.ExposeProcess = ExposeProcess
+
+    def test_inputs_union_valid(self):
+        loop_object = self.loop.create(self.ExposeProcess, {'common': 1, 'sub_one': 2, 'sub_two': 3})
+        self.loop.run_until_complete(loop_object)
+
+    def test_inputs_union_invalid(self):
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.ExposeProcess, {'sub_one': 2, 'sub_two': 3})
+            self.loop.run_until_complete(loop_object)
+
+
+class TestAgglomerateExposeProcess(TestCase):
+    """
+    Often one wants to run multiple instances of a certain Process, where some but
+    not all the inputs will be the same or "common". By using a combination of include and
+    exclude on the same Process, the user can define separate namespaces for the specific
+    inputs, while exposing the shared or common inputs on the base level namespace. The
+    method exposed_inputs will by default agglomerate inputs that belong to the SubProcess
+    starting from the base level and moving down the specified namespaces, overriding duplicate
+    inputs as they are found.
+
+    The exposed_inputs provides the flag 'agglomerate' which can be set to False to turn off
+    this behavior and only return the inputs in the specified namespace
+    """
+
+    def setUp(self):
+        super(TestAgglomerateExposeProcess, self).setUp()
+
+        loop = loop_factory()
+
+        class SubProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(SubProcess, cls).define(spec)
+                spec.input('common', valid_type=int, required=True)
+                spec.input('specific_a', valid_type=int, required=True)
+                spec.input('specific_b', valid_type=int, required=True)
+
+            @override
+            def _run(self, **kwargs):
+                pass
+
+        class ExposeProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeProcess, cls).define(spec)
+                spec.expose_inputs(SubProcess, include=('common,'))
+                spec.expose_inputs(SubProcess, namespace='sub_a', exclude=('common,'))
+                spec.expose_inputs(SubProcess, namespace='sub_b', exclude=('common,'))
+
+            @override
+            def _run(self, **kwargs):
+                loop_object = loop.create(SubProcess, self.exposed_inputs(SubProcess, namespace='sub_a'))
+                loop.run_until_complete(loop_object)
+                loop_object = loop.create(SubProcess, self.exposed_inputs(SubProcess, namespace='sub_b'))
+                loop.run_until_complete(loop_object)
+
+        self.loop = loop
+        self.SubProcess = SubProcess
+        self.ExposeProcess = ExposeProcess
+
+    def test_inputs_union_valid(self):
+        inputs = {
+            'common': 1,
+            'sub_a': {
+                'specific_a': 2,
+                'specific_b': 3
+            },
+            'sub_b': {
+                'specific_a': 4,
+                'specific_b': 5
+            }
+        }
+        loop_object = self.loop.create(self.ExposeProcess, inputs)
+        self.loop.run_until_complete(loop_object)
+
+    def test_inputs_union_invalid(self):
+        inputs = {
+            'sub_a': {
+                'specific_a': 2,
+                'specific_b': 3
+            },
+            'sub_b': {
+                'specific_a': 4,
+                'specific_b': 5
+            }
+        }
+        with self.assertRaises(ValueError):
+            loop_object = self.loop.create(self.ExposeProcess, inputs)
+            self.loop.run_until_complete(loop_object)
+
+
+class TestNonAgglomerateExposeProcess(TestCase):
+    """
+    Example where the default agglomerate behavior of exposed_inputs is undesirable and can be
+    switched off by setting the flag agglomerate to False. The SubProcess shares an input with
+    the parent processs, but unlike for the ExposeProcess, for the SubProcess it is not required.
+    A user might for that reason not want to pass the common input to the SubProcess.
+    """
+
+    def setUp(self):
+        super(TestNonAgglomerateExposeProcess, self).setUp()
+
+        loop = loop_factory()
+
+        class SubProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(SubProcess, cls).define(spec)
+                spec.input('specific_a', valid_type=int, required=True)
+                spec.input('specific_b', valid_type=int, required=True)
+                spec.input('common', valid_type=int, required=False)
+
+            @override
+            def _run(self, **kwargs):
+                assert 'common' not in self.inputs
+
+        class ExposeProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeProcess, cls).define(spec)
+                spec.expose_inputs(SubProcess, namespace='sub')
+                spec.input('common', valid_type=int, required=True)
+
+            @override
+            def _run(self, **kwargs):
+                loop_object = loop.create(SubProcess, self.exposed_inputs(SubProcess, namespace='sub', agglomerate=False))
+                loop.run_until_complete(loop_object)
+
+        self.loop = loop
+        self.SubProcess = SubProcess
+        self.ExposeProcess = ExposeProcess
+
+    def test_valid_input_non_agglomerate(self):
+        inputs = {
+            'common': 1,
+            'sub': {
+                'specific_a': 2,
+                'specific_b': 3
+            },
+        }
+        loop_object = self.loop.create(self.ExposeProcess, inputs)
+        self.loop.run_until_complete(loop_object)
