@@ -478,6 +478,37 @@ class TestExposeProcess(TestCase):
         loop_object = loop.create(ExposeProcess, {'alef': {'a': 1, 'b': 2}, 'beta': {'a': 3, 'b': 4}})
         loop.run_until_complete(loop_object)
 
+    def test_expose_pass_same_dictionary(self):
+        """
+        Pass the same dictionary to two different namespaces.
+        """
+        loop = self.loop
+        SimpleProcess = self.SimpleProcess
+
+        class ExposeProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeProcess, cls).define(spec)
+                spec.expose_inputs(SimpleProcess, namespace='alef')
+                spec.expose_inputs(SimpleProcess, namespace='beta')
+
+            @override
+            def _run(self, **kwargs):
+                assert 'a' in self.inputs.alef
+                assert 'b' in self.inputs.alef
+                assert 'a' in self.inputs.beta
+                assert 'b' in self.inputs.beta
+                assert self.inputs.alef['a'] == 1
+                assert self.inputs.alef['b'] == 2
+                assert self.inputs.beta['a'] == 1
+                assert self.inputs.beta['b'] == 2
+                loop.create(SimpleProcess, self.exposed_inputs(SimpleProcess, namespace='alef'))
+                loop.create(SimpleProcess, self.exposed_inputs(SimpleProcess, namespace='beta'))
+
+        inputs = {'a': 1, 'b': 2}
+        loop_object = loop.create(ExposeProcess, {'alef': inputs, 'beta': inputs})
+        loop.run_until_complete(loop_object)
+
 
 class TestNestedUnnamespacedExposedProcess(TestCase):
 
