@@ -1,5 +1,6 @@
 import apricotpy
 import json
+from functools import partial
 import pika
 import pika.exceptions
 import uuid
@@ -32,7 +33,13 @@ def action_encode(msg):
     return json.dumps(d)
 
 
-RESULT_KEY = 'result'
+_RESULT_KEY = 'result'
+# This means that the intent has been actioned but not yet completed
+_ACTION_SCHEDULED = 'SCHEDULED'
+# This means that the intent has been completed
+_ACTION_DONE = 'DONE'
+# The action failed to be completed
+_ACTION_FAILED = 'ACTION_FAILED'
 
 
 class ProcessControlPublisher(apricotpy.TickingLoopObject):
@@ -97,7 +104,19 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
     def _on_response(self, ch, method, props, body):
         if props.correlation_id in self._responses:
             future = self._responses.pop(props.correlation_id)
-            future.set_result(self._response_decode(body))
+            response = self._response_decode(body)
+            result = response[_RESULT_KEY]
+            if result == _ACTION_DONE:
+                future.set_result(True)
+            elif result == _ACTION_FAILED:
+                future.set_result(False)
+            elif result == _ACTION_SCHEDULED:
+                # We have to wait until the action is completed, so give another future
+                fut = self.loop().create_future()
+                self._responses[props.correlation_id] = fut
+                future.set_result(fut)
+            else:
+                raise ValueError("Unknown action result '{}'".format(result))
 
     def _check_in_loop(self):
         assert self.in_loop(), "Object is not in the event loop"
@@ -136,28 +155,51 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
     def _on_control(self, ch, method, props, body):
         d = self._decode(body)
         pid = d['pid']
+
+        try:
+            obj = self.loop().get_object(pid)
+        except ValueError:
+            # Not an object our loop knows about
+            return
+
         intent = d['intent']
         try:
             if intent == Action.PLAY:
-                self.loop().get_object(pid).play()
-                result = 'PLAYED'
+                obj.play()
+                result = _ACTION_DONE
             elif intent == Action.PAUSE:
-                self.loop().get_object(pid).pause()
-                result = 'PAUSED'
+                obj.pause()
+                result = _ACTION_DONE
             elif intent == Action.ABORT:
-                self.loop().get_object(pid).abort(msg=d.get('msg', None))
-                result = 'ABORTED'
+                fut = obj.abort(msg=d.get('msg', None))
+
+                # When the abort is finished send another message to say it's done
+                fut.add_done_callback(
+                    partial(self._action_done, ch, props.reply_to, props.correlation_id)
+                )
+
+                result = _ACTION_SCHEDULED
             else:
                 raise RuntimeError("Unknown intent")
         except ValueError as e:
             result = e.message
         else:
-            response = {RESULT_KEY: result}
-            add_host_info(response)
-
             # Tell the sender that we've dealt with it
-            ch.basic_publish(
-                exchange='', routing_key=props.reply_to,
-                properties=pika.BasicProperties(correlation_id=props.correlation_id),
-                body=self._response_encode(response)
-            )
+            self._send_response(ch, props.reply_to, props.correlation_id, result)
+
+    def _action_done(self, ch, reply_to, correlation_id, future):
+        if future.result():
+            result = _ACTION_DONE
+        else:
+            result = _ACTION_FAILED
+
+        self._send_response(ch, reply_to, correlation_id, result)
+
+    def _send_response(self, ch, reply_to, correlation_id, result):
+        response = {_RESULT_KEY: result}
+        add_host_info(response)
+        ch.basic_publish(
+            exchange='', routing_key=reply_to,
+            properties=pika.BasicProperties(correlation_id=correlation_id),
+            body=self._response_encode(response)
+        )

@@ -62,15 +62,31 @@ class TestControl(TestCase):
 
     def test_abort(self):
         # Create the process and wait until it is waiting
-        p = self.loop.create(WaitForSignalProcess)
-        run_until(p, ProcessState.WAITING, self.loop)
+        proc = self.loop.create(WaitForSignalProcess)
+        run_until(proc, ProcessState.WAITING, self.loop)
 
-        # Send a message asking the process to abort
-        self.loop.run_until_complete(self.publisher.abort_process(p.pid, msg='Farewell'))
+        # Send a message asking the process to abort, this gives back a future
+        # representing the actual abort itself
+        fut = ~self.publisher.abort_process(proc.pid, msg='Farewell')
+        # Now run until actually aborted
+        self.assertTrue(~fut)
 
         # Check the resulting state
-        self.assertTrue(p.has_aborted())
-        self.assertEqual(p.get_abort_msg(), 'Farewell')
+        self.assertTrue(proc.has_aborted())
+        self.assertEqual(proc.get_abort_msg(), 'Farewell')
+
+    def test_abort_already_aborted(self):
+        # Create the process and wait until it is waiting
+        proc = ~self.loop.create_inserted(WaitForSignalProcess)
+
+        # Now abort the process
+        proc.abort()
+
+        # Send a message asking the process to abort, this gives back a future
+        # representing the actual abort itself
+        # Now run until actually aborted
+        fut = ~self.publisher.abort_process(proc.pid, msg='Farewell')
+        self.assertTrue(~fut)
 
     def _create_connection(self):
         return pika.BlockingConnection()

@@ -5,6 +5,7 @@ import apricotpy
 from collections import namedtuple
 import copy
 from enum import Enum
+import inspect
 import logging
 import time
 import sys
@@ -46,11 +47,14 @@ class BundleKeys(Enum):
     INPUTS = 'inputs'
     OUTPUTS = 'outputs'
     PID = 'pid'
-    EXECUTE_CALLBACK = 'EXECUTE_CALLBACK'
+    LOOP_CALLBACK = 'LOOP_CALLBACK'
     AWAITING = 'AWAITING'
     NEXT_STEP = 'NEXT_STEP'
     ABORT_MSG = 'ABORT_MSG'
     PROC_STATE = 'PROC_SATE'
+    PAUSED = 'PAUSED'
+    CALLBACK_FN = 'CALLBACK_FN'
+    CALLBACK_ARGS = 'CALLBACK_ARGS'
 
 
 class Process(apricotpy.persistable.AwaitableLoopObject):
@@ -173,12 +177,15 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
             self._pid = pid
 
         # State stuff
-        self._CREATION_TIME = time.time()
+        self.__CREATION_TIME = time.time()
         self.__state = None
         self.__next_step = None
         self.__awaiting = None
-        self._execute_callback = None
-        self._abort_msg = None
+        self.__loop_callback = None
+        self.__paused = False
+        self.__callback_fn = None
+        self.__callback_args = None
+        self.__abort_msg = None
 
     @property
     def creation_time(self):
@@ -187,7 +194,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         :return: The creation time
         :rtype: float
         """
-        return self._CREATION_TIME
+        return self.__CREATION_TIME
 
     @property
     def pid(self):
@@ -261,7 +268,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         return self.cancelled()
 
     def get_abort_msg(self):
-        return self._abort_msg
+        return self.__abort_msg
 
     def get_waiting_on(self):
         """
@@ -298,35 +305,27 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         out_state[BundleKeys.CREATION_TIME] = self.creation_time
         out_state[BundleKeys.PID] = self.pid
 
+        # Inputs/outputs
+        out_state[BundleKeys.INPUTS] = self.raw_inputs
+        out_state[BundleKeys.OUTPUTS] = self._outputs
+
         # Now state stuff
         out_state[BundleKeys.PROC_STATE] = self.__state
         if self.__next_step is not None:
             out_state[BundleKeys.NEXT_STEP] = self.__next_step.__name__
         out_state[BundleKeys.AWAITING] = self.__awaiting
-        out_state[BundleKeys.EXECUTE_CALLBACK] = self._execute_callback
-        out_state[BundleKeys.ABORT_MSG] = self._abort_msg
-
-        # Inputs/outputs
-        out_state[BundleKeys.INPUTS] = self.raw_inputs
-        out_state[BundleKeys.OUTPUTS] = self._outputs
+        out_state[BundleKeys.LOOP_CALLBACK] = self.__loop_callback
+        out_state[BundleKeys.PAUSED] = self.__paused
+        out_state[BundleKeys.CALLBACK_FN] = self.__callback_fn
+        out_state[BundleKeys.CALLBACK_ARGS] = self.__callback_args
+        out_state[BundleKeys.ABORT_MSG] = self.__abort_msg
 
     @protected
     def load_instance_state(self, saved_state, loop):
         super(Process, self).load_instance_state(saved_state, loop)
+
+        # Set up runtime state
         self.__init(None)
-
-        # Immutable stuff
-        self._CREATION_TIME = saved_state[BundleKeys.CREATION_TIME]
-        self._pid = saved_state[BundleKeys.PID]
-
-        # State stuff
-        self.__state = saved_state[BundleKeys.PROC_STATE]
-        try:
-            self.__next_step = getattr(self, saved_state[BundleKeys.NEXT_STEP])
-        except KeyError:
-            pass
-        self.__awaiting = saved_state[BundleKeys.AWAITING]
-        self._execute_callback = saved_state[BundleKeys.EXECUTE_CALLBACK]
 
         # Inputs/outputs
         if saved_state[BundleKeys.INPUTS] is not None:
@@ -336,13 +335,30 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
         self._outputs = copy.deepcopy(saved_state[BundleKeys.OUTPUTS])
 
+        # Immutable stuff
+        self.__CREATION_TIME = saved_state[BundleKeys.CREATION_TIME]
+        self._pid = saved_state[BundleKeys.PID]
+
+        # State stuff
+        self.__state = saved_state[BundleKeys.PROC_STATE]
+        try:
+            self.__next_step = getattr(self, saved_state[BundleKeys.NEXT_STEP])
+        except KeyError:
+            self.__next_step = None
+        self.__awaiting = saved_state[BundleKeys.AWAITING]
+        self.__loop_callback = saved_state[BundleKeys.LOOP_CALLBACK]
+        self.__paused = saved_state[BundleKeys.PAUSED]
+        self.__callback_fn = saved_state[BundleKeys.CALLBACK_FN]
+        self.__callback_args = saved_state[BundleKeys.CALLBACK_ARGS]
+        self.__abort_msg = saved_state[BundleKeys.ABORT_MSG]
+
     def on_loop_inserted(self, loop):
         super(Process, self).on_loop_inserted(loop)
         self._enter_created()
 
     def abort(self, msg=None):
         """
-        Abort a playing process.  Can optionally provide a message with
+        Abort the process.  Can optionally provide a message with
         the abort.  This can be called from another thread.
 
         :param msg: The abort message
@@ -351,40 +367,36 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self.log_with_pid(logging.INFO, "aborting")
 
         self._loop_check()
+        self.play()
 
-        if self._execute_callback is not None:
-            self._execute_callback.cancel()
+        if self.__loop_callback is not None:
+            self.__loop_callback.cancel()
 
         fut = self.loop().create_future()
-        self._schedule_callback(self._do_abort, fut, msg)
+        self.loop().call_soon(self._do_abort, fut, msg)
         return fut
 
     def _do_abort(self, fut, msg=None):
-        if self.has_terminated():
-            fut.set_result(False)
-            return
+        if not self.has_terminated():
+            self._enter_stopped(abort=True, abort_msg=msg)
 
-        # Abort the current state
-        if self._execute_callback is not None:
-            self._execute_callback.cancel()
-            self._execute_callback = None
-
-        self._enter_stopped(abort=True, abort_msg=msg)
-
-        fut.set_result(True)
+        fut.set_result(self.has_aborted())
 
     def play(self):
         if self.is_playing():
             return
 
-        self.__state.enter(self.__state.label)
         self.__paused = False
+        if self._callback_fn is not None:
+            self._schedule_callback(self._callback_fn, *self._callback_args)
 
     def pause(self):
         if not self.is_playing():
             return
 
-        self.__state.abort()
+        if self.__loop_callback is not None:
+            self.__loop_callback.cancel()
+
         self.__paused = True
 
     def is_playing(self):
@@ -472,6 +484,8 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         """
         Called when the process has been asked to abort itself.
         """
+        self.__abort_msg = abort_msg
+
         self._fire_event(ProcessListener.on_process_abort)
         self._send_message('abort', {'msg': abort_msg})
 
@@ -588,7 +602,6 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         load_instance_state.
         """
         self.__logger = logger
-        self.__paused = False
 
         # Events and running
         self.__event_helper = utils.EventHelper(ProcessListener)
@@ -615,33 +628,6 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
             # collected
             self.__event_helper.remove_all_listeners()
 
-    def _on_create(self):
-        self._call_with_super_check(self.on_create)
-
-    def _on_start(self):
-        self._call_with_super_check(self.on_start)
-
-    def _on_resume(self):
-        self._call_with_super_check(self.on_resume)
-
-    def _on_run(self):
-        self._call_with_super_check(self.on_run)
-
-    def _on_wait(self, awaiting_uuid):
-        self._call_with_super_check(self.on_wait, awaiting_uuid)
-
-    def _on_finish(self):
-        self._call_with_super_check(self.on_finish)
-
-    def _on_abort(self, msg):
-        self._call_with_super_check(self.on_abort, msg)
-
-    def _on_stop(self, msg):
-        self._call_with_super_check(self.on_stop)
-
-    def _on_fail(self, exc_info):
-        self._call_with_super_check(self.on_fail)
-
     def _fire_event(self, event):
         self.loop().call_soon(self.__event_helper.fire_event, event, self)
 
@@ -655,6 +641,10 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self._call_with_super_check(self.on_terminate)
 
     def _call_with_super_check(self, fn, *args, **kwargs):
+        """
+        Call one of our state event methods making sure super() was called
+        by the subclassing class.
+        """
         self.__called = False
         fn(*args, **kwargs)
         assert self.__called, \
@@ -687,7 +677,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     def _enter_created(self):
         self.__state = ProcessState.CREATED
-        self._on_create()
+        self._call_with_super_check(self.on_create)
         self._schedule_callback(self._exec_created)
 
     def _exec_created(self):
@@ -695,19 +685,17 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     def _enter_running(self, next_step, result=_NO_RESULT):
         last_state = self.__state
-        if last_state not in \
-                [ProcessState.CREATED, ProcessState.WAITING, ProcessState.RUNNING]:
-            raise RuntimeError("Cannot enter RUNNING from '{}'".format(self.__state))
+        self._set_state(ProcessState.RUNNING,
+                        [ProcessState.CREATED, ProcessState.WAITING, ProcessState.RUNNING])
 
-        self.__state = ProcessState.RUNNING
         if last_state is ProcessState.CREATED:
-            self._on_start()
+            self._call_with_super_check(self.on_start)
         elif last_state is ProcessState.WAITING:
-            self._on_resume()
+            self._call_with_super_check(self.on_resume)
 
         self.__next_step = next_step
         self._last_result = result
-        self._on_run()
+        self._call_with_super_check(self.on_run)
         self._schedule_callback(self._exec_running, next_step, result)
 
     def _exec_running(self, next_step, result):
@@ -736,13 +724,12 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self.__state = ProcessState.WAITING
         self.__awaiting = awaiting
         self.__next_step = next_step
-        self._on_wait(awaiting)
-        # There's no exec_waiting because all is has to do is wait for the
+        self._call_with_super_check(self.on_wait, awaiting)
+        # There's no exec_waiting() because all is has to do is wait for the
         # thing that it's awaiting
-        self._execute_callback = awaiting.add_done_callback(self._await_done)
+        awaiting.add_done_callback(self._await_done)
 
     def _await_done(self, awaitable):
-        self._execute_callback = None
         self.__awaiting = None
 
         if self.__next_step is None:
@@ -753,15 +740,15 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     def _enter_stopped(self, abort=False, abort_msg=None):
         last_state = self.__state
         if not abort and last_state not in [ProcessState.RUNNING, ProcessState.WAITING]:
-            raise RuntimeError("Cannot enter STOPPED from '{}'".format(self.__state))
+            raise RuntimeError("Cannot enter STOPPED state from {}".format(self.__state))
 
-        self.__state = ProcessState.STOPPED
+        self._set_state(ProcessState.STOPPED)
         if abort:
-            self._on_abort(abort_msg)
+            self._call_with_super_check(self.on_abort, abort_msg)
         elif last_state in [ProcessState.RUNNING, ProcessState.WAITING]:
-            self._on_finish()
+            self._call_with_super_check(self.on_finish)
 
-        self._on_stop(abort_msg)
+        self._call_with_super_check(self.on_stop)
         if abort:
             self._exec_stopped(abort)
         else:
@@ -775,9 +762,9 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
             self.set_result(self.outputs)
 
     def _enter_failed(self, exc_info):
-        self.__state = ProcessState.FAILED
+        self._set_state(ProcessState.FAILED)
         try:
-            self._on_fail(exc_info)
+            self._call_with_super_check(self.on_fail)
         except BaseException:
             import traceback
             self.log_with_pid(
@@ -789,8 +776,35 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self._terminate()
         self.set_exception(exception)
 
+    def _set_state(self, new_state, allowed_states=None):
+        """
+        Set the state optionally checking that we are entering from an allowed state.
+
+        :param new_state: The new state
+        :param allowed_states: An optional tuple of states we are allowed to enter
+            this state from.
+        """
+        if allowed_states is not None and self.__state not in allowed_states:
+            raise RuntimeError(
+                "Cannot enter state {} from {}".format(new_state, self.__state)
+            )
+        self.__state = new_state
+
     def _schedule_callback(self, fn, *args):
-        self._execute_callback = self.loop().call_soon(fn, *args)
+        assert inspect.ismethod(fn) and fn.__self__ is self, \
+            "Callback has to be a member of this process"
+
+        self._callback_fn = fn
+        self._callback_args = args
+        # If not playing, then the play call will schedule the callback
+        if self.is_playing():
+            self.__loop_callback = self.loop().call_soon(self._do_callback, fn, *args)
+
+    def _do_callback(self, fn, *args):
+        self.__loop_callback = None
+        self._callback_args = None
+        self._callback_fn = None
+        fn(*args)
 
 
 class ListenContext(object):

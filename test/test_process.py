@@ -235,9 +235,10 @@ class TestProcess(TestCase):
     def test_abort(self):
         proc = ~self.loop.create_inserted(DummyProcess)
 
-        aborted = ~proc.abort()
+        aborted = ~proc.abort('Farewell!')
         self.assertTrue(aborted)
         self.assertTrue(proc.has_aborted())
+        self.assertEqual(proc.get_abort_msg(), 'Farewell!')
         self.assertEqual(proc.state, ProcessState.STOPPED)
 
     def test_wait_continue(self):
@@ -283,6 +284,50 @@ class TestProcess(TestCase):
         p = self.loop.create(DummyProcess)
         self.loop.run_until_complete(p)
         self.assertTrue(p.has_terminated())
+
+    def test_wait_pause_continue_play(self):
+        """
+        Test that if you pause a process that and its awaitable finishes that it
+        completes correctly when played again.
+        """
+        proc = self.loop.create(WaitForSignalProcess)
+
+        # Wait - Run the process and wait until it is waiting
+        run_until(proc, ProcessState.WAITING, self.loop)
+
+        proc.pause()
+        proc.continue_()
+        proc.play()
+
+        # Run
+        result = ~proc
+
+        # Check it's done
+        self.assertEqual(proc.state, ProcessState.STOPPED)
+        self.assertTrue(proc.has_finished())
+
+    def test_wait_pause_continue_tick_play(self):
+        """
+        Test that if you pause a process that and its awaitable finishes that it
+        completes correctly when played again.
+        """
+        proc = self.loop.create(WaitForSignalProcess)
+
+        # Wait - Run the process and wait until it is waiting
+        run_until(proc, ProcessState.WAITING, self.loop)
+
+        proc.pause()
+        proc.continue_()
+        self.loop.tick()  # This should schedule the awaitable done callback
+        self.loop.tick()  # Now the callback should be processed
+        proc.play()
+
+        # Run
+        result = ~proc
+
+        # Check it's done
+        self.assertEqual(proc.state, ProcessState.STOPPED)
+        self.assertTrue(proc.has_finished())
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
