@@ -329,6 +329,27 @@ class TestProcess(TestCase):
         self.assertEqual(proc.state, ProcessState.STOPPED)
         self.assertTrue(proc.has_finished())
 
+    def test_wait_save_continue(self):
+        """ Test that process saved while in WAITING state restarts correctly when loaded """
+        proc = self.loop.create(WaitForSignalProcess)
+
+        # Wait - Run the process until it enters the WAITING state
+        run_until(proc, ProcessState.WAITING, self.loop)
+
+        saved_state = apricotpy.persistable.Bundle(proc)
+
+        # Run the process to the end
+        proc.continue_()
+        result = ~proc
+
+        # Load from saved state and run again
+        proc = saved_state.unbundle(self.loop)
+        proc.continue_()
+        result2 = ~proc
+
+        # Check results match
+        self.assertEqual(result, result2)
+
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
