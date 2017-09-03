@@ -77,7 +77,7 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
 
     @override
     def tick(self):
-        self._channel.connection.process_data_events(time_limit=0.1)
+        self._channel.connection.process_data_events(time_limit=0.01)
 
     def _send_msg(self, msg):
         self._check_in_loop()
@@ -150,7 +150,7 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
 
     @override
     def tick(self):
-        self._channel.connection.process_data_events(time_limit=0.1)
+        self._channel.connection.process_data_events(time_limit=0.01)
 
     def _on_control(self, ch, method, props, body):
         d = self._decode(body)

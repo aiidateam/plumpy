@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from abc import abstractmethod
-import apricotpy.persistable as apricotpy
+import abc
+from apricotpy import persistable
 import frozendict
 import importlib
 import inspect
@@ -11,7 +11,7 @@ import threading
 from plum.exceptions import ClassNotFoundException, InvalidStateError, CancelledError
 from plum.settings import check_protected, check_override
 
-__all__ = ['loop_factory', 'get_default_loop']
+__all__ = ['loop_factory']
 
 protected = plum.lang.protected(check=check_protected)
 override = plum.lang.override(check=check_override)
@@ -209,16 +209,8 @@ def load_with_classloader(bundle):
 
 
 def loop_factory(*args, **kwargs):
-    loop = apricotpy.BaseEventLoop()
+    loop = persistable.BaseEventLoop()
     return loop
-
-
-def get_default_loop():
-    global _default_loop
-    if _default_loop is None:
-        _default_loop = loop_factory()
-
-    return _default_loop
 
 
 def set_if_not_none(mapping, key, value):

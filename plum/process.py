@@ -310,7 +310,10 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         out_state[BundleKeys.OUTPUTS] = self._outputs
 
         # Now state stuff
-        out_state[BundleKeys.PROC_STATE] = self.__state
+        if self.__state is None:
+            out_state[BundleKeys.PROC_STATE] = None
+        else:
+            out_state[BundleKeys.PROC_STATE] = self.__state.value
         if self.__next_step is not None:
             out_state[BundleKeys.NEXT_STEP] = self.__next_step.__name__
         out_state[BundleKeys.AWAITING] = self.__awaiting
@@ -340,7 +343,10 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self._pid = saved_state[BundleKeys.PID]
 
         # State stuff
-        self.__state = saved_state[BundleKeys.PROC_STATE]
+        if saved_state[BundleKeys.PROC_STATE] is None:
+            self.__state = None
+        else:
+            self.__state = ProcessState(saved_state[BundleKeys.PROC_STATE])
         try:
             self.__next_step = getattr(self, saved_state[BundleKeys.NEXT_STEP])
         except KeyError:

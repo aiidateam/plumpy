@@ -38,27 +38,12 @@ class TestTaskControllerAndRunner(TestCase):
             loop.create_inserted(ProcessLaunchSubscriber, self._connection, queue=queue)
         )
 
-        self.publisher, self.subscriber = loop.run_until_complete(
-            apricotpy.gather(insert, loop)
-        )
+        self.publisher, self.subscriber = ~apricotpy.gather(insert, loop)
 
     def tearDown(self):
         self._connection.close()
         self.loop.close()
         self.loop = None
-
-    # def test_launch_with_timeout(self):
-    #     """ Test launching a process without a response from a subscriber within the timeout """
-    #     # Create a test queue
-    #     queue = _create_temporary_queue(self._connection)
-    #     publisher = self.loop.create(ProcessLaunchPublisher, self._connection, queue=queue)
-    #
-    #     future = publisher.launch(DummyProcess, launch_timeout=0.)
-    #
-    #     # The future should be cancelled by the publisher because there will be no
-    #     # response in the timeout
-    #     with self.assertRaises(CancelledError):
-    #         self.loop.run_until_complete(future)
 
     def test_launch(self):
         # Try launching some processes
@@ -69,8 +54,8 @@ class TestTaskControllerAndRunner(TestCase):
         # Make sure they have all launched
         launched = []
         for future in launch_requests:
-            self.loop.run_until_complete(future)
-            launched.append(self.loop.get_object(future.result()['pid']).__class__)
+            result = ~future
+            launched.append(self.loop.get_object(result['pid']).__class__)
 
         self.assertEqual(len(launched), len(TEST_PROCESSES))
         self.assertListEqual(TEST_PROCESSES, launched)

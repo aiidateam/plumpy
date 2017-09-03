@@ -157,7 +157,7 @@ class ProcessEventSubscriber(apricotpy.TickingLoopObject):
 
     @override
     def tick(self):
-        self._channel.connection.process_data_events(time_limit=0.1)
+        self._channel.connection.process_data_events()
 
     def _on_event(self, ch, method, props, body):
         for fn in self._callbacks:

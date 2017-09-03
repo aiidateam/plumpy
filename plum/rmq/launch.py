@@ -65,7 +65,7 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject, ProcessListener):
         """
         Poll the channel for launch process events
         """
-        self._channel.connection.process_data_events(time_limit=0.1)
+        self._channel.connection.process_data_events()
 
     def _on_launch(self, ch, method, props, body):
         """
@@ -155,7 +155,7 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
 
     @override
     def tick(self):
-        self._channel.connection.process_data_events(time_limit=0.1)
+        self._channel.connection.process_data_events()
 
     def _on_response(self, ch, method, props, body):
         if props.correlation_id in self._responses:
