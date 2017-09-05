@@ -279,20 +279,6 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         """
         return self.__awaiting
 
-    def get_exc_info(self):
-        """
-        If this process produced an exception that caused it to fail during its
-        execution then it will have store the execution information as obtained
-        from sys.exc_info(), this method returns it.  If there was no exception
-        then None is returned.
-
-        :return: The exception info if process failed, None otherwise
-        """
-        try:
-            return self.__state.get_exc_info()
-        except AttributeError:
-            return None
-
     def save_instance_state(self, out_state):
         """
         Ask the process to save its current instance state.
@@ -306,7 +292,8 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         out_state[BundleKeys.PID] = self.pid
 
         # Inputs/outputs
-        out_state[BundleKeys.INPUTS] = self.raw_inputs
+        if self.raw_inputs is not None:
+            out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
         out_state[BundleKeys.OUTPUTS] = self._outputs
 
         # Now state stuff
@@ -331,8 +318,9 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self.__init(None)
 
         # Inputs/outputs
-        if saved_state[BundleKeys.INPUTS] is not None:
-            self._raw_inputs = utils.AttributesFrozendict(saved_state[BundleKeys.INPUTS])
+        if saved_state.get(BundleKeys.INPUTS, None) is not None:
+            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS])
+            self._raw_inputs = utils.AttributesFrozendict(decoded)
         else:
             self._raw_inputs = None
         self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
@@ -517,9 +505,11 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self.__called = True
 
     @protected
-    def on_fail(self):
+    def on_fail(self, exc_info):
         """
         Called if the process raised an exception.
+        
+        :param exc_info: The exception information as returned by sys.exc_info()
         """
         self._fire_event(ProcessListener.on_process_fail)
         self._send_message('fail')
@@ -600,6 +590,28 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
                     )
 
         return ins
+
+    @protected
+    def encode_input_args(self, inputs):
+        """ 
+        Encode input arguments such that they may be saved in a 
+        :class:`apricotpy.persistable.Bundle`
+        
+        :param inputs: A mapping of the inputs as passed to the process
+        :return: The encoded inputs
+        """
+        return inputs
+
+    @protected
+    def decode_input_args(self, encoded):
+        """
+        Decode saved input arguments as they came from the saved instance state 
+        :class:`apricotpy.persistable.Bundle`
+        
+        :param encoded: 
+        :return: The decoded input args
+        """
+        return encoded
 
     def __init(self, logger):
         """
@@ -770,7 +782,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     def _enter_failed(self, exc_info):
         self._set_state(ProcessState.FAILED)
         try:
-            self._call_with_super_check(self.on_fail)
+            self._call_with_super_check(self.on_fail, exc_info)
         except BaseException:
             import traceback
             self.log_with_pid(
