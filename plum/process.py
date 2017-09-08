@@ -311,8 +311,8 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         out_state[BundleKeys.ABORT_MSG] = self.__abort_msg
 
     @protected
-    def load_instance_state(self, saved_state, loop):
-        super(Process, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(Process, self).load_instance_state(saved_state)
 
         # Set up runtime state
         self.__init(None)

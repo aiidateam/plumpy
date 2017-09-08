@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta
-
 import apricotpy
+from apricotpy import persistable
 from collections import Sequence
 from plum.event import WaitOnEvent, wait_on_process_event
 from plum.wait import WaitOn
@@ -20,69 +19,6 @@ class Checkpoint(WaitOn):
     def on_loop_inserted(self, loop):
         super(Checkpoint, self).on_loop_inserted(loop)
         self.set_result(None)
-
-
-class _CompoundWaitOn(WaitOn):
-    __metaclass__ = ABCMeta
-
-    WAIT_LIST = 'wait_list'
-
-    def __init__(self, wait_list):
-        super(_CompoundWaitOn, self).__init__()
-        for w in wait_list:
-            if not isinstance(w, apricotpy.Awaitable):
-                raise ValueError(
-                    "Must provide objects of type Awaitable, got '{}'.".format(w.__class__.__name__))
-
-        self._wait_list = wait_list
-
-    @override
-    def save_instance_state(self, out_state):
-        super(_CompoundWaitOn, self).save_instance_state(out_state)
-        # Save all the waits lists
-        waits = []
-        for w in self._wait_list:
-            b = apricotpy.Bundle()
-            w.save_instance_state(b)
-            waits.append(b)
-
-        out_state[self.WAIT_LIST] = waits
-
-    @override
-    def load_instance_state(self, saved_state, loop):
-        super(_CompoundWaitOn, self).load_instance_state(saved_state, loop)
-        self._wait_list = [self.loop().create(b) for b in saved_state[self.WAIT_LIST]]
-
-
-class WaitOnAll(_CompoundWaitOn):
-    def __init__(self, wait_list):
-        super(WaitOnAll, self).__init__(wait_list)
-        self._num_finished = 0
-
-    def on_loop_inserted(self, loop):
-        super(WaitOnAll, self).on_loop_inserted(loop)
-        for wait_on in self._wait_list:
-            wait_on.add_done_callback(self._wait_done)
-
-    def load_instance_state(self, saved_state, loop):
-        super(WaitOnAll, self).load_instance_state(saved_state, loop)
-        self._num_finished = 0
-
-    def _wait_done(self, future):
-        self._num_finished += 1
-        if self._num_finished == len(self._wait_list):
-            self.set_result([w.result() for w in self._wait_list])
-
-
-class WaitOnAny(_CompoundWaitOn):
-    def on_loop_inserted(self, loop):
-        super(WaitOnAny, self).on_loop_inserted(loop)
-        for wait_on in self._wait_list:
-            wait_on.add_done_callback(self._wait_done)
-
-    def _wait_done(self, future):
-        if not self.done():
-            self.set_result(None)
 
 
 class WaitOnProcessState(WaitOn, ProcessListener):
@@ -114,8 +50,9 @@ class WaitOnProcessState(WaitOn, ProcessListener):
         out_state['calc_pid'] = self._pid
         out_state['target_state'] = self._target_state
 
-    def load_instance_state(self, saved_state, loop):
-        super(WaitOnProcessState, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(WaitOnProcessState, self).load_instance_state(saved_state)
+
         self._pid = saved_state['calc_pid']
         self._target_state = saved_state['target_state']
 
@@ -181,7 +118,7 @@ def run_until(proc, state, loop):
     :param loop: The event loop
     """
     if isinstance(proc, Sequence):
-        wait_for = loop.create(WaitOnAll, [loop.create(WaitOnProcessState, p, state) for p in proc])
+        wait_for = persistable.gather((loop.create(WaitOnProcessState, p, state) for p in proc), loop)
     else:
         wait_for = loop.create(WaitOnProcessState, proc, state)
 
@@ -207,8 +144,9 @@ class WaitOnProcessOutput(WaitOn):
         self._wait_on_event = wait_on_process_event(loop, pid, 'output_emitted.{}'.format(port))
         self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
-    def load_instance_state(self, saved_state, loop):
-        super(WaitOnProcessOutput, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(WaitOnProcessOutput, self).load_instance_state(saved_state)
+
         self._wait_on_event = self.loop().create(WaitOnEvent, saved_state['output_event'])
         self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
@@ -235,8 +173,9 @@ def wait_until_stopped(proc, timeout=None):
 
 class Barrier(WaitOn):
     @override
-    def load_instance_state(self, saved_state, loop):
-        super(Barrier, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(Barrier, self).load_instance_state(saved_state)
+        
         if saved_state['is_open']:
             self.open()
 

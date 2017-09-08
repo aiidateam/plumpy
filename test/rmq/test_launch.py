@@ -55,7 +55,11 @@ class TestTaskControllerAndRunner(TestCase):
         launched = []
         for future in launch_requests:
             result = ~future
-            launched.append(self.loop.get_object(result['pid']).__class__)
+            launched.append(self.loop.get_object(result.pid).__class__)
 
         self.assertEqual(len(launched), len(TEST_PROCESSES))
         self.assertListEqual(TEST_PROCESSES, launched)
+
+        # Now check if they all finish
+        for fut in launch_requests:
+            result = ~fut.result().done_future
