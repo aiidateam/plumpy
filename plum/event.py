@@ -205,8 +205,8 @@ class WaitOnEvent(WaitOn):
         loop.messages().add_listener(self._event_occurred, self._event)
 
     @override
-    def load_instance_state(self, saved_state, loop):
-        super(WaitOnEvent, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(WaitOnEvent, self).load_instance_state(saved_state)
         self._event = saved_state['event']
         self._body = saved_state['body']
 

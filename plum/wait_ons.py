@@ -49,7 +49,7 @@ class _CompoundWaitOn(WaitOn):
         out_state[self.WAIT_LIST] = waits
 
     @override
-    def load_instance_state(self, saved_state, loop):
+    def load_instance_state(self, saved_state):
         super(_CompoundWaitOn, self).load_instance_state(saved_state, loop)
         self._wait_list = [self.loop().create(b) for b in saved_state[self.WAIT_LIST]]
 
@@ -64,8 +64,8 @@ class WaitOnAll(_CompoundWaitOn):
         for wait_on in self._wait_list:
             wait_on.add_done_callback(self._wait_done)
 
-    def load_instance_state(self, saved_state, loop):
-        super(WaitOnAll, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(WaitOnAll, self).load_instance_state(saved_state)
         self._num_finished = 0
 
     def _wait_done(self, future):
@@ -110,12 +110,12 @@ class WaitOnProcessState(WaitOn, ProcessListener):
         self.execute()
 
     def save_instance_state(self, out_state):
-        super(WaitOnProcessState, self).save_instance_state()
+        super(WaitOnProcessState, self).save_instance_state(out_state)
         out_state['calc_pid'] = self._pid
         out_state['target_state'] = self._target_state
 
-    def load_instance_state(self, saved_state, loop):
-        super(WaitOnProcessState, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(WaitOnProcessState, self).load_instance_state(saved_state)
         self._pid = saved_state['calc_pid']
         self._target_state = saved_state['target_state']
 
@@ -207,8 +207,8 @@ class WaitOnProcessOutput(WaitOn):
         self._wait_on_event = wait_on_process_event(loop, pid, 'output_emitted.{}'.format(port))
         self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
-    def load_instance_state(self, saved_state, loop):
-        super(WaitOnProcessOutput, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(WaitOnProcessOutput, self).load_instance_state(saved_state)
         self._wait_on_event = self.loop().create(WaitOnEvent, saved_state['output_event'])
         self._wait_on_event.future().add_done_callbacK(self._output_emitted)
 
@@ -235,8 +235,8 @@ def wait_until_stopped(proc, timeout=None):
 
 class Barrier(WaitOn):
     @override
-    def load_instance_state(self, saved_state, loop):
-        super(Barrier, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(Barrier, self).load_instance_state(saved_state)
         if saved_state['is_open']:
             self.open()
 

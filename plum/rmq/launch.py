@@ -1,4 +1,3 @@
-
 import apricotpy
 from collections import namedtuple
 import json
@@ -8,6 +7,8 @@ import uuid
 from plum.process_listener import ProcessListener
 from plum.rmq.defaults import Defaults
 from plum.utils import override, load_class, fullname
+
+__all__ = ['ProcessLaunchPublisher', 'ProcessLaunchSubscriber']
 
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
 
@@ -108,6 +109,7 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
     """
     Class used to publishes messages requesting a process to be launched
     """
+
     def __init__(self, connection, queue=Defaults.TASK_QUEUE, encoder=json.dumps,
                  response_decoder=launched_decode):
         super(ProcessLaunchPublisher, self).__init__()

@@ -14,8 +14,8 @@ class _DummyWait(WaitOn):
         super(_DummyWait, self).save_instance_state(out_state)
         out_state['value'] = self._value
 
-    def load_instance_state(self, saved_state, loop):
-        super(_DummyWait, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(_DummyWait, self).load_instance_state(saved_state)
         self._value = saved_state['value']
 
 

@@ -9,6 +9,8 @@ from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.utils import override
 
+__all__ = ['ProcessControlSubscriber', 'ProcessControlPublisher']
+
 
 class Action(object):
     PLAY = 'play'
