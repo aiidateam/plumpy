@@ -3,6 +3,7 @@ import unittest
 import uuid
 
 from plum import loop_factory
+import plum.test_utils
 from plum.test_utils import TEST_PROCESSES
 from test.test_rmq import _HAS_PIKA
 from test.util import TestCase
@@ -46,20 +47,11 @@ class TestTaskControllerAndRunner(TestCase):
         self.loop = None
 
     def test_launch(self):
-        # Try launching some processes
-        launch_requests = []
-        for proc_class in TEST_PROCESSES:
-            launch_requests.append(self.publisher.launch(proc_class))
+        # Try launching a process
+        launch = self.publisher.launch(plum.test_utils.WaitForSignalProcess)
 
-        # Make sure they have all launched
-        launched = []
-        for future in launch_requests:
-            result = ~future
-            launched.append(self.loop.get_object(result.pid).__class__)
+        # Make sure it has launched
+        response, done = self.loop.run_until_complete(launch)
 
-        self.assertEqual(len(launched), len(TEST_PROCESSES))
-        self.assertListEqual(TEST_PROCESSES, launched)
-
-        # Now check if they all finish
-        for fut in launch_requests:
-            result = ~fut.result().done_future
+        proc = self.loop.get_object(response['pid'])
+        self.assertEqual(str(proc.pid), proc.pid)

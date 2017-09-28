@@ -1,3 +1,4 @@
+import abc
 import apricotpy
 from apricotpy import persistable
 from collections import namedtuple
@@ -155,9 +156,9 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
         # Response queue
         result = self._channel.queue_declare(exclusive=True)
         self._callback_queue = result.method.queue
-        self._channel.basic_consume(self._on_response, no_ack=True, queue=self._callback_queue)
+        #self._channel.basic_consume(self._on_response, no_ack=False, queue=self._callback_queue)
 
-    def launch(self, proc_class, inputs=None):
+    def launch2(self, proc_class, inputs=None):
         """
         Send a request to launch a Process.
 
@@ -186,24 +187,137 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
 
         return future
 
+    def launch(self, proc_class, inputs=None):
+        """
+        Send a request to launch a Process.
+
+        :param proc_class: The Process class to run
+        :param inputs: The inputs to supply
+        """
+        self._assert_in_loop()
+
+        correlation_id = str(uuid.uuid4())
+        task = {'proc_class': fullname(proc_class), 'inputs': inputs}
+        delivered = self._channel.basic_publish(
+            exchange='', routing_key=self._queue, body=self._encode(task),
+            properties=pika.BasicProperties(
+                reply_to=self._callback_queue,
+                delivery_mode=2,  # Persist
+                correlation_id=correlation_id
+            )
+        )
+
+        if not delivered:
+            raise RuntimeError("Failed to delivery message to exchange")
+
+        return self.loop().create(_AwaitLaunch, self, correlation_id)
+
     @override
     def tick(self):
         self._channel.connection.process_data_events()
 
+    def _create_launch_message(self, process_class, inputs):
+        """
+        Create a string that encodes the message interpreted by the launch subscriber
+
+        :param process_class: The process class to launch at the remote end
+        :param inputs: The inputs
+        :type inputs: dict
+        :return: The launch task encoded in a string
+        :rtype: str
+        """
+        task = {'proc_class': fullname(process_class), 'inputs': inputs}
+        return self._encode(task)
+
     def _on_response(self, ch, method, props, body):
         if props.correlation_id in self._responses:
             response = self._response_decode(body)
-            if response['state'] == 'launched':
-                future = self._responses[props.correlation_id]
+            future = self._responses.pop(props.correlation_id)
 
+            if response['state'] == 'launched':
                 done_future = self.loop().create_future()
                 result = LaunchResponse(response['pid'], done_future)
                 self._responses[props.correlation_id] = done_future
 
                 future.set_result(result)
             else:
-                future = self._responses.pop(props.correlation_id)
                 future.set_result(response)
+
+    def _consume_responses(self, callback):
+        return self._channel.basic_consume(
+            callback, no_ack=False, queue=self._callback_queue)
 
     def _assert_in_loop(self):
         assert self.in_loop(), "Object is not in the event loop"
+
+
+class _AwaitResponse(persistable.AwaitableLoopObject):
+    PUBLISHER = 'PUBLISHER'
+    CORRELATION_ID = 'CORRELATION_ID'
+    CONSUMER_TAG = 'CONSUMER_TAG'
+
+    __metaclass__ = abc.ABCMeta
+
+    def __init__(self, publisher, correlation_id):
+        super(_AwaitResponse, self).__init__()
+
+        self._publisher = publisher
+        self._correlation_id = correlation_id
+        self._consumer_tag = None
+
+        self._start_consuming()
+
+    def save_instance_state(self, out_state):
+        super(_AwaitResponse, self).save_instance_state(out_state)
+
+        out_state[self.PUBLISHER] = persistable.ObjectProxy(self._publisher)
+        out_state[self.CORRELATION_ID] = self._correlation_id
+        out_state[self.CONSUMER_TAG] = self._consumer_tag
+
+    def load_instance_state(self, saved_state):
+        super(_AwaitResponse, self).load_instance_state(saved_state)
+
+        self._publisher = saved_state[self.PUBLISHER]
+        self._correlation_id = saved_state[self.CORRELATION_ID]
+        self._consumer_tag = saved_state[self.CONSUMER_TAG]
+
+        self._start_consuming()
+        # TODO: Ask the connection to resend messages
+
+    def _start_consuming(self):
+        self._consumer_tag = self._publisher._consume_responses(self._response)
+
+    def _stop_consuming(self):
+        self._publisher._channel.basic_cancel(self._consumer_tag)
+
+    @abc.abstractmethod
+    def on_response(self, ch, method, props, body):
+        pass
+
+    def _response(self, ch, method, props, body):
+        if props.correlation_id == self._correlation_id:
+            self.on_response(ch, method, props, body)
+
+
+class _AwaitLaunch(_AwaitResponse):
+    def on_response(self, ch, method, props, body):
+        assert props.correlation_id == self._correlation_id
+
+        pub = self._publisher
+        response = pub._response_decode(body)
+
+        if not response['state'] == 'launched':
+            self.awaiting().set_exception()
+
+        await_done = self.loop().create(
+            _AwaitDone, self._publisher, self._correlation_id)
+        self.set_result((response['pid'], await_done))
+
+
+class _AwaitDone(_AwaitResponse):
+    def on_response(self, ch, method, props, body):
+        assert props.correlation_id == self._correlation_id
+
+        pub = self._publisher
+        response = pub._response_decode(body)
+        self.set_result(response)
