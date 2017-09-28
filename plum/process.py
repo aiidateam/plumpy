@@ -12,7 +12,6 @@ import sys
 
 import plum.stack as _stack
 from plum.process_listener import ProcessListener
-from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
 from . import utils
@@ -628,23 +627,6 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self.__called = False
 
     # region State event/transition methods
-
-    def _on_start_playing(self):
-        _stack.push(self)
-        MONITOR.register_process(self)
-
-    def _on_stop_playing(self):
-        """
-        WARNING: No state changes should be made after this call.
-        """
-        MONITOR.deregister_process(self)
-        _stack.pop(self)
-
-        if self.has_terminated():
-            # There will be no more messages so remove the listeners.  Otherwise we
-            # may continue to hold references to them and stop them being garbage
-            # collected
-            self.__event_helper.remove_all_listeners()
 
     def _fire_event(self, event):
         self.loop().call_soon(self.__event_helper.fire_event, event, self)

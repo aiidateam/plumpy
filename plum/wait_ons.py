@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from abc import ABCMeta
+
 import apricotpy
 from apricotpy import persistable
 from collections import Sequence
@@ -46,7 +48,7 @@ class WaitOnProcessState(WaitOn, ProcessListener):
         self.execute()
 
     def save_instance_state(self, out_state):
-        super(WaitOnProcessState, self).save_instance_state()
+        super(WaitOnProcessState, self).save_instance_state(out_state)
         out_state['calc_pid'] = self._pid
         out_state['target_state'] = self._target_state
 
