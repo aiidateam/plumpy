@@ -22,6 +22,11 @@ class ForgetToCallParent(Process):
         pass
 
     @override
+    def on_create(self):
+        if self.inputs.forget_on != 'create':
+            super(ForgetToCallParent, self).on_create()
+
+    @override
     def on_start(self):
         if self.inputs.forget_on != 'start':
             super(ForgetToCallParent, self).on_start()
@@ -32,7 +37,7 @@ class ForgetToCallParent(Process):
             super(ForgetToCallParent, self).on_start()
 
     @override
-    def on_fail(self):
+    def on_fail(self, exc_info):
         if self.inputs.forget_on != 'fail':
             super(ForgetToCallParent, self).on_start()
 
@@ -137,7 +142,7 @@ class TestProcess(TestCase):
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
-        for event in ('start', 'run', 'finish', 'stop'):
+        for event in ('create', 'start', 'run', 'finish', 'stop'):
             with self.assertRaises(AssertionError):
                 self.loop.run_until_complete(
                     self.loop.create(ForgetToCallParent, {'forget_on': event})

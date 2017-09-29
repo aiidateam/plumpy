@@ -347,7 +347,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     def on_loop_inserted(self, loop):
         super(Process, self).on_loop_inserted(loop)
-        self._enter_created()
+        self._do(self._enter_created)
 
     def abort(self, msg=None):
         """
@@ -798,13 +798,16 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self._callback_args = args
         # If not playing, then the play call will schedule the callback
         if self.is_playing():
-            self.__loop_callback = self.loop().call_soon(self._do_callback, fn, *args)
+            self.__loop_callback = self.loop().call_soon(self._do, fn, *args)
 
-    def _do_callback(self, fn, *args):
-        self.__loop_callback = None
-        self._callback_args = None
-        self._callback_fn = None
-        fn(*args)
+    def _do(self, fn, *args):
+        try:
+            self.__loop_callback = None
+            self._callback_args = None
+            self._callback_fn = None
+            fn(*args)
+        except BaseException:
+            self._enter_failed(sys.exc_info())
 
 
 class ListenContext(object):
