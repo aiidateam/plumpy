@@ -727,7 +727,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self._call_with_super_check(self.on_wait, awaiting)
         # There's no exec_waiting() because all is has to do is wait for the
         # thing that it's awaiting
-        awaiting.add_done_callback(self._await_done)
+        awaiting.add_done_callback(apricotpy.persistable.Function(self._do, self._await_done))
 
     def _await_done(self, awaitable):
         self.__awaiting = None
