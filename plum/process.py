@@ -14,6 +14,7 @@ import plum.stack as _stack
 from plum.process_listener import ProcessListener
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
+from plum.port import _NULL
 from . import utils
 
 __all__ = ['Process', 'ProcessState']
@@ -581,7 +582,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         # inputs
         for name, port in self.spec().inputs.iteritems():
             if name not in ins:
-                if port.default:
+                if port.default != _NULL:
                     ins[name] = port.default
                 elif port.required:
                     raise ValueError(

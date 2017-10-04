@@ -6,6 +6,8 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
+_NULL = ()
+
 
 class ValueSpec(object):
     """
@@ -80,7 +82,7 @@ class ValueSpec(object):
 
 
 class Attribute(ValueSpec):
-    def __init__(self, name, valid_type=None, help=None, default=None, required=False):
+    def __init__(self, name, valid_type=None, help=None, default=_NULL, required=False):
         super(Attribute, self).__init__(name, valid_type=valid_type,
                                         help=help, required=required)
         self._default = default
@@ -107,12 +109,12 @@ class InputPort(Port):
         as required. Otherwise the input should always be marked explicitly
         to be not required even if a default is specified.
         """
-        if default is None:
+        if default is _NULL:
             return required
         else:
             return False
 
-    def __init__(self, name, valid_type=None, help=None, default=None,
+    def __init__(self, name, valid_type=None, help=None, default=_NULL,
                  required=True, validator=None):
         super(InputPort, self).__init__(
             name, valid_type=valid_type, help=help, required=InputPort.required_override(required, default),
@@ -122,7 +124,7 @@ class InputPort(Port):
             _LOGGER.info("the required attribute for the input port '{}' was overridden "
                          "because a default was specified".format(name))
 
-        if default is not None:
+        if default is not _NULL:
             default_valid, msg = self.validate(default)
             if not default_valid:
                 raise ValueError("Invalid default value: {}".format(msg))
@@ -148,12 +150,12 @@ class InputGroupPort(InputPort):
     the whole input itself.
     """
 
-    def __init__(self, name, valid_type=None, help=None, default=None,
+    def __init__(self, name, valid_type=None, help=None, default=_NULL,
                  required=False):
         # We have to set _valid_inner_type before calling the super constructor
         # because it will call validate on the default value (if supplied)
         # which in turn needs this value to be set.
-        if default is not None and not isinstance(default, collections.Mapping):
+        if default is not _NULL and not isinstance(default, collections.Mapping):
             raise ValueError("Input group default must be of type Mapping")
         self._valid_inner_type = valid_type
 
