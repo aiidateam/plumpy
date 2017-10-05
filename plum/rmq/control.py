@@ -62,7 +62,7 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
         # Set up comms
         self._connection = connection
         self._channel = connection.channel()
-        self._channel.exchange_declare(exchange=exchange, type='fanout')
+        self._channel.exchange_declare(exchange=exchange, exchange_type='fanout')
         # Response queue
         result = self._channel.queue_declare(exclusive=True)
         self._callback_queue = result.method.queue
@@ -144,7 +144,7 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
 
         # Set up communications
         self._channel = connection.channel()
-        self._channel.exchange_declare(exchange, type='fanout')
+        self._channel.exchange_declare(exchange, exchange_type='fanout')
         result = self._channel.queue_declare(exclusive=True)
         queue = result.method.queue
         self._channel.queue_bind(queue, exchange)
