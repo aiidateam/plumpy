@@ -1,7 +1,7 @@
 
 import importlib
 from plum.exceptions import ClassNotFoundException
-from plum.utils import load_class
+from . import utils
 
 
 class ClassLoader(object):
@@ -12,17 +12,7 @@ class ClassLoader(object):
         """
         Load a class from a string
         """
-        class_data = name.split(".")
-        module_path = ".".join(class_data[:-1])
-        class_name = class_data[-1]
-
-        module = importlib.import_module(module_path)
-
-        # Finally, retrieve the class
-        try:
-            return getattr(module, class_name)
-        except AttributeError:
-            raise ClassNotFoundException("Class {} not found".format(name))
+        return utils.load_class(name)
 
     def load_class(self, name):
         # Try the parent first
