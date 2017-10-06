@@ -69,28 +69,43 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
         """
         self._num_processes += 1
 
-        task = self._decode(body)
-        proc_class = load_class(task['proc_class'])
+        try:
+            task = self._decode(body)
+            proc_class = load_class(task['proc_class'])
+            proc = self.loop().create(proc_class, inputs=task['inputs'], pid=task.get('pid', None))
+        except BaseException as exc:
+            response = {
+                'pid': task.get('pid', None),
+                'state': 'exception',
+                'exception': traceback.format_exception(type(exc), exc, None)[0]
+            }
+            self._channel.basic_publish(
+                exchange='', routing_key=props.reply_to,
+                properties=pika.BasicProperties(
+                    correlation_id=props.correlation_id
+                ),
+                body=self._response_encode(response)
+            )
+            self._channel.basic_ack(delivery_tag=method.delivery_tag)
+        else:
+            # Tell the sender that we've launched it
+            ch.basic_publish(
+                exchange='', routing_key=props.reply_to,
+                properties=pika.BasicProperties(
+                    correlation_id=props.correlation_id,
+                    delivery_mode=2  # Persist
+                ),
+                body=self._response_encode({'pid': proc.pid, 'state': 'launched'})
+            )
 
-        proc = self.loop().create(proc_class, inputs=task['inputs'], pid=task['pid'])
+            proc.add_done_callback(persistable.Function(
+                _process_done,
+                persistable.ObjectProxy(self),
+                method.delivery_tag,
+                props.reply_to,
+                props.correlation_id
+            ))
 
-        # Tell the sender that we've launched it
-        ch.basic_publish(
-            exchange='', routing_key=props.reply_to,
-            properties=pika.BasicProperties(
-                correlation_id=props.correlation_id,
-                delivery_mode=2  # Persist
-            ),
-            body=self._response_encode({'pid': proc.pid, 'state': 'launched'})
-        )
-
-        proc.add_done_callback(persistable.Function(
-            _process_done,
-            persistable.ObjectProxy(self),
-            method.delivery_tag,
-            props.reply_to,
-            props.correlation_id
-        ))
 
 
 def _process_done(publisher, delivery_tag, reply_to, correlation_id, process):
@@ -241,8 +256,7 @@ class _AwaitDone(persistable.AwaitableLoopObject):
     def on_response(self, ch, method, props, body):
         assert props.correlation_id == self._correlation_id
 
-        pub = self._publisher
-        response = pub._response_decode(body)
+        response = self._publisher._response_decode(body)
 
         if response['state'] == 'cancelled':
             self.cancel()
