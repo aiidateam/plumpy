@@ -191,8 +191,7 @@ class DynamicInputPort(InputPort):
 
     def __init__(self, valid_type=None, help_=None):
         super(DynamicInputPort, self).__init__(
-            self.NAME, valid_type=valid_type, help=help_, default=None,
-            required=False)
+            self.NAME, valid_type=valid_type, help=help_, required=False)
 
 
 class OutputPort(Port):

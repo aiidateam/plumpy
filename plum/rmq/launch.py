@@ -16,6 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = ['ProcessLaunchSubscriber', 'ProcessLaunchPublisher']
 
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
+_TaskInfo = namedtuple('TaskInfo', ['proc_class', 'args', 'kwargs'])
 
 
 class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
@@ -69,33 +70,63 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
         """
         self._num_processes += 1
 
-        task = self._decode(body)
-        proc_class = load_class(task['proc_class'])
+        try:
+            task = self._decode(body)
+        except BaseException:
+            response = {
+                'state': 'exception',
+                'exception': 'Failed to decode task: {}'.format(
+                    traceback.format_exception(type(exc), exc, None)[0]
+                )
+            }
+            self._channel.basic_publish(
+                exchange='', routing_key=props.reply_to,
+                properties=pika.BasicProperties(
+                    correlation_id=props.correlation_id
+                ),
+                body=self._response_encode(response)
+            )
 
-        proc = self.loop().create(proc_class, inputs=task['inputs'], pid=task['pid'])
+        try:
+            proc = self.loop().create(task.proc_class, *task.args, **task.kwargs)
+        except BaseException as exc:
+            response = {
+                'pid': task.kwargs.get('pid', None),
+                'state': 'exception',
+                'exception': 'Failed to create the process: {}'.format(
+                    traceback.format_exception(type(exc), exc, None)[0]
+                )
+            }
+            self._channel.basic_publish(
+                exchange='', routing_key=props.reply_to,
+                properties=pika.BasicProperties(
+                    correlation_id=props.correlation_id
+                ),
+                body=self._response_encode(response)
+            )
+            self._channel.basic_ack(delivery_tag=method.delivery_tag)
+        else:
+            # Tell the sender that we've launched it
+            ch.basic_publish(
+                exchange='', routing_key=props.reply_to,
+                properties=pika.BasicProperties(
+                    correlation_id=props.correlation_id,
+                    delivery_mode=2
+                ),
+                body=self._response_encode({'pid': proc.pid, 'state': 'launched'})
+            )
 
-        # Tell the sender that we've launched it
-        ch.basic_publish(
-            exchange='', routing_key=props.reply_to,
-            properties=pika.BasicProperties(
-                correlation_id=props.correlation_id,
-                delivery_mode=2  # Persist
-            ),
-            body=self._response_encode({'pid': proc.pid, 'state': 'launched'})
-        )
-
-        proc.add_done_callback(persistable.Function(
-            _process_done,
-            persistable.ObjectProxy(self),
-            method.delivery_tag,
-            props.reply_to,
-            props.correlation_id
-        ))
+            proc.add_done_callback(persistable.Function(
+                _process_done,
+                persistable.ObjectProxy(self),
+                method.delivery_tag,
+                props.reply_to,
+                props.correlation_id
+            ))
 
 
 def _process_done(publisher, delivery_tag, reply_to, correlation_id, process):
     """
-
     :param publisher: The process launch subscriber
     :type publisher: :class:`ProcessLaunchSubscriber`
     :param delivery_tag:
@@ -104,6 +135,7 @@ def _process_done(publisher, delivery_tag, reply_to, correlation_id, process):
     :param process:
     """
     response = {'pid': process.pid}
+
     if process.cancelled():
         response['state'] = 'cancelled'
     elif process.exception() is not None:
@@ -159,7 +191,7 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
         if pid is None:
             pid = str(uuid.uuid4())
 
-        await_done = self.loop().create(_AwaitDone, self, proc_class, inputs, pid)
+        await_done = self.loop().create(_AwaitDone, self, proc_class, pid, **inputs)
 
         if not await_done.done():
             self._responses[await_done._correlation_id] = await_done
@@ -191,7 +223,7 @@ class _AwaitDone(persistable.AwaitableLoopObject):
 
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, publisher, proc_class, inputs, pid):
+    def __init__(self, publisher, proc_class, pid, *args, **inputs):
         super(_AwaitDone, self).__init__()
 
         self._publisher = publisher
@@ -199,18 +231,18 @@ class _AwaitDone(persistable.AwaitableLoopObject):
         self._pid = pid
         self._correlation_id = str(uuid.uuid4())
 
-        task = {'proc_class': fullname(proc_class), 'inputs': inputs}
-        if pid is not None:
-            task['pid'] = pid
-
         channel = publisher._channel
+        kwargs = {
+            'pid': pid,
+            'inputs': inputs
+        }
 
         delivered = channel.basic_publish(
             exchange='', routing_key=publisher._queue,
-            body=self._publisher._encode(task),
+            body=self._publisher._encode(proc_class, *args, **kwargs),
             properties=pika.BasicProperties(
                 reply_to=publisher._callback_queue,
-                delivery_mode=2,  # Persist
+                delivery_mode=2,
                 correlation_id=self._correlation_id
             )
         )
@@ -241,9 +273,7 @@ class _AwaitDone(persistable.AwaitableLoopObject):
     def on_response(self, ch, method, props, body):
         assert props.correlation_id == self._correlation_id
 
-        pub = self._publisher
-        response = pub._response_decode(body)
-
+        response = self._publisher._response_decode(body)
         if response['state'] == 'cancelled':
             self.cancel()
         elif response['state'] == 'exception':

@@ -75,7 +75,7 @@ class TestStatusProvider(TestCase):
 
         # Set up the request exchange
         self.request_exchange = '{}.{}.task_control'.format(self.__class__, uuid.uuid4())
-        self.channel.exchange_declare(exchange=self.request_exchange, type='fanout')
+        self.channel.exchange_declare(exchange=self.request_exchange, exchange_type='fanout')
 
         # Set up the response queue
         result = self.channel.queue_declare(exclusive=True)
