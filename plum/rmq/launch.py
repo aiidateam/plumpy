@@ -4,6 +4,7 @@ from apricotpy import persistable
 from collections import namedtuple
 import json
 import logging
+import pickle
 import pika
 import pickle
 import traceback
@@ -11,13 +12,17 @@ import uuid
 
 from plum import process
 from plum.rmq.defaults import Defaults
-from plum.utils import override, load_class, fullname
+from plum.utils import override
 
 _LOGGER = logging.getLogger(__name__)
 
 __all__ = ['ProcessLaunchSubscriber', 'ProcessLaunchPublisher']
 
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
+
+
+def launch_decode(msg_body):
+    return pickle.loads(msg_body)
 
 
 class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
@@ -72,29 +77,11 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
         self._num_processes += 1
 
         try:
-            task = self._decode(body)
-        except BaseException:
-            response = {
-                'state': 'exception',
-                'exception': 'Failed to decode task: {}'.format(
-                    traceback.format_exception(type(exc), exc, None)[0]
-                )
-            }
-            self._channel.basic_publish(
-                exchange='', routing_key=props.reply_to,
-                properties=pika.BasicProperties(
-                    correlation_id=props.correlation_id
-                ),
-                body=self._response_encode(response)
-            )
-
-        try:
-            proc = self.loop().create(task.proc_class, *task.args, **task.kwargs)
+            saved_state = self._decode(body)
         except BaseException as exc:
             response = {
-                'pid': task.kwargs.get('pid', None),
                 'state': 'exception',
-                'exception': 'Failed to create the process: {}'.format(
+                'exception': 'Failed to decode task:\n{}'.format(
                     traceback.format_exception(type(exc), exc, None)[0]
                 )
             }
@@ -105,25 +92,42 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
                 ),
                 body=self._response_encode(response)
             )
-            self._channel.basic_ack(delivery_tag=method.delivery_tag)
         else:
-            # Tell the sender that we've launched it
-            ch.basic_publish(
-                exchange='', routing_key=props.reply_to,
-                properties=pika.BasicProperties(
-                    correlation_id=props.correlation_id,
-                    delivery_mode=2
-                ),
-                body=self._response_encode({'pid': proc.pid, 'state': 'launched'})
-            )
+            try:
+                proc = saved_state.unbundle(self.loop())
+            except BaseException as exc:
+                response = {
+                    'state': 'exception',
+                    'exception': 'Failed to unbundle the process:\n{}'.format(
+                        traceback.format_exception(type(exc), exc, None)[0]
+                    )
+                }
+                self._channel.basic_publish(
+                    exchange='', routing_key=props.reply_to,
+                    properties=pika.BasicProperties(
+                        correlation_id=props.correlation_id
+                    ),
+                    body=self._response_encode(response)
+                )
+                self._channel.basic_ack(delivery_tag=method.delivery_tag)
+            else:
+                # Tell the sender that we've launched it
+                ch.basic_publish(
+                    exchange='', routing_key=props.reply_to,
+                    properties=pika.BasicProperties(
+                        correlation_id=props.correlation_id,
+                        delivery_mode=2
+                    ),
+                    body=self._response_encode({'pid': proc.pid, 'state': 'launched'})
+                )
 
-            proc.add_done_callback(persistable.Function(
-                _process_done,
-                persistable.ObjectProxy(self),
-                method.delivery_tag,
-                props.reply_to,
-                props.correlation_id
-            ))
+                proc.add_done_callback(persistable.Function(
+                    _process_done,
+                    persistable.ObjectProxy(self),
+                    method.delivery_tag,
+                    props.reply_to,
+                    props.correlation_id
+                ))
 
 
 def _process_done(publisher, delivery_tag, reply_to, correlation_id, process):

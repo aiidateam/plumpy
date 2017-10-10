@@ -4,6 +4,7 @@ import unittest
 import uuid
 
 from plum import loop_factory
+import plum.rmq.launch
 import plum.test_utils
 from test.test_rmq import _HAS_PIKA
 from test.util import TestCase
@@ -104,3 +105,10 @@ class TestTaskControllerAndRunner(TestCase):
 
         with self.assertRaises(RuntimeError):
             result = self.launcher_loop.run_until_complete(awaitable)
+
+    def test_launch_decoder(self):
+        # Check that the launch decoder works
+        dp = plum.test_utils.DummyProcess()
+        saved_state = plum.Bundle(dp)
+
+        plum.rmq.launch.launch_decode(saved_state)
