@@ -7,6 +7,7 @@ __all__ = (process.__all__ + utils.__all__)
 
 EventLoop = apricotpy.BaseEventLoop
 PersistableEventLoop = apricotpy.persistable.BaseEventLoop
+Bundle = apricotpy.persistable.Bundle
 
 
 # Do this se we don't get the "No handlers could be found..." warnings that will be produced
