@@ -17,7 +17,7 @@ from plum.utils import protected
 from plum.port import _NULL
 from . import utils
 
-__all__ = ['Process', 'ProcessState']
+__all__ = ['Process', 'ProcessState', 'get_pid_from_bundle']
 
 _LOGGER = logging.getLogger(__name__)
 _NO_RESULT = ()
@@ -846,3 +846,6 @@ def _is_wait_retval(retval):
     return (isinstance(retval, tuple) and
             len(retval) == 2 and
             isinstance(retval[0], apricotpy.Awaitable))
+
+def get_pid_from_bundle(process_bundle):
+    return process_bundle[BundleKeys.PID]

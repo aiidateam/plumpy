@@ -5,9 +5,11 @@ from collections import namedtuple
 import json
 import logging
 import pika
+import pickle
 import traceback
 import uuid
 
+from plum import process
 from plum.rmq.defaults import Defaults
 from plum.utils import override, load_class, fullname
 
@@ -16,7 +18,6 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = ['ProcessLaunchSubscriber', 'ProcessLaunchPublisher']
 
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
-_TaskInfo = namedtuple('TaskInfo', ['proc_class', 'args', 'kwargs'])
 
 
 class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
@@ -163,7 +164,7 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
     Class used to publishes messages requesting a process to be launched
     """
 
-    def __init__(self, connection, queue=Defaults.TASK_QUEUE, encoder=json.dumps,
+    def __init__(self, connection, queue=Defaults.TASK_QUEUE, encoder=pickle.dumps,
                  response_decoder=json.loads):
         super(ProcessLaunchPublisher, self).__init__()
 
@@ -171,27 +172,23 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
         self._encode = encoder
         self._response_decode = response_decoder
         self._responses = {}
-
         self._channel = connection.channel()
         self._channel.queue_declare(queue=queue, durable=True)
+
         # Response queue
         result = self._channel.queue_declare(exclusive=True, durable=True)
         self._callback_queue = result.method.queue
         self._channel.basic_consume(self._on_response, no_ack=False, queue=self._callback_queue)
 
-    def launch(self, proc_class, inputs=None, pid=None):
+    def launch(self, process_bundle):
         """
-        Send a request to launch a Process.
+        Send a request to continue a Process from the provided bundle
 
-        :param proc_class: The Process class to run
-        :param inputs: The inputs to supply
+        :param process_bundle: The Process bundle to run
         """
         self._assert_in_loop()
 
-        if pid is None:
-            pid = str(uuid.uuid4())
-
-        await_done = self.loop().create(_AwaitDone, self, proc_class, pid, **inputs)
+        await_done = self.loop().create(_AwaitDone, self, process_bundle)
 
         if not await_done.done():
             self._responses[await_done._correlation_id] = await_done
@@ -223,23 +220,17 @@ class _AwaitDone(persistable.AwaitableLoopObject):
 
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, publisher, proc_class, pid, *args, **inputs):
+    def __init__(self, publisher, process_bundle):
         super(_AwaitDone, self).__init__()
 
+        self._pid = process.get_pid_from_bundle(process_bundle)
         self._publisher = publisher
         self._consumer_tag = None
-        self._pid = pid
         self._correlation_id = str(uuid.uuid4())
 
-        channel = publisher._channel
-        kwargs = {
-            'pid': pid,
-            'inputs': inputs
-        }
-
-        delivered = channel.basic_publish(
+        delivered = publisher._channel.basic_publish(
             exchange='', routing_key=publisher._queue,
-            body=self._publisher._encode(proc_class, *args, **kwargs),
+            body=self._publisher._encode(process_bundle),
             properties=pika.BasicProperties(
                 reply_to=publisher._callback_queue,
                 delivery_mode=2,
@@ -274,6 +265,7 @@ class _AwaitDone(persistable.AwaitableLoopObject):
         assert props.correlation_id == self._correlation_id
 
         response = self._publisher._response_decode(body)
+
         if response['state'] == 'cancelled':
             self.cancel()
         elif response['state'] == 'exception':
