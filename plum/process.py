@@ -303,6 +303,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
             out_state[BundleKeys.PROC_STATE] = self.__state.value
         if self.__next_step is not None:
             out_state[BundleKeys.NEXT_STEP] = self.__next_step.__name__
+
         out_state[BundleKeys.AWAITING] = self.__awaiting
         out_state[BundleKeys.LOOP_CALLBACK] = self.__loop_callback
         out_state[BundleKeys.PAUSED] = self.__paused
@@ -318,11 +319,12 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self.__init(None)
 
         # Inputs/outputs
-        if saved_state.get(BundleKeys.INPUTS, None) is not None:
+        try:
             decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS])
             self._raw_inputs = utils.AttributesFrozendict(decoded)
-        else:
+        except KeyError:
             self._raw_inputs = None
+
         self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
         self._outputs = copy.deepcopy(saved_state[BundleKeys.OUTPUTS])
 
@@ -339,6 +341,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
             self.__next_step = getattr(self, saved_state[BundleKeys.NEXT_STEP])
         except KeyError:
             self.__next_step = None
+
         self.__awaiting = saved_state[BundleKeys.AWAITING]
         self.__loop_callback = saved_state[BundleKeys.LOOP_CALLBACK]
         self.__paused = saved_state[BundleKeys.PAUSED]
