@@ -82,7 +82,7 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
             response = {
                 'state': 'exception',
                 'exception': 'Failed to decode task:\n{}'.format(
-                    traceback.format_exception(type(exc), exc, None)[0]
+                    traceback.format_exc()
                 )
             }
             self._channel.basic_publish(
@@ -99,7 +99,7 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
                 response = {
                     'state': 'exception',
                     'exception': 'Failed to unbundle the process:\n{}'.format(
-                        traceback.format_exception(type(exc), exc, None)[0]
+                        traceback.format_exc()
                     )
                 }
                 self._channel.basic_publish(
