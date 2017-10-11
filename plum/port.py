@@ -195,8 +195,8 @@ class DynamicInputPort(InputPort):
 
 
 class OutputPort(Port):
-    def __init__(self, name, valid_type=None, required=True):
-        super(OutputPort, self).__init__(name, valid_type)
+    def __init__(self, name, valid_type=None, required=True, help=None):
+        super(OutputPort, self).__init__(name, valid_type, help=help)
         self._required = required
 
     @property
