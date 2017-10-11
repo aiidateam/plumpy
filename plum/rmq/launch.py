@@ -20,11 +20,6 @@ __all__ = ['ProcessLaunchSubscriber', 'ProcessLaunchPublisher']
 
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
 
-
-def launch_decode(msg_body):
-    return pickle.loads(msg_body)
-
-
 class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
     """
     Run tasks as they come form the RabbitMQ task queue
@@ -34,7 +29,7 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
         as the start method is called.
     """
 
-    def __init__(self, connection, queue=Defaults.TASK_QUEUE, decoder=json.loads,
+    def __init__(self, connection, queue=Defaults.TASK_QUEUE, decoder=pickle.loads,
                  response_encoder=json.dumps, persistent_uuid=None):
         """
         :param connection: The pika RabbitMQ connection
