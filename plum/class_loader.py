@@ -8,7 +8,8 @@ class ClassLoader(object):
     def __init__(self, parent=None):
         self._parent = parent
 
-    def find_class(self, name):
+    @staticmethod
+    def find_class(name):
         """
         Load a class from a string
         """

@@ -134,10 +134,7 @@ def load_class(classstring):
     """
     Load a class from a string
     """
-    class_data = classstring.split(".")
-    module_path = ".".join(class_data[:-1])
-    class_name = class_data[-1]
-
+    module_path, class_name = classstring.rsplit('.', 1)
     module = importlib.import_module(module_path)
 
     # Finally, retrieve the class
