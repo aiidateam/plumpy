@@ -1,3 +1,5 @@
+from past.builtins import basestring 
+
 from .util import TestCase
 from plum.port import InputGroupPort
 

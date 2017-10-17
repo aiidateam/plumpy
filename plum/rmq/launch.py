@@ -10,6 +10,8 @@ import pickle
 import traceback
 import uuid
 
+from future.utils import with_metaclass
+
 from plum import process
 from plum.rmq.defaults import Defaults
 from plum.utils import override
@@ -215,12 +217,10 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
         assert self.in_loop(), "Object is not in the event loop"
 
 
-class _AwaitDone(persistable.AwaitableLoopObject):
+class _AwaitDone(with_metaclass(abc.ABCMeta, persistable.AwaitableLoopObject)):
     PUBLISHER = 'PUBLISHER'
     CORRELATION_ID = 'CORRELATION_ID'
     CONSUMER_TAG = 'CONSUMER_TAG'
-
-    __metaclass__ = abc.ABCMeta
 
     def __init__(self, publisher, process_bundle):
         super(_AwaitDone, self).__init__()

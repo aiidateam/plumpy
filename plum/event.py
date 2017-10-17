@@ -5,6 +5,9 @@ import re
 import threading
 import traceback
 
+from past.builtins import basestring
+from future.utils import with_metaclass
+
 from plum import Process
 from plum.process_listener import ProcessListener
 from plum.utils import override, protected, ListenContext
@@ -15,11 +18,10 @@ _LOGGER = logging.getLogger(__name__)
 _WilcardEntry = namedtuple("_WildcardEntry", ['re', 'listeners'])
 
 
-class EventEmitter(object):
+class EventEmitter(with_metaclass(ABCMeta, object)):
     """
     A class to send general events to listeners
     """
-    __metaclass__ = ABCMeta
 
     @staticmethod
     def contains_wildcard(eventstring):
@@ -27,7 +29,7 @@ class EventEmitter(object):
         Does the event string contain a wildcard.
 
         :param eventstring: The event string
-        :type eventstring: str or unicode
+        :type eventstring: basestring
         :return: True if it does, False otherwise
         """
         return eventstring.find('*') != -1 or eventstring.find('#') != -1
@@ -44,7 +46,7 @@ class EventEmitter(object):
         :param listener: The listener callback function to call when the
             event happens
         :param event: An event string
-        :type event: str or unicode
+        :type event: basestring
         """
         with self._listeners_lock:
             self._check_listener(listener)
@@ -60,14 +62,14 @@ class EventEmitter(object):
 
         :param listener: The listener that is currently listening
         :param event: (optional) event to stop listening for
-        :type event: str or unicode
+        :type event: basestring
         """
         with self._listeners_lock:
             if event is None:
                 # This means remove ALL messages for this listener
-                for evt in self._specific_listeners.iterkeys():
+                for evt in list(self._specific_listeners.keys()):
                     self._remove_specific_listener(listener, evt)
-                for evt in self._wildcard_listeners.iterkeys():
+                for evt in list(self._wildcard_listeners.keys()):
                     self._remove_wildcard_listener(listener, evt)
             else:
                 if self.contains_wildcard(event):
@@ -100,9 +102,9 @@ class EventEmitter(object):
         """
         with self._listeners_lock:
             total = 0
-            for listeners in self._specific_listeners.itervalues():
+            for listeners in self._specific_listeners.values():
                 total += len(listeners)
-            for entry in self._wildcard_listeners.itervalues():
+            for entry in self._wildcard_listeners.values():
                 total += len(entry.listeners)
             return total
 
@@ -190,7 +192,7 @@ class WaitOnEvent(WaitOn):
         """
         :param loop: The event loop
         :param subject: The subject to listen for
-        :type subject: str or unicode
+        :type subject: basestring
         """
         super(WaitOnEvent, self).__init__()
         self._event = subject

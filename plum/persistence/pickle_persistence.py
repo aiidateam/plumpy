@@ -327,7 +327,7 @@ class PicklePersistence(apricotpy.LoopObject):
         )
 
     def reset_persisted(self, delete=False):
-        for saver in self._savers.itervalues():
+        for saver in self._savers.values():
             saver.stop(delete=delete)
 
         self._savers.clear()
