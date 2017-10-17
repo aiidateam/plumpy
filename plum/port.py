@@ -176,8 +176,8 @@ class InputGroupPort(InputPort):
             # Check that all the members of the dictionary are of the right type
             for k, v in value.iteritems():
                 if not isinstance(v, self._valid_inner_type):
-                    return False, "Group port value {} is not of the right type".format(
-                        k)
+                    return False, "Group port value {} is not of the right type. Should be of type {}, but is {}.".format(
+                        k, self._valid_inner_type, type(v))
 
         return True, None
 
