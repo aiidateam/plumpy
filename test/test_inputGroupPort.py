@@ -1,4 +1,4 @@
-from util import TestCase
+from .util import TestCase
 from plum.port import InputGroupPort
 
 
