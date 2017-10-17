@@ -374,6 +374,8 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         return fut
 
     def _do_abort(self, fut, msg=None):
+        if self.__awaiting is not None:
+            self.__awaiting.cancel()
         if not self.has_terminated():
             self._enter_stopped(abort=True, abort_msg=msg)
 
@@ -511,7 +513,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     def on_fail(self, exc_info):
         """
         Called if the process raised an exception.
-        
+
         :param exc_info: The exception information as returned by sys.exc_info()
         """
         self._fire_event(ProcessListener.on_process_fail)
@@ -596,10 +598,10 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     @protected
     def encode_input_args(self, inputs):
-        """ 
-        Encode input arguments such that they may be saved in a 
+        """
+        Encode input arguments such that they may be saved in a
         :class:`apricotpy.persistable.Bundle`
-        
+
         :param inputs: A mapping of the inputs as passed to the process
         :return: The encoded inputs
         """
@@ -608,10 +610,10 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     @protected
     def decode_input_args(self, encoded):
         """
-        Decode saved input arguments as they came from the saved instance state 
+        Decode saved input arguments as they came from the saved instance state
         :class:`apricotpy.persistable.Bundle`
-        
-        :param encoded: 
+
+        :param encoded:
         :return: The decoded input args
         """
         return encoded
@@ -817,7 +819,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 class ListenContext(object):
     """
     A context manager for listening to the Process.
-    
+
     A typical usage would be:
     with ListenContext(producer, listener):
         # Producer generates messages that the listener gets
