@@ -2,6 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 import apricotpy
+import apricotpy.persistable
 from collections import namedtuple
 import copy
 from enum import Enum
@@ -22,7 +23,6 @@ from . import utils
 __all__ = ['Process', 'ProcessState', 'get_pid_from_bundle']
 
 _LOGGER = logging.getLogger(__name__)
-_NO_RESULT = ()
 
 
 class ProcessState(Enum):
@@ -37,6 +37,17 @@ class ProcessState(Enum):
 
 
 Wait = namedtuple('Wait', ['on', 'callback'])
+
+
+def _should_pass_result(fn):
+    if isinstance(fn, apricotpy.persistable.Function):
+        fn = fn._fn
+
+    fn_spec = inspect.getargspec(fn)
+    is_method_with_argument = inspect.ismethod(fn) and len(fn_spec[0]) > 1
+    is_function_with_argument = inspect.isfunction(fn) and len(fn_spec[0]) > 0
+    has_args_or_kwargs = fn_spec[1] is not None or fn_spec[2] is not None
+    return is_method_with_argument or is_function_with_argument or has_args_or_kwargs
 
 
 class BundleKeys(Enum):
@@ -688,7 +699,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
     def _exec_created(self):
         self._enter_running(self.do_run)
 
-    def _enter_running(self, next_step, result=_NO_RESULT):
+    def _enter_running(self, next_step, result=None):
         last_state = self.__state
         self._set_state(ProcessState.RUNNING,
                         [ProcessState.CREATED, ProcessState.WAITING, ProcessState.RUNNING])
@@ -705,7 +716,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
 
     def _exec_running(self, next_step, result):
         args = []
-        if result is not _NO_RESULT:
+        if _should_pass_result(next_step):
             args.append(result)
 
         # Run the next function
@@ -850,6 +861,7 @@ def _is_wait_retval(retval):
     return (isinstance(retval, tuple) and
             len(retval) == 2 and
             isinstance(retval[0], apricotpy.Awaitable))
+
 
 def get_pid_from_bundle(process_bundle):
     return process_bundle[BundleKeys.PID]
