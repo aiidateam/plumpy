@@ -211,15 +211,15 @@ class TestProcess(TestCase):
         saver = ProcessSaver(proc)
         self.loop.run_until_complete(proc)
 
-        for info, outputs in zip(saver.snapshots, saver.outputs):
-            state, bundle = info
+        for bundle, outputs in zip(saver.snapshots, saver.outputs):
             # Check that it is a copy
             self.assertIsNot(outputs, bundle[BundleKeys.OUTPUTS])
             # Check the contents are the same
             self.assertEqual(outputs, bundle[BundleKeys.OUTPUTS])
 
         self.assertIsNot(
-            proc.outputs, saver.snapshots[-1][1][BundleKeys.OUTPUTS])
+            proc.outputs, saver.snapshots[-1][BundleKeys.OUTPUTS]
+        )
 
     def test_saving_each_step(self):
         for ProcClass in TEST_PROCESSES:

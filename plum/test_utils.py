@@ -1,6 +1,8 @@
+import apricotpy
+import collections
 from collections import namedtuple
 
-import apricotpy
+from plum import process
 from plum.process import Process
 from plum.process_listener import ProcessListener
 from plum.utils import override
@@ -228,8 +230,7 @@ class Saver(object):
 
     def _save(self, p):
         b = apricotpy.persistable.Bundle(p)
-
-        self.snapshots.append((p.state, b))
+        self.snapshots.append(b)
         self.outputs.append(p.outputs.copy())
 
 
@@ -295,9 +296,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     :return: True if snapshots match False otherwise
     :rtype: bool
     """
-    for i, info in zip(range(0, len(snapshots)), snapshots):
-
-        bundle = info[1]
+    for i, bundle in zip(range(0, len(snapshots)), snapshots):
         loaded = bundle.unbundle(loop)
         ps = ProcessSaver(loaded)
         try:
@@ -311,8 +310,35 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
             if j >= min(len(snapshots), len(ps.snapshots)):
                 break
 
-            if snapshots[-j] != ps.snapshots[-j]:
-                return False
+            compare_dictionaries(
+                snapshots[-j], ps.snapshots[-j],
+                exclude={
+                    str(process.BundleKeys.LOOP_CALLBACK),
+                    str(process.BundleKeys.AWAITING),
+                    'LOOP_CALLBACK', 'CALLBACKS'
+                })
             j += 1
 
         return True
+
+
+def compare_dictionaries(dict1, dict2, exclude=None):
+    keys = set(dict1.iterkeys()) & set(dict2.iterkeys())
+    if exclude is not None:
+        keys -= exclude
+
+    for key in keys:
+        if key not in dict1:
+            raise ValueError("Key '{}' in dict 1 but not 2".format(key))
+
+        if key not in dict2:
+            raise ValueError("Key '{}' in dict 2 but not 1".format(key))
+
+        v1 = dict1[key]
+        v2 = dict2[key]
+        if isinstance(v1, collections.Mapping) and isinstance(v2, collections.Mapping):
+            compare_dictionaries(v1, v2)
+        elif v1 != v2:
+            raise ValueError(
+                "Dict values mismatch for '{}':\n{} != {}".format(key, v1, v2)
+            )

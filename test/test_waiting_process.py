@@ -22,8 +22,7 @@ class TestWaitingProcess(TestCase):
         wl = ProcessSaver(proc)
         self.loop.run_until_complete(proc)
 
-        for snapshot, outputs in zip(wl.snapshots, wl.outputs):
-            state, bundle = snapshot
+        for bundle, outputs in zip(wl.snapshots, wl.outputs):
             self.assertEqual(outputs, bundle[plum.process.BundleKeys.OUTPUTS])
 
     def test_saving_each_step(self):

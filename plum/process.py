@@ -54,18 +54,18 @@ class BundleKeys(Enum):
 
     See :func:`create_from`, :func:`save_instance_state` and :func:`load_instance_state`.
     """
-    CREATION_TIME = 'creation_time'
-    INPUTS = 'inputs'
-    OUTPUTS = 'outputs'
-    PID = 'pid'
-    LOOP_CALLBACK = 'LOOP_CALLBACK'
-    AWAITING = 'AWAITING'
-    NEXT_STEP = 'NEXT_STEP'
-    ABORT_MSG = 'ABORT_MSG'
-    PROC_STATE = 'PROC_SATE'
-    PAUSED = 'PAUSED'
-    CALLBACK_FN = 'CALLBACK_FN'
-    CALLBACK_ARGS = 'CALLBACK_ARGS'
+    CREATION_TIME = 0
+    INPUTS = 1
+    OUTPUTS = 2
+    PID = 3
+    LOOP_CALLBACK = 4
+    AWAITING = 5
+    NEXT_STEP = 6
+    ABORT_MSG = 7
+    PROC_STATE = 8
+    PAUSED = 9
+    CALLBACK_FN = 10
+    CALLBACK_ARGS = 11
 
 
 class Process(apricotpy.persistable.AwaitableLoopObject):
