@@ -3,7 +3,7 @@
 from setuptools import setup
 
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__version__ = "0.7.9"
+__version__ = "0.7.10-dev"
 __contributors__ = "Martin Uhrin"
 
 setup(
