@@ -68,7 +68,7 @@ class _Future(Future):
         return self._status is self.Status.CURRENT
 
     def done(self):
-        return self._status in [self.Status.CANCELLED, self.Status.FINISHED]
+        return self._status in [self.Status.CANCELLED, self.Status.FINISHED, self.Status.FAILED]
 
     def result(self, timeout=None):
         if self._status is self.Status.CURRENT:
