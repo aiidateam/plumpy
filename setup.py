@@ -13,7 +13,7 @@ setup(
     long_description=open('README.md').read(),
     url='https://bitbucket.org/aiida_team/plum',
     author='Martin Uhrin',
-    author_email='Martin Uhrin <martin.uhrin@epfl.ch>',
+    author_email='martin.uhrin@epfl.ch',
     license=__license__,
     classifiers=[
         'License :: OSI Approved :: MIT License',
