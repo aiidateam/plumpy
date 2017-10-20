@@ -3,7 +3,7 @@
 from setuptools import setup
 
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__version__ = "0.7.9"
+__version__ = "0.7.10-dev"
 __contributors__ = "Martin Uhrin"
 
 setup(
@@ -13,7 +13,7 @@ setup(
     long_description=open('README.md').read(),
     url='https://bitbucket.org/aiida_team/plum',
     author='Martin Uhrin',
-    author_email='Martin Uhrin <martin.uhrin@epfl.ch>',
+    author_email='martin.uhrin@epfl.ch',
     license=__license__,
     classifiers=[
         'License :: OSI Approved :: MIT License',
