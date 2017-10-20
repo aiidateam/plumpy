@@ -169,7 +169,7 @@ class TickingEngine(ExecutionEngine):
                 # Process is dead
                 to_delete.append(pid)
             else:
-                if proc.state is ProcessState.FINISHED:
+                if proc.state is ProcessState.STOPPED:
                     proc_info.future.process_finished(proc.outputs)
                 elif proc.state is ProcessState.DESTROYED:
                     to_delete.append(pid)
