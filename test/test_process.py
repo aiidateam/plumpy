@@ -432,5 +432,5 @@ class _RestartProcess(WaitForSignalProcess):
         super(_RestartProcess, cls).define(spec)
         spec.dynamic_output()
 
-    def finish(self, result):
+    def finish(self):
         self.out("finished", True)

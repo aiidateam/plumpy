@@ -47,11 +47,11 @@ class TestTaskControllerAndRunner(TestCase):
 
     def test_launch(self):
         # Try launching a process
-        awaitable = self.publisher.launch(plum.test_utils.DummyProcessWithOutput)
+        awaitable = self._launch(plum.test_utils.DummyProcessWithOutput)
 
         proc = None
         t0 = time.time()
-        while proc is None and time.time() - t0 < 5.:
+        while proc is None and time.time() - t0 < 3.:
             self.runner_loop.tick()
             procs = self.runner_loop.objects(obj_type=plum.test_utils.DummyProcessWithOutput)
             if len(procs) > 0 and procs[0].pid == awaitable.pid:
@@ -66,11 +66,11 @@ class TestTaskControllerAndRunner(TestCase):
 
     def test_launch_cancel(self):
         # Try launching a process
-        awaitable = self.publisher.launch(plum.test_utils.DummyProcessWithOutput)
+        awaitable = self._launch(plum.test_utils.DummyProcessWithOutput)
 
         proc = None
         t0 = time.time()
-        while proc is None and time.time() - t0 < 5.:
+        while proc is None and time.time() - t0 < 3.:
             self.runner_loop.tick()
             procs = self.runner_loop.objects(obj_type=plum.test_utils.DummyProcessWithOutput)
             if len(procs) > 0 and procs[0].pid == awaitable.pid:
@@ -87,11 +87,11 @@ class TestTaskControllerAndRunner(TestCase):
 
     def test_launch_exception(self):
         # Try launching a process
-        awaitable = self.publisher.launch(plum.test_utils.ExceptionProcess)
+        awaitable = self._launch(plum.test_utils.ExceptionProcess)
 
         proc = None
         t0 = time.time()
-        while proc is None and time.time() - t0 < 5.:
+        while proc is None and time.time() - t0 < 3.:
             self.runner_loop.tick()
             procs = self.runner_loop.objects(obj_type=plum.test_utils.ExceptionProcess)
             if len(procs) > 0 and procs[0].pid == awaitable.pid:
@@ -106,9 +106,7 @@ class TestTaskControllerAndRunner(TestCase):
         with self.assertRaises(RuntimeError):
             result = self.launcher_loop.run_until_complete(awaitable)
 
-    def test_launch_decoder(self):
-        # Check that the launch decoder works
-        dp = plum.test_utils.DummyProcess()
-        saved_state = plum.Bundle(dp)
-
-        plum.rmq.launch.launch_decode(saved_state)
+    def _launch(self, proc_class, *args, **kwargs):
+        proc = ~self.launcher_loop.create_inserted(proc_class, *args, **kwargs)
+        bundle = plum.Bundle(proc)
+        return self.publisher.launch(bundle)

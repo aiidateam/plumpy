@@ -30,7 +30,7 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
     """
 
     def __init__(self, connection, queue=Defaults.TASK_QUEUE, decoder=pickle.loads,
-                 response_encoder=json.dumps, persistent_uuid=None):
+                 response_encoder=pickle.dumps, persistent_uuid=None):
         """
         :param connection: The pika RabbitMQ connection
         :type connection: :class:`pika.Connection`
@@ -167,7 +167,7 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
     """
 
     def __init__(self, connection, queue=Defaults.TASK_QUEUE, encoder=pickle.dumps,
-                 response_decoder=json.loads):
+                 response_decoder=pickle.loads):
         super(ProcessLaunchPublisher, self).__init__()
 
         self._queue = queue
