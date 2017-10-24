@@ -5,7 +5,6 @@ from abc import ABCMeta
 import apricotpy
 from apricotpy import persistable
 from collections import Sequence
-from plum.event import WaitOnEvent, wait_on_process_event
 from plum.wait import WaitOn
 from plum.utils import override
 from plum.process_listener import ProcessListener
@@ -18,17 +17,17 @@ class Checkpoint(WaitOn):
     create a checkpoint at this point in the execution of a Process.
     """
 
-    def on_loop_inserted(self, loop):
-        super(Checkpoint, self).on_loop_inserted(loop)
+    def __init__(self, *args, **kwargs):
+        super(Checkpoint, self).__init__(*args, **kwargs)
         self.set_result(None)
 
 
-class WaitOnProcessState(WaitOn, ProcessListener):
+class WaitOnProcessState(WaitOn):
     STATE_REACHED = 'state_reached'
     STATE_UNREACHABLE = 'state_unreachable'
 
     @override
-    def __init__(self, proc, target_state):
+    def __init__(self, proc, target_state, loop=None):
         """
         Create the WaitOnState.
 
@@ -38,13 +37,11 @@ class WaitOnProcessState(WaitOn, ProcessListener):
         :type target_state: :class:`plum.process.ProcessState`
         """
         assert target_state in ProcessState, "Must supply a valid process state"
-        super(WaitOnProcessState, self).__init__()
+        super(WaitOnProcessState, self).__init__(loop)
 
         self._pid = proc.pid
         self._target_state = target_state
 
-    def on_loop_inserted(self, loop):
-        super(WaitOnProcessState, self).on_loop_inserted(loop)
         self.execute()
 
     def save_instance_state(self, out_state):
@@ -54,45 +51,38 @@ class WaitOnProcessState(WaitOn, ProcessListener):
 
     def load_instance_state(self, saved_state):
         super(WaitOnProcessState, self).load_instance_state(saved_state)
-
         self._pid = saved_state['calc_pid']
         self._target_state = saved_state['target_state']
 
     def execute(self):
-        proc = self.loop().get_object(self._pid)
+        self.loop().messages().add_listener(
+            self._on_event_message,
+            subject_filter="process.{}.on_*".format(self._pid)
+        )
+        self._send_status_request()
 
-        # Are we currently in the state?
-        if proc.state == self._target_state:
+    def _on_event_message(self, loop, subject, body, sender_id):
+        self._state_changed(body['state'])
+
+    def _state_changed(self, state):
+        if state is self._target_state:
             self.set_result(self.STATE_REACHED)
-        elif self._is_target_state_unreachable(proc.state):
-            self.set_result(self.STATE_UNREACHABLE)
-        else:
-            proc.add_process_listener(self)
-
-    @override
-    def on_process_run(self, proc):
-        self._state_changed(proc)
-
-    @override
-    def on_process_wait(self, proc):
-        self._state_changed(proc)
-
-    @override
-    def on_process_stop(self, proc):
-        self._state_changed(proc)
-
-    @override
-    def on_process_fail(self, proc):
-        self._state_changed(proc)
-
-    def _state_changed(self, proc):
-        if proc.state is self._target_state:
-            self.set_result(self.STATE_REACHED)
-        elif self._is_target_state_unreachable(proc.state):
+        elif self._is_target_state_unreachable(state):
             self.set_result(self.STATE_UNREACHABLE)
 
         if self.done():
-            proc.remove_process_listener(self)
+            self.loop().messages().remove_listener(self._on_event_message)
+
+    def _send_status_request(self):
+        self.loop().messages().add_listener(
+            self._status_request_received,
+            'process.{}.status'.format(self._pid)
+        )
+        self.loop().messages().send('process.{}.request.status'.format(self._pid))
+
+    def _status_request_received(self, loop, subject, body, sender_id):
+        self._state_changed(body['state'])
+        self.loop().messages().remove_listener(self._status_request_received)
 
     def _is_target_state_unreachable(self, current_state):
         # Check start state
@@ -120,7 +110,9 @@ def run_until(proc, state, loop):
     :param loop: The event loop
     """
     if isinstance(proc, Sequence):
-        wait_for = persistable.gather((loop.create(WaitOnProcessState, p, state) for p in proc), loop)
+        wait_for = persistable.gather(
+            (loop.create(WaitOnProcessState, p, state) for p in proc), loop
+        )
     else:
         wait_for = loop.create(WaitOnProcessState, proc, state)
 
@@ -177,7 +169,7 @@ class Barrier(WaitOn):
     @override
     def load_instance_state(self, saved_state):
         super(Barrier, self).load_instance_state(saved_state)
-        
+
         if saved_state['is_open']:
             self.open()
 

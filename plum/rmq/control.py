@@ -51,8 +51,8 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
     """
 
     def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
-                 encoder=action_encode, response_decoder=json.loads):
-        super(ProcessControlPublisher, self).__init__()
+                 encoder=action_encode, response_decoder=json.loads, loop=None):
+        super(ProcessControlPublisher, self).__init__(loop)
 
         self._exchange = exchange
         self._encode = encoder
@@ -126,7 +126,7 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
 
 class ProcessControlSubscriber(apricotpy.TickingLoopObject):
     def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
-                 decoder=action_decode, response_encoder=json.dumps):
+                 decoder=action_decode, response_encoder=json.dumps, loop=None):
         """
         Subscribes and listens for process control messages and acts on them
         by calling the corresponding methods of the process manager.
@@ -135,7 +135,7 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
         :param exchange: The name of the exchange to use
         :param decoder:
         """
-        super(ProcessControlSubscriber, self).__init__()
+        super(ProcessControlSubscriber, self).__init__(loop)
 
         self._decode = decoder
         self._response_encode = response_encoder

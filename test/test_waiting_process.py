@@ -18,7 +18,7 @@ class TestWaitingProcess(TestCase):
         self.loop = loop_factory()
 
     def test_instance_state(self):
-        proc = ~self.loop.create_inserted(TwoCheckpoint)
+        proc = self.loop.create(TwoCheckpoint)
         wl = ProcessSaver(proc)
         self.loop.run_until_complete(proc)
 

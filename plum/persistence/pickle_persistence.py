@@ -211,7 +211,8 @@ class PicklePersistence(apricotpy.LoopObject):
 
     def __init__(self, running_directory=_RUNNING_DIRECTORY,
                  finished_directory=_FINISHED_DIRECTORY,
-                 failed_directory=_FAILED_DIRECTORY):
+                 failed_directory=_FAILED_DIRECTORY,
+                 loop=None):
         """
         Create the pickle persistence object.  If auto_persist is True then
         this object will automatically persist any Processes that are created
@@ -234,7 +235,7 @@ class PicklePersistence(apricotpy.LoopObject):
             Process pickles in.  If None they will be deleted on fail.
         :type failed_directory: str
         """
-        super(PicklePersistence, self).__init__()
+        super(PicklePersistence, self).__init__(loop)
 
         self._running_directory = running_directory
         self._finished_directory = finished_directory

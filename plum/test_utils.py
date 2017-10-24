@@ -81,10 +81,10 @@ class EventsTesterMixin(object):
         assert event in cls.EVENTS, "Unknown event '{}'".format(event)
         cls.called_events.append(event)
 
-    def __init__(self, inputs=None, pid=None, logger=None):
+    def __init__(self, *args, **kwargs):
         assert isinstance(self, Process), \
             "Mixin has to be used with a type derived from a Process"
-        super(EventsTesterMixin, self).__init__(inputs, pid, logger)
+        super(EventsTesterMixin, self).__init__(*args, **kwargs)
         self.__class__.called_events = []
 
     @override

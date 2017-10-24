@@ -30,14 +30,14 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
     """
 
     def __init__(self, connection, queue=Defaults.TASK_QUEUE, decoder=pickle.loads,
-                 response_encoder=pickle.dumps, persistent_uuid=None):
+                 response_encoder=pickle.dumps, persistent_uuid=None, loop=None):
         """
         :param connection: The pika RabbitMQ connection
         :type connection: :class:`pika.Connection`
         :param queue: The queue name to use
         :param decoder: A function to deserialise incoming messages
         """
-        super(ProcessLaunchSubscriber, self).__init__()
+        super(ProcessLaunchSubscriber, self).__init__(loop)
 
         if persistent_uuid is not None:
             self._uuid = uuid
@@ -167,8 +167,8 @@ class ProcessLaunchPublisher(apricotpy.TickingLoopObject):
     """
 
     def __init__(self, connection, queue=Defaults.TASK_QUEUE, encoder=pickle.dumps,
-                 response_decoder=pickle.loads):
-        super(ProcessLaunchPublisher, self).__init__()
+                 response_decoder=pickle.loads, loop=None):
+        super(ProcessLaunchPublisher, self).__init__(loop)
 
         self._queue = queue
         self._encode = encoder

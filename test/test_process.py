@@ -1,6 +1,5 @@
 import apricotpy
 import plum
-from plum import loop_factory
 from plum import Process, ProcessState
 from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, \
     check_process_against_snapshots, \
@@ -9,6 +8,9 @@ from plum.test_utils import ProcessListenerTester
 from plum.utils import override
 from plum.wait_ons import run_until, WaitOnProcessState
 from util import TestCase
+
+from plum import process
+from . import util
 
 
 class ForgetToCallParent(Process):
@@ -52,11 +54,7 @@ class ForgetToCallParent(Process):
             super(ForgetToCallParent, self).on_start()
 
 
-class TestProcess(TestCase):
-    def setUp(self):
-        super(TestProcess, self).setUp()
-        self.loop = loop_factory()
-
+class TestProcess(util.TestCaseWithLoop):
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
@@ -197,15 +195,14 @@ class TestProcess(TestCase):
         Check that the bundle after just creating a process is as we expect
         :return:
         """
-        proc = ~self.loop.create_inserted(DummyProcessWithOutput)
+        proc = self.loop.create(DummyProcessWithOutput)
         b = apricotpy.persistable.Bundle(proc)
 
-        self.assertIsNone(b.get(plum.process.BundleKeys.INPUTS, None))
-        self.assertEqual(len(b[plum.process.BundleKeys.OUTPUTS]), 0)
+        self.assertIsNone(b.get(process.BundleKeys.INPUTS, None))
+        self.assertEqual(len(b[process.BundleKeys.OUTPUTS]), 0)
 
     def test_instance_state(self):
-        BundleKeys = plum.process.BundleKeys
-
+        BundleKeys = process.BundleKeys
         proc = self.loop.create(DummyProcessWithOutput)
 
         saver = ProcessSaver(proc)
@@ -229,7 +226,9 @@ class TestProcess(TestCase):
             self.loop.run_until_complete(proc)
 
             self.assertEqual(proc.state, ProcessState.STOPPED)
-            self.assertTrue(check_process_against_snapshots(self.loop, ProcClass, saver.snapshots))
+            self.assertTrue(
+                check_process_against_snapshots(self.loop, ProcClass, saver.snapshots)
+            )
 
     def test_saving_each_step_interleaved(self):
         for ProcClass in TEST_PROCESSES:
@@ -240,7 +239,9 @@ class TestProcess(TestCase):
             except BaseException:
                 pass
 
-            self.assertTrue(check_process_against_snapshots(self.loop, ProcClass, ps.snapshots))
+            self.assertTrue(
+                check_process_against_snapshots(self.loop, ProcClass, ps.snapshots)
+            )
 
     def test_logging(self):
         class LoggerTester(Process):
@@ -251,7 +252,7 @@ class TestProcess(TestCase):
         self.loop.run_until_complete(self.loop.create(LoggerTester))
 
     def test_abort(self):
-        proc = ~self.loop.create_inserted(DummyProcess)
+        proc = self.loop.create(DummyProcess)
 
         aborted = ~proc.abort('Farewell!')
         self.assertTrue(aborted)
@@ -287,7 +288,6 @@ class TestProcess(TestCase):
 
         # Save the state of the process
         saved_state = apricotpy.persistable.Bundle(process)
-        ~self.loop.remove(process)
 
         # Load a process from the saved state
         process = saved_state.unbundle(self.loop)
@@ -368,6 +368,25 @@ class TestProcess(TestCase):
         # Check results match
         self.assertEqual(result, result2)
 
+    def test_status_request(self):
+        """
+        Test that a status request is acknowledged by a process.
+        """
+        result = {}
+
+        def _got_status(loop, subject, body, sender_id):
+            result['subject'] = subject
+            result['body'] = body
+            result['sender_id'] = sender_id
+
+        self.loop.messages().add_listener(_got_status, 'process.*.status')
+        proc = DummyProcess()
+        self.loop.messages().send('process.[all].request.status')
+        self.loop.run_until_complete(proc)
+
+        self.assertEqual(result['subject'], 'process.{}.status'.format(proc.pid))
+        self.assertIn('body', result)
+
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
@@ -386,12 +405,9 @@ class TestProcess(TestCase):
                              proc.__class__, snapshot.outputs, proc.outputs))
 
 
-class TestProcessEvents(TestCase):
+class TestProcessEvents(util.TestCaseWithLoop):
     def setUp(self):
         super(TestProcessEvents, self).setUp()
-
-        self.loop = loop_factory()
-
         self.events_tester = ProcessListenerTester()
         self.proc = self.loop.create(DummyProcessWithOutput)
         self.proc.add_process_listener(self.events_tester)

@@ -35,10 +35,10 @@ class TestTaskControllerAndRunner(TestCase):
 
         queue = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
 
-        self.publisher = \
-            ~self.launcher_loop.create_inserted(ProcessLaunchPublisher, self._connection, queue=queue)
-        self.subscriber = \
-            ~self.runner_loop.create_inserted(ProcessLaunchSubscriber, self._connection, queue=queue)
+        self.publisher = self.launcher_loop.create(
+            ProcessLaunchPublisher, self._connection, queue=queue)
+        self.subscriber = self.runner_loop.create(
+            ProcessLaunchSubscriber, self._connection, queue=queue)
 
     def tearDown(self):
         self._connection.close()
@@ -107,6 +107,6 @@ class TestTaskControllerAndRunner(TestCase):
             result = self.launcher_loop.run_until_complete(awaitable)
 
     def _launch(self, proc_class, *args, **kwargs):
-        proc = ~self.launcher_loop.create_inserted(proc_class, *args, **kwargs)
+        proc = self.launcher_loop.create(proc_class, *args, **kwargs)
         bundle = plum.Bundle(proc)
         return self.publisher.launch(bundle)

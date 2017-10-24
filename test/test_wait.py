@@ -5,8 +5,8 @@ from util import TestCase
 
 
 class _DummyWait(WaitOn):
-    def __init__(self, value):
-        super(_DummyWait, self).__init__()
+    def __init__(self, value, loop=None):
+        super(_DummyWait, self).__init__(loop)
         self._value = value
         self.set_result(self._value)
 
@@ -27,9 +27,8 @@ class TestWaitOn(TestCase):
         """
         loop = loop_factory()
 
-        w = ~loop.create_inserted(_DummyWait, 5)
+        w = loop.create(_DummyWait, 5)
         saved_state = apricotpy.persistable.Bundle(w)
-        ~w.remove()
 
         w_ = saved_state.unbundle(loop)
         self.assertEqual(w._value, w_._value)

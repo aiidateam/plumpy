@@ -1,3 +1,4 @@
+import apricotpy
 import os.path
 from plum.process import ProcessState
 from plum.persistence.pickle_persistence import PicklePersistence
@@ -15,10 +16,11 @@ class TestPicklePersistence(TestCase):
         super(TestPicklePersistence, self).setUp()
 
         self.loop = loop_factory()
+        apricotpy.set_event_loop(self.loop)
 
         self.store_dir = tempfile.mkdtemp()
         self.pickle_persistence = \
-            ~self.loop.create_inserted(PicklePersistence, running_directory=self.store_dir)
+            self.loop.create(PicklePersistence, running_directory=self.store_dir)
 
     def tearDown(self):
         super(TestPicklePersistence, self).tearDown()
@@ -69,7 +71,7 @@ class TestPicklePersistence(TestCase):
     def test_load_all_checkpoints(self):
         # Create some processes and pickles
         for _ in range(3):
-            proc = ~self.loop.create_inserted(ProcessWithCheckpoint)
+            proc = self.loop.create(ProcessWithCheckpoint)
             self.pickle_persistence.save(proc)
 
         # Check that the number of checkpoints matches we expected
