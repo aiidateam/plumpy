@@ -50,7 +50,7 @@ class TestProcessSpec(TestCase):
         desc = spec.get_description()
         self.assertNotEqual(desc, "")
 
-    def test_validate(self):
+    def test_evaluate(self):
         """
         Test the global spec validator functionality.
         """
@@ -64,7 +64,11 @@ class TestProcessSpec(TestCase):
         self.spec.input("b", required=False)
         self.spec.validator(is_valid)
 
-        self.assertRaises(ValidationError, self.spec.validate, inputs={})
-        self.assertRaises(ValidationError, self.spec.validate, inputs={'a': 'a', 'b': 'b'})
-        self.spec.validate(inputs={'a': 'a'})
-        self.spec.validate(inputs={'b': 'b'})
+        self.assertRaises(ValidationError, self.spec.evaluate, inputs={})
+        self.assertRaises(ValidationError, self.spec.evaluate, inputs={'a': 'a', 'b': 'b'})
+        self.spec.evaluate(inputs={'a': 'a'})
+        self.spec.evaluate(inputs={'b': 'b'})
+
+    def test_serialize(self):
+        self.spec.input("a", valid_type=int, serialize_fct=int)
+        self.assertEqual(self.spec.evaluate(inputs={'a': '1'}), {'a': 1})

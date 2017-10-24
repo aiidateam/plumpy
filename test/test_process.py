@@ -201,7 +201,7 @@ class TestProcess(TestCase):
         proc = ~self.loop.create_inserted(DummyProcessWithOutput)
         b = apricotpy.persistable.Bundle(proc)
 
-        self.assertIsNone(b.get(plum.process.BundleKeys.INPUTS, None))
+        self.assertEqual(b.get(plum.process.BundleKeys.INPUTS, {}), {})
         self.assertEqual(len(b[plum.process.BundleKeys.OUTPUTS]), 0)
 
     def test_instance_state(self):

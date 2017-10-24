@@ -193,7 +193,7 @@ class ProcessSpec(object):
         """
         self._validator = fn
 
-    def validate(self, inputs=None):
+    def evaluate(self, inputs=None):
         """
         This will validate a dictionary of inputs to make sure they are valid
         according to this specification.
@@ -211,15 +211,20 @@ class ProcessSpec(object):
         if not self.has_dynamic_input():
             unexpected = set(inputs.iterkeys()) - set(self.inputs.iterkeys())
             if unexpected:
-                return False, \
-                       "Unexpected inputs found: '{}'.  If you want to allow " \
-                       "dynamic inputs add dynamic_input() to the spec " \
-                       "definition.".format(unexpected)
+                raise ValidationError(
+                    "Unexpected inputs found: '{}'.  If you want to allow " \
+                    "dynamic inputs add dynamic_input() to the spec " \
+                    "definition.".format(unexpected)
+                )
 
         for name, port in self.inputs.items():
-            port.validate(inputs.get(name, None))
+            value = port.evaluate(inputs.get(name, None))
+            if name in inputs:
+                inputs[name] = value
 
         if self._validator is not None:
             valid, msg = self._validator(self, inputs)
             if not valid:
                 raise ValidationError(msg)
+
+        return inputs

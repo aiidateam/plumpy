@@ -179,7 +179,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self.__init(logger)
 
         # Input/output
-        self._check_inputs(inputs)
+        inputs = self._evaluate_inputs(inputs)
         self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
         self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
         self._outputs = {}
@@ -671,9 +671,9 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     # endregion
 
-    def _check_inputs(self, inputs):
+    def _evaluate_inputs(self, inputs):
         # Check the inputs meet the requirements
-        self.spec().validate(inputs)
+        return self.spec().evaluate(inputs)
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
