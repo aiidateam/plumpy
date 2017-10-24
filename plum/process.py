@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta, abstractmethod
-import apricotpy
-import apricotpy.persistable
 from collections import namedtuple
 import copy
 from enum import Enum
@@ -11,11 +9,16 @@ import logging
 import time
 import sys
 
+from future.utils import raise_from
+import apricotpy
+import apricotpy.persistable
+
 import plum.stack as _stack
 from plum.process_listener import ProcessListener
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
 from plum.port import _NULL
+from .exceptions import ValidationError
 from . import utils
 
 __all__ = ['Process', 'ProcessState', 'get_pid_from_bundle']
@@ -522,7 +525,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     def on_fail(self, exc_info):
         """
         Called if the process raised an exception.
-        
+
         :param exc_info: The exception information as returned by sys.exc_info()
         """
         self._fire_event(ProcessListener.on_process_fail)
@@ -594,7 +597,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
             ins = dict(inputs)
         # Go through the spec filling in any default and checking for required
         # inputs
-        for name, port in self.spec().inputs.iteritems():
+        for name, port in self.spec().inputs.items():
             if name not in ins:
                 if port.default != _NULL:
                     ins[name] = port.default
@@ -607,10 +610,10 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     @protected
     def encode_input_args(self, inputs):
-        """ 
-        Encode input arguments such that they may be saved in a 
+        """
+        Encode input arguments such that they may be saved in a
         :class:`apricotpy.persistable.Bundle`
-        
+
         :param inputs: A mapping of the inputs as passed to the process
         :return: The encoded inputs
         """
@@ -619,10 +622,10 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     @protected
     def decode_input_args(self, encoded):
         """
-        Decode saved input arguments as they came from the saved instance state 
+        Decode saved input arguments as they came from the saved instance state
         :class:`apricotpy.persistable.Bundle`
-        
-        :param encoded: 
+
+        :param encoded:
         :return: The decoded input args
         """
         return encoded
@@ -670,18 +673,17 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
-        valid, msg = self.spec().validate(inputs)
-        if not valid:
-            raise ValueError(msg)
+        self.spec().validate(inputs)
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
         for name, port in self.spec().outputs.iteritems():
-            valid, msg = port.validate(self._outputs.get(name, None))
-            if not valid:
-                raise RuntimeError(
-                    "Process {} failed because {}".format(self.get_name(), msg)
-                )
+            try:
+                port.validate(self._outputs.get(name, None))
+            except ValidationError as err:
+                raise_from(err, ValidationError(
+                    "Process {} failed because {}".format(self.get_name(), err)
+                ))
 
     def _loop_check(self):
         assert self.in_loop(), "The process is not in the event loop"
@@ -828,7 +830,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 class ListenContext(object):
     """
     A context manager for listening to the Process.
-    
+
     A typical usage would be:
     with ListenContext(producer, listener):
         # Producer generates messages that the listener gets

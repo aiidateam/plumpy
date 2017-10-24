@@ -2,6 +2,7 @@ from plum.port import InputPort, InputGroupPort, OutputPort, \
     DynamicOutputPort, DynamicInputPort
 from plum._base import LOGGER
 from plum.utils import protected
+from .exceptions import ValidationError
 
 
 class ProcessSpec(object):
@@ -215,14 +216,10 @@ class ProcessSpec(object):
                        "dynamic inputs add dynamic_input() to the spec " \
                        "definition.".format(unexpected)
 
-        for name, port in self.inputs.iteritems():
-            valid, msg = port.validate(inputs.get(name, None))
-            if not valid:
-                return False, msg
+        for name, port in self.inputs.items():
+            port.validate(inputs.get(name, None))
 
         if self._validator is not None:
             valid, msg = self._validator(self, inputs)
             if not valid:
-                return False, msg
-
-        return True, None
+                raise ValidationError(msg)

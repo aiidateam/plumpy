@@ -8,6 +8,7 @@ from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutp
 from plum.test_utils import ProcessListenerTester
 from plum.utils import override
 from plum.wait_ons import run_until, WaitOnProcessState
+from plum.exceptions import ValidationError
 from util import TestCase
 
 
@@ -88,7 +89,7 @@ class TestProcess(TestCase):
             def _run(self, **kwargs):
                 pass
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValidationError):
             self.loop.run_until_complete(self.loop.create(NoDynamic, {'a': 5}))
 
         self.loop.run_until_complete(self.loop.create(WithDynamic, {'a': 5}))

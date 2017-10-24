@@ -4,6 +4,10 @@ from abc import ABCMeta
 import collections
 import logging
 
+from future.utils import raise_from
+
+from .exceptions import ValidationError
+
 _LOGGER = logging.getLogger(__name__)
 
 _NULL = ()
@@ -60,25 +64,29 @@ class ValueSpec(object):
     def validate(self, value):
         if value is None:
             if self._required:
-                return False, "required value was not provided for '{}'". \
-                    format(self.name)
+                raise ValidationError(
+                    "required value was not provided for '{}'".format(self.name)
+                )
         else:
-            if self._valid_type is not None and \
-                    not isinstance(value, self._valid_type):
-                msg = "value '{}' is not of the right type. " \
-                      "Got '{}', expected '{}'".format(
-                    self.name, type(value), self._valid_type)
-                return False, msg
+            if not self._check_type(value):
+                raise ValidationError(
+                    "value '{}' is not of the right type. Got '{}', expected '{}'".format(
+                        self.name, type(value), self._valid_type
+                    )
+                )
 
         if self._validator is not None:
             result = self._validator(value)
             if isinstance(result, collections.Sequence):
                 assert (len(result) == 2), "Invalid validator return type"
-                return result
+                valid, msg = result
+                if not valid:
+                    raise ValidationError(msg)
             elif result is False:
-                return False, "Value failed validation"
+                raise ValidationError("Value failed validation")
 
-        return True, None
+    def _check_type(self, value):
+        return self._valid_type is None or isinstance(value, self._valid_type)
 
 
 class Attribute(ValueSpec):
@@ -115,7 +123,7 @@ class InputPort(Port):
             return False
 
     def __init__(self, name, valid_type=None, help=None, default=_NULL,
-                 required=True, validator=None):
+                 required=True, validator=None, serialize_fct=None):
         super(InputPort, self).__init__(
             name, valid_type=valid_type, help=help, required=InputPort.required_override(required, default),
             validator=validator)
@@ -125,11 +133,23 @@ class InputPort(Port):
                          "because a default was specified".format(name))
 
         if default is not _NULL:
-            default_valid, msg = self.validate(default)
-            if not default_valid:
-                raise ValueError("Invalid default value: {}".format(msg))
+            try:
+                self.validate(default)
+            except ValidationError as err:
+                raise_from(err, ValidationError("Invalid default value: {}".format(err)))
 
         self._default = default
+        self._serialize_fct = serialize_fct
+
+    def evaluate(self, value):
+        value = self._serialize(value)
+        self.validate(value)
+        return value
+
+    def _serialize(self, value):
+        if not self._check_type(value):
+            value = self._serialize_fct(value)
+        return value
 
     def __str__(self):
         desc = [super(InputPort, self).__str__()]
@@ -168,19 +188,17 @@ class InputGroupPort(InputPort):
         return self._default
 
     def validate(self, value):
-        valid, msg = super(InputGroupPort, self).validate(value)
-        if not valid:
-            return False, msg
+        super(InputGroupPort, self).validate(value)
 
         if value is not None and self._valid_inner_type is not None:
             # Check that all the members of the dictionary are of the right type
-            for k, v in value.iteritems():
+            for k, v in value.items():
                 if not isinstance(v, self._valid_inner_type):
-                    return False, "Group port value {} is not of the right type. Should be of type {}, but is {}.".format(
-                        k, self._valid_inner_type, type(v))
-
-        return True, None
-
+                    raise ValidationError(
+                        "Group port value {} is not of the right type. Should be of type {}, but is {}.".format(
+                            k, self._valid_inner_type, type(v)
+                        )
+                    )
 
 class DynamicInputPort(InputPort):
     """

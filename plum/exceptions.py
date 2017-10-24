@@ -28,3 +28,6 @@ class Interrupted(Exception):
 
 class InvalidStateError(Exception):
     pass
+
+class ValidationError(Exception):
+    pass

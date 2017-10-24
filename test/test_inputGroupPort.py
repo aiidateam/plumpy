@@ -1,23 +1,24 @@
 from util import TestCase
 from plum.port import InputGroupPort
+from plum.exceptions import ValidationError
 
 
 class TestInputGroupPort(TestCase):
     def test_validate(self):
         p = InputGroupPort("test")
-        self.assertTrue(p.validate({})[0])
+        p.validate({})
 
         p = InputGroupPort("test", required=True)
-        self.assertFalse(p.validate(None)[0])
-        self.assertTrue(p.validate({})[0])
-        self.assertTrue(p.validate({'a': 'value'})[0])
+        self.assertRaises(ValidationError, p.validate, None)
+        p.validate({})
+        p.validate({'a': 'value'})
 
         p = InputGroupPort("test", default={})
-        self.assertTrue(p.validate(None)[0])
-        self.assertTrue(p.validate({})[0])
+        p.validate(None)
+        p.validate({})
 
         p = InputGroupPort("test", valid_type=basestring)
-        self.assertTrue(p.validate({'a': 'value'})[0])
+        p.validate({'a': 'value'})
 
         p = InputGroupPort("test", required=True, valid_type=(basestring, int))
-        self.assertTrue(p.validate({'a': 'value', 'b': 3}))
+        p.validate({'a': 'value', 'b': 3})

@@ -1,5 +1,6 @@
 import unittest
 from plum.process import ProcessSpec
+from plum.exceptions import ValidationError
 from util import TestCase
 
 
@@ -14,9 +15,9 @@ class TestProcessSpec(TestCase):
     def test_dynamic_output(self):
         self.spec.dynamic_output(valid_type=str)
         port = self.spec.get_dynamic_output()
-        self.assertTrue(port.validate("foo")[0])
-        self.assertTrue(port.validate(StrSubtype("bar"))[0])
-        self.assertFalse(port.validate(5)[0])
+        port.validate("foo")
+        port.validate(StrSubtype("bar"))
+        self.assertRaises(ValidationError, port.validate, 5)
 
         # Remove dynamic output
         self.spec.no_dynamic_output()
@@ -29,9 +30,9 @@ class TestProcessSpec(TestCase):
         # Now add and check behaviour
         self.spec.dynamic_output(valid_type=str)
         port = self.spec.get_dynamic_output()
-        self.assertTrue(port.validate("foo")[0])
-        self.assertTrue(port.validate(StrSubtype("bar"))[0])
-        self.assertFalse(port.validate(5)[0])
+        port.validate("foo")
+        port.validate(StrSubtype("bar"))
+        self.assertRaises(ValidationError, port.validate, 5)
 
     def test_get_description(self):
         spec = ProcessSpec()
@@ -63,14 +64,7 @@ class TestProcessSpec(TestCase):
         self.spec.input("b", required=False)
         self.spec.validator(is_valid)
 
-        valid, msg = self.spec.validate(inputs={})
-        self.assertFalse(valid, msg)
-
-        valid, msg = self.spec.validate(inputs={'a': 'a', 'b': 'b'})
-        self.assertFalse(valid, msg)
-
-        valid, msg = self.spec.validate(inputs={'a': 'a'})
-        self.assertTrue(valid, msg)
-
-        valid, msg = self.spec.validate(inputs={'b': 'b'})
-        self.assertTrue(valid, msg)
+        self.assertRaises(ValidationError, self.spec.validate, inputs={})
+        self.assertRaises(ValidationError, self.spec.validate, inputs={'a': 'a', 'b': 'b'})
+        self.spec.validate(inputs={'a': 'a'})
+        self.spec.validate(inputs={'b': 'b'})
