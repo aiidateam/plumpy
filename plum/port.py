@@ -4,17 +4,18 @@ from abc import ABCMeta
 import collections
 import logging
 
+from future.utils import with_metaclass
+
 _LOGGER = logging.getLogger(__name__)
 
 _NULL = ()
 
 
-class ValueSpec(object):
+class ValueSpec(with_metaclass(ABCMeta, object)):
     """
     Specifications relating to a general input/output value including
     properties like whether it is required, valid types, the help string, etc.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, valid_type=None, help=None, required=True,
                  validator=None):
@@ -92,8 +93,7 @@ class Attribute(ValueSpec):
         return self._default
 
 
-class Port(ValueSpec):
-    __metaclass__ = ABCMeta
+class Port(with_metaclass(ABCMeta, ValueSpec)):
     pass
 
 
@@ -174,7 +174,7 @@ class InputGroupPort(InputPort):
 
         if value is not None and self._valid_inner_type is not None:
             # Check that all the members of the dictionary are of the right type
-            for k, v in value.iteritems():
+            for k, v in value.items():
                 if not isinstance(v, self._valid_inner_type):
                     return False, "Group port value {} is not of the right type. Should be of type {}, but is {}.".format(
                         k, self._valid_inner_type, type(v))
