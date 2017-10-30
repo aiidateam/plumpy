@@ -1,4 +1,3 @@
-
 from unittest import TestCase
 from plum.process_monitor import MONITOR, ProcessMonitorListener
 from plum.util import override
@@ -8,10 +7,16 @@ from plum.engine.serial import SerialEngine
 
 class EventTracker(ProcessMonitorListener):
     def __init__(self):
-        MONITOR.add_monitor_listener(self)
         self.created_called = False
         self.failed_called = False
         self.destroyed_called = False
+
+    def __enter__(self):
+        MONITOR.add_monitor_listener(self)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        MONITOR.remove_monitor_listener(self)
 
     @override
     def on_monitored_process_created(self, process):
@@ -30,9 +35,6 @@ class EventTracker(ProcessMonitorListener):
         self.failed_called = False
         self.destroyed_called = False
 
-    def __del__(self):
-        MONITOR.remove_monitor_listener(self)
-
 
 class TestProcessMonitor(TestCase):
     def setUp(self):
@@ -43,32 +45,26 @@ class TestProcessMonitor(TestCase):
         self.assertEqual(len(MONITOR.get_pids()), 0)
 
     def test_create_destroy(self):
-        l = EventTracker()
+        with EventTracker() as l:
+            pid = self.engine.submit(DummyProcess).pid
 
-        pid = self.engine.submit(DummyProcess).pid
+            with self.assertRaises(ValueError):
+                MONITOR.get_process(pid)
 
-        with self.assertRaises(ValueError):
-            MONITOR.get_process(pid)
-
-        self.assertTrue(l.created_called)
-        self.assertTrue(l.destroyed_called)
-        self.assertFalse(l.failed_called)
-
-        del l
+            self.assertTrue(l.created_called)
+            self.assertTrue(l.destroyed_called)
+            self.assertFalse(l.failed_called)
 
     def test_create_fail(self):
-        l = EventTracker()
+        with EventTracker() as l:
+            pid = self.engine.submit(ExceptionProcess).pid
 
-        pid = self.engine.submit(ExceptionProcess).pid
+            with self.assertRaises(ValueError):
+                MONITOR.get_process(pid)
 
-        with self.assertRaises(ValueError):
-            MONITOR.get_process(pid)
-
-        self.assertTrue(l.created_called)
-        self.assertFalse(l.destroyed_called)
-        self.assertTrue(l.failed_called)
-
-        del l
+            self.assertTrue(l.created_called)
+            self.assertFalse(l.destroyed_called)
+            self.assertTrue(l.failed_called)
 
     def test_get_proecss(self):
         dp = DummyProcess.new_instance()
@@ -80,4 +76,3 @@ class TestProcessMonitor(TestCase):
         with self.assertRaises(ValueError):
             MONITOR.get_process(pid)
         self.assertEqual(len(MONITOR.get_pids()), 0)
-

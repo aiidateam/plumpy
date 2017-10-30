@@ -68,7 +68,7 @@ class _Future(Future):
         return self._status is self.Status.CURRENT
 
     def done(self):
-        return self._status in [self.Status.CANCELLED, self.Status.FINISHED]
+        return self._status in [self.Status.CANCELLED, self.Status.FINISHED, self.Status.FAILED]
 
     def result(self, timeout=None):
         if self._status is self.Status.CURRENT:
@@ -169,7 +169,7 @@ class TickingEngine(ExecutionEngine):
                 # Process is dead
                 to_delete.append(pid)
             else:
-                if proc.state is ProcessState.FINISHED:
+                if proc.state is ProcessState.STOPPED:
                     proc_info.future.process_finished(proc.outputs)
                 elif proc.state is ProcessState.DESTROYED:
                     to_delete.append(pid)

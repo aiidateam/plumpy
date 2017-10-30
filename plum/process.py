@@ -51,11 +51,11 @@ class Process(object):
 
     The possible transitions between states are::
 
-                        /------WAITING----------------\\
+                        /------WAITING-----------------\\
                        /        | |                    \\
         CREATED -- STARTED -- RUNNING -- FINISHED -- STOPPED -- DESTROYED
-           \           \______________________________/            /
-            \_____________________________________________________/
+           \           \________|_____________________/            /
+           \______________________________________________________/
     ::
 
     When a Process enters a state is always gets a corresponding message, e.g.
@@ -446,7 +446,7 @@ class Process(object):
 
     def perform_stop(self):
         assert self.state in [ProcessState.STARTED, ProcessState.WAITING,
-                              ProcessState.FINISHED]
+                              ProcessState.RUNNING, ProcessState.FINISHED]
 
         self._waiting_on = None
 
@@ -833,7 +833,9 @@ class _Director(object):
         :param retval:
         :return:
         """
-        if isinstance(retval, WaitOn):
+        if self._stop:
+            self._proc.perform_stop()
+        elif isinstance(retval, WaitOn):
             # RUNNING -> WAITING
             self._proc.perform_wait(retval)
         else:
