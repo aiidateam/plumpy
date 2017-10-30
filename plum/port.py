@@ -4,7 +4,7 @@ from abc import ABCMeta
 import collections
 import logging
 
-from future.utils import raise_from
+from future.utils import raise_from, with_metaclass
 
 from .exceptions import ValidationError
 
@@ -13,12 +13,11 @@ _LOGGER = logging.getLogger(__name__)
 _NULL = ()
 
 
-class ValueSpec(object):
+class ValueSpec(with_metaclass(ABCMeta, object)):
     """
     Specifications relating to a general input/output value including
     properties like whether it is required, valid types, the help string, etc.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, valid_type=None, help=None, required=True,
                  validator=None):
@@ -100,8 +99,7 @@ class Attribute(ValueSpec):
         return self._default
 
 
-class Port(ValueSpec):
-    __metaclass__ = ABCMeta
+class Port(with_metaclass(ABCMeta, ValueSpec)):
     pass
 
 

@@ -9,7 +9,7 @@ from plum.test_utils import ProcessListenerTester
 from plum.utils import override
 from plum.wait_ons import run_until, WaitOnProcessState
 from plum.exceptions import ValidationError
-from util import TestCase
+from .util import TestCase
 
 
 class ForgetToCallParent(Process):

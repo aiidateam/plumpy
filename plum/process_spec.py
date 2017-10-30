@@ -53,13 +53,13 @@ class ProcessSpec(object):
             desc.append("Inputs")
             desc.append("======")
             desc.extend([p.get_description() for k, p in
-                         sorted(self.inputs.iteritems(), key=lambda x: x[0])])
+                         sorted(self.inputs.items(), key=lambda x: x[0])])
 
         if self.outputs:
             desc.append("Outputs")
             desc.append("=======")
             desc.extend([p.get_description() for k, p in
-                         sorted(self.outputs.iteritems(), key=lambda x: x[0])])
+                         sorted(self.outputs.items(), key=lambda x: x[0])])
 
         return "\n".join(desc)
 
@@ -209,7 +209,7 @@ class ProcessSpec(object):
 
         # Check the inputs meet the requirements
         if not self.has_dynamic_input():
-            unexpected = set(inputs.iterkeys()) - set(self.inputs.iterkeys())
+            unexpected = set(inputs.keys()) - set(self.inputs.keys())
             if unexpected:
                 raise ValidationError(
                     "Unexpected inputs found: '{}'.  If you want to allow " \

@@ -1,7 +1,8 @@
 import unittest
 from plum.process import ProcessSpec
 from plum.exceptions import ValidationError
-from util import TestCase
+from .util import TestCase
+
 
 
 class StrSubtype(str):

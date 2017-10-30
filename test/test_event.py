@@ -1,4 +1,4 @@
-from util import TestCase
+from .util import TestCase
 from plum.event import wait_on_process_event, EventEmitter
 from plum import loop_factory
 from plum.test_utils import DummyProcess, ExceptionProcess

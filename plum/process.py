@@ -9,7 +9,7 @@ import logging
 import time
 import sys
 
-from future.utils import raise_from
+from future.utils import raise_from, with_metaclass
 import apricotpy
 import apricotpy.persistable
 
@@ -71,7 +71,7 @@ class BundleKeys(Enum):
     CALLBACK_ARGS = 'CALLBACK_ARGS'
 
 
-class Process(apricotpy.persistable.AwaitableLoopObject):
+class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)):
     """
     The Process class is the base for any unit of work in plum.
 
@@ -110,7 +110,6 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     always called immediately after that state is entered but before being
     executed.
     """
-    __metaclass__ = ABCMeta
 
     # Static class stuff ######################
     _spec_type = ProcessSpec
@@ -677,7 +676,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
-        for name, port in self.spec().outputs.iteritems():
+        for name, port in self.spec().outputs.items():
             try:
                 port.validate(self._outputs.get(name, None))
             except ValidationError as err:
