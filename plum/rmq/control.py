@@ -5,6 +5,8 @@ import pika
 import pika.exceptions
 import uuid
 
+from past.builtins import basestring
+
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.utils import override
@@ -184,7 +186,7 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
             else:
                 raise RuntimeError("Unknown intent")
         except ValueError as e:
-            result = e.message
+            result = str(e)
         else:
             # Tell the sender that we've dealt with it
             self._send_response(ch, props.reply_to, props.correlation_id, result)

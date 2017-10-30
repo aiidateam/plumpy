@@ -1,7 +1,7 @@
 import apricotpy
 from plum import loop_factory
 from plum.wait import WaitOn
-from util import TestCase
+from .util import TestCase
 
 
 class _DummyWait(WaitOn):

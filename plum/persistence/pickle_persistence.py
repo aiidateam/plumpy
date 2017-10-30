@@ -8,6 +8,9 @@ import shutil
 import tempfile
 import traceback
 import pickle
+
+from future.utils import raise_from
+
 from plum.process import Process
 from plum.persistence._base import LOGGER
 
@@ -63,7 +66,7 @@ def _ensure_directory(dir_path):
 def _create_saved_instance_state(process):
     """
     Create a saved instance state bundle for a process.
-    
+
     :param process: The process
     :type process: :class:`plum.Process`
     :return: The saved state bundle
@@ -112,8 +115,14 @@ class Saver(object):
             self._lock = RLock(save_file, 'w+b', timeout=0)
             self._lock.acquire()
         except portalocker.LockException as e:
-            e.message = "Unable to lock pickle '{}' someone else must have locked it.\n" + e.message
-            raise e
+            raise_from(
+                portalocker.LockException(
+                    "Unable to lock pickle '{}' someone else must have locked it.\n".format(
+                        save_file
+                    ) + str(e)
+                ),
+                e
+            )
 
         self._save_file = save_file
         self._loop = loop
@@ -165,8 +174,8 @@ class Saver(object):
             _save_locked(process, self._lock)
         except BaseException as e:
             LOGGER.debug(
-                "Failed trying to save pickle for process '{}': "
-                    .format(process.uuid, e.message)
+                "Failed trying to save pickle for process '{}': {}"
+                    .format(process.uuid, str(e))
             )
 
 
@@ -276,7 +285,7 @@ class PicklePersistence(apricotpy.LoopObject):
         return checkpoints
 
     def start_persisting(self):
-        """      
+        """
         Any new processes inserted into the event loop will be persisted at each state transition.
         """
         if self._persisting:
@@ -328,7 +337,7 @@ class PicklePersistence(apricotpy.LoopObject):
         )
 
     def reset_persisted(self, delete=False):
-        for saver in self._savers.itervalues():
+        for saver in self._savers.values():
             saver.stop(delete=delete)
 
         self._savers.clear()

@@ -8,7 +8,7 @@ from plum.test_utils import check_process_against_snapshots
 from plum.utils import override
 from plum.test_utils import ProcessSaver
 from plum.wait_ons import run_until
-from util import TestCase
+from .util import TestCase
 
 
 class TestWaitingProcess(TestCase):

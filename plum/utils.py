@@ -58,7 +58,7 @@ class EventHelper(object):
                 _LOGGER.error(
                     "The listener '{}' produced an exception while receiving "
                     "the message '{}':\n{}: {}".format(
-                        l, event_function.__name__, e.__class__.__name__, e.message)
+                        l, event_function.__name__, e.__class__.__name__, str(e))
                 )
                 if self._raise_exceptions:
                     raise
@@ -200,8 +200,8 @@ def set_if_not_none(mapping, key, value):
     """
     Set the given value in a mapping only if the value is not `None`,
     otherwise the mapping is left untouched
-    
-    :param mapping: The mapping to set the value for 
+
+    :param mapping: The mapping to set the value for
     :param key: The mapping key
     :param value: The mapping value
     """

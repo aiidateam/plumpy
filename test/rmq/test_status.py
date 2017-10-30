@@ -107,7 +107,7 @@ class TestStatusProvider(TestCase):
         self.assertSetEqual(set([p.pid for p in procs]), set(procs_dict.keys()))
 
         # Check they are all waiting on the same thing
-        waiting_on = set([entry['waiting_on'] for entry in procs_dict.itervalues()])
+        waiting_on = set([entry['waiting_on'] for entry in procs_dict.values()])
         self.assertSetEqual(waiting_on, {str(procs[0].get_waiting_on())})
 
 

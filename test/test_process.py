@@ -7,7 +7,7 @@ from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutp
 from plum.test_utils import ProcessListenerTester
 from plum.utils import override
 from plum.wait_ons import run_until, WaitOnProcessState
-from util import TestCase
+from .util import TestCase
 
 from plum import process
 from . import util
