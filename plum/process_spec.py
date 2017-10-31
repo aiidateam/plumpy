@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from collections import defaultdict
 from plum.port import InputPort, InputGroupPort, OutputPort, \
     DynamicOutputPort, DynamicInputPort, PortNamespace
 from plum._base import LOGGER
@@ -21,6 +23,7 @@ class ProcessSpec(object):
     def __init__(self):
         self._inputs = PortNamespace()
         self._outputs = PortNamespace()
+        self._exposed_inputs = defaultdict(lambda: defaultdict(list))
         self._validator = None
         self._sealed = False
 
@@ -246,14 +249,19 @@ class ProcessSpec(object):
         else:
             port_namespace = self._inputs
 
+        exposed_inputs_list = self._exposed_inputs[namespace][process_class]
+
         for name, port in process_class.spec().inputs.iteritems():
 
             if name.startswith('_') or name == 'dynamic':
                 continue
 
             if include is not None:
-                if name in include:
-                    port_namespace[name] = port
+                if name not in include:
+                    continue
             else:
-                if name not in exclude:
-                    port_namespace[name] = port
+                if name in exclude:
+                    continue
+
+            port_namespace[name] = port
+            exposed_inputs_list.append(name)

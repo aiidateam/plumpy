@@ -623,6 +623,8 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
 
         for namespace in namespaces:
 
+            exposed_inputs_list = self.spec()._exposed_inputs[namespace][process_class]
+
             # The namespace None indicates the base level namespace
             if namespace is None:
                 inputs = self.inputs
@@ -635,7 +637,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
                     raise ValueError('this process does not contain the "{}" input namespace'.format(namespace))
 
             for name, port in port_namespace.ports.iteritems():
-                if name in inputs and name in process_class.spec().inputs:
+                if name in inputs and name in exposed_inputs_list:
                     exposed_inputs[name] = inputs[name]
 
         return exposed_inputs
