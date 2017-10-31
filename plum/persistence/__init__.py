@@ -1,6 +1,8 @@
+from collections import namedtuple
 from abc import abstractmethod, abstractproperty, ABCMeta
 import apricotpy
 
+PersistedCheckpoint = namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
 class Persister(object):
 
@@ -27,5 +29,27 @@ class Persister(object):
             a specific sub checkpoint for the corresponding process
         :return: a bundle with the process state
         :rtype: :class:`apricotpy.Bundle`
+        """
+        pass
+
+    @abstractmethod
+    def get_checkpoints(self):
+        """
+        Return a list of all the current persisted process checkpoints
+        with each element containing the process id and optional checkpoint tag
+
+        :return: list of PersistedCheckpoint tuples
+        """
+        pass
+
+    @abstractmethod
+    def get_process_checkpoints(self, pid):
+        """
+        Return a list of all the current persisted process checkpoints for the
+        specified process with each element containing the process id and
+        optional checkpoint tag
+
+        :param pid: the process pid
+        :return: list of PersistedCheckpoint tuples
         """
         pass

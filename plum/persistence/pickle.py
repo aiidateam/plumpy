@@ -1,9 +1,12 @@
 import os
+import re
 import errno
+import fnmatch
 import pickle
 
 from apricotpy.persistable import Bundle
 from plum.persistence import Persister
+from plum.persistence import PersistedCheckpoint
 
 
 class PicklePersister(Persister):
@@ -11,6 +14,7 @@ class PicklePersister(Persister):
     Implementation of the abstract Persister class that stores Process states
     in pickles on a filesystem.
     """
+    PICKLE_SUFFIX = 'pickle'
 
     def __init__(self, pickle_directory):
         """
@@ -23,7 +27,7 @@ class PicklePersister(Persister):
         super(PicklePersister, self).__init__()
 
         try:
-            ensure_pickle_directory(pickle_directory)
+            self.ensure_pickle_directory(pickle_directory)
         except OSError as exception:
             raise ValueError('failed to create the pickle directory at {}'.format(pickle_directory))
 
@@ -43,15 +47,36 @@ class PicklePersister(Persister):
                 raise
 
     @staticmethod
+    def parse_filename(filename):
+        """
+        Parse the filename of a persisted checkpoint to retrieve the process id
+        and the optional tag
+
+        :returns: a tuple of process id and optional tag
+        :rtype: PersistedCheckpoint
+        :raises ValueError: if filename does not conform to expected format
+        """
+        regex = '^(([^\.]*)\.)?(.*)\.{}$'.format(PICKLE_SUFFIX)
+        matches = re.findall(regex, filename)
+
+        if not matches:
+            raise ValueError('invalid pickle filename detected, could not determine pid and or tag')
+
+        if matches[0][0]:
+            return PersistedCheckpoint(matches[0][1], matches[0][2])
+        else:
+            return PersistedCheckpoint(matches[0][2], None)
+
+    @staticmethod
     def pickle_filename(pid, tag=None):
         """
         Returns the relative filepath of the pickle for the given process id
         and optional checkpoint tag
         """
         if tag is not None:
-            filename = '{}.{}.pickle'.format(pid, tag)
+            filename = '{}.{}.{}'.format(pid, tag, self.PICKLE_SUFFIX)
         else:
-            filename = '{}.pickle'.format(pid)
+            filename = '{}.{}'.format(pid, self.PICKLE_SUFFIX)
 
         return filename
 
@@ -61,7 +86,7 @@ class PicklePersister(Persister):
         Returns the full filepath of the pickle for the given process id
         and optional checkpoint tag
         """
-        return os.path.join(self._pickle_directory, pickle_filename(pid, tag))
+        return os.path.join(self._pickle_directory, self.pickle_filename(pid, tag))
 
     def save_checkpoint(self, process, tag=None):
         """
@@ -73,7 +98,7 @@ class PicklePersister(Persister):
         """
         bundle = Bundle(process)
 
-        with open(pickle_filepath(process.pid, tag), 'w+b') as handle:
+        with open(self.pickle_filepath(process.pid, tag), 'w+b') as handle:
             pickle.dump(bundle, handle)
 
     def load_checkpoint(self, pid, tag=None):
@@ -87,8 +112,40 @@ class PicklePersister(Persister):
         :rtype: :class:`apricotpy.persistable.Bundle`
         """
         try:
-            bundle = pickle.load(pickle_filepath(pid, tag))
+            bundle = pickle.load(self.pickle_filepath(pid, tag))
         except IOError as exception:
             raise
 
         return bundle
+
+    def get_checkpoints(self):
+        """
+        Return a list of all the current persisted process checkpoints
+        with each element containing the process id and optional checkpoint tag
+
+        :return: list of PersistedCheckpoint tuples
+        """
+        checkpoints = []
+        file_pattern = '*.{}'.format(self.PICKLE_SUFFIX)
+
+        for subdir, dirs, files in os.walk(self._pickle_directory):
+            for filename in fnmatch.filter(files, file_pattern):
+                try:
+                    checkpoint = self.parse_filename(filename)
+                except ValueError:
+                    continue
+                else:
+                    checkpoints.append(checkpoint)
+
+        return checkpoints
+
+    def get_process_checkpoints(self, pid):
+        """
+        Return a list of all the current persisted process checkpoints for the
+        specified process with each element containing the process id and
+        optional checkpoint tag
+
+        :param pid: the process pid
+        :return: list of PersistedCheckpoint tuples
+        """
+        return [checkpoint for c in self.get_checkpoints if c.pid == pid]
