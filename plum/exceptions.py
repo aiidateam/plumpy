@@ -2,7 +2,7 @@ class CancelledError(Exception):
     pass
 
 
-class ClassNotFoundException(Exception):
+class ClassNotFoundException(ImportError):
     pass
 
 
