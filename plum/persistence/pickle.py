@@ -43,40 +43,51 @@ class PicklePersister(Persister):
                 raise
 
     @staticmethod
-    def pickle_filename(pid):
+    def pickle_filename(pid, tag=None):
         """
         Returns the relative filepath of the pickle for the given process id
+        and optional checkpoint tag
         """
-        return '{}.pickle'.format(pid)
+        if tag is not None:
+            filename = '{}.{}.pickle'.format(pid, tag)
+        else:
+            filename = '{}.pickle'.format(pid)
+
+        return filename
 
     @staticmethod
-    def pickle_filepath(pid):
+    def pickle_filepath(pid, tag=None):
         """
         Returns the full filepath of the pickle for the given process id
+        and optional checkpoint tag
         """
-        return os.path.join(self._pickle_directory, pickle_filename(pid))
+        return os.path.join(self._pickle_directory, pickle_filename(pid, tag))
 
-    def save_checkpoint(self, process):
+    def save_checkpoint(self, process, tag=None):
         """
         Persist a process to a pickle on disk
 
         :param process: :class:`plum.process.Process`
+        :param tag: optional checkpoint identifier to allow distinguishing
+            multiple checkpoints for the same process
         """
         bundle = Bundle(process)
 
-        with open(pickle_filepath(process.pid), 'w+b') as handle:
+        with open(pickle_filepath(process.pid, tag), 'w+b') as handle:
             pickle.dump(bundle, handle)
 
-    def load_checkpoint(self, pid):
+    def load_checkpoint(self, pid, tag=None):
         """
         Load a process from a persisted checkpoint by its process id
 
         :param pid: the process id of the :class:`plum.process.Process`
+        :param tag: optional checkpoint identifier to allow retrieving
+            a specific sub checkpoint for the corresponding process
         :return: a bundle with the process state
         :rtype: :class:`apricotpy.persistable.Bundle`
         """
         try:
-            bundle = pickle.load(pickle_filepath(pid))
+            bundle = pickle.load(pickle_filepath(pid, tag))
         except IOError as exception:
             raise
 
