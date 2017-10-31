@@ -2,7 +2,7 @@ from plum import loop_factory
 from plum.process import ProcessState
 from plum.test_utils import WaitForSignalProcess, DummyProcess
 from plum import wait_ons
-from util import TestCase
+from .util import TestCase
 
 
 class TestWaitOnProcessStateEvent(TestCase):

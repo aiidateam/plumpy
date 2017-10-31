@@ -32,6 +32,7 @@ setup(
         'apricotpy', 'frozendict', 'portalocker'
     ],
     extras_require={
+        'rmq': ['pika'],
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['futures'],
     },

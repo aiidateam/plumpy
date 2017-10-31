@@ -8,7 +8,7 @@ from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutp
 from plum.test_utils import ProcessListenerTester
 from plum.utils import override
 from plum.wait_ons import run_until, WaitOnProcessState
-from util import TestCase
+from .util import TestCase
 
 
 class ForgetToCallParent(Process):
@@ -22,6 +22,11 @@ class ForgetToCallParent(Process):
         pass
 
     @override
+    def on_create(self):
+        if self.inputs.forget_on != 'create':
+            super(ForgetToCallParent, self).on_create()
+
+    @override
     def on_start(self):
         if self.inputs.forget_on != 'start':
             super(ForgetToCallParent, self).on_start()
@@ -32,7 +37,7 @@ class ForgetToCallParent(Process):
             super(ForgetToCallParent, self).on_start()
 
     @override
-    def on_fail(self):
+    def on_fail(self, exc_info):
         if self.inputs.forget_on != 'fail':
             super(ForgetToCallParent, self).on_start()
 
@@ -110,7 +115,7 @@ class TestProcess(TestCase):
             @classmethod
             def define(cls, spec):
                 super(Proc, cls).define(spec)
-                spec.input("input", default=5, required=False)
+                spec.input('input', default=5, required=False)
 
         # Supply a value
         p = self.loop.create(Proc, inputs={'input': 2})
@@ -119,6 +124,19 @@ class TestProcess(TestCase):
         # Don't supply, use default
         p = self.loop.create(Proc)
         self.assertEqual(p.inputs['input'], 5)
+
+    def test_inputs_default_that_evaluate_to_false(self):
+        for def_val in (True, False, 0, 1):
+            class Proc(DummyProcess):
+                @classmethod
+                def define(cls, spec):
+                    super(Proc, cls).define(spec)
+                    spec.input('input', default=def_val)
+
+            # Don't supply, use default
+            p = self.loop.create(Proc)
+            self.assertIn('input', p.inputs)
+            self.assertEqual(p.inputs['input'], def_val)
 
     def test_run(self):
         p = self.loop.create(DummyProcessWithOutput)
@@ -137,7 +155,7 @@ class TestProcess(TestCase):
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
-        for event in ('start', 'run', 'finish', 'stop'):
+        for event in ('create', 'start', 'run', 'finish', 'stop'):
             with self.assertRaises(AssertionError):
                 self.loop.run_until_complete(
                     self.loop.create(ForgetToCallParent, {'forget_on': event})
@@ -329,6 +347,27 @@ class TestProcess(TestCase):
         self.assertEqual(proc.state, ProcessState.STOPPED)
         self.assertTrue(proc.has_finished())
 
+    def test_wait_save_continue(self):
+        """ Test that process saved while in WAITING state restarts correctly when loaded """
+        proc = self.loop.create(WaitForSignalProcess)
+
+        # Wait - Run the process until it enters the WAITING state
+        run_until(proc, ProcessState.WAITING, self.loop)
+
+        saved_state = apricotpy.persistable.Bundle(proc)
+
+        # Run the process to the end
+        proc.continue_()
+        result = ~proc
+
+        # Load from saved state and run again
+        proc = saved_state.unbundle(self.loop)
+        proc.continue_()
+        result2 = ~proc
+
+        # Check results match
+        self.assertEqual(result, result2)
+
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
@@ -393,7 +432,7 @@ class _RestartProcess(WaitForSignalProcess):
         super(_RestartProcess, cls).define(spec)
         spec.dynamic_output()
 
-    def finish(self, result):
+    def finish(self):
         self.out("finished", True)
 
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from abc import abstractmethod
-import apricotpy.persistable as apricotpy
+import apricotpy.utils
+from apricotpy import persistable
 import frozendict
 import importlib
 import inspect
@@ -11,7 +11,7 @@ import threading
 from plum.exceptions import ClassNotFoundException, InvalidStateError, CancelledError
 from plum.settings import check_protected, check_override
 
-__all__ = ['loop_factory', 'get_default_loop']
+__all__ = ['loop_factory']
 
 protected = plum.lang.protected(check=check_protected)
 override = plum.lang.override(check=check_override)
@@ -58,7 +58,7 @@ class EventHelper(object):
                 _LOGGER.error(
                     "The listener '{}' produced an exception while receiving "
                     "the message '{}':\n{}: {}".format(
-                        l, event_function.__name__, e.__class__.__name__, e.message)
+                        l, event_function.__name__, e.__class__.__name__, str(e))
                 )
                 if self._raise_exceptions:
                     raise
@@ -134,10 +134,7 @@ def load_class(classstring):
     """
     Load a class from a string
     """
-    class_data = classstring.split(".")
-    module_path = ".".join(class_data[:-1])
-    class_name = class_data[-1]
-
+    module_path, class_name = classstring.rsplit('.', 1)
     module = importlib.import_module(module_path)
 
     # Finally, retrieve the class
@@ -177,21 +174,7 @@ class AttributesFrozendict(frozendict.frozendict):
         return self.keys()
 
 
-class SimpleNamespace(object):
-    """
-    An attempt to emulate python 3's types.SimpleNamespace
-    """
-
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-    def __repr__(self):
-        keys = sorted(self.__dict__)
-        items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
-        return "{}({})".format(type(self).__name__, ", ".join(items))
-
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
+SimpleNamespace = apricotpy.utils.SimpleNamespace
 
 
 def load_with_classloader(bundle):
@@ -209,24 +192,16 @@ def load_with_classloader(bundle):
 
 
 def loop_factory(*args, **kwargs):
-    loop = apricotpy.BaseEventLoop()
+    loop = persistable.BaseEventLoop()
     return loop
-
-
-def get_default_loop():
-    global _default_loop
-    if _default_loop is None:
-        _default_loop = loop_factory()
-
-    return _default_loop
 
 
 def set_if_not_none(mapping, key, value):
     """
     Set the given value in a mapping only if the value is not `None`,
     otherwise the mapping is left untouched
-    
-    :param mapping: The mapping to set the value for 
+
+    :param mapping: The mapping to set the value for
     :param key: The mapping key
     :param value: The mapping value
     """

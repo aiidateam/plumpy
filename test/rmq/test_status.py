@@ -75,7 +75,7 @@ class TestStatusProvider(TestCase):
 
         # Set up the request exchange
         self.request_exchange = '{}.{}.task_control'.format(self.__class__, uuid.uuid4())
-        self.channel.exchange_declare(exchange=self.request_exchange, type='fanout')
+        self.channel.exchange_declare(exchange=self.request_exchange, exchange_type='fanout')
 
         # Set up the response queue
         result = self.channel.queue_declare(exclusive=True)
@@ -107,7 +107,7 @@ class TestStatusProvider(TestCase):
         self.assertSetEqual(set([p.pid for p in procs]), set(procs_dict.keys()))
 
         # Check they are all waiting on the same thing
-        waiting_on = set([entry['waiting_on'] for entry in procs_dict.itervalues()])
+        waiting_on = set([entry['waiting_on'] for entry in procs_dict.values()])
         self.assertSetEqual(waiting_on, {str(procs[0].get_waiting_on())})
 
 

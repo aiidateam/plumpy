@@ -2,6 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 import apricotpy
+import apricotpy.persistable
 from collections import namedtuple
 import copy
 from enum import Enum
@@ -10,17 +11,18 @@ import logging
 import time
 import sys
 
+from future.utils import with_metaclass
+
 import plum.stack as _stack
 from plum.process_listener import ProcessListener
-from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
+from plum.port import _NULL
 from . import utils
 
-__all__ = ['Process', 'ProcessState']
+__all__ = ['Process', 'ProcessState', 'get_pid_from_bundle']
 
 _LOGGER = logging.getLogger(__name__)
-_NO_RESULT = ()
 
 
 class ProcessState(Enum):
@@ -35,6 +37,17 @@ class ProcessState(Enum):
 
 
 Wait = namedtuple('Wait', ['on', 'callback'])
+
+
+def _should_pass_result(fn):
+    if isinstance(fn, apricotpy.persistable.Function):
+        fn = fn._fn
+
+    fn_spec = inspect.getargspec(fn)
+    is_method_with_argument = inspect.ismethod(fn) and len(fn_spec[0]) > 1
+    is_function_with_argument = inspect.isfunction(fn) and len(fn_spec[0]) > 0
+    has_args_or_kwargs = fn_spec[1] is not None or fn_spec[2] is not None
+    return is_method_with_argument or is_function_with_argument or has_args_or_kwargs
 
 
 class BundleKeys(Enum):
@@ -57,7 +70,7 @@ class BundleKeys(Enum):
     CALLBACK_ARGS = 'CALLBACK_ARGS'
 
 
-class Process(apricotpy.persistable.AwaitableLoopObject):
+class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)):
     """
     The Process class is the base for any unit of work in plum.
 
@@ -96,7 +109,6 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     always called immediately after that state is entered but before being
     executed.
     """
-    __metaclass__ = ABCMeta
 
     # Static class stuff ######################
     _spec_type = ProcessSpec
@@ -279,20 +291,6 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         """
         return self.__awaiting
 
-    def get_exc_info(self):
-        """
-        If this process produced an exception that caused it to fail during its
-        execution then it will have store the execution information as obtained
-        from sys.exc_info(), this method returns it.  If there was no exception
-        then None is returned.
-
-        :return: The exception info if process failed, None otherwise
-        """
-        try:
-            return self.__state.get_exc_info()
-        except AttributeError:
-            return None
-
     def save_instance_state(self, out_state):
         """
         Ask the process to save its current instance state.
@@ -306,13 +304,18 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         out_state[BundleKeys.PID] = self.pid
 
         # Inputs/outputs
-        out_state[BundleKeys.INPUTS] = self.raw_inputs
+        if self.raw_inputs is not None:
+            out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
         out_state[BundleKeys.OUTPUTS] = self._outputs
 
         # Now state stuff
-        out_state[BundleKeys.PROC_STATE] = self.__state
+        if self.__state is None:
+            out_state[BundleKeys.PROC_STATE] = None
+        else:
+            out_state[BundleKeys.PROC_STATE] = self.__state.value
         if self.__next_step is not None:
             out_state[BundleKeys.NEXT_STEP] = self.__next_step.__name__
+
         out_state[BundleKeys.AWAITING] = self.__awaiting
         out_state[BundleKeys.LOOP_CALLBACK] = self.__loop_callback
         out_state[BundleKeys.PAUSED] = self.__paused
@@ -321,17 +324,19 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         out_state[BundleKeys.ABORT_MSG] = self.__abort_msg
 
     @protected
-    def load_instance_state(self, saved_state, loop):
-        super(Process, self).load_instance_state(saved_state, loop)
+    def load_instance_state(self, saved_state):
+        super(Process, self).load_instance_state(saved_state)
 
         # Set up runtime state
         self.__init(None)
 
         # Inputs/outputs
-        if saved_state[BundleKeys.INPUTS] is not None:
-            self._raw_inputs = utils.AttributesFrozendict(saved_state[BundleKeys.INPUTS])
-        else:
+        try:
+            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS])
+            self._raw_inputs = utils.AttributesFrozendict(decoded)
+        except KeyError:
             self._raw_inputs = None
+
         self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
         self._outputs = copy.deepcopy(saved_state[BundleKeys.OUTPUTS])
 
@@ -340,11 +345,15 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self._pid = saved_state[BundleKeys.PID]
 
         # State stuff
-        self.__state = saved_state[BundleKeys.PROC_STATE]
+        if saved_state[BundleKeys.PROC_STATE] is None:
+            self.__state = None
+        else:
+            self.__state = ProcessState(saved_state[BundleKeys.PROC_STATE])
         try:
             self.__next_step = getattr(self, saved_state[BundleKeys.NEXT_STEP])
         except KeyError:
             self.__next_step = None
+
         self.__awaiting = saved_state[BundleKeys.AWAITING]
         self.__loop_callback = saved_state[BundleKeys.LOOP_CALLBACK]
         self.__paused = saved_state[BundleKeys.PAUSED]
@@ -354,7 +363,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     def on_loop_inserted(self, loop):
         super(Process, self).on_loop_inserted(loop)
-        self._enter_created()
+        self._do(self._enter_created)
 
     def abort(self, msg=None):
         """
@@ -511,9 +520,11 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self.__called = True
 
     @protected
-    def on_fail(self):
+    def on_fail(self, exc_info):
         """
         Called if the process raised an exception.
+
+        :param exc_info: The exception information as returned by sys.exc_info()
         """
         self._fire_event(ProcessListener.on_process_fail)
         self._send_message('fail')
@@ -584,9 +595,9 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
             ins = dict(inputs)
         # Go through the spec filling in any default and checking for required
         # inputs
-        for name, port in self.spec().inputs.iteritems():
+        for name, port in self.spec().inputs.items():
             if name not in ins:
-                if port.default:
+                if port.default != _NULL:
                     ins[name] = port.default
                 elif port.required:
                     raise ValueError(
@@ -629,6 +640,28 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
         return exposed_inputs
 
+    @protected
+    def encode_input_args(self, inputs):
+        """
+        Encode input arguments such that they may be saved in a
+        :class:`apricotpy.persistable.Bundle`
+
+        :param inputs: A mapping of the inputs as passed to the process
+        :return: The encoded inputs
+        """
+        return inputs
+
+    @protected
+    def decode_input_args(self, encoded):
+        """
+        Decode saved input arguments as they came from the saved instance state
+        :class:`apricotpy.persistable.Bundle`
+
+        :param encoded:
+        :return: The decoded input args
+        """
+        return encoded
+
     def __init(self, logger):
         """
         Common place to put all runtime state variables i.e. those that don't need
@@ -644,23 +677,6 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self.__called = False
 
     # region State event/transition methods
-
-    def _on_start_playing(self):
-        _stack.push(self)
-        MONITOR.register_process(self)
-
-    def _on_stop_playing(self):
-        """
-        WARNING: No state changes should be made after this call.
-        """
-        MONITOR.deregister_process(self)
-        _stack.pop(self)
-
-        if self.has_terminated():
-            # There will be no more messages so remove the listeners.  Otherwise we
-            # may continue to hold references to them and stop them being garbage
-            # collected
-            self.__event_helper.remove_all_listeners()
 
     def _fire_event(self, event):
         self.loop().call_soon(self.__event_helper.fire_event, event, self)
@@ -695,7 +711,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
-        for name, port in self.spec().outputs.iteritems():
+        for name, port in self.spec().outputs.items():
             valid, msg = port.validate(self._outputs.get(name, None))
             if not valid:
                 raise RuntimeError(
@@ -717,7 +733,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     def _exec_created(self):
         self._enter_running(self.do_run)
 
-    def _enter_running(self, next_step, result=_NO_RESULT):
+    def _enter_running(self, next_step, result=None):
         last_state = self.__state
         self._set_state(ProcessState.RUNNING,
                         [ProcessState.CREATED, ProcessState.WAITING, ProcessState.RUNNING])
@@ -734,7 +750,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
 
     def _exec_running(self, next_step, result):
         args = []
-        if result is not _NO_RESULT:
+        if _should_pass_result(next_step):
             args.append(result)
 
         # Run the next function
@@ -761,7 +777,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self._call_with_super_check(self.on_wait, awaiting)
         # There's no exec_waiting() because all is has to do is wait for the
         # thing that it's awaiting
-        awaiting.add_done_callback(self._await_done)
+        awaiting.add_done_callback(apricotpy.persistable.Function(self._do, self._await_done))
 
     def _await_done(self, awaitable):
         self.__awaiting = None
@@ -798,7 +814,7 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
     def _enter_failed(self, exc_info):
         self._set_state(ProcessState.FAILED)
         try:
-            self._call_with_super_check(self.on_fail)
+            self._call_with_super_check(self.on_fail, exc_info)
         except BaseException:
             import traceback
             self.log_with_pid(
@@ -832,19 +848,22 @@ class Process(apricotpy.persistable.AwaitableLoopObject):
         self._callback_args = args
         # If not playing, then the play call will schedule the callback
         if self.is_playing():
-            self.__loop_callback = self.loop().call_soon(self._do_callback, fn, *args)
+            self.__loop_callback = self.loop().call_soon(self._do, fn, *args)
 
-    def _do_callback(self, fn, *args):
-        self.__loop_callback = None
-        self._callback_args = None
-        self._callback_fn = None
-        fn(*args)
+    def _do(self, fn, *args):
+        try:
+            self.__loop_callback = None
+            self._callback_args = None
+            self._callback_fn = None
+            fn(*args)
+        except BaseException:
+            self._enter_failed(sys.exc_info())
 
 
 class ListenContext(object):
     """
     A context manager for listening to the Process.
-    
+
     A typical usage would be:
     with ListenContext(producer, listener):
         # Producer generates messages that the listener gets
@@ -876,3 +895,7 @@ def _is_wait_retval(retval):
     return (isinstance(retval, tuple) and
             len(retval) == 2 and
             isinstance(retval[0], apricotpy.Awaitable))
+
+
+def get_pid_from_bundle(process_bundle):
+    return process_bundle[BundleKeys.PID]

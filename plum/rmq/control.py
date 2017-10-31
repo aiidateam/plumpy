@@ -5,9 +5,13 @@ import pika
 import pika.exceptions
 import uuid
 
+from past.builtins import basestring
+
 from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.utils import override
+
+__all__ = ['ProcessControlPublisher', 'ProcessControlSubscriber']
 
 
 class Action(object):
@@ -60,7 +64,7 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
         # Set up comms
         self._connection = connection
         self._channel = connection.channel()
-        self._channel.exchange_declare(exchange=exchange, type='fanout')
+        self._channel.exchange_declare(exchange=exchange, exchange_type='fanout')
         # Response queue
         result = self._channel.queue_declare(exclusive=True)
         self._callback_queue = result.method.queue
@@ -77,7 +81,7 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
 
     @override
     def tick(self):
-        self._channel.connection.process_data_events(time_limit=0.1)
+        self._channel.connection.process_data_events(time_limit=0.01)
 
     def _send_msg(self, msg):
         self._check_in_loop()
@@ -142,7 +146,7 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
 
         # Set up communications
         self._channel = connection.channel()
-        self._channel.exchange_declare(exchange, type='fanout')
+        self._channel.exchange_declare(exchange, exchange_type='fanout')
         result = self._channel.queue_declare(exclusive=True)
         queue = result.method.queue
         self._channel.queue_bind(queue, exchange)
@@ -150,7 +154,7 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
 
     @override
     def tick(self):
-        self._channel.connection.process_data_events(time_limit=0.1)
+        self._channel.connection.process_data_events(time_limit=0.01)
 
     def _on_control(self, ch, method, props, body):
         d = self._decode(body)
@@ -182,7 +186,7 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
             else:
                 raise RuntimeError("Unknown intent")
         except ValueError as e:
-            result = e.message
+            result = str(e)
         else:
             # Tell the sender that we've dealt with it
             self._send_response(ch, props.reply_to, props.correlation_id, result)

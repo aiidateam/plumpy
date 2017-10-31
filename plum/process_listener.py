@@ -1,8 +1,8 @@
 from abc import ABCMeta
 
+from future.utils import with_metaclass
 
-class ProcessListener(object):
-    __metaclass__ = ABCMeta
+class ProcessListener(with_metaclass(ABCMeta, object)):
 
     def on_process_start(self, process):
         """

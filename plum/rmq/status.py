@@ -9,6 +9,8 @@ from plum.rmq.defaults import Defaults
 from plum.rmq.util import add_host_info
 from plum.utils import override
 
+__all__ = ['ProcessStatusRequester', 'ProcessStatusSubscriber']
+
 PROCS_KEY = 'procs'
 
 
@@ -65,7 +67,7 @@ class ProcessStatusRequester(apricotpy.TickingLoopObject):
         self._channel = connection.channel()
         result = self._channel.queue_declare(exclusive=True)
         self._callback_queue = result.method.queue
-        self._channel.exchange_declare(exchange=self._exchange, type='fanout')
+        self._channel.exchange_declare(exchange=self._exchange, exchange_type='fanout')
         self._channel.basic_consume(self._on_response, no_ack=True, queue=self._callback_queue)
 
     def send_request(self, callback=None, timeout=1.0):
@@ -130,7 +132,7 @@ class ProcessStatusSubscriber(apricotpy.TickingLoopObject):
 
         # Set up communications
         self._channel = connection.channel()
-        self._channel.exchange_declare(exchange=exchange, type='fanout')
+        self._channel.exchange_declare(exchange=exchange, exchange_type='fanout')
         result = self._channel.queue_declare(exclusive=True)
         self._channel.queue_bind(exchange=exchange, queue=result.method.queue)
         self._channel.basic_consume(self._on_request, queue=result.method.queue)

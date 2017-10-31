@@ -48,7 +48,7 @@ class ProcessWithCheckpoint(Process):
     def _run(self):
         return self.loop().create(Checkpoint), self.finish
 
-    def finish(self, result):
+    def finish(self):
         pass
 
 
@@ -59,7 +59,7 @@ class WaitForSignalProcess(Process):
     def _run(self):
         return self.loop().create(Barrier), self.finish
 
-    def finish(self, wait_on):
+    def finish(self):
         pass
 
     def continue_(self):
