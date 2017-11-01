@@ -27,15 +27,14 @@ class PicklePersister(Persister):
         super(PicklePersister, self).__init__()
 
         try:
-            self.ensure_pickle_directory(pickle_directory)
+            self._ensure_pickle_directory(pickle_directory)
         except OSError as exception:
             raise ValueError('failed to create the pickle directory at {}'.format(pickle_directory))
 
         self._pickle_directory = pickle_directory
 
 
-    @staticmethod
-    def ensure_pickle_directory(dirpath):
+    def _ensure_pickle_directory(dirpath):
         """
         Will attempt to create the directory at dirpath and raise if it fails, except
         if the exception arose because the directory already existed
@@ -46,8 +45,7 @@ class PicklePersister(Persister):
             if exception.errno != errno.EEXIST:
                 raise
 
-    @staticmethod
-    def parse_filename(filename):
+    def _parse_filename(filename):
         """
         Parse the filename of a persisted checkpoint to retrieve the process id
         and the optional tag
@@ -67,7 +65,6 @@ class PicklePersister(Persister):
         else:
             return PersistedCheckpoint(matches[0][2], None)
 
-    @staticmethod
     def pickle_filename(pid, tag=None):
         """
         Returns the relative filepath of the pickle for the given process id
@@ -80,7 +77,6 @@ class PicklePersister(Persister):
 
         return filename
 
-    @staticmethod
     def pickle_filepath(pid, tag=None):
         """
         Returns the full filepath of the pickle for the given process id
@@ -131,7 +127,7 @@ class PicklePersister(Persister):
         for subdir, dirs, files in os.walk(self._pickle_directory):
             for filename in fnmatch.filter(files, file_pattern):
                 try:
-                    checkpoint = self.parse_filename(filename)
+                    checkpoint = self._parse_filename(filename)
                 except ValueError:
                     continue
                 else:
