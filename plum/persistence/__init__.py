@@ -53,3 +53,24 @@ class Persister(object):
         :return: list of PersistedCheckpoint tuples
         """
         pass
+
+    @abstractmethod
+    def delete_checkpoint(self, pid, tag=None):
+        """
+        Delete a persisted process checkpoint. No error will be raised if
+        the checkpoint does not exist
+
+        :param pid: the process id of the :class:`plum.process.Process`
+        :param tag: optional checkpoint identifier to allow retrieving
+            a specific sub checkpoint for the corresponding process
+        """
+        pass
+
+    @abstractmethod
+    def delete_process_checkpoints(self, pid):
+        """
+        Delete all persisted checkpoints related to the given process id
+
+        :param pid: the process id of the :class:`plum.process.Process`
+        """
+        pass

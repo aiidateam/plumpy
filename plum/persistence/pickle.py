@@ -149,3 +149,28 @@ class PicklePersister(Persister):
         :return: list of PersistedCheckpoint tuples
         """
         return [checkpoint for c in self.get_checkpoints if c.pid == pid]
+
+    def delete_checkpoint(self, pid, tag=None):
+        """
+        Delete a persisted process checkpoint. No error will be raised if
+        the checkpoint does not exist
+
+        :param pid: the process id of the :class:`plum.process.Process`
+        :param tag: optional checkpoint identifier to allow retrieving
+            a specific sub checkpoint for the corresponding process
+        """
+        pickle_filepath = self.pickle_filepath(pid, tag)
+
+        try:
+            os.remove(pickle_filepath)
+        except OSError:
+            pass
+
+    def delete_process_checkpoints(self, pid):
+        """
+        Delete all persisted checkpoints related to the given process id
+
+        :param pid: the process id of the :class:`plum.process.Process`
+        """
+        for checkpoint in self.get_process_checkpoints(pid):
+            self.delete_checkpoint(checkpoint.pid, checkpoint.tag)
