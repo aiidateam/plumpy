@@ -311,17 +311,18 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
 
             compare_dictionaries(
                 snapshots[-j], ps.snapshots[-j],
+                snapshots[-j], ps.snapshots[-j],
                 exclude={
                     str(process.BundleKeys.LOOP_CALLBACK),
                     str(process.BundleKeys.AWAITING),
-                    'LOOP_CALLBACK', 'CALLBACKS'
+                    'CALLBACKS', 'DONE_CALLBACKS', 'SCHEDULED_CALLBACKS', 'PERSISTABLE_ID'
                 })
             j += 1
 
     return True
 
 
-def compare_dictionaries(dict1, dict2, exclude=None):
+def compare_dictionaries(bundle1, bundle2, dict1, dict2, exclude=None):
     keys = set(dict1.iterkeys()) & set(dict2.iterkeys())
     if exclude is not None:
         keys -= exclude
@@ -335,9 +336,24 @@ def compare_dictionaries(dict1, dict2, exclude=None):
 
         v1 = dict1[key]
         v2 = dict2[key]
-        if isinstance(v1, collections.Mapping) and isinstance(v2, collections.Mapping):
-            compare_dictionaries(v1, v2)
-        elif v1 != v2:
+
+        compare_value(bundle1, bundle2, v1, v2, exclude)
+
+
+def compare_value(bundle1, bundle2, v1, v2, exclude=None):
+    if isinstance(v1, collections.Mapping) and isinstance(v2, collections.Mapping):
+        compare_dictionaries(bundle1, bundle2, v1, v2, exclude)
+    elif isinstance(v1, list) and isinstance(v2, list):
+        for vv1, vv2 in zip(v1, v2):
+            compare_value(bundle1, bundle2, vv1, vv2, exclude)
+    else:
+        if isinstance(v1, apricotpy.persistable.core._Reference):
+            v1 = bundle1._get_bundle(v1)
+
+        if isinstance(v2, apricotpy.persistable.core._Reference):
+            v2 = bundle2._get_bundle(v2)
+
+        if v1 != v2:
             raise ValueError(
-                "Dict values mismatch for '{}':\n{} != {}".format(key, v1, v2)
+                "Dict values mismatch for :\n{} != {}".format(v1, v2)
             )
