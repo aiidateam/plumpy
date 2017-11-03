@@ -102,7 +102,6 @@ class TestPicklePersister(TestCaseWithLoop):
         checkpoint_b1 = PersistedCheckpoint(process_b.pid, '1')
         checkpoint_b2 = PersistedCheckpoint(process_b.pid, '2')
 
-
         with tempfile.TemporaryDirectory() as directory:
             persister = PicklePersister(directory)
             persister.save_checkpoint(process_a, tag='1')

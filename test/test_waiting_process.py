@@ -12,6 +12,7 @@ from . import util
 class TestWaitingProcess(util.TestCaseWithLoop):
     def test_instance_state(self):
         proc = self.loop.create(TwoCheckpoint)
+        proc.play()
         wl = ProcessSaver(proc)
         self.loop.run_until_complete(proc)
 
@@ -21,6 +22,7 @@ class TestWaitingProcess(util.TestCaseWithLoop):
     def test_saving_each_step(self):
         for proc_class in TEST_WAITING_PROCESSES:
             proc = self.loop.create(proc_class)
+            proc.play()
             saver = ProcessSaver(proc)
             try:
                 self.loop.run_until_complete(proc)

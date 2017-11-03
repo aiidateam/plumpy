@@ -140,8 +140,8 @@ class ProcessEventsTester(EventsTesterMixin, Process):
 
 
 class TwoCheckpoint(ProcessEventsTester):
-    def __init__(self, inputs=None, pid=None, logger=None):
-        super(TwoCheckpoint, self).__init__(inputs, pid, logger)
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None):
+        super(TwoCheckpoint, self).__init__(inputs, pid, logger, loop)
         self._last_checkpoint = None
 
     @override
