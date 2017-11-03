@@ -296,7 +296,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     :rtype: bool
     """
     for i, bundle in zip(range(0, len(snapshots)), snapshots):
-        loaded = bundle.unbundle(loop)
+        loaded = bundle.unbundle(loop).play()
         ps = ProcessSaver(loaded)
         try:
             loop.run_until_complete(loaded)
@@ -318,7 +318,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
                 })
             j += 1
 
-        return True
+    return True
 
 
 def compare_dictionaries(dict1, dict2, exclude=None):

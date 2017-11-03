@@ -101,8 +101,6 @@ class BundleKeys(object):
     ABORT_MSG = 'ABORT_MSG'
     PROC_STATE = 'PROC_STATE'
     PAUSED = 'PAUSED'
-    CALLBACK_FN = 'CALLBACK_FN'
-    CALLBACK_ARGS = 'CALLBACK_ARGS'
 
 
 class ProcessAction(object):
@@ -234,6 +232,8 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
 
         # Setup runtime state
         self.__init(logger)
+        self.store.callback_fn = None
+        self.store.callback_args = None
 
         # Input/output
         self._check_inputs(inputs)
@@ -457,8 +457,9 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
     def play(self):
         if not self.is_playing():
             self.__paused = False
-            if self._callback_fn is not None:
-                self._schedule_callback(self._callback_fn, *self._callback_args)
+            if self.store.callback_fn is not None:
+                self._schedule_callback(
+                    self.store.callback_fn, *self.store.callback_args)
         return self
 
     def pause(self):
@@ -696,7 +697,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         self.__logger = logger
 
         # Events and running
-        self.__event_helper = utils.EventHelper(ProcessListener)
+        self.__event_helper = utils.EventHelper(ProcessListener, self.loop())
 
         # Flag to make sure all the necessary event methods were called
         self.__called = False
@@ -704,7 +705,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
     # region State event/transition methods
 
     def _fire_event(self, event):
-        self.loop().call_soon(self.__event_helper.fire_event, event, self)
+        self.__event_helper.fire_event(event, self)
 
     def _send_message(self, subject, body=None, to=None):
         body_ = {'uuid': self.uuid}
@@ -872,8 +873,8 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         assert inspect.ismethod(fn) and fn.__self__ is self, \
             "Callback has to be a member of this process"
 
-        self._callback_fn = fn
-        self._callback_args = args
+        self.store.callback_fn = fn
+        self.store.callback_args = list(args)
         # If not playing, then the play call will schedule the callback
         if self.is_playing():
             self.__loop_callback = self.loop().call_soon(self._do, fn, *args)
@@ -881,8 +882,8 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
     def _do(self, fn, *args):
         try:
             self.__loop_callback = None
-            self._callback_args = None
-            self._callback_fn = None
+            self.store.callback_args = None
+            self.store.callback_fn = None
             fn(*args)
         except BaseException:
             self._enter_failed(sys.exc_info())

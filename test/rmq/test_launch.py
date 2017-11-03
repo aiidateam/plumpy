@@ -6,7 +6,7 @@ import uuid
 import plum.rmq.launch
 import plum.test_utils
 from test.test_rmq import _HAS_PIKA
-from test.util import TestCase
+from test.util import TestCase, MaxTicks
 
 if _HAS_PIKA:
     import pika.exceptions
@@ -57,11 +57,10 @@ class TestTaskControllerAndRunner(TestCase):
                 break
             except ValueError:
                 pass
-
         self.assertIsNotNone(proc)
 
-        result = ~proc
-        awaitable_result = self.launcher_loop.run_until_complete(awaitable)
+        result = proc.loop().run_until_complete(MaxTicks(5, proc))
+        awaitable_result = self.launcher_loop.run_until_complete(MaxTicks(5, awaitable))
 
         self.assertEqual(result, awaitable_result)
 
@@ -73,10 +72,11 @@ class TestTaskControllerAndRunner(TestCase):
         t0 = time.time()
         while proc is None and time.time() - t0 < 3.:
             self.runner_loop.tick()
-            procs = self.runner_loop.objects(obj_type=plum.test_utils.DummyProcessWithOutput)
-            if len(procs) > 0 and procs[0].pid == awaitable.pid:
-                proc = procs[0]
+            try:
+                proc = self.runner_loop.get_process(awaitable.pid)
                 break
+            except ValueError:
+                pass
         self.assertIsNotNone(proc)
 
         # Now cancel it
@@ -84,7 +84,7 @@ class TestTaskControllerAndRunner(TestCase):
         self.runner_loop.tick()
 
         with self.assertRaises(apricotpy.CancelledError):
-            self.launcher_loop.run_until_complete(awaitable)
+            self.launcher_loop.run_until_complete(MaxTicks(5, awaitable))
 
     def test_launch_exception(self):
         # Try launching a process
@@ -94,18 +94,19 @@ class TestTaskControllerAndRunner(TestCase):
         t0 = time.time()
         while proc is None and time.time() - t0 < 3.:
             self.runner_loop.tick()
-            procs = self.runner_loop.objects(obj_type=plum.test_utils.ExceptionProcess)
-            if len(procs) > 0 and procs[0].pid == awaitable.pid:
-                proc = procs[0]
+            try:
+                proc = self.runner_loop.get_process(awaitable.pid)
                 break
+            except ValueError:
+                pass
         self.assertIsNotNone(proc)
 
         # Now let it run
         with self.assertRaises(RuntimeError):
-            result = ~proc
+            result = proc.loop().run_until_complete(MaxTicks(5, proc))
 
         with self.assertRaises(RuntimeError):
-            result = self.launcher_loop.run_until_complete(awaitable)
+            result = self.launcher_loop.run_until_complete(MaxTicks(5, awaitable))
 
     def _launch(self, proc_class, *args, **kwargs):
         proc = self.launcher_loop.create(proc_class, *args, **kwargs)

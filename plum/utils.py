@@ -21,11 +21,11 @@ _default_loop = None
 
 
 class EventHelper(object):
-    def __init__(self, listener_type, raise_exceptions=False):
+    def __init__(self, listener_type, loop):
         assert (listener_type is not None), "Must provide valid listener type"
 
         self._listener_type = listener_type
-        self._raise_exceptions = raise_exceptions
+        self._loop = loop
         self._listeners = set()
 
     def add_listener(self, listener):
@@ -43,25 +43,13 @@ class EventHelper(object):
         return self._listeners
 
     def fire_event(self, event_function, *args, **kwargs):
-        assert event_function is not None, "Must provide valid event method"
+        if event_function is None:
+            raise ValueError("Must provide valid event method")
 
-        # TODO: Check if the function is in the listener type
-        # We have to use a copy here because the listener may
-        # remove themselves during the message
-        for l in list(self.listeners):
-            try:
-                getattr(l, event_function.__name__)(*args, **kwargs)
-            except BaseException as e:
-                import traceback
-                traceback.print_exc()
-
-                _LOGGER.error(
-                    "The listener '{}' produced an exception while receiving "
-                    "the message '{}':\n{}: {}".format(
-                        l, event_function.__name__, e.__class__.__name__, str(e))
-                )
-                if self._raise_exceptions:
-                    raise
+        for l in self.listeners:
+            self._loop.call_soon(
+                getattr(l, event_function.__name__), *args, **kwargs
+            )
 
 
 class ListenContext(object):

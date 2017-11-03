@@ -1,4 +1,5 @@
 import apricotpy
+import apricotpy.persistable
 import functools
 import plum
 import plum.stack as stack
@@ -24,7 +25,9 @@ class TestCaseWithLoop(TestCase):
         self.loop = None
 
 
-class MaxTicks(apricotpy.TickingLoopObject, apricotpy.AwaitableMixin):
+class MaxTicks(apricotpy.persistable.AwaitableMixin,
+               apricotpy.persistable.PersistableLoopObjectMixin,
+               apricotpy.TickingLoopObject):
     def __init__(self, max_ticks, awaitable, loop=None):
         super(MaxTicks, self).__init__(loop=loop)
         self._max_ticks = max_ticks

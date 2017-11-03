@@ -30,7 +30,7 @@ class TestWaitingProcess(util.TestCaseWithLoop):
             self.assertTrue(check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
 
     def test_abort(self):
-        p = self.loop.create(WaitForSignalProcess)
+        p = WaitForSignalProcess().play()
 
         # Wait until it is waiting
         run_until(p, ProcessState.WAITING, self.loop)

@@ -93,6 +93,7 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
         else:
             try:
                 proc = saved_state.unbundle(self.loop())
+                proc.play()
             except BaseException as exc:
                 response = {
                     'state': 'exception',
