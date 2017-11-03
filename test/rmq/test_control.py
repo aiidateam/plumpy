@@ -1,12 +1,12 @@
 import unittest
 import uuid
 
-from plum import loop_factory
-from plum.process import ProcessState
+import plum
 from plum.test_utils import WaitForSignalProcess
 from plum.wait_ons import run_until
-from test.util import TestCase
+from test.util import TestCaseWithLoop
 from . import utils
+from .. import util as test_utils
 
 if utils._HAS_PIKA:
     import pika
@@ -14,11 +14,9 @@ if utils._HAS_PIKA:
 
 
 @unittest.skipIf(not utils._HAS_PIKA, "Requires pika library and RabbitMQ")
-class TestControl(TestCase):
+class TestControl(TestCaseWithLoop):
     def setUp(self):
         super(TestControl, self).setUp()
-
-        self.loop = loop_factory()
 
         self._connection = self._create_connection()
         self.exchange = "{}.{}.control".format(self.__class__, uuid.uuid4())
@@ -34,38 +32,43 @@ class TestControl(TestCase):
 
     def test_pause(self):
         # Create the process and wait until it is waiting
-        p = self.loop.create(WaitForSignalProcess)
+        p = WaitForSignalProcess().play()
 
-        run_until(p, ProcessState.WAITING, self.loop)
+        run_until(p, plum.ProcessState.WAITING, self.loop)
 
         # Send a message asking the process to pause
-        self.loop.run_until_complete(self.publisher.pause_process(p.pid))
+        pause = self.publisher.pause_process(p.pid)
+        self.loop.run_until_complete(test_utils.MaxTicks(5, pause))
         self.assertFalse(p.is_playing())
 
     def test_pause_play(self):
         # Create the process and wait until it is waiting
-        p = self.loop.create(WaitForSignalProcess)
+        p = WaitForSignalProcess().play()
 
         # Playing
         self.assertTrue(p.is_playing())
 
         # Pause
         # Send a message asking the process to pause
-        self.loop.run_until_complete(self.publisher.pause_process(p.pid))
+        pause = self.publisher.pause_process(p.pid)
+        self.loop.run_until_complete(test_utils.MaxTicks(5, pause))
         self.assertFalse(p.is_playing())
 
         # Now ask it to continue
-        self.loop.run_until_complete(self.publisher.play_process(p.pid))
+        play = self.publisher.play_process(p.pid)
+        self.loop.run_until_complete(test_utils.MaxTicks(5, play))
         self.assertTrue(p.is_playing())
 
     def test_abort(self):
         # Create the process and wait until it is waiting
-        proc = self.loop.create(WaitForSignalProcess)
-        run_until(proc, ProcessState.WAITING, self.loop)
+        proc = WaitForSignalProcess().play()
+        run_until(proc, plum.ProcessState.WAITING, self.loop)
 
         # Send a message asking the process to abort, this gives back a future
         # representing the actual abort itself
-        fut = ~self.publisher.abort_process(proc.pid, msg='Farewell')
+
+        abort = self.publisher.abort_process(proc.pid, msg='Farewell')
+        fut = self.loop.run_until_complete(test_utils.MaxTicks(5, abort))
         # Now run until actually aborted
         self.assertTrue(~fut)
 
@@ -83,7 +86,8 @@ class TestControl(TestCase):
         # Send a message asking the process to abort, this gives back a future
         # representing the actual abort itself
         # Now run until actually aborted
-        fut = ~self.publisher.abort_process(proc.pid, msg='Farewell')
+        abort = self.publisher.abort_process(proc.pid, msg='Farewell')
+        fut = self.loop.run_until_complete(test_utils.MaxTicks(5, abort))
         self.assertTrue(~fut)
 
     def _create_connection(self):

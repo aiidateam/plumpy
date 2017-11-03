@@ -1,5 +1,4 @@
-import apricotpy
-from plum import loop_factory
+import plum
 from plum.wait import WaitOn
 from .util import TestCase
 
@@ -25,10 +24,10 @@ class TestWaitOn(TestCase):
         """
         Basic test to check saving instance state and reloading
         """
-        loop = loop_factory()
+        loop = plum.new_event_loop()
 
         w = loop.create(_DummyWait, 5)
-        saved_state = apricotpy.persistable.Bundle(w)
+        saved_state = plum.Bundle(w)
 
         w_ = saved_state.unbundle(loop)
         self.assertEqual(w._value, w_._value)

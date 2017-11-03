@@ -1,10 +1,9 @@
-import apricotpy
 import os.path
+import plum
 from plum.process import ProcessState
 from plum.persistence.pickle_persistence import PicklePersistence
 from plum.test_utils import ProcessWithCheckpoint, WaitForSignalProcess
 from plum.persistence import pickle_persistence
-from plum import loop_factory
 from plum.wait_ons import run_until
 from test.util import TestCase
 
@@ -15,8 +14,8 @@ class TestPicklePersistence(TestCase):
 
         super(TestPicklePersistence, self).setUp()
 
-        self.loop = loop_factory()
-        apricotpy.set_event_loop(self.loop)
+        self.loop = plum.new_event_loop()
+        plum.set_event_loop(self.loop)
 
         self.store_dir = tempfile.mkdtemp()
         self.pickle_persistence = \

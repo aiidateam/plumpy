@@ -1,41 +1,18 @@
 import apricotpy
 import collections
 import json
+import pickle
 import pika
 import uuid
 
-from plum import Process
+import plum
 from plum.rmq.defaults import Defaults
-from plum.rmq.util import add_host_info
+from . import util
 from plum.utils import override
 
 __all__ = ['ProcessStatusRequester', 'ProcessStatusSubscriber']
 
 PROCS_KEY = 'procs'
-
-
-def status_decode(msg):
-    decoded = json.loads(msg)
-    procs = decoded[PROCS_KEY]
-    for pid in procs.keys():
-        try:
-            new_pid = uuid.UUID(pid)
-            procs[new_pid] = procs.pop(pid)
-        except ValueError:
-            pass
-    return decoded
-
-
-def status_encode(response_):
-    response = response_.copy()
-    procs = response[PROCS_KEY]
-    # UUID pids get converted to strings
-    for pid in procs.keys():
-        procs[pid]['state'] = procs[pid]['state'].name
-
-        if isinstance(pid, uuid.UUID):
-            procs[str(pid)] = procs.pop(pid)
-    return json.dumps(response)
 
 
 def status_request_decode(msg):
@@ -56,7 +33,7 @@ class ProcessStatusRequester(apricotpy.TickingLoopObject):
     """
 
     def __init__(self, connection, exchange=Defaults.STATUS_REQUEST_EXCHANGE,
-                 decoder=status_decode, loop=None):
+                 decoder=pickle.loads, loop=None):
         super(ProcessStatusRequester, self).__init__(loop)
 
         self._exchange = exchange
@@ -123,12 +100,13 @@ class ProcessStatusSubscriber(apricotpy.TickingLoopObject):
 
     def __init__(self, connection,
                  exchange=Defaults.STATUS_REQUEST_EXCHANGE,
-                 decoder=status_request_decode, encoder=status_encode, loop=None):
+                 decoder=status_request_decode, encoder=pickle.dumps, loop=None):
         super(ProcessStatusSubscriber, self).__init__(loop)
 
         self._decode = decoder
         self._encode = encoder
         self._stopping = False
+        self._last_props = None
 
         # Set up communications
         self._channel = connection.channel()
@@ -144,33 +122,18 @@ class ProcessStatusSubscriber(apricotpy.TickingLoopObject):
     def _on_request(self, ch, method, props, body):
         # d = self._decode(body)
 
-        proc_status = {}
-        for p in self.loop().objects(obj_type=Process):
-            proc_status[p.pid] = self._get_status(p)
-
-        response = {PROCS_KEY: proc_status}
-        add_host_info(response)
-
-        if response:
-            ch.basic_publish(
-                exchange='', routing_key=props.reply_to,
-                properties=pika.BasicProperties(correlation_id=props.correlation_id),
-                body=self._encode(response)
-            )
+        # Send message to all Proecsses asking for a status update
+        self.send_message(subject=plum.ProcessAction.REPORT_STATUS)
+        self._last_props = props
         # Always acknowledge
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
-    def _get_status(self, process):
-        """
-        Generate the status dictionary
-
-        :param process: The process to generate the dictionary for
-        :type process: :class:`plum.process.Process`
-        :return: The status dictionary
-        :rtype: dict
-        """
-        return {
-            'creation_time': process.creation_time,
-            'state': process.state,
-            'waiting_on': str(process.get_waiting_on())
-        }
+    def message_received(self, subject, body, sender_id):
+        if subject == plum.ProcessMessage.STATUS_REPORT:
+            response = dict(body)
+            util.add_host_info(response)
+            self._channel.basic_publish(
+                exchange='', routing_key=self._last_props.reply_to,
+                properties=pika.BasicProperties(correlation_id=self._last_props.correlation_id),
+                body=self._encode(response)
+            )

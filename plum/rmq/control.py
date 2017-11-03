@@ -1,6 +1,7 @@
 import apricotpy
 import json
 from functools import partial
+import pickle
 import pika
 import pika.exceptions
 import uuid
@@ -20,23 +21,6 @@ class Action(object):
     ABORT = 'abort'
 
 
-def action_decode(msg):
-    d = json.loads(msg)
-    if isinstance(d['pid'], basestring):
-        try:
-            d['pid'] = uuid.UUID(d['pid'])
-        except ValueError:
-            pass
-    return d
-
-
-def action_encode(msg):
-    d = msg.copy()
-    if isinstance(d['pid'], uuid.UUID):
-        d['pid'] = str(d['pid'])
-    return json.dumps(d)
-
-
 _RESULT_KEY = 'result'
 # This means that the intent has been actioned but not yet completed
 _ACTION_SCHEDULED = 'SCHEDULED'
@@ -53,7 +37,7 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
     """
 
     def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
-                 encoder=action_encode, response_decoder=json.loads, loop=None):
+                 encoder=pickle.dumps, response_decoder=pickle.loads, loop=None):
         super(ProcessControlPublisher, self).__init__(loop)
 
         self._exchange = exchange
@@ -84,8 +68,6 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
         self._channel.connection.process_data_events(time_limit=0.01)
 
     def _send_msg(self, msg):
-        self._check_in_loop()
-
         correlation_id = str(uuid.uuid4())
 
         delivered = self._channel.basic_publish(
@@ -94,7 +76,7 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
                 reply_to=self._callback_queue, correlation_id=correlation_id,
                 delivery_mode=1, content_type='text/json'
             ),
-            body=action_encode(msg),
+            body=self._encode(msg),
         )
 
         if not delivered:
@@ -122,13 +104,10 @@ class ProcessControlPublisher(apricotpy.TickingLoopObject):
             else:
                 raise ValueError("Unknown action result '{}'".format(result))
 
-    def _check_in_loop(self):
-        assert self.in_loop(), "Object is not in the event loop"
-
 
 class ProcessControlSubscriber(apricotpy.TickingLoopObject):
     def __init__(self, connection, exchange=Defaults.CONTROL_EXCHANGE,
-                 decoder=action_decode, response_encoder=json.dumps, loop=None):
+                 decoder=pickle.loads, response_encoder=json.dumps, loop=None):
         """
         Subscribes and listens for process control messages and acts on them
         by calling the corresponding methods of the process manager.
@@ -161,7 +140,7 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
         pid = d['pid']
 
         try:
-            obj = self.loop().get_object(pid)
+            proc = self.loop().get_process(pid)
         except ValueError:
             # Not an object our loop knows about
             return
@@ -169,13 +148,13 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
         intent = d['intent']
         try:
             if intent == Action.PLAY:
-                obj.play()
+                proc.play()
                 result = _ACTION_DONE
             elif intent == Action.PAUSE:
-                obj.pause()
+                proc.pause()
                 result = _ACTION_DONE
             elif intent == Action.ABORT:
-                fut = obj.abort(msg=d.get('msg', None))
+                fut = proc.abort(msg=d.get('msg', None))
 
                 # When the abort is finished send another message to say it's done
                 fut.add_done_callback(

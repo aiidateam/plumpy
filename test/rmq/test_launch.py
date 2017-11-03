@@ -3,7 +3,6 @@ import time
 import unittest
 import uuid
 
-from plum import loop_factory
 import plum.rmq.launch
 import plum.test_utils
 from test.test_rmq import _HAS_PIKA
@@ -30,8 +29,8 @@ class TestTaskControllerAndRunner(TestCase):
         except pika.exceptions.ConnectionClosed:
             self.fail("Couldn't open connection.  Make sure rmq server is running")
 
-        self.launcher_loop = loop_factory()
-        self.runner_loop = loop_factory()
+        self.launcher_loop = plum.new_event_loop()
+        self.runner_loop = plum.new_event_loop()
 
         queue = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
 
@@ -53,6 +52,7 @@ class TestTaskControllerAndRunner(TestCase):
         t0 = time.time()
         while proc is None and time.time() - t0 < 3.:
             self.runner_loop.tick()
+            proc = self.runner_loop.get_process(awaitable.pid)
             procs = self.runner_loop.objects(obj_type=plum.test_utils.DummyProcessWithOutput)
             if len(procs) > 0 and procs[0].pid == awaitable.pid:
                 proc = procs[0]

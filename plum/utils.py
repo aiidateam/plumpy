@@ -11,7 +11,7 @@ import threading
 from plum.exceptions import ClassNotFoundException, InvalidStateError, CancelledError
 from plum.settings import check_protected, check_override
 
-__all__ = ['loop_factory']
+__all__ = []
 
 protected = plum.lang.protected(check=check_protected)
 override = plum.lang.override(check=check_override)
@@ -189,11 +189,6 @@ def load_with_classloader(bundle):
     class_name = bundle['class_name']
     proc_class = bundle.get_class_loader().load_class(class_name)
     return proc_class.create_from(bundle)
-
-
-def loop_factory(*args, **kwargs):
-    loop = persistable.BaseEventLoop()
-    return loop
 
 
 def set_if_not_none(mapping, key, value):

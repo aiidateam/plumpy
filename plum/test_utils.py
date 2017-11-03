@@ -55,20 +55,19 @@ class ProcessWithCheckpoint(Process):
 
 
 class WaitForSignalProcess(Process):
-    BARRIER = 'barrier'
+    def __init__(self, *args, **kwargs):
+        super(WaitForSignalProcess, self).__init__(*args, **kwargs)
+        self.store._barrier = Barrier(loop=self.loop())
 
     @override
     def _run(self):
-        return self.loop().create(Barrier), self.finish
+        return self.store._barrier, self.finish
 
     def finish(self):
         pass
 
     def continue_(self):
-        """
-        Can only be called when in the WAITING state
-        """
-        self.get_waiting_on().open()
+        self.store._barrier.open()
 
 
 class EventsTesterMixin(object):

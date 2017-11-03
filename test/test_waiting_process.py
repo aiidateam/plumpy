@@ -1,22 +1,15 @@
 import apricotpy
 import plum
-from plum import loop_factory
 from plum import Process, ProcessState
 from plum.test_utils import TwoCheckpoint, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plum.test_utils import check_process_against_snapshots
-from plum.utils import override
 from plum.test_utils import ProcessSaver
 from plum.wait_ons import run_until
-from .util import TestCase
+from . import util
 
 
-class TestWaitingProcess(TestCase):
-    def setUp(self):
-        super(TestWaitingProcess, self).setUp()
-
-        self.loop = loop_factory()
-
+class TestWaitingProcess(util.TestCaseWithLoop):
     def test_instance_state(self):
         proc = self.loop.create(TwoCheckpoint)
         wl = ProcessSaver(proc)

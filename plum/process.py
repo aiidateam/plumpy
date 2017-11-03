@@ -18,9 +18,14 @@ from plum.process_listener import ProcessListener
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
 from plum.port import _NULL
+from . import events
 from . import utils
 
-__all__ = ['Process', 'ProcessState', 'get_pid_from_bundle']
+__all__ = ['Process',
+           'ProcessAction',
+           'ProcessMessage',
+           'ProcessState',
+           'get_pid_from_bundle']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +39,36 @@ class ProcessState(Enum):
     WAITING = 2
     STOPPED = 3
     FAILED = 4
+
+
+class ProcessStateTransitions(object):
+    # The allowed state transitions
+    ALLOWED = {
+        ProcessState.CREATED: {ProcessState.RUNNING, ProcessState.STOPPED, ProcessState.FAILED},
+        ProcessState.RUNNING: {ProcessState.RUNNING, ProcessState.WAITING, ProcessState.STOPPED, ProcessState.FAILED},
+        ProcessState.WAITING: {ProcessState.RUNNING, ProcessState.STOPPED, ProcessState.FAILED},
+        ProcessState.STOPPED: {ProcessState.FAILED},
+        ProcessState.FAILED: {}
+    }
+
+    @staticmethod
+    def is_allowed(start_state, end_state):
+        return end_state in ProcessStateTransitions.ALLOWED[start_state]
+
+    @staticmethod
+    def is_reachable(start_state, end_state):
+        if ProcessStateTransitions.is_allowed(start_state, end_state):
+            return True
+        # From each of the states we can transition to from the start state
+        # is there one from which we can reach the end state?
+        for state in ProcessStateTransitions.ALLOWED[start_state]:
+            if ProcessStateTransitions.is_reachable(state, end_state):
+                return True
+        return False
+
+    @staticmethod
+    def is_terminal(state):
+        return not ProcessStateTransitions.ALLOWED[state]
 
 
 Wait = namedtuple('Wait', ['on', 'callback'])
@@ -68,6 +103,25 @@ class BundleKeys(object):
     PAUSED = 'PAUSED'
     CALLBACK_FN = 'CALLBACK_FN'
     CALLBACK_ARGS = 'CALLBACK_ARGS'
+
+
+class ProcessAction(object):
+    """
+    Actions that the process can be asked to perform
+    These should be sent as the subject of a message to the process
+    """
+    PAUSE = 'pause'
+    PLAY = 'play'
+    ABORT = 'abort'
+    REPORT_STATUS = 'report_status'
+
+
+class ProcessMessage(object):
+    """
+    Messages that the process can emit, these will be the subject
+    of the message
+    """
+    STATUS_REPORT = 'status_report'
 
 
 class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)):
@@ -173,6 +227,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         :type logger: :class:`logging.Logger`
         """
         super(Process, self).__init__(loop)
+        assert isinstance(self.loop(), events.ProcessEventLoop), "Must be used with a ProcessEventLoop"
 
         # Don't allow the spec to be changed anymore
         self.spec().seal()
@@ -201,13 +256,16 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         self.__paused = False
         self.__abort_msg = None
 
-        for proc in ('[all]', str(self._pid)):
-            self.loop().messages().add_listener(
-                self._status_requested, "process.{}.request.status".format(proc)
-            )
+        self.loop().messages().add_listener(
+            self._status_requested,
+            "Process.[all].request.status"
+        )
 
         self.enable_message_listening()
+        self.pause()
         self._do(self._enter_created)
+
+        self.loop()._insert_process(self)
 
     @property
     def creation_time(self):
@@ -395,21 +453,19 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         fut.set_result(self.has_aborted())
 
     def play(self):
-        if self.is_playing():
-            return
-
-        self.__paused = False
-        if self._callback_fn is not None:
-            self._schedule_callback(self._callback_fn, *self._callback_args)
+        if not self.is_playing():
+            self.__paused = False
+            if self._callback_fn is not None:
+                self._schedule_callback(self._callback_fn, *self._callback_args)
+        return self
 
     def pause(self):
-        if not self.is_playing():
-            return
+        if self.is_playing():
+            if self.__loop_callback is not None:
+                self.__loop_callback.cancel()
 
-        if self.__loop_callback is not None:
-            self.__loop_callback.cancel()
-
-        self.__paused = True
+            self.__paused = True
+        return self
 
     def is_playing(self):
         return not self.__paused
@@ -420,9 +476,6 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
 
     def remove_process_listener(self, listener):
         self.__event_helper.remove_listener(listener)
-
-    def listen_scope(self, listener):
-        return ListenContext(self, listener)
 
     @protected
     def set_logger(self, logger):
@@ -439,7 +492,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         """
         Called when the process is created.
         """
-        self._send_event_message('create')
+        self._broadcast_event_message('create')
         self.__called = True
 
     @protected
@@ -452,7 +505,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         method, usually at the end of the function.
         """
         self._fire_event(ProcessListener.on_process_start)
-        self._send_event_message('start')
+        self._broadcast_event_message('start')
         self.__called = True
 
     @protected
@@ -467,7 +520,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         method.
         """
         self._fire_event(ProcessListener.on_process_run)
-        self._send_event_message('run')
+        self._broadcast_event_message('run')
         self.__called = True
 
     @protected
@@ -476,13 +529,13 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         Called when the process is about to enter the WAITING state
         """
         self._fire_event(ProcessListener.on_process_wait)
-        self._send_event_message({'awaiting': awaiting_uuid})
+        self._broadcast_event_message({'awaiting': awaiting_uuid})
         self.__called = True
 
     @protected
     def on_resume(self):
         self._fire_event(ProcessListener.on_process_resume)
-        self._send_event_message('resume')
+        self._broadcast_event_message('resume')
         self.__called = True
 
     @protected
@@ -492,7 +545,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         """
         self.__abort_msg = abort_msg
         self._fire_event(ProcessListener.on_process_abort)
-        self._send_event_message('abort', {'abort_msg': abort_msg})
+        self._broadcast_event_message('abort', {'abort_msg': abort_msg})
         self.__called = True
 
     @protected
@@ -503,13 +556,13 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         """
         self._check_outputs()
         self._fire_event(ProcessListener.on_process_finish)
-        self._send_event_message('finish')
+        self._broadcast_event_message('finish')
         self.__called = True
 
     @protected
     def on_stop(self):
         self._fire_event(ProcessListener.on_process_stop)
-        self._send_event_message('stop')
+        self._broadcast_event_message('stop')
         self.__called = True
 
     @protected
@@ -520,7 +573,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         :param exc_info: The exception information as returned by sys.exc_info()
         """
         self._fire_event(ProcessListener.on_process_fail)
-        self._send_event_message('fail')
+        self._broadcast_event_message('fail')
         self.__called = True
 
     @protected
@@ -529,7 +582,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         Called when the process reaches a terminal state.
         """
         self._fire_event(ProcessListener.on_process_terminate)
-        self._send_event_message('terminate')
+        self._broadcast_event_message('terminate')
         self.__called = True
 
     def on_output_emitted(self, output_port, value, dynamic):
@@ -619,14 +672,18 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         """
         return encoded
 
-    def message_received(self, subject, body=None, recipient=None, sender_id=None):
-        super(Process, self).message_received(subject, body, recipient, sender_id)
-        if subject == 'abort':
+    def message_received(self, subject, body=None, sender_id=None):
+        super(Process, self).message_received(subject, body, sender_id)
+        if subject == ProcessAction.ABORT:
             self.abort()
-        elif subject == 'pause':
+        elif subject == ProcessAction.PAUSE:
             self.pause()
-        elif subject == 'play':
+        elif subject == ProcessAction.PLAY:
             self.play()
+        elif subject == ProcessAction.REPORT_STATUS:
+            self._status_requested(
+                self.loop(), subject, body, self.uuid, sender_id
+            )
 
     def __init(self, logger):
         """
@@ -647,17 +704,19 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
     def _fire_event(self, event):
         self.loop().call_soon(self.__event_helper.fire_event, event, self)
 
-    def _send_message(self, subject, body_=None):
-        body = {'uuid': self.uuid}
-        if body_ is not None:
-            body.update(body_)
-        self.send_message('process.{}.{}'.format(self.pid, subject), body)
+    def _send_message(self, subject, body=None, to=None):
+        body_ = {'uuid': self.uuid}
+        if body is not None:
+            body_.update(body)
+        self.send_message(subject, to=to, body=body_)
 
-    def _send_event_message(self, event, info=None):
-        body = {'state': self.__state}
-        if info is not None:
-            body.update(info)
-        self._send_message('on_{}'.format(event), body)
+    def _broadcast_event_message(self, event, body=None):
+        if body is None:
+            body_ = {}
+        else:
+            body_ = body.copy()
+        body_.update({'state': self.__state})
+        self._send_message('on_{}'.format(event), body_)
 
     def _terminate(self):
         self._call_with_super_check(self.on_terminate)
@@ -707,8 +766,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
 
     def _enter_running(self, next_step, result=None):
         last_state = self.__state
-        self._set_state(ProcessState.RUNNING,
-                        [ProcessState.CREATED, ProcessState.WAITING, ProcessState.RUNNING])
+        self._set_state(ProcessState.RUNNING)
 
         if last_state is ProcessState.CREATED:
             self._call_with_super_check(self.on_start)
@@ -798,18 +856,14 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         self._terminate()
         self.set_exception(exception)
 
-    def _set_state(self, new_state, allowed_states=None):
+    def _set_state(self, new_state):
         """
         Set the state optionally checking that we are entering from an allowed state.
 
         :param new_state: The new state
-        :param allowed_states: An optional tuple of states we are allowed to enter
-            this state from.
         """
-        if allowed_states is not None and self.__state not in allowed_states:
-            raise RuntimeError(
-                "Cannot enter state {} from {}".format(new_state, self.__state)
-            )
+        if not ProcessStateTransitions.is_allowed(self.__state, new_state):
+            raise RuntimeError("Cannot enter state {} from {}".format(new_state, self.__state))
         self.__state = new_state
 
     def _schedule_callback(self, fn, *args):
@@ -831,11 +885,13 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         except BaseException:
             self._enter_failed(sys.exc_info())
 
-    def _status_requested(self, loop, subject, body, sender_id):
+    def _status_requested(self, loop, subject, body, to, sender_id):
         status_info = {
+            'creation_time': self.__CREATION_TIME,
             'state': self.__state,
+            'waiting_on': str(self.__awaiting)
         }
-        self._send_message('status', status_info)
+        self._send_message(to=sender_id, subject=ProcessMessage.STATUS_REPORT, body=status_info)
 
     def _get_message_identifier(self):
         id_str = []
@@ -844,29 +900,6 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         id_str.append(self.__class__.__name__)
         id_str.append(str(self.pid))
         return '.'.join(id_str)
-
-
-class ListenContext(object):
-    """
-    A context manager for listening to the Process.
-
-    A typical usage would be:
-    with ListenContext(producer, listener):
-        # Producer generates messages that the listener gets
-        pass
-    """
-
-    def __init__(self, producer, *args, **kwargs):
-        self._producer = producer
-        self._args = args
-        self._kwargs = kwargs
-
-    def __enter__(self):
-        self._producer.add_process_listener(*self._args, **self._kwargs)
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        self._producer.remove_process_listener(*self._args, **self._kwargs)
 
 
 def _is_wait_retval(retval):

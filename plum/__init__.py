@@ -1,9 +1,12 @@
 import apricotpy
 import logging
+from .events import *
 from .process import *
 from .utils import *
 
-__all__ = (process.__all__ + utils.__all__)
+__all__ = (events.__all__ +
+           process.__all__ +
+           utils.__all__)
 
 EventLoop = apricotpy.BaseEventLoop
 PersistableEventLoop = apricotpy.persistable.BaseEventLoop

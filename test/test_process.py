@@ -7,9 +7,8 @@ from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutp
 from plum.test_utils import ProcessListenerTester
 from plum.utils import override
 from plum.wait_ons import run_until, WaitOnProcessState
-from .util import TestCase
-
 from plum import process
+import uuid
 from . import util
 
 
@@ -59,7 +58,7 @@ class TestProcess(util.TestCaseWithLoop):
         """
         Check that the references to specs are doing the right thing...
         """
-        dp = self.loop.create(DummyProcess)
+        dp = DummyProcess()
         self.assertIsNot(DummyProcess.spec(), Process.spec())
         self.assertIs(dp.spec(), DummyProcess.spec())
 
@@ -87,9 +86,9 @@ class TestProcess(util.TestCaseWithLoop):
                 pass
 
         with self.assertRaises(ValueError):
-            self.loop.run_until_complete(self.loop.create(NoDynamic, {'a': 5}))
+            self.loop.run_until_complete(util.MaxTicks(10, NoDynamic(inputs={'a': 5}).play()))
 
-        self.loop.run_until_complete(self.loop.create(WithDynamic, {'a': 5}))
+        self.loop.run_until_complete(util.MaxTicks(10, WithDynamic(inputs={'a': 5}).play()))
 
     def test_inputs(self):
         class Proc(Process):
@@ -137,26 +136,23 @@ class TestProcess(util.TestCaseWithLoop):
             self.assertEqual(p.inputs['input'], def_val)
 
     def test_run(self):
-        p = self.loop.create(DummyProcessWithOutput)
-        self.loop.run_until_complete(p)
+        proc = DummyProcessWithOutput().play()
+        self.loop.run_until_complete(util.MaxTicks(10, proc))
 
-        self.assertTrue(p.has_finished())
-        self.assertEqual(p.state, ProcessState.STOPPED)
-        self.assertEqual(p.outputs, {'default': 5})
+        self.assertTrue(proc.has_finished())
+        self.assertEqual(proc.state, ProcessState.STOPPED)
+        self.assertEqual(proc.outputs, {'default': 5})
 
     def test_run_from_class(self):
         # Test running through class method
-
-        results = self.loop.run_until_complete(
-            self.loop.create(DummyProcessWithOutput)
-        )
+        results = self.loop.run_until_complete(DummyProcessWithOutput().play())
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
         for event in ('create', 'start', 'run', 'finish', 'stop'):
             with self.assertRaises(AssertionError):
                 self.loop.run_until_complete(
-                    self.loop.create(ForgetToCallParent, {'forget_on': event})
+                    util.MaxTicks(10, ForgetToCallParent(inputs={'forget_on': event}).play())
                 )
 
     def test_pid(self):
@@ -173,9 +169,9 @@ class TestProcess(util.TestCaseWithLoop):
         self.assertEquals(p.pid, 'a')
 
     def test_exception(self):
-        proc = self.loop.create(ExceptionProcess)
+        proc = ExceptionProcess().play()
         with self.assertRaises(RuntimeError):
-            self.loop.run_until_complete(proc)
+            self.loop.run_until_complete(util.MaxTicks(10, proc))
         self.assertEqual(proc.state, ProcessState.FAILED)
 
     def test_get_description(self):
@@ -203,10 +199,10 @@ class TestProcess(util.TestCaseWithLoop):
 
     def test_instance_state(self):
         BundleKeys = process.BundleKeys
-        proc = self.loop.create(DummyProcessWithOutput)
+        proc = DummyProcessWithOutput().play()
 
         saver = ProcessSaver(proc)
-        self.loop.run_until_complete(proc)
+        self.loop.run_until_complete(util.MaxTicks(10, proc))
 
         for bundle, outputs in zip(saver.snapshots, saver.outputs):
             # Check that it is a copy
@@ -219,23 +215,23 @@ class TestProcess(util.TestCaseWithLoop):
         )
 
     def test_saving_each_step(self):
-        for ProcClass in TEST_PROCESSES:
-            proc = self.loop.create(ProcClass)
+        for proc_class in TEST_PROCESSES:
+            proc = proc_class().play()
 
             saver = ProcessSaver(proc)
-            self.loop.run_until_complete(proc)
+            self.loop.run_until_complete(util.MaxTicks(10, proc))
 
             self.assertEqual(proc.state, ProcessState.STOPPED)
             self.assertTrue(
-                check_process_against_snapshots(self.loop, ProcClass, saver.snapshots)
+                check_process_against_snapshots(self.loop, proc_class, saver.snapshots)
             )
 
     def test_saving_each_step_interleaved(self):
         for ProcClass in TEST_PROCESSES:
-            proc = self.loop.create(ProcClass)
+            proc = ProcClass().play()
             ps = ProcessSaver(proc)
             try:
-                self.loop.run_until_complete(proc)
+                self.loop.run_until_complete(util.MaxTicks(10, proc))
             except BaseException:
                 pass
 
@@ -249,7 +245,7 @@ class TestProcess(util.TestCaseWithLoop):
                 self.logger.info("Test")
 
         # TODO: Test giving a custom logger to see if it gets used
-        self.loop.run_until_complete(self.loop.create(LoggerTester))
+        self.loop.run_until_complete(util.MaxTicks(10, LoggerTester().play()))
 
     def test_abort(self):
         proc = self.loop.create(DummyProcess)
@@ -261,7 +257,7 @@ class TestProcess(util.TestCaseWithLoop):
         self.assertEqual(proc.state, ProcessState.STOPPED)
 
     def test_wait_continue(self):
-        proc = self.loop.create(WaitForSignalProcess)
+        proc = WaitForSignalProcess().play()
 
         # Wait - Run the process and wait until it is waiting
         run_until(proc, ProcessState.WAITING, self.loop)
@@ -269,46 +265,46 @@ class TestProcess(util.TestCaseWithLoop):
         proc.continue_()
 
         # Run
-        self.loop.run_until_complete(proc)
+        self.loop.run_until_complete(util.MaxTicks(4, proc))
 
         # Check it's done
         self.assertEqual(proc.state, ProcessState.STOPPED)
         self.assertTrue(proc.has_finished())
 
     def test_exc_info(self):
-        p = self.loop.create(ExceptionProcess)
+        proc = ExceptionProcess().play()
         try:
-            self.loop.run_until_complete(p)
+            self.loop.run_until_complete(util.MaxTicks(10, proc))
         except RuntimeError as e:
-            self.assertEqual(p.exception(), e)
+            self.assertEqual(proc.exception(), e)
 
     def test_restart(self):
-        process = self.loop.create(_RestartProcess)
-        run_until(process, ProcessState.WAITING, self.loop)
+        proc = _RestartProcess().play()
+        run_until(proc, ProcessState.WAITING, self.loop)
 
         # Save the state of the process
-        saved_state = apricotpy.persistable.Bundle(process)
+        saved_state = apricotpy.persistable.Bundle(proc)
 
         # Load a process from the saved state
-        process = saved_state.unbundle(self.loop)
-        self.assertEqual(process.state, ProcessState.WAITING)
+        proc = saved_state.unbundle(self.loop)
+        self.assertEqual(proc.state, ProcessState.WAITING)
 
         # Now play it
-        process.continue_()
-        result = ~process
+        proc.continue_()
+        result = ~proc
         self.assertEqual(result, {'finished': True})
 
     def test_run_terminated(self):
-        p = self.loop.create(DummyProcess)
-        self.loop.run_until_complete(p)
-        self.assertTrue(p.has_terminated())
+        proc = DummyProcess().play()
+        self.loop.run_until_complete(proc)
+        self.assertTrue(proc.has_terminated())
 
     def test_wait_pause_continue_play(self):
         """
         Test that if you pause a process that and its awaitable finishes that it
         completes correctly when played again.
         """
-        proc = self.loop.create(WaitForSignalProcess)
+        proc = WaitForSignalProcess().play()
 
         # Wait - Run the process and wait until it is waiting
         run_until(proc, ProcessState.WAITING, self.loop)
@@ -318,7 +314,7 @@ class TestProcess(util.TestCaseWithLoop):
         proc.play()
 
         # Run
-        result = ~proc
+        self.loop.run_until_complete(util.MaxTicks(4, proc))
 
         # Check it's done
         self.assertEqual(proc.state, ProcessState.STOPPED)
@@ -329,7 +325,7 @@ class TestProcess(util.TestCaseWithLoop):
         Test that if you pause a process that and its awaitable finishes that it
         completes correctly when played again.
         """
-        proc = self.loop.create(WaitForSignalProcess)
+        proc = WaitForSignalProcess().play()
 
         # Wait - Run the process and wait until it is waiting
         run_until(proc, ProcessState.WAITING, self.loop)
@@ -341,7 +337,7 @@ class TestProcess(util.TestCaseWithLoop):
         proc.play()
 
         # Run
-        result = ~proc
+        self.loop.run_until_complete(util.MaxTicks(10, proc))
 
         # Check it's done
         self.assertEqual(proc.state, ProcessState.STOPPED)
@@ -349,7 +345,7 @@ class TestProcess(util.TestCaseWithLoop):
 
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
-        proc = self.loop.create(WaitForSignalProcess)
+        proc = WaitForSignalProcess().play()
 
         # Wait - Run the process until it enters the WAITING state
         run_until(proc, ProcessState.WAITING, self.loop)
@@ -369,22 +365,23 @@ class TestProcess(util.TestCaseWithLoop):
         self.assertEqual(result, result2)
 
     def test_status_request(self):
-        """
-        Test that a status request is acknowledged by a process.
-        """
-        result = {}
+        """ Test that a status request is acknowledged by a process. """
+        results = []
+        _got_status = util.get_message_capture_fn(results)
 
-        def _got_status(loop, subject, body, sender_id):
-            result['subject'] = subject
-            result['body'] = body
-            result['sender_id'] = sender_id
+        my_id = uuid.uuid4()
+        self.loop.messages().add_listener(_got_status, subject_filter=plum.ProcessMessage.STATUS_REPORT)
+        proc = DummyProcess().play()
+        self.loop.messages().send(
+            sender_id=my_id,
+            to=proc.uuid,
+            subject=plum.ProcessAction.REPORT_STATUS
+            )
+        self.loop.run_until_complete(util.MaxTicks(10, proc))
 
-        self.loop.messages().add_listener(_got_status, 'process.*.status')
-        proc = DummyProcess()
-        self.loop.messages().send('process.[all].request.status')
-        self.loop.run_until_complete(proc)
-
-        self.assertEqual(result['subject'], 'process.{}.status'.format(proc.pid))
+        self.assertEqual(len(results), 1)
+        result = results[0]
+        self.assertEqual(result['subject'], plum.ProcessMessage.STATUS_REPORT)
         self.assertIn('body', result)
 
     def _check_process_against_snapshot(self, snapshot, proc):
@@ -409,7 +406,7 @@ class TestProcessEvents(util.TestCaseWithLoop):
     def setUp(self):
         super(TestProcessEvents, self).setUp()
         self.events_tester = ProcessListenerTester()
-        self.proc = self.loop.create(DummyProcessWithOutput)
+        self.proc = DummyProcessWithOutput().play()
         self.proc.add_process_listener(self.events_tester)
 
     def tearDown(self):
@@ -417,23 +414,23 @@ class TestProcessEvents(util.TestCaseWithLoop):
         super(TestProcessEvents, self).tearDown()
 
     def test_on_start(self):
-        self.loop.run_until_complete(self.proc)
+        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
         self.assertTrue(self.events_tester.start)
 
     def test_on_run(self):
-        self.loop.run_until_complete(self.proc)
+        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
         self.assertTrue(self.events_tester.run)
 
     def test_on_output_emitted(self):
-        self.loop.run_until_complete(self.proc)
+        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
         self.assertTrue(self.events_tester.emitted)
 
     def test_on_finished(self):
-        self.loop.run_until_complete(self.proc)
+        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
         self.assertTrue(self.events_tester.finish)
 
     def test_events_run_through(self):
-        self.loop.run_until_complete(self.proc)
+        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
         self.assertTrue(self.events_tester.start)
         self.assertTrue(self.events_tester.run)
         self.assertTrue(self.events_tester.emitted)

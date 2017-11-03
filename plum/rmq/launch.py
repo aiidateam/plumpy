@@ -22,6 +22,7 @@ __all__ = ['ProcessLaunchSubscriber', 'ProcessLaunchPublisher']
 
 _RunningTaskInfo = namedtuple("_RunningTaskInfo", ['pid', 'ch', 'delivery_tag'])
 
+
 class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
     """
     Run tasks as they come form the RabbitMQ task queue
@@ -222,8 +223,8 @@ class _AwaitDone(with_metaclass(abc.ABCMeta, persistable.AwaitableLoopObject)):
     CORRELATION_ID = 'CORRELATION_ID'
     CONSUMER_TAG = 'CONSUMER_TAG'
 
-    def __init__(self, publisher, process_bundle):
-        super(_AwaitDone, self).__init__()
+    def __init__(self, publisher, process_bundle, loop=None):
+        super(_AwaitDone, self).__init__(loop)
 
         self._pid = process.get_pid_from_bundle(process_bundle)
         self._publisher = publisher

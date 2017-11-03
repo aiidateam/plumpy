@@ -13,14 +13,14 @@ except ImportError:
 import apricotpy.persistable
 import uuid
 
-from plum import loop_factory
 from plum.test_utils import WaitForSignalProcess
 from plum.process import ProcessState
 from plum.wait_ons import run_until
+from .. import util
 
 
 @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
-class TestStatusRequesterAndProvider(TestCase):
+class TestStatusRequesterAndProvider(util.TestCaseWithLoop):
     def setUp(self):
         super(TestStatusRequesterAndProvider, self).setUp()
 
@@ -34,7 +34,6 @@ class TestStatusRequesterAndProvider(TestCase):
 
         exchange = "{}.{}.status_request".format(self.__class__.__name__, uuid.uuid4())
 
-        self.loop = loop_factory()
         self.requester = self.loop.create(ProcessStatusRequester, self._connection, exchange=exchange)
         self.subscriber = self.loop.create(ProcessStatusSubscriber, self._connection, exchange=exchange)
 
@@ -60,7 +59,7 @@ class TestStatusRequesterAndProvider(TestCase):
 
 
 @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
-class TestStatusProvider(TestCase):
+class TestStatusProvider(util.TestCaseWithLoop):
     def setUp(self):
         super(TestStatusProvider, self).setUp()
         self._response = None
@@ -82,14 +81,12 @@ class TestStatusProvider(TestCase):
         self.response_queue = result.method.queue
         self.channel.basic_consume(self._on_response, no_ack=True, queue=self.response_queue)
 
-        self.loop = loop_factory()
         self.subscriber = self.loop.create(ProcessStatusSubscriber, self._connection, exchange=self.request_exchange)
 
     def tearDown(self):
         super(TestStatusProvider, self).tearDown()
         self.channel.close()
         self._connection.close()
-        self.loop.close()
 
     def test_no_processes(self):
         response = status_decode(self._send_and_get())
@@ -109,7 +106,6 @@ class TestStatusProvider(TestCase):
         # Check they are all waiting on the same thing
         waiting_on = set([entry['waiting_on'] for entry in procs_dict.values()])
         self.assertSetEqual(waiting_on, {str(procs[0].get_waiting_on())})
-
 
         ~apricotpy.persistable.gather([proc.abort() for proc in procs], self.loop)
 
