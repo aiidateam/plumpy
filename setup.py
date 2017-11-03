@@ -35,6 +35,7 @@ setup(
         'rmq': ['pika'],
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['futures'],
+        ':python_version<"3.2"': ['backports.tempfile']
     },
     packages=['plum', 'plum.persistence'],
     test_suite='test'

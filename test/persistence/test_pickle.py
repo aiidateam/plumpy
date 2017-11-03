@@ -1,22 +1,18 @@
 import tempfile
-from plum import loop_factory
-from plum.persistence.pickle import PicklePersister
+
+if getattr(tempfile, 'TemporaryDirectory', None) is None:
+    from backports import tempfile
+
+from plum.persistence.pickle_persistence import PicklePersister
 from plum.test_utils import ProcessWithCheckpoint
-from test.util import TestCase
+from test.util import TestCaseWithLoop
 
 
-class TestPicklePersister(TestCase):
-    def setUp(self):
-        super(TestPicklePersister, self).setUp()
-        self.loop = loop_factory()
-
-    def tearDown(self):
-        super(TestPicklePersister, self).tearDown()
-
+class TestPicklePersister(TestCaseWithLoop):
     def test_on_create_process(self):
         process = self.loop.create(ProcessWithCheckpoint)
 
-        with tempfile.mkdtemp() as directory:
+        with tempfile.TemporaryDirectory() as directory:
             persister = PicklePersister(directory)
             persister.save_checkpoint(process)
 

@@ -4,9 +4,11 @@ import errno
 import fnmatch
 import pickle
 
-from apricotpy.persistable import Bundle
+import plum
 from plum.persistence import Persister
 from plum.persistence import PersistedCheckpoint
+
+_PICKLE_SUFFIX = 'pickle'
 
 
 class PicklePersister(Persister):
@@ -14,7 +16,6 @@ class PicklePersister(Persister):
     Implementation of the abstract Persister class that stores Process states
     in pickles on a filesystem.
     """
-    PICKLE_SUFFIX = 'pickle'
 
     def __init__(self, pickle_directory):
         """
@@ -33,7 +34,7 @@ class PicklePersister(Persister):
 
         self._pickle_directory = pickle_directory
 
-
+    @staticmethod
     def _ensure_pickle_directory(dirpath):
         """
         Will attempt to create the directory at dirpath and raise if it fails, except
@@ -45,7 +46,7 @@ class PicklePersister(Persister):
             if exception.errno != errno.EEXIST:
                 raise
 
-    def _parse_filename(filename):
+    def _parse_filename(self, filename):
         """
         Parse the filename of a persisted checkpoint to retrieve the process id
         and the optional tag
@@ -54,7 +55,7 @@ class PicklePersister(Persister):
         :rtype: PersistedCheckpoint
         :raises ValueError: if filename does not conform to expected format
         """
-        regex = '^(([^\.]*)\.)?(.*)\.{}$'.format(PICKLE_SUFFIX)
+        regex = '^(([^\.]*)\.)?(.*)\.{}$'.format(_PICKLE_SUFFIX)
         matches = re.findall(regex, filename)
 
         if not matches:
@@ -65,19 +66,20 @@ class PicklePersister(Persister):
         else:
             return PersistedCheckpoint(matches[0][2], None)
 
+    @staticmethod
     def pickle_filename(pid, tag=None):
         """
         Returns the relative filepath of the pickle for the given process id
         and optional checkpoint tag
         """
         if tag is not None:
-            filename = '{}.{}.{}'.format(pid, tag, self.PICKLE_SUFFIX)
+            filename = '{}.{}.{}'.format(pid, tag, _PICKLE_SUFFIX)
         else:
-            filename = '{}.{}'.format(pid, self.PICKLE_SUFFIX)
+            filename = '{}.{}'.format(pid, _PICKLE_SUFFIX)
 
         return filename
 
-    def pickle_filepath(pid, tag=None):
+    def pickle_filepath(self, pid, tag=None):
         """
         Returns the full filepath of the pickle for the given process id
         and optional checkpoint tag
@@ -92,7 +94,7 @@ class PicklePersister(Persister):
         :param tag: optional checkpoint identifier to allow distinguishing
             multiple checkpoints for the same process
         """
-        bundle = Bundle(process)
+        bundle = plum.Bundle(process)
 
         with open(self.pickle_filepath(process.pid, tag), 'w+b') as handle:
             pickle.dump(bundle, handle)
@@ -107,10 +109,8 @@ class PicklePersister(Persister):
         :return: a bundle with the process state
         :rtype: :class:`apricotpy.persistable.Bundle`
         """
-        try:
-            bundle = pickle.load(self.pickle_filepath(pid, tag))
-        except IOError as exception:
-            raise
+        with open(self.pickle_filename(pid, tag), 'r+b') as handle:
+            bundle = pickle.load(handle)
 
         return bundle
 
@@ -122,7 +122,7 @@ class PicklePersister(Persister):
         :return: list of PersistedCheckpoint tuples
         """
         checkpoints = []
-        file_pattern = '*.{}'.format(self.PICKLE_SUFFIX)
+        file_pattern = '*.{}'.format(_PICKLE_SUFFIX)
 
         for subdir, dirs, files in os.walk(self._pickle_directory):
             for filename in fnmatch.filter(files, file_pattern):
@@ -144,7 +144,7 @@ class PicklePersister(Persister):
         :param pid: the process pid
         :return: list of PersistedCheckpoint tuples
         """
-        return [checkpoint for c in self.get_checkpoints if c.pid == pid]
+        return [c for c in self.get_checkpoints() if c.pid == pid]
 
     def delete_checkpoint(self, pid, tag=None):
         """
