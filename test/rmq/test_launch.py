@@ -52,11 +52,12 @@ class TestTaskControllerAndRunner(TestCase):
         t0 = time.time()
         while proc is None and time.time() - t0 < 3.:
             self.runner_loop.tick()
-            proc = self.runner_loop.get_process(awaitable.pid)
-            procs = self.runner_loop.objects(obj_type=plum.test_utils.DummyProcessWithOutput)
-            if len(procs) > 0 and procs[0].pid == awaitable.pid:
-                proc = procs[0]
+            try:
+                proc = self.runner_loop.get_process(awaitable.pid)
                 break
+            except ValueError:
+                pass
+
         self.assertIsNotNone(proc)
 
         result = ~proc

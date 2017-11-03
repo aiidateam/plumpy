@@ -93,9 +93,6 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
         else:
             try:
                 proc = saved_state.unbundle(self.loop())
-                # HACK attack: remove this later
-                if proc.loop() is None:
-                    self.loop().insert(proc)
             except BaseException as exc:
                 response = {
                     'state': 'exception',

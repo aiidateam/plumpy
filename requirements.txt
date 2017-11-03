@@ -1,5 +1,5 @@
 #apricotpy==0.1.0.dev1
--e git+git://github.com/muhrin/apricotpy.git@29b8bdf8542fe79f06a98c802b13fcc1f9f4b78f#egg=apricotpy
+-e git+git://github.com/muhrin/apricotpy.git@ba8fb06d37edc7e4546f451b4cd69b4b180e347d#egg=apricotpy
 enum34==1.1.2; python_version < '3.4'
 futures==3.0.5; python_version < '3.2'
 backports.tempfile==1.0; python_version < '3.2'

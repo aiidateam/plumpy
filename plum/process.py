@@ -426,6 +426,8 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         self.__paused = saved_state[BundleKeys.PAUSED]
         self.__abort_msg = saved_state[BundleKeys.ABORT_MSG]
 
+        self.loop()._insert_process(self)
+
     def abort(self, msg=None):
         """
         Abort the process.  Can optionally provide a message with
