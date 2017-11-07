@@ -56,6 +56,8 @@ class ProcessLaunchSubscriber(apricotpy.TickingLoopObject):
         self._channel.queue_declare(queue=queue, durable=True)
         self._channel.basic_consume(self._on_launch, queue=queue)
 
+        self.play()
+
     @override
     def tick(self):
         """

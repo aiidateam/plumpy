@@ -438,7 +438,6 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         """
         self.log_with_pid(logging.INFO, "aborting")
 
-        self._loop_check()
         self.play()
 
         if self.__loop_callback is not None:
@@ -752,9 +751,6 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
                     "Process {} failed because {}".format(self.get_name(), msg)
                 )
 
-    def _loop_check(self):
-        assert self.in_loop(), "The process is not in the event loop"
-
     @abstractmethod
     def _run(self, **kwargs):
         pass
@@ -870,9 +866,6 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         self.__state = new_state
 
     def _schedule_callback(self, fn, *args):
-        assert inspect.ismethod(fn) and fn.__self__ is self, \
-            "Callback has to be a member of this process"
-
         self.store.callback_fn = fn
         self.store.callback_args = list(args)
         # If not playing, then the play call will schedule the callback

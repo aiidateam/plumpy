@@ -25,12 +25,24 @@ class TestCaseWithLoop(TestCase):
         self.loop = None
 
 
-class MaxTicks(apricotpy.persistable.AwaitableMixin,
+class HansKlok(apricotpy.persistable.AwaitableMixin,
                apricotpy.persistable.PersistableLoopObjectMixin,
                apricotpy.TickingLoopObject):
-    def __init__(self, max_ticks, awaitable, loop=None):
-        super(MaxTicks, self).__init__(loop=loop)
+    """
+    A debugging tool to let the loop run for a maximum time or maximum
+    number of ticks.  Like magic.
+    """
+    def __init__(self, awaitable, max_ticks=10, max_time=10., loop=None):
+        # If no loop is suppled, try to put it in the same one as the
+        # awaitable (if it has one)
+        if loop is None:
+            try:
+                loop = awaitable.loop()
+            except AttributeError:
+                pass
+        super(HansKlok, self).__init__(loop=loop)
         self._max_ticks = max_ticks
+        self._max_time = max_time
         awaitable.add_done_callback(self._awaitable_done)
         self._ticks = 0
 

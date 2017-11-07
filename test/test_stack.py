@@ -20,4 +20,4 @@ class TestStack(TestCase):
     def test_simple(self):
         loop = plum.new_event_loop()
         stack_test = loop.create(StackTest).play()
-        loop.run_until_complete(util.MaxTicks(5, stack_test, loop))
+        loop.run_until_complete(util.HansKlok(stack_test, loop))

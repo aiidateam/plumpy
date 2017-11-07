@@ -6,7 +6,7 @@ import uuid
 import plum.rmq.launch
 import plum.test_utils
 from test.test_rmq import _HAS_PIKA
-from test.util import TestCase, MaxTicks
+from test.util import TestCase, HansKlok
 
 if _HAS_PIKA:
     import pika.exceptions
@@ -46,21 +46,21 @@ class TestTaskControllerAndRunner(TestCase):
 
     def test_launch(self):
         # Try launching a process
-        awaitable = self._launch(plum.test_utils.DummyProcessWithOutput)
+        launch = self._launch(plum.test_utils.DummyProcessWithOutput)
 
         proc = None
         t0 = time.time()
         while proc is None and time.time() - t0 < 3.:
             self.runner_loop.tick()
             try:
-                proc = self.runner_loop.get_process(awaitable.pid)
+                proc = self.runner_loop.get_process(launch.pid)
                 break
             except ValueError:
                 pass
         self.assertIsNotNone(proc)
 
-        result = proc.loop().run_until_complete(MaxTicks(5, proc))
-        awaitable_result = self.launcher_loop.run_until_complete(MaxTicks(5, awaitable))
+        result = proc.loop().run_until_complete(HansKlok(proc))
+        awaitable_result = self.launcher_loop.run_until_complete(HansKlok(launch))
 
         self.assertEqual(result, awaitable_result)
 
@@ -84,7 +84,7 @@ class TestTaskControllerAndRunner(TestCase):
         self.runner_loop.tick()
 
         with self.assertRaises(apricotpy.CancelledError):
-            self.launcher_loop.run_until_complete(MaxTicks(5, awaitable))
+            self.launcher_loop.run_until_complete(HansKlok(awaitable))
 
     def test_launch_exception(self):
         # Try launching a process
@@ -103,10 +103,10 @@ class TestTaskControllerAndRunner(TestCase):
 
         # Now let it run
         with self.assertRaises(RuntimeError):
-            result = proc.loop().run_until_complete(MaxTicks(5, proc))
+            result = proc.loop().run_until_complete(HansKlok(proc))
 
         with self.assertRaises(RuntimeError):
-            result = self.launcher_loop.run_until_complete(MaxTicks(5, awaitable))
+            result = self.launcher_loop.run_until_complete(HansKlok(awaitable))
 
     def _launch(self, proc_class, *args, **kwargs):
         proc = self.launcher_loop.create(proc_class, *args, **kwargs)

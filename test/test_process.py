@@ -86,9 +86,9 @@ class TestProcess(util.TestCaseWithLoop):
                 pass
 
         with self.assertRaises(ValueError):
-            self.loop.run_until_complete(util.MaxTicks(10, NoDynamic(inputs={'a': 5}).play()))
+            self.loop.run_until_complete(util.HansKlok(NoDynamic(inputs={'a': 5}).play()))
 
-        self.loop.run_until_complete(util.MaxTicks(10, WithDynamic(inputs={'a': 5}).play()))
+        self.loop.run_until_complete(util.HansKlok(WithDynamic(inputs={'a': 5}).play()))
 
     def test_inputs(self):
         class Proc(Process):
@@ -137,7 +137,7 @@ class TestProcess(util.TestCaseWithLoop):
 
     def test_run(self):
         proc = DummyProcessWithOutput().play()
-        self.loop.run_until_complete(util.MaxTicks(10, proc))
+        self.loop.run_until_complete(util.HansKlok(proc))
 
         self.assertTrue(proc.has_finished())
         self.assertEqual(proc.state, ProcessState.STOPPED)
@@ -152,7 +152,7 @@ class TestProcess(util.TestCaseWithLoop):
         for event in ('create', 'start', 'run', 'finish', 'stop'):
             with self.assertRaises(AssertionError):
                 self.loop.run_until_complete(
-                    util.MaxTicks(10, ForgetToCallParent(inputs={'forget_on': event}).play())
+                    util.HansKlok(ForgetToCallParent(inputs={'forget_on': event}).play())
                 )
 
     def test_pid(self):
@@ -171,7 +171,7 @@ class TestProcess(util.TestCaseWithLoop):
     def test_exception(self):
         proc = ExceptionProcess().play()
         with self.assertRaises(RuntimeError):
-            self.loop.run_until_complete(util.MaxTicks(10, proc))
+            self.loop.run_until_complete(util.HansKlok(proc))
         self.assertEqual(proc.state, ProcessState.FAILED)
 
     def test_get_description(self):
@@ -202,7 +202,7 @@ class TestProcess(util.TestCaseWithLoop):
         proc = DummyProcessWithOutput().play()
 
         saver = ProcessSaver(proc)
-        self.loop.run_until_complete(util.MaxTicks(10, proc))
+        self.loop.run_until_complete(util.HansKlok(proc))
 
         for bundle, outputs in zip(saver.snapshots, saver.outputs):
             # Check that it is a copy
@@ -219,7 +219,7 @@ class TestProcess(util.TestCaseWithLoop):
             proc = proc_class().play()
 
             saver = ProcessSaver(proc)
-            self.loop.run_until_complete(util.MaxTicks(10, proc))
+            self.loop.run_until_complete(util.HansKlok(proc))
 
             self.assertEqual(proc.state, ProcessState.STOPPED)
             self.assertTrue(
@@ -231,7 +231,7 @@ class TestProcess(util.TestCaseWithLoop):
             proc = ProcClass().play()
             ps = ProcessSaver(proc)
             try:
-                self.loop.run_until_complete(util.MaxTicks(10, proc))
+                self.loop.run_until_complete(util.HansKlok(proc))
             except BaseException:
                 pass
 
@@ -245,7 +245,7 @@ class TestProcess(util.TestCaseWithLoop):
                 self.logger.info("Test")
 
         # TODO: Test giving a custom logger to see if it gets used
-        self.loop.run_until_complete(util.MaxTicks(10, LoggerTester().play()))
+        self.loop.run_until_complete(util.HansKlok(LoggerTester().play()))
 
     def test_abort(self):
         proc = self.loop.create(DummyProcess)
@@ -265,7 +265,7 @@ class TestProcess(util.TestCaseWithLoop):
         proc.continue_()
 
         # Run
-        self.loop.run_until_complete(util.MaxTicks(4, proc))
+        self.loop.run_until_complete(util.HansKlok(proc))
 
         # Check it's done
         self.assertEqual(proc.state, ProcessState.STOPPED)
@@ -274,7 +274,7 @@ class TestProcess(util.TestCaseWithLoop):
     def test_exc_info(self):
         proc = ExceptionProcess().play()
         try:
-            self.loop.run_until_complete(util.MaxTicks(10, proc))
+            self.loop.run_until_complete(util.HansKlok( proc))
         except RuntimeError as e:
             self.assertEqual(proc.exception(), e)
 
@@ -284,6 +284,7 @@ class TestProcess(util.TestCaseWithLoop):
 
         # Save the state of the process
         saved_state = apricotpy.persistable.Bundle(proc)
+        ~proc.abort()
 
         # Load a process from the saved state
         proc = saved_state.unbundle(self.loop)
@@ -314,7 +315,7 @@ class TestProcess(util.TestCaseWithLoop):
         proc.play()
 
         # Run
-        self.loop.run_until_complete(util.MaxTicks(4, proc))
+        self.loop.run_until_complete(util.HansKlok(proc))
 
         # Check it's done
         self.assertEqual(proc.state, ProcessState.STOPPED)
@@ -337,7 +338,7 @@ class TestProcess(util.TestCaseWithLoop):
         proc.play()
 
         # Run
-        self.loop.run_until_complete(util.MaxTicks(10, proc))
+        self.loop.run_until_complete(util.HansKlok(proc))
 
         # Check it's done
         self.assertEqual(proc.state, ProcessState.STOPPED)
@@ -377,7 +378,7 @@ class TestProcess(util.TestCaseWithLoop):
             to=proc.uuid,
             subject=plum.ProcessAction.REPORT_STATUS
             )
-        self.loop.run_until_complete(util.MaxTicks(10, proc))
+        self.loop.run_until_complete(util.HansKlok(proc))
 
         self.assertEqual(len(results), 1)
         result = results[0]
@@ -414,23 +415,23 @@ class TestProcessEvents(util.TestCaseWithLoop):
         super(TestProcessEvents, self).tearDown()
 
     def test_on_start(self):
-        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
+        self.loop.run_until_complete(util.HansKlok(self.proc))
         self.assertTrue(self.events_tester.start)
 
     def test_on_run(self):
-        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
+        self.loop.run_until_complete(util.HansKlok(self.proc))
         self.assertTrue(self.events_tester.run)
 
     def test_on_output_emitted(self):
-        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
+        self.loop.run_until_complete(util.HansKlok(self.proc))
         self.assertTrue(self.events_tester.emitted)
 
     def test_on_finished(self):
-        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
+        self.loop.run_until_complete(util.HansKlok(self.proc))
         self.assertTrue(self.events_tester.finish)
 
     def test_events_run_through(self):
-        self.loop.run_until_complete(util.MaxTicks(10, self.proc))
+        self.loop.run_until_complete(util.HansKlok(self.proc))
         self.assertTrue(self.events_tester.start)
         self.assertTrue(self.events_tester.run)
         self.assertTrue(self.events_tester.emitted)

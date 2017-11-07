@@ -140,8 +140,8 @@ class ProcessEventsTester(EventsTesterMixin, Process):
 
 
 class TwoCheckpoint(ProcessEventsTester):
-    def __init__(self, inputs=None, pid=None, logger=None):
-        super(TwoCheckpoint, self).__init__(inputs, pid, logger)
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None):
+        super(TwoCheckpoint, self).__init__(inputs, pid, logger, loop)
         self._last_checkpoint = None
 
     @override
@@ -301,7 +301,8 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
         try:
             loop.run_until_complete(loaded)
         except BaseException:
-            pass
+            import traceback
+            traceback.print_exc()
 
         # Now check going backwards until running that the saved states match
         j = 1

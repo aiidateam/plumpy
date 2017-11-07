@@ -10,10 +10,12 @@ new_event_loop = apricotpy.new_event_loop
 class ProcessEventLoop(apricotpy.persistable.BaseEventLoop):
     def __init__(self):
         super(ProcessEventLoop, self).__init__()
-
         self._processes = {}
 
     def _insert_process(self, process):
+        if process.pid in self._processes:
+            raise RuntimeError("Cannot insert the same process twice")
+
         self._processes[process.pid] = process
         process.add_done_callback(self._process_done)
 
@@ -26,10 +28,14 @@ class ProcessEventLoop(apricotpy.persistable.BaseEventLoop):
         except KeyError:
             raise ValueError("Process with pid '{}' not known".format(pid))
 
-    # def run_until_complete(self, awaitable):
-    #     if isinstance(awaitable, process.Process):
-    #         awaitable.play()
-    #     return super(ProcessEventLoop, self).run_until_complete(awaitable)
+    def run_until_complete(self, awaitable):
+        # Some awaitables are 'playable', these should be played now,
+        # otherwise they won't do anything and will never complete
+        try:
+            awaitable.play()
+        except AttributeError:
+            pass
+        return super(ProcessEventLoop, self).run_until_complete(awaitable)
 
 
 def set_event_loop(event_loop):

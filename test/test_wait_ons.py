@@ -14,7 +14,7 @@ class TestWaitOnProcessStateEvent(TestCase):
     def test_already_in_state(self):
         proc = DummyProcess()
         wait_for = wait_ons.WaitOnProcessState(proc, plum.ProcessState.CREATED)
-        self.loop.run_until_complete(util.MaxTicks(4, wait_for))
+        self.loop.run_until_complete(util.HansKlok(wait_for))
         self.assertEqual(wait_for.result(), wait_ons.WaitOnProcessState.STATE_REACHED)
 
     def test_state_messages(self):
@@ -23,7 +23,7 @@ class TestWaitOnProcessStateEvent(TestCase):
             proc.play()
 
             wait_for = wait_ons.WaitOnProcessState(proc, state)
-            self.loop.run_until_complete(util.MaxTicks(4, wait_for))
+            self.loop.run_until_complete(util.HansKlok(wait_for))
 
             self.assertEqual(wait_for.result(), wait_ons.WaitOnProcessState.STATE_REACHED)
             self.assertTrue(proc.state, state)
@@ -33,7 +33,7 @@ class TestWaitOnProcessStateEvent(TestCase):
         proc.play()
         proc.continue_()
         wait_for = wait_ons.WaitOnProcessState(proc, plum.ProcessState.WAITING)
-        self.loop.run_until_complete(util.MaxTicks(4, wait_for))
+        self.loop.run_until_complete(util.HansKlok(wait_for))
         self.assertEqual(wait_for.result(), wait_ons.WaitOnProcessState.STATE_REACHED)
 
     def test_wait_until(self):

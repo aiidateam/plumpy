@@ -38,7 +38,7 @@ class TestControl(TestCaseWithLoop):
 
         # Send a message asking the process to pause
         pause = self.publisher.pause_process(p.pid)
-        self.loop.run_until_complete(test_utils.MaxTicks(5, pause))
+        self.loop.run_until_complete(test_utils.HansKlok(pause))
         self.assertFalse(p.is_playing())
 
     def test_pause_play(self):
@@ -51,12 +51,12 @@ class TestControl(TestCaseWithLoop):
         # Pause
         # Send a message asking the process to pause
         pause = self.publisher.pause_process(p.pid)
-        self.loop.run_until_complete(test_utils.MaxTicks(5, pause))
+        self.loop.run_until_complete(test_utils.HansKlok(pause))
         self.assertFalse(p.is_playing())
 
         # Now ask it to continue
         play = self.publisher.play_process(p.pid)
-        self.loop.run_until_complete(test_utils.MaxTicks(5, play))
+        self.loop.run_until_complete(test_utils.HansKlok(play))
         self.assertTrue(p.is_playing())
 
     def test_abort(self):
@@ -68,7 +68,7 @@ class TestControl(TestCaseWithLoop):
         # representing the actual abort itself
 
         abort = self.publisher.abort_process(proc.pid, msg='Farewell')
-        fut = self.loop.run_until_complete(test_utils.MaxTicks(5, abort))
+        fut = self.loop.run_until_complete(test_utils.HansKlok(abort))
         # Now run until actually aborted
         self.assertTrue(~fut)
 
@@ -87,7 +87,7 @@ class TestControl(TestCaseWithLoop):
         # representing the actual abort itself
         # Now run until actually aborted
         abort = self.publisher.abort_process(proc.pid, msg='Farewell')
-        fut = self.loop.run_until_complete(test_utils.MaxTicks(5, abort))
+        fut = self.loop.run_until_complete(test_utils.HansKlok(abort))
         self.assertTrue(~fut)
 
     def _create_connection(self):
