@@ -42,7 +42,7 @@ class TestWaitingProcess(util.TestCaseWithLoop):
 
         # Wait until it's completely finished
         run_until(p, ProcessState.STOPPED, self.loop)
-        self.assertTrue(p.has_aborted())
+        self.assertTrue(p.cancelled())
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)

@@ -1,13 +1,14 @@
 import abc
 from enum import Enum
+from . import statemachine
+from .statemachine import InvalidStateError
+from .utils import super_check, call_with_super_check
+
+__all__ = ['ProcessStateMachine', 'ProcessState', 'Wait', 'Continue']
 
 
 class CancelledError(BaseException):
     """The process was cancelled."""
-
-
-class InvalidStateError(BaseException):
-    """The operation is not allowed in this state."""
 
 
 # region Commands
@@ -21,9 +22,9 @@ class Cancel(Command):
 
 
 class Wait(Command):
-    def __init__(self, continue_fn=None, desc=None):
+    def __init__(self, continue_fn=None, msg=None):
         self.continue_fn = continue_fn
-        self.desc = desc
+        self.msg = msg
 
 
 class Stop(Command):
@@ -41,6 +42,16 @@ class Continue(Command):
 # endregion
 
 
+class ProcessEvent(Enum):
+    PLAY = 0
+    PAUSE = 1
+    WAIT = 2
+    RESUME = 3
+    FINISH = 4
+    FAIL = 5
+    CANCEL = 6
+
+
 # region States
 
 class ProcessState(Enum):
@@ -51,252 +62,157 @@ class ProcessState(Enum):
     RUNNING = 1
     WAITING = 2
     PAUSED = 3
-    STOPPED = 4
+    FINISHED = 4
     FAILED = 5
     CANCELLED = 6
 
 
-class State(object):
-    __metaclass__ = abc.ABCMeta
-    STATE = None
+class State(statemachine.State):
+    INFO = 'INFO'
+    # Can transition from any (non-terminal) state to these
+    TRANSITIONS = {
+        ProcessEvent.CANCEL: ProcessState.CANCELLED,
+        ProcessEvent.FAIL: ProcessState.FAILED
+    }
 
-    @classmethod
-    def is_terminal(cls):
-        return not cls.ALLOWED
-
-    def __init__(self, process):
-        """
-        :param process: The process this state belongs to
-        :type process: :class:`Process`
-        """
-        self.process = process
-
-    def __str__(self):
-        return str(self.STATE)
-
-    @abc.abstractmethod
-    def enter(self):
-        pass
-
-    def exit(self):
-        if self.is_terminal():
-            raise InvalidStateError(
-                "Cannot exit a terminal state {}".format(self.STATE)
-            )
+    @property
+    def process(self):
+        return self.state_machine
 
     def save_instance_state(self, out_state):
         pass
 
     def load_instance_state(self, process, saved_state):
-        self.process = process
-
-    def cancel(self, msg):
-        self.process._transition(Cancelled(self.process, msg))
+        self.state_machine = process
 
 
 class Created(State):
-    STATE = ProcessState.CREATED
+    LABEL = ProcessState.CREATED
     ALLOWED = {ProcessState.RUNNING,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
+    TRANSITIONS = {
+        ProcessEvent.PLAY: ProcessState.RUNNING,
+    }
 
-    def enter(self):
-        self.process.on_created()
-
-    def exit(self):
-        self.process.on_exit_created()
-
-    def play(self):
-        self.process._transition(Running(self.process, self.process.run))
-
-    def pause(self):
-        # Ignored
-        pass
+    def evt(self, event, *args, **kwargs):
+        if event == ProcessEvent.PLAY:
+            args = (self.process.run,)
+        super(Created, self).evt(event, *args, **kwargs)
 
 
 class Running(State):
-    STATE = ProcessState.RUNNING
+    LABEL = ProcessState.RUNNING
     ALLOWED = {ProcessState.RUNNING,
                ProcessState.WAITING,
                ProcessState.PAUSED,
-               ProcessState.STOPPED,
+               ProcessState.FINISHED,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
-
-    RUN_FN = 'RUN_FN'
-    ARGS = 'ARGS'
-    KWARGS = 'KWARGS'
-    PAUSING = 'PAUSING'
-    CANCELLING_MSG = 'CANCELLING_MSG'
+    TRANSITIONS = {
+        ProcessEvent.RESUME: ProcessState.RUNNING,
+        ProcessEvent.WAIT: ProcessState.WAITING,
+        ProcessEvent.PAUSE: ProcessState.PAUSED,
+        ProcessEvent.FINISH: ProcessState.FINISHED,
+        # TODO: Remove these once transition inheritance is supported
+        ProcessEvent.CANCEL: ProcessState.CANCELLED,
+        ProcessEvent.FAIL: ProcessState.FAILED
+    }
 
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Running, self).__init__(process)
+        assert run_fn is not None
         self.run_fn = run_fn
         self.args = args
         self.kwargs = kwargs
-        self.pausing = False
-        self.cancelling = None
 
-    def __str__(self):
-        state = str(self.STATE)
-        if self.cancelling:
-            state += " (cancelling)"
-        elif self.pause:
-            state += " (pausing)"
-        return state
-
-    def enter(self):
-        self.process.on_running()
-
-    def do_run(self):
-        next_state = None
+    def _run(self):
         try:
             command = self.run_fn(*self.args, **self.kwargs)
-
-            # Cancelling takes precedence over everything else
-            if self.cancelling:
-                command = self.cancelling
-            elif not isinstance(command, Command):
+        except BaseException as e:
+            self.evt(ProcessEvent.FAIL, e)
+        else:
+            if not isinstance(command, Command):
                 command = Stop(command)
 
             if isinstance(command, Cancel):
-                next_state = Cancelled(self.process, command.msg)
-            else:
-                if isinstance(command, Stop):
-                    next_state = Stopped(self.process, command.result)
-                elif isinstance(command, Wait):
-                    next_state = Waiting(
-                        self.process, command.continue_fn, command.desc
-                    )
-                elif isinstance(command, Continue):
-                    next_state = Running(
-                        self.process, command.continue_fn, *command.args
-                    )
-
-                if self.pausing:
-                    next_state = Paused(self.process, next_state)
-
-        except BaseException as e:
-            next_state = Failed(self.process, e)
-
-        self.process._transition(next_state)
-
-    def exit(self):
-        self.process.on_exit_running()
-
-    def save_instance_state(self, out_state):
-        super(Running, self).save_instance_state(out_state)
-        out_state[self.RUN_FN] = self.run_fn.__name__
-        out_state[self.ARGS] = self.args
-        out_state[self.KWARGS] = self.kwargs
-        out_state[self.PAUSING] = self.pausing
-        if self.cancelling:
-            out_state[self.CANCELLING_MSG] = self.cancelling.msg
-
-    def load_instance_state(self, process, saved_state):
-        super(Running, self).load_instance_state(process, saved_state)
-        self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
-        self.args = saved_state[self.ARGS]
-        self.kwargs = saved_state[self.KWARGS]
-        self.pausing = saved_state[self.PAUSING]
-        try:
-            self.cancelling = Cancel(saved_state[self.CANCELLING_MSG])
-        except KeyError:
-            self.cancelling = None
-
-    def pause(self):
-        self.pausing = True
-
-    def cancel(self, msg):
-        self.cancelling = Cancel(msg)
+                self.evt(ProcessEvent.CANCEL, command.msg)
+            if isinstance(command, Stop):
+                self.evt(ProcessEvent.FINISH, command.result)
+            elif isinstance(command, Wait):
+                self.evt(ProcessEvent.WAIT, command.continue_fn, command.msg)
+            elif isinstance(command, Continue):
+                self.evt(ProcessEvent.RESUME, command.continue_fn, *command.args)
 
 
 class Waiting(State):
-    STATE = ProcessState.WAITING
+    LABEL = ProcessState.WAITING
     ALLOWED = {ProcessState.RUNNING,
                ProcessState.PAUSED,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
-
-    CONTINUE_FN = 'CONTINUE_FN'
-    DESC = 'DESC'
-
-    def __init__(self, process, continue_fn, desc):
-        super(Waiting, self).__init__(process)
-        self.continue_fn = continue_fn
-        self.desc = desc
+    TRANSITIONS = {
+        ProcessEvent.WAIT: ProcessState.WAITING,
+        ProcessEvent.RESUME: ProcessState.RUNNING,
+        ProcessEvent.PAUSE: ProcessState.PAUSED,
+        ProcessEvent.FINISH: ProcessState.FINISHED
+    }
 
     def __str__(self):
-        state = str(self.STATE)
-        if self.desc is not None:
-            state += " ({})".format(self.desc)
-        return state
+        state_info = super(Waiting, self).__str__()
+        if self.msg is not None:
+            state_info += " ({})".format(self.msg)
+        return state_info
 
-    def enter(self):
-        self.process.on_waiting(self.desc)
+    def __init__(self, process, done_callback, msg=None, data=None):
+        super(Waiting, self).__init__(process)
+        self.done_callback = done_callback
+        self.msg = msg
+        self.data = data
 
-    def exit(self):
-        self.process.on_exit_waiting()
-
-    def save_instance_state(self, out_state):
-        super(Waiting, self).save_instance_state(out_state)
-        out_state[self.CONTINUE_FN] = self.continue_fn.__name__
-        out_state[self.DESC] = self.desc
-
-    def load_instance_state(self, process, saved_state):
-        super(Waiting, self).load_instance_state(process, saved_state)
-        self.continue_fn = getattr(process, saved_state[self.CONTINUE_FN])
-        self.desc = saved_state[self.DESC]
-
-    def pause(self):
-        self.process._transition(Paused(self.process, self))
-
-    def done(self, value):
-        if self.continue_fn is None:
-            next_state = Stopped(self.process, value)
-        else:
-            next_state = Running(self.process, self.continue_fn, value)
-        self.process._transition(next_state)
+    def evt(self, event, *args, **kwargs):
+        if event == ProcessEvent.RESUME:
+            args = (self.done_callback,)
+        super(Waiting, self).evt(event, *args, **kwargs)
 
 
 class Paused(State):
-    STATE = ProcessState.PAUSED
+    LABEL = ProcessState.PAUSED
     ALLOWED = {ProcessState.WAITING,
                ProcessState.RUNNING,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
 
-    NEXT_STATE = 'NEXT_STATE'
+    PAUSED_STATE = 'PAUSED_STATE'
 
-    def __init__(self, process, next_state):
+    def __init__(self, process, paused_state):
         """
         :param process: The process this state belongs to
-        :param next_state: The state that was interrupted when pausing
-        :type next_state: :class:`State`
+        :param paused_state: The state that was interrupted by pausing
+        :type paused_state: :class:`State`
         """
         super(Paused, self).__init__(process)
-        self.next_state = next_state
-
-    def enter(self):
-        self.process.on_paused()
-
-    def exit(self):
-        self.process.on_exit_paused()
+        self.paused_state = paused_state
 
     def save_instance_state(self, out_state):
         super(Paused, self).save_instance_state(out_state)
         next_state_state = {}
-        self.next_state.save_instance_state(next_state_state)
-        out_state[self.NEXT_STATE] = next_state_state
+        self.paused_state.save_instance_state(next_state_state)
+        out_state[self.PAUSED_STATE] = next_state_state
 
     def load_instance_state(self, process, saved_state):
         super(Paused, self).load_instance_state(process, saved_state)
-        self.next_state = State.create_from(process, saved_state[self.NEXT_STATE])
+        self.paused_state = State.create_from(process, saved_state[self.PAUSED_STATE])
+
+    def evt(self, event, *args, **kwargs):
+        if event == ProcessEvent.PLAY:
+            self.transition_to(self.paused_state)
+        else:
+            super(Paused, self).evt(event, *args, **kwargs)
 
 
 class Failed(State):
-    STATE = ProcessState.FAILED
-    ALLOWED = {}  # terminal
+    LABEL = ProcessState.FAILED
 
     def __init__(self, parent, exception):
         super(Failed, self).__init__(parent)
@@ -308,46 +224,34 @@ class Failed(State):
             exc += " - {}".format(self.exception.message)
         except AttributeError:
             pass
-        return "{} ({})".format(self.STATE, exc)
-
-    def enter(self):
-        self.process.on_failed(self.exception)
+        return "{} ({})".format(self.LABEL, exc)
 
 
-class Stopped(State):
-    STATE = ProcessState.FAILED
-    ALLOWED = {}  # terminal
+class Finished(State):
+    LABEL = ProcessState.FINISHED
 
     RESULT = 'RESULT'
 
     def __init__(self, process, result):
-        super(Stopped, self).__init__(process)
+        super(Finished, self).__init__(process)
         self.result = result
 
-    def enter(self):
-        self.process.on_stopped(self.result)
-
     def save_instance_state(self, out_state):
-        super(Stopped, self).save_instance_state(out_state)
+        super(Finished, self).save_instance_state(out_state)
         out_state[self.RESULT] = self.result
 
     def load_instance_state(self, process, saved_state):
-        super(Stopped, self).load_instance_state(process, saved_state)
+        super(Finished, self).load_instance_state(process, saved_state)
         self.result = saved_state[self.RESULT]
 
 
 class Cancelled(State):
-    STATE = ProcessState.CANCELLED
-    ALLOWED = {}  # terminal
-
+    LABEL = ProcessState.CANCELLED
     MSG = 'MSG'
 
     def __init__(self, process, msg):
         super(Cancelled, self).__init__(process)
         self.msg = msg
-
-    def enter(self):
-        self.process.on_cancelled(self.msg)
 
     def save_instance_state(self, out_state):
         super(Cancelled, self).save_instance_state(out_state)
@@ -358,94 +262,107 @@ class Cancelled(State):
         self.msg = saved_state[self.MSG]
 
 
-STATE_CLASSES = {
-    ProcessState.CREATED: Created,
-    ProcessState.RUNNING: Running,
-    ProcessState.WAITING: Waiting,
-    ProcessState.STOPPED: Stopped,
-    ProcessState.PAUSED: Paused,
-    ProcessState.CANCELLED: Cancelled,
-    ProcessState.FAILED: Failed
-}
-
-
-class ProcessStateGraph(object):
-    # The allowed state transitions
-    ALLOWED = {state: state_class.ALLOWED for
-               state, state_class in STATE_CLASSES.iteritems()}
-
-    @staticmethod
-    def is_allowed(start_state, end_state):
-        return end_state in ProcessStateGraph.ALLOWED[start_state]
-
-    @staticmethod
-    def is_reachable(start_state, end_state):
-        if ProcessStateGraph.is_allowed(start_state, end_state):
-            return True
-        # From each of the states we can transition to from the start state
-        # is there one from which we can reach the end state?
-        for state in ProcessStateGraph.ALLOWED[start_state]:
-            if ProcessStateGraph.is_reachable(state, end_state):
-                return True
-        return False
-
-    @staticmethod
-    def is_terminal(state):
-        return not ProcessStateGraph.ALLOWED[state]
-
 # endregion
 
 
-class Process(object):
+class ProcessStateMachine(statemachine.StateMachine):
+    """
+    CREATED --- RUNNING --- STOPPED (o)
+              /  v   ^     /
+      PAUSED --- WAITING---
+
+
+      * -- FAILED (o)
+      * -- CANCELLED (o)
+
+      * = any non terminal state
+    """
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self):
-        self._state = None
-        # Enter the created state
-        self._transition(Created(self))
+    STATES = (Created, Running, Waiting, Finished, Paused, Cancelled, Failed)
 
     def __str__(self):
         return "Process {}".format(self._state)
 
-    @property
-    def state(self):
-        return self._state.STATE
+    def cancelled(self):
+        return self.state == ProcessState.CANCELLED
+
+    def cancelled_msg(self):
+        if isinstance(self._state, Cancelled):
+            return self._state.msg
+        else:
+            raise InvalidStateError("Has not been cancelled")
+
+    def exception(self):
+        if isinstance(self._state, Failed):
+            return self._state.exception
+        else:
+            raise InvalidStateError("Has not failed")
+
+    def done(self):
+        """
+        Return True if the call was successfully cancelled or finished running.
+        :rtype: bool
+        """
+        return self.cancelled() or self.state == ProcessState.FINISHED
 
     @abc.abstractmethod
     def run(self):
         pass
 
     # region State entry/exit events
+
+    def on_entered(self):
+        state = self.state
+        if state == ProcessState.CREATED:
+            call_with_super_check(self.on_created)
+        elif state == ProcessState.RUNNING:
+            call_with_super_check(self.on_running)
+        elif state == ProcessState.PAUSED:
+            call_with_super_check(self.on_paused)
+        elif state == ProcessState.WAITING:
+            call_with_super_check(self.on_waiting, self._state.data)
+        elif state == ProcessState.FINISHED:
+            call_with_super_check(self.on_finished, self.result())
+        elif state == ProcessState.FAILED:
+            call_with_super_check(self.on_failed, self.exception())
+        elif state == ProcessState.CANCELLED:
+            call_with_super_check(self.on_cancelled, self._state.msg)
+
+    def on_exiting(self):
+        state = self.state
+        if state == ProcessState.WAITING:
+            call_with_super_check(self.on_exit_waiting)
+
+    @super_check
     def on_created(self):
         pass
 
-    def on_exit_created(self):
-        pass
-
+    @super_check
     def on_running(self):
+        self._state._run()
+
+    @super_check
+    def on_waiting(self, data):
         pass
 
-    def on_exit_running(self):
-        pass
-
-    def on_waiting(self, what):
-        pass
-
+    @super_check
     def on_exit_waiting(self):
         pass
 
+    @super_check
     def on_paused(self):
         pass
 
-    def on_exit_paused(self):
+    @super_check
+    def on_finished(self, result):
         pass
 
-    def on_stopped(self, result):
-        pass
-
+    @super_check
     def on_failed(self, exception):
         pass
 
+    @super_check
     def on_cancelled(self, msg):
         pass
 
@@ -459,12 +376,13 @@ class Process(object):
 
     def result(self):
         """
-        Get the result from the process if it is stopped.
-        If the process is CANCELLED then a CancelledError will be raise.
+        Get the result from the process if it is finished.
+        If the process was cancelled then a CancelledError will be raise.
+        If the process has failed then the failing exception will be raised.
         If in any other state this will raise an InvalidStateError.
-        :return: The stop value of the process
+        :return: The result of the process
         """
-        if isinstance(self._state, Stopped):
+        if isinstance(self._state, Finished):
             return self._state.result
         elif isinstance(self._state, Cancelled):
             raise CancelledError()
@@ -473,63 +391,55 @@ class Process(object):
         else:
             raise InvalidStateError
 
-    # region External events
-    def pause(self):
-        """ Pause the process """
-        try:
-            self._state.pause()
-        except AttributeError:
-            raise InvalidStateError("Cannot pause in state {}".format(self.state))
-
+    # region commands
     def play(self):
         """
         Play the process if in the CREATED or PAUSED state
         """
-        try:
-            self._state.play()
-        except AttributeError:
-            raise InvalidStateError("Cannot play in state {}".format(self.state))
+        self.evt(ProcessEvent.PLAY)
+
+    def pause(self):
+        """ Pause the process """
+        self.evt(ProcessEvent.PAUSE)
+
+    def wait(self, done_callback=None, msg=None, data=None):
+        """
+        Wait for something
+        :param done_callback: A function to call when done waiting
+        :param msg: The waiting message
+        :type msg: basestring
+        :param data: Optional information about what to wait for
+         """
+        self.evt(ProcessEvent.WAIT, msg, data)
+
+    def resume(self, value=None):
+        """
+        Start running the process again
+        :param value: An optional value to pass to the callback function
+        """
+        self.evt(ProcessEvent.RESUME, value)
+
+    def finish(self, result=None):
+        """
+        The process has finished
+        :param result: An optional result from this process
+        """
+        self.evt(ProcessEvent.FINISH, result)
+
+    def fail(self, exception):
+        """
+        Fail the process in response to an exception
+        :param exception: The exception that caused the failure
+        """
+        self.evt(ProcessEvent.FAIL, exception)
 
     def cancel(self, msg=None):
         """
         Cancel the process
         :param msg: An optional cancellation message
-        :type msg: bool
+        :type msg: basestring
         """
-        try:
-            self._state.cancel(msg)
-        except AttributeError:
-            raise InvalidStateError("Cannot cancel in state {}".format(self.state))
+        self.evt(ProcessEvent.CANCEL, msg)
 
-    def resume(self, value=None):
-        """
-        Resume the process from the waiting state
-        :param value: An optional value to pass to either the function that is
-            called upon continuing or the final results of the process.
-        """
-        try:
-            self._state.done(value)
-        except AttributeError:
-            raise InvalidStateError(
-                "Cannot finish waiting in state {}".format(self.state)
-            )
 
-    # endregion
-
-    def _transition(self, new_state):
-        if self._state is not None:
-            if new_state.STATE not in self._state.ALLOWED:
-                raise RuntimeError("Cannot transition from {} to {}".format(
-                    self._state.STATE, new_state.STATE
-                ))
-            self._state.exit()
-        try:
-            new_state.enter()
-            self._state = new_state
-            if isinstance(self._state, Running):
-                self._state.do_run()
-        except BaseException as e:
-            new_state = Failed(self, e)
-            # The user is expected to deal with exceptions from entering Failed
-            new_state.enter()
-            self._state = new_state
+        # endregion

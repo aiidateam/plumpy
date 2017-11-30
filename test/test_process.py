@@ -247,14 +247,13 @@ class TestProcess(util.TestCaseWithLoop):
         # TODO: Test giving a custom logger to see if it gets used
         self.loop.run_until_complete(util.HansKlok(LoggerTester().play()))
 
-    def test_abort(self):
+    def test_cancel(self):
         proc = self.loop.create(DummyProcess)
 
-        aborted = ~proc.abort('Farewell!')
-        self.assertTrue(aborted)
-        self.assertTrue(proc.has_aborted())
-        self.assertEqual(proc.get_abort_msg(), 'Farewell!')
-        self.assertEqual(proc.state, ProcessState.STOPPED)
+        proc.cancel('Farewell!')
+        self.assertTrue(proc.cancelled())
+        self.assertEqual(proc.cancelled_msg(), 'Farewell!')
+        self.assertEqual(proc.state, ProcessState.DONE)
 
     def test_wait_continue(self):
         proc = WaitForSignalProcess().play()
@@ -295,10 +294,10 @@ class TestProcess(util.TestCaseWithLoop):
         result = ~proc
         self.assertEqual(result, {'finished': True})
 
-    def test_run_terminated(self):
+    def test_run_done(self):
         proc = DummyProcess().play()
         self.loop.run_until_complete(proc)
-        self.assertTrue(proc.has_terminated())
+        self.assertTrue(proc.done())
 
     def test_wait_pause_continue_play(self):
         """
