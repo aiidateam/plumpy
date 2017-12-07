@@ -29,7 +29,7 @@ setup(
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
     install_requires=[
-        'apricotpy', 'frozendict', 'portalocker'
+        'apricotpy', 'frozendict', 'portalocker', 'trollius'
     ],
     extras_require={
         'rmq': ['pika'],

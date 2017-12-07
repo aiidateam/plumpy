@@ -1,4 +1,3 @@
-import apricotpy
 import collections
 from collections import namedtuple
 
@@ -9,12 +8,6 @@ from plum.process_listener import ProcessListener
 from plum.utils import override
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
-
-
-def create_snapshot(proc):
-    b = apricotpy.Bundle()
-    proc.save_instance_state(b)
-    return Snapshot(proc.state, b, proc.outputs.copy())
 
 
 class DummyProcess(Process):
@@ -142,7 +135,7 @@ class TwoCheckpoint(ProcessEventsTester):
         self.out("test", 5)
         return plum.Continue(self.middle_step)
 
-    def middle_step(self,):
+    def middle_step(self, ):
         return plum.Continue(self.last_step)
 
     def last_step(self):
@@ -207,7 +200,7 @@ class Saver(object):
         self.outputs = []
 
     def _save(self, p):
-        b = apricotpy.persistable.Bundle(p)
+        b = plum.Bundle(p)
         self.snapshots.append(b)
         self.outputs.append(p.outputs.copy())
 
@@ -327,12 +320,6 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
         for vv1, vv2 in zip(v1, v2):
             compare_value(bundle1, bundle2, vv1, vv2, exclude)
     else:
-        if isinstance(v1, apricotpy.persistable.core._Reference):
-            v1 = bundle1._get_bundle(v1)
-
-        if isinstance(v2, apricotpy.persistable.core._Reference):
-            v2 = bundle2._get_bundle(v2)
-
         if v1 != v2:
             raise ValueError(
                 "Dict values mismatch for :\n{} != {}".format(v1, v2)

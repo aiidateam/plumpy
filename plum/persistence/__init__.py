@@ -1,8 +1,6 @@
-from abc import abstractmethod, abstractproperty, ABCMeta
+from abc import abstractmethod, ABCMeta
 from collections import namedtuple
 import plum.utils
-
-
 
 PersistedCheckpoint = namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
@@ -41,7 +39,7 @@ class Persister(object):
         :param tag: optional checkpoint identifier to allow retrieving
             a specific sub checkpoint for the corresponding process
         :return: a bundle with the process state
-        :rtype: :class:`apricotpy.Bundle`
+        :rtype: :class:`plum.Bundle`
         """
         pass
 

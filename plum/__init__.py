@@ -1,4 +1,3 @@
-import apricotpy
 import logging
 from .base import *
 from .events import *
@@ -8,8 +7,6 @@ from . import persistence
 
 __all__ = (events.__all__ + process.__all__ + utils.__all__)
 
-EventLoop = apricotpy.BaseEventLoop
-PersistableEventLoop = apricotpy.persistable.BaseEventLoop
 Bundle = persistence.Bundle
 
 

@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta, abstractmethod
-import apricotpy
-import apricotpy.persistable
 from collections import namedtuple
 import copy
-from enum import Enum
-import inspect
 import logging
 import time
 import trollius
@@ -329,7 +325,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         Ask the process to save its current instance state.
 
         :param out_state: A bundle to save the state to
-        :type out_state: :class:`apricotpy.Bundle`
+        :type out_state: :class:`plum.Bundle`
         """
         super(Process, self).save_instance_state(out_state)
         # Immutables first
@@ -477,7 +473,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     def encode_input_args(self, inputs):
         """
         Encode input arguments such that they may be saved in a
-        :class:`apricotpy.persistable.Bundle`
+        :class:`plum.Bundle`
 
         :param inputs: A mapping of the inputs as passed to the process
         :return: The encoded inputs
@@ -488,7 +484,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     def decode_input_args(self, encoded):
         """
         Decode saved input arguments as they came from the saved instance state
-        :class:`apricotpy.persistable.Bundle`
+        :class:`plum.Bundle`
 
         :param encoded:
         :return: The decoded input args
@@ -554,20 +550,6 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
                 raise RuntimeError(
                     "Process {} failed because {}".format(self.get_name(), msg)
                 )
-
-
-def _is_wait_retval(retval):
-    """
-    Determine if the value provided is a valid Wait return value which consists
-    of a 2-tuple of a WaitOn and a callback function (or None) to be called
-    after the wait on is ready
-
-    :param retval: The return value from a step to check
-    :return: True if it is a valid wait object, False otherwise
-    """
-    return (isinstance(retval, tuple) and
-            len(retval) == 2 and
-            isinstance(retval[0], apricotpy.Awaitable))
 
 
 def get_pid_from_bundle(process_bundle):

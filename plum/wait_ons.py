@@ -2,7 +2,6 @@
 
 from abc import ABCMeta
 
-import apricotpy
 from apricotpy import persistable
 from collections import Sequence
 from plum.wait import WaitOn

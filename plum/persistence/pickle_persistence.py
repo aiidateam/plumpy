@@ -105,7 +105,7 @@ class PicklePersister(Persister):
         :param tag: optional checkpoint identifier to allow retrieving
             a specific sub checkpoint for the corresponding process
         :return: a bundle with the process state
-        :rtype: :class:`apricotpy.persistable.Bundle`
+        :rtype: :class:`plum.Bundle`
         """
         filepath = self._pickle_filepath(pid, tag)
         checkpoint = PicklePersister.load_pickle(filepath)

@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
 
-import apricotpy.utils
-from apricotpy import persistable
 import frozendict
 import importlib
 import inspect
 import logging
 import plum.lang
 import threading
-from plum.exceptions import ClassNotFoundException, InvalidStateError, CancelledError
 from plum.settings import check_protected, check_override
-from apricotpy.persistable.utils import function_name, class_name, load_function, load_module, load_object
+from collections import deque
 
 __all__ = []
 
@@ -138,31 +135,113 @@ class AttributesFrozendict(frozendict.frozendict):
         return self.keys()
 
 
-SimpleNamespace = apricotpy.utils.SimpleNamespace
-
-
-def load_with_classloader(bundle):
+class SimpleNamespace(object):
     """
-    Load a process from a saved instance state
-
-    :param bundle: The saved instance state bundle
-    :return: The process instance
-    :rtype: :class:`Process`
+    An attempt to emulate python 3's types.SimpleNamespace
     """
-    # Get the class using the class loader and instantiate it
-    class_name = bundle['class_name']
-    proc_class = bundle.get_class_loader().load_class(class_name)
-    return proc_class.create_from(bundle)
+
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+    def __repr__(self):
+        keys = sorted(self.__dict__)
+        items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
+        return "{}({})".format(type(self).__name__, ", ".join(items))
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
 
 
-def set_if_not_none(mapping, key, value):
+def function_name(fn):
+    try:
+        name = fn.__module__ + '.' + fn.__qualname__
+    except AttributeError:
+        if inspect.ismethod(fn):
+            cls = fn.__self__.__class__
+            name = class_name(cls) + '.' + fn.__name__
+        elif inspect.isfunction(fn):
+            name = fn.__module__ + '.' + fn.__name__
+        else:
+            raise ValueError("Must be function or method")
+
+    # Make sure we can load it
+    try:
+        load_object(name)
+    except ValueError:
+        raise ValueError("Could not create a consistent name for fn '{}'".format(fn))
+
+    return name
+
+
+def load_function(name, instance=None):
+    obj = load_object(name)
+    if inspect.ismethod(obj):
+        if instance is not None:
+            return obj.__get__(instance, instance.__class__)
+        else:
+            return obj
+    elif inspect.isfunction(obj):
+        return obj
+    else:
+        raise ValueError("Invalid function name '{}'".format(name))
+
+
+def class_name(obj, class_loader=None):
     """
-    Set the given value in a mapping only if the value is not `None`,
-    otherwise the mapping is left untouched
+    Given a class or an instance this function will give the fully qualified name
+    e.g. 'my_module.MyClass'
 
-    :param mapping: The mapping to set the value for
-    :param key: The mapping key
-    :param value: The mapping value
+    :param obj: The object to get the name from.
+    :return: The fully qualified name.
     """
-    if value is not None:
-        mapping[key] = value
+
+    if not inspect.isclass(obj):
+        # assume it's an instance
+        obj = obj.__class__
+
+    name = obj.__module__ + '.' + obj.__name__
+
+    try:
+        if class_loader is not None:
+            class_loader.load_class(name)
+        else:
+            load_object(name)
+    except ValueError:
+        raise ValueError("Could not create a consistent full name for object '{}'".format(obj))
+
+    return name
+
+
+def load_object(fullname):
+    """
+    Load a class from a string
+    """
+    obj, remainder = load_module(fullname)
+
+    # Finally, retrieve the object
+    for name in remainder:
+        try:
+            obj = getattr(obj, name)
+        except AttributeError:
+            raise ValueError("Could not load object corresponding to '{}'".format(fullname))
+
+    return obj
+
+
+def load_module(fullname):
+    parts = fullname.split('.')
+
+    # Try to find the module, working our way from the back
+    mod = None
+    remainder = deque()
+    for i in range(len(parts)):
+        try:
+            mod = importlib.import_module('.'.join(parts))
+            break
+        except ImportError:
+            remainder.appendleft(parts.pop())
+
+    if mod is None:
+        raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
+
+    return mod, remainder
