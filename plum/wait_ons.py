@@ -11,17 +11,6 @@ from plum.process import ProcessState
 from . import process
 
 
-class Checkpoint(WaitOn):
-    """
-    This WaitOn doesn't actually wait, it's just a way to ask the engine to
-    create a checkpoint at this point in the execution of a Process.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(Checkpoint, self).__init__(*args, **kwargs)
-        self.set_result(None)
-
-
 class WaitOnProcessState(persistable.AwaitableLoopObject):
     STATE_REACHED = 'state_reached'
     STATE_UNREACHABLE = 'state_unreachable'
@@ -109,49 +98,6 @@ def run_until(proc, state, loop):
 
     if any(result is WaitOnProcessState.STATE_UNREACHABLE for result in results):
         raise RuntimeError("State '{}' could not be reached for at least one process".format(state))
-
-
-def wait_on_process(pid, loop):
-    return wait_on_process_event(loop, pid, 'terminated')
-
-
-class WaitOnProcessOutput(WaitOn):
-    def __init__(self, loop, pid, port):
-        """
-        :param process: The process whose output is being waited for
-        :type process: :class:`plum.process.Process`
-        :param port: The output port being waited on
-        :type port: str or unicode
-        """
-        super(WaitOnProcessOutput, self).__init__()
-        self._wait_on_event = wait_on_process_event(loop, pid, 'output_emitted.{}'.format(port))
-        self._wait_on_event.future().add_done_callbacK(self._output_emitted)
-
-    def load_instance_state(self, saved_state):
-        super(WaitOnProcessOutput, self).load_instance_state(saved_state)
-
-        self._wait_on_event = self.loop().create(WaitOnEvent, saved_state['output_event'])
-        self._wait_on_event.future().add_done_callbacK(self._output_emitted)
-
-    def save_instance_state(self, out_state):
-        event_state = apricotpy.Bundle()
-        self._wait_on_event.save_instance_state(event_state)
-        out_state['output_event'] = event_state
-
-    def _output_emitted(self, future):
-        self.future().set_result(future.get_result()[1])
-
-
-def wait_until_stopped(proc, timeout=None):
-    """
-    Wait until a process or processes reach the STOPPED state.  `proc` can be
-    a single process or a sequence of processes.
-
-    :param proc: The process or sequence of processes to wait for
-    :type proc: :class:`~plum.process.Process` or :class:`Sequence`
-    :param timeout: The optional timeout
-    """
-    return run_until(proc, ProcessState.STOPPED, timeout)
 
 
 class Barrier(WaitOn):

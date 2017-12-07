@@ -10,6 +10,7 @@ import plum.lang
 import threading
 from plum.exceptions import ClassNotFoundException, InvalidStateError, CancelledError
 from plum.settings import check_protected, check_override
+from apricotpy.persistable.utils import function_name, class_name, load_function, load_module, load_object
 
 __all__ = []
 
@@ -47,9 +48,11 @@ class EventHelper(object):
             raise ValueError("Must provide valid event method")
 
         for l in self.listeners:
-            self._loop.call_soon(
-                getattr(l, event_function.__name__), *args, **kwargs
-            )
+            try:
+                getattr(l, event_function.__name__)(*args, **kwargs)
+            except Exception as e:
+                _LOGGER.error(
+                    "Listener {} produced an exception:\n".format(l, e))
 
 
 class ListenContext(object):
@@ -103,33 +106,6 @@ class ThreadSafeCounter(object):
 _PENDING = 'PENDING'
 _CANCELLED = 'CANCELLED'
 _FINISHED = 'FINISHED'
-
-
-def fullname(object):
-    """
-    Get the fully qualified name of an object.
-
-    :param object: The object to get the name from.
-    :return: The fully qualified name.
-    """
-    if inspect.isclass(object):
-        return object.__module__ + "." + object.__name__
-    else:
-        return object.__module__ + "." + object.__class__.__name__
-
-
-def load_class(classstring):
-    """
-    Load a class from a string
-    """
-    module_path, class_name = classstring.rsplit('.', 1)
-    module = importlib.import_module(module_path)
-
-    # Finally, retrieve the class
-    try:
-        return getattr(module, class_name)
-    except AttributeError:
-        raise ClassNotFoundException("Class {} not found".format(classstring))
 
 
 class AttributesFrozendict(frozendict.frozendict):

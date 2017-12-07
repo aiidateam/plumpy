@@ -1,10 +1,21 @@
 import abc
 from enum import Enum
-from . import statemachine
-from .statemachine import InvalidStateError
+import plum.utils
+from . import state_machine
+from .state_machine import InvalidStateError, event
 from .utils import super_check, call_with_super_check
 
-__all__ = ['ProcessStateMachine', 'ProcessState', 'Wait', 'Continue']
+__all__ = ['ProcessStateMachine', 'ProcessState', 'Wait', 'Continue',
+           'Created', 'Running', 'Waiting', 'Paused', 'Finished', 'Failed',
+           'Cancelled']
+
+
+class __NULL(object):
+    def __eq__(self, other):
+        return isinstance(other, self.__class__)
+
+
+NULL = __NULL()
 
 
 class CancelledError(BaseException):
@@ -58,30 +69,27 @@ class ProcessState(Enum):
     """
     The possible states that a :class:`Process` can be in.
     """
-    CREATED = 0
-    RUNNING = 1
-    WAITING = 2
-    PAUSED = 3
-    FINISHED = 4
-    FAILED = 5
-    CANCELLED = 6
+    CREATED = 'created'
+    RUNNING = 'running'
+    WAITING = 'waiting'
+    PAUSED = 'paused'
+    FINISHED = 'finished'
+    FAILED = 'failed'
+    CANCELLED = 'cancelled'
 
 
-class State(statemachine.State):
-    INFO = 'INFO'
-    # Can transition from any (non-terminal) state to these
-    TRANSITIONS = {
-        ProcessEvent.CANCEL: ProcessState.CANCELLED,
-        ProcessEvent.FAIL: ProcessState.FAILED
-    }
+KEY_STATE = 'state'
 
+
+class State(state_machine.State):
     @property
     def process(self):
         return self.state_machine
 
     def save_instance_state(self, out_state):
-        pass
+        out_state[KEY_STATE] = self.LABEL
 
+    @super_check
     def load_instance_state(self, process, saved_state):
         self.state_machine = process
 
@@ -91,14 +99,16 @@ class Created(State):
     ALLOWED = {ProcessState.RUNNING,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
-    TRANSITIONS = {
-        ProcessEvent.PLAY: ProcessState.RUNNING,
-    }
 
-    def evt(self, event, *args, **kwargs):
-        if event == ProcessEvent.PLAY:
-            args = (self.process.run,)
-        super(Created, self).evt(event, *args, **kwargs)
+    def __init__(self, process, run_fn, *args, **kwargs):
+        super(Created, self).__init__(process)
+        assert run_fn is not None
+        self.run_fn = run_fn
+        self.args = args
+        self.kwargs = kwargs
+
+    def play(self):
+        self.transition_to(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
 
 
 class Running(State):
@@ -109,15 +119,6 @@ class Running(State):
                ProcessState.FINISHED,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
-    TRANSITIONS = {
-        ProcessEvent.RESUME: ProcessState.RUNNING,
-        ProcessEvent.WAIT: ProcessState.WAITING,
-        ProcessEvent.PAUSE: ProcessState.PAUSED,
-        ProcessEvent.FINISH: ProcessState.FINISHED,
-        # TODO: Remove these once transition inheritance is supported
-        ProcessEvent.CANCEL: ProcessState.CANCELLED,
-        ProcessEvent.FAIL: ProcessState.FAILED
-    }
 
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Running, self).__init__(process)
@@ -126,23 +127,29 @@ class Running(State):
         self.args = args
         self.kwargs = kwargs
 
+    def resume(self, run_fn, value=NULL):
+        if value == NULL:
+            self.transition_to(ProcessState.RUNNING, run_fn)
+        else:
+            self.transition_to(ProcessState.RUNNING, run_fn, value)
+
     def _run(self):
         try:
             command = self.run_fn(*self.args, **self.kwargs)
         except BaseException as e:
-            self.evt(ProcessEvent.FAIL, e)
+            self.process.fail(e)
         else:
             if not isinstance(command, Command):
                 command = Stop(command)
 
             if isinstance(command, Cancel):
-                self.evt(ProcessEvent.CANCEL, command.msg)
+                self.process.cancel(command.msg)
             if isinstance(command, Stop):
-                self.evt(ProcessEvent.FINISH, command.result)
+                self.process.finish(command.result)
             elif isinstance(command, Wait):
-                self.evt(ProcessEvent.WAIT, command.continue_fn, command.msg)
+                self.process.wait(command.continue_fn, command.msg)
             elif isinstance(command, Continue):
-                self.evt(ProcessEvent.RESUME, command.continue_fn, *command.args)
+                self.process.resume(command.continue_fn, *command.args)
 
 
 class Waiting(State):
@@ -151,12 +158,10 @@ class Waiting(State):
                ProcessState.PAUSED,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
-    TRANSITIONS = {
-        ProcessEvent.WAIT: ProcessState.WAITING,
-        ProcessEvent.RESUME: ProcessState.RUNNING,
-        ProcessEvent.PAUSE: ProcessState.PAUSED,
-        ProcessEvent.FINISH: ProcessState.FINISHED
-    }
+
+    DONE_CALLBACK = 'DONE_CALLBACK'
+    MSG = 'MSG'
+    DATA = 'DATA'
 
     def __str__(self):
         state_info = super(Waiting, self).__str__()
@@ -170,10 +175,23 @@ class Waiting(State):
         self.msg = msg
         self.data = data
 
-    def evt(self, event, *args, **kwargs):
-        if event == ProcessEvent.RESUME:
-            args = (self.done_callback,)
-        super(Waiting, self).evt(event, *args, **kwargs)
+    def save_instance_state(self, out_state):
+        super(Waiting, self).save_instance_state(out_state)
+        out_state[self.DONE_CALLBACK] = self.done_callback.__name__
+        out_state[self.MSG] = self.msg
+        out_state[self.DATA] = self.data
+
+    def load_instance_state(self, process, saved_state):
+        super(Waiting, self).load_instance_state(process, saved_state)
+        self.done_callback = getattr(self.process, saved_state[self.DONE_CALLBACK])
+        self.msg = saved_state[self.MSG]
+        self.data = saved_state[self.DATA]
+
+    def resume(self, value=NULL):
+        if value == NULL:
+            self.transition_to(ProcessState.RUNNING, self.done_callback)
+        else:
+            self.transition_to(ProcessState.RUNNING, self.done_callback, value)
 
 
 class Paused(State):
@@ -187,7 +205,7 @@ class Paused(State):
 
     def __init__(self, process, paused_state):
         """
-        :param process: The process this state belongs to
+        :param process: The associated process
         :param paused_state: The state that was interrupted by pausing
         :type paused_state: :class:`State`
         """
@@ -202,20 +220,21 @@ class Paused(State):
 
     def load_instance_state(self, process, saved_state):
         super(Paused, self).load_instance_state(process, saved_state)
-        self.paused_state = State.create_from(process, saved_state[self.PAUSED_STATE])
+        self.paused_state = process.create_state(saved_state[self.PAUSED_STATE])
 
-    def evt(self, event, *args, **kwargs):
-        if event == ProcessEvent.PLAY:
-            self.transition_to(self.paused_state)
-        else:
-            super(Paused, self).evt(event, *args, **kwargs)
+    def play(self):
+        self.transition_to(self.paused_state)
 
 
 class Failed(State):
     LABEL = ProcessState.FAILED
 
-    def __init__(self, parent, exception):
-        super(Failed, self).__init__(parent)
+    def __init__(self, process, exception):
+        """
+        :param process: The associated process
+        :param exception: The exception that caused the failure
+        """
+        super(Failed, self).__init__(process)
         self.exception = exception
 
     def __str__(self):
@@ -250,6 +269,11 @@ class Cancelled(State):
     MSG = 'MSG'
 
     def __init__(self, process, msg):
+        """
+        :param process: The associated process
+        :param msg: Optional cancellation message
+        :type msg: basestring
+        """
         super(Cancelled, self).__init__(process)
         self.msg = msg
 
@@ -264,8 +288,7 @@ class Cancelled(State):
 
 # endregion
 
-
-class ProcessStateMachine(statemachine.StateMachine):
+class ProcessStateMachine(state_machine.StateMachine):
     """
     CREATED --- RUNNING --- STOPPED (o)
               /  v   ^     /
@@ -279,10 +302,29 @@ class ProcessStateMachine(statemachine.StateMachine):
     """
     __metaclass__ = abc.ABCMeta
 
-    STATES = (Created, Running, Waiting, Finished, Paused, Cancelled, Failed)
+    @classmethod
+    def get_states(cls):
+        state_classes = cls.get_state_classes()
+        return (state_classes[ProcessState.CREATED],) + \
+               tuple(state
+                     for state in state_classes.values()
+                     if state.LABEL != ProcessState.CREATED)
 
-    def __str__(self):
-        return "Process {}".format(self._state)
+    @classmethod
+    def get_state_classes(cls):
+        # A mapping of the State constants to the corresponding state class
+        return {
+            ProcessState.CREATED: Created,
+            ProcessState.RUNNING: Running,
+            ProcessState.WAITING: Waiting,
+            ProcessState.PAUSED: Paused,
+            ProcessState.FINISHED: Finished,
+            ProcessState.FAILED: Failed,
+            ProcessState.CANCELLED: Cancelled
+        }
+
+    def __init__(self):
+        super(ProcessStateMachine, self).__init__(self.run)
 
     def cancelled(self):
         return self.state == ProcessState.CANCELLED
@@ -333,6 +375,8 @@ class ProcessStateMachine(statemachine.StateMachine):
         state = self.state
         if state == ProcessState.WAITING:
             call_with_super_check(self.on_exit_waiting)
+        elif state == ProcessState.RUNNING:
+            call_with_super_check(self.on_exit_running)
 
     @super_check
     def on_created(self):
@@ -340,7 +384,11 @@ class ProcessStateMachine(statemachine.StateMachine):
 
     @super_check
     def on_running(self):
-        self._state._run()
+        pass
+
+    @super_check
+    def on_exit_running(self):
+        pass
 
     @super_check
     def on_waiting(self, data):
@@ -368,11 +416,19 @@ class ProcessStateMachine(statemachine.StateMachine):
 
     # endregion
 
+    def save_state(self, out_state):
+        return call_with_super_check(self.save_instance_state, out_state)
+
+    def load_state(self, saved_state):
+        return call_with_super_check(self.load_instance_state, saved_state)
+
+    @super_check
     def save_instance_state(self, out_state):
         self._state.save_instance_state(out_state)
 
+    @super_check
     def load_instance_state(self, saved_state):
-        pass
+        self._state = self.create_state(saved_state)
 
     def result(self):
         """
@@ -392,16 +448,19 @@ class ProcessStateMachine(statemachine.StateMachine):
             raise InvalidStateError
 
     # region commands
+    @event(from_states=(Created, Paused), to_states=(Running, Waiting))
     def play(self):
         """
         Play the process if in the CREATED or PAUSED state
         """
-        self.evt(ProcessEvent.PLAY)
+        self._state.play()
 
+    @event(from_states=(Running, Waiting), to_states=Paused)
     def pause(self):
         """ Pause the process """
-        self.evt(ProcessEvent.PAUSE)
+        self.transition_to(ProcessState.PAUSED, self._state)
 
+    @event(from_states=Running, to_states=Waiting)
     def wait(self, done_callback=None, msg=None, data=None):
         """
         Wait for something
@@ -410,36 +469,53 @@ class ProcessStateMachine(statemachine.StateMachine):
         :type msg: basestring
         :param data: Optional information about what to wait for
          """
-        self.evt(ProcessEvent.WAIT, msg, data)
+        self.transition_to(ProcessState.WAITING, done_callback, msg, data)
 
-    def resume(self, value=None):
+    @event(from_states=(Running, Waiting), to_states=Running)
+    def resume(self, *args):
         """
         Start running the process again
-        :param value: An optional value to pass to the callback function
         """
-        self.evt(ProcessEvent.RESUME, value)
+        self._state.resume(*args)
 
+    @event(from_states=(Running, Waiting), to_states=Finished)
     def finish(self, result=None):
         """
         The process has finished
         :param result: An optional result from this process
         """
-        self.evt(ProcessEvent.FINISH, result)
+        self.transition_to(ProcessState.FINISHED, result)
 
+    @event(to_states=Failed)
     def fail(self, exception):
         """
         Fail the process in response to an exception
         :param exception: The exception that caused the failure
         """
-        self.evt(ProcessEvent.FAIL, exception)
+        self.transition_to(ProcessState.FAILED, exception)
 
+    @event(to_states=Cancelled)
     def cancel(self, msg=None):
         """
         Cancel the process
         :param msg: An optional cancellation message
         :type msg: basestring
         """
-        self.evt(ProcessEvent.CANCEL, msg)
-
+        self.transition_to(ProcessState.CANCELLED, msg)
 
         # endregion
+
+    def create_state(self, saved_state):
+        """
+        Create a state object from a saved state
+
+        :param saved_state: The saved state
+        :type saved_state: :class:`Bundle`
+        :return: An instance of the object with its state loaded from the save state.
+        """
+        # Get the class using the class loader and instantiate it
+        state_label = ProcessState(saved_state[KEY_STATE])
+        state_class = self._ensure_state_class(state_label)
+        state = state_class.__new__(state_class)
+        call_with_super_check(state.load_instance_state, self, saved_state)
+        return state

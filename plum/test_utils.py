@@ -2,11 +2,11 @@ import apricotpy
 import collections
 from collections import namedtuple
 
+import plum
 from plum import process
 from plum.process import Process
 from plum.process_listener import ProcessListener
 from plum.utils import override
-from plum.wait_ons import Checkpoint, Barrier
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -48,26 +48,19 @@ class KeyboardInterruptProc(Process):
 class ProcessWithCheckpoint(Process):
     @override
     def _run(self):
-        return self.loop().create(Checkpoint), self.finish
+        return plum.Continue(self.last_step)
 
-    def finish(self):
+    def last_step(self):
         pass
 
 
 class WaitForSignalProcess(Process):
-    def __init__(self, *args, **kwargs):
-        super(WaitForSignalProcess, self).__init__(*args, **kwargs)
-        self.store._barrier = Barrier(loop=self.loop())
-
     @override
     def _run(self):
-        return self.store._barrier, self.finish
+        return plum.Wait(self.last_step)
 
-    def finish(self):
+    def last_step(self):
         pass
-
-    def continue_(self):
-        self.store._barrier.open()
 
 
 class EventsTesterMixin(object):
@@ -147,12 +140,12 @@ class TwoCheckpoint(ProcessEventsTester):
     @override
     def _run(self):
         self.out("test", 5)
-        return self.loop().create(Checkpoint), self.middle_step
+        return plum.Continue(self.middle_step)
 
-    def middle_step(self, wait_on):
-        return self.loop().create(Checkpoint), self.finish
+    def middle_step(self,):
+        return plum.Continue(self.last_step)
 
-    def finish(self, wait_on):
+    def last_step(self):
         pass
 
 
@@ -160,10 +153,10 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
     @override
     def _run(self):
         self.out("test", 5)
-        return self.loop().create(Checkpoint), self.middle_step
+        return plum.Continue(self.middle_step)
 
-    def middle_step(self, wait_on):
-        return self.loop().create(Checkpoint), None
+    def middle_step(self):
+        pass
 
 
 class ExceptionProcess(ProcessEventsTester):
@@ -175,51 +168,37 @@ class ExceptionProcess(ProcessEventsTester):
 
 class TwoCheckpointThenException(TwoCheckpoint):
     @override
-    def finish(self, wait_on):
+    def last_step(self):
         raise RuntimeError("Great scott!")
 
 
 class ProcessListenerTester(ProcessListener):
     def __init__(self):
-        self.start = False
-        self.run = False
-        self.continue_ = False
-        self.emitted = False
-        self.finish = False
-        self.stop = False
-        self.terminate = False
+        self.called = set()
 
-    @override
-    def on_process_start(self, process):
-        self.start = True
+    def on_process_created(self, process):
+        self.called.add('created')
 
-    @override
-    def on_process_run(self, process):
-        self.run = True
+    def on_process_running(self, process):
+        self.called.add('running')
 
-    @override
+    def on_process_waiting(self, process, data):
+        self.called.add('waiting')
+
+    def on_process_paused(self, process):
+        self.called.add('paused')
+
     def on_output_emitted(self, process, output_port, value, dynamic):
-        self.emitted = True
+        self.called.add('output_emitted')
 
-    @override
-    def on_process_wait(self, process):
-        self.wait = True
+    def on_process_finished(self, process, outputs):
+        self.called.add('finished')
 
-    @override
-    def on_process_continue(self, process, wait_on):
-        self.continue_ = True
+    def on_process_failed(self, process, exception):
+        self.called.add('failed')
 
-    @override
-    def on_process_finish(self, process):
-        self.finish = True
-
-    @override
-    def on_process_stop(self, process):
-        self.stop = True
-
-    @override
-    def on_process_terminate(self, process):
-        self.terminate = True
+    def on_process_cancelled(self, process, msg):
+        self.called.add('cancelled')
 
 
 class Saver(object):

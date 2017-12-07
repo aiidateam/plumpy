@@ -1,16 +1,16 @@
 import apricotpy
 import logging
+from .base import *
 from .events import *
 from .process import *
 from .utils import *
+from . import persistence
 
-__all__ = (events.__all__ +
-           process.__all__ +
-           utils.__all__)
+__all__ = (events.__all__ + process.__all__ + utils.__all__)
 
 EventLoop = apricotpy.BaseEventLoop
 PersistableEventLoop = apricotpy.persistable.BaseEventLoop
-Bundle = apricotpy.persistable.Bundle
+Bundle = persistence.Bundle
 
 
 # Do this se we don't get the "No handlers could be found..." warnings that will be produced

@@ -26,7 +26,7 @@ class TestWaitOn(TestCase):
         """
         loop = plum.new_event_loop()
 
-        w = loop.create(_DummyWait, 5)
+        w = _DummyWait(5)
         saved_state = plum.Bundle(w)
 
         w_ = saved_state.unbundle(loop)

@@ -1,11 +1,24 @@
-from collections import namedtuple
 from abc import abstractmethod, abstractproperty, ABCMeta
-import apricotpy
+from collections import namedtuple
+import plum.utils
+
+
 
 PersistedCheckpoint = namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
-class Persister(object):
 
+class Bundle(dict):
+    def __init__(self, persistable):
+        super(Bundle, self).__init__()
+        self['CLASS_NAME'] = plum.utils.class_name(persistable)
+        persistable.save_state(self)
+
+    def unbundle(self, loop=None):
+        cls = plum.utils.load_object(self['CLASS_NAME'])
+        return cls.create_from(self, loop)
+
+
+class Persister(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod

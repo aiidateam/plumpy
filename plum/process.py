@@ -9,7 +9,8 @@ from enum import Enum
 import inspect
 import logging
 import time
-import sys
+import trollius
+import uuid
 
 from future.utils import with_metaclass
 
@@ -22,68 +23,14 @@ from . import events
 from . import utils
 from . import base
 
-__all__ = ['Process',
-           'ProcessAction',
-           'ProcessMessage',
-           'ProcessState',
+__all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
            'get_pid_from_bundle']
 
 _LOGGER = logging.getLogger(__name__)
 
-
-class ProcessState(Enum):
-    """
-    The possible states that a :class:`Process` can be in.
-    """
-    CREATED = 0
-    RUNNING = 1
-    WAITING = 2
-    STOPPED = 3
-    FAILED = 4
-
-
-class ProcessStateTransitions(object):
-    # The allowed state transitions
-    ALLOWED = {
-        ProcessState.CREATED: {ProcessState.RUNNING, ProcessState.STOPPED, ProcessState.FAILED},
-        ProcessState.RUNNING: {ProcessState.RUNNING, ProcessState.WAITING, ProcessState.STOPPED, ProcessState.FAILED},
-        ProcessState.WAITING: {ProcessState.RUNNING, ProcessState.STOPPED, ProcessState.FAILED},
-        ProcessState.STOPPED: {ProcessState.FAILED},
-        ProcessState.FAILED: {}
-    }
-
-    @staticmethod
-    def is_allowed(start_state, end_state):
-        return end_state in ProcessStateTransitions.ALLOWED[start_state]
-
-    @staticmethod
-    def is_reachable(start_state, end_state):
-        if ProcessStateTransitions.is_allowed(start_state, end_state):
-            return True
-        # From each of the states we can transition to from the start state
-        # is there one from which we can reach the end state?
-        for state in ProcessStateTransitions.ALLOWED[start_state]:
-            if ProcessStateTransitions.is_reachable(state, end_state):
-                return True
-        return False
-
-    @staticmethod
-    def is_terminal(state):
-        return not ProcessStateTransitions.ALLOWED[state]
-
+ProcessState = base.ProcessState
 
 Wait = namedtuple('Wait', ['on', 'callback'])
-
-
-def _should_pass_result(fn):
-    if isinstance(fn, apricotpy.persistable.Function):
-        fn = fn._fn
-
-    fn_spec = inspect.getargspec(fn)
-    is_method_with_argument = inspect.ismethod(fn) and len(fn_spec[0]) > 1
-    is_function_with_argument = inspect.isfunction(fn) and len(fn_spec[0]) > 0
-    has_args_or_kwargs = fn_spec[1] is not None or fn_spec[2] is not None
-    return is_method_with_argument or is_function_with_argument or has_args_or_kwargs
 
 
 class BundleKeys(object):
@@ -121,6 +68,46 @@ class ProcessMessage(object):
     of the message
     """
     STATUS_REPORT = 'status_report'
+
+
+class Running(base.Running):
+    _run_handle = None
+
+    def enter(self):
+        super(Running, self).enter()
+        self._run_handle = self.process._loop.call_soon(self._run)
+
+    def exit(self):
+        super(Running, self).exit()
+        self._run_handle.cancel()
+        self._run_handle = None
+
+
+class Executor(ProcessListener):
+    _future = None
+
+    def __init__(self, interrupt_on_pause_or_wait=False):
+        self._interrupt_on_pause_or_wait = interrupt_on_pause_or_wait
+
+    def on_process_waiting(self, process, data):
+        if self._interrupt_on_pause_or_wait:
+            self._future.set_result('waiting')
+
+    def on_process_paused(self, process):
+        if self._interrupt_on_pause_or_wait:
+            self._future.set_result('paused')
+
+    def execute(self, process):
+        process.add_process_listener(self)
+        try:
+            self._future = trollius.Future(loop=process.loop())
+            if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
+                process.play()
+            return process.loop().run_until_complete(
+                next(trollius.as_completed((self._future, process.future())))
+            )
+        finally:
+            process.remove_process_listener(self)
 
 
 class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
@@ -171,6 +158,12 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     _spec_type = ProcessSpec
 
     @classmethod
+    def get_state_classes(cls):
+        states_map = super(Process, cls).get_state_classes()
+        states_map[ProcessState.RUNNING] = Running
+        return states_map
+
+    @classmethod
     def spec(cls):
         try:
             return cls.__getattribute__(cls, '_spec')
@@ -214,6 +207,20 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
         return "\n".join(desc)
 
+    @classmethod
+    def create_from(cls, saved_state, loop=None):
+        """
+        Create a process from the saved state providing a loop to load_instance_state()
+
+        :param saved_state: The saved state
+        :type saved_state: :class:`Bundle`
+        :param loop: The event loop
+        :return: An instance of the object with its state loaded from the save state.
+        """
+        obj = cls.__new__(cls)
+        obj.load_state(saved_state)
+        return obj
+
     def __init__(self, inputs=None, pid=None, logger=None, loop=None):
         """
         The signature of the constructor should not be changed by subclassing
@@ -225,16 +232,11 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         :param logger: An optional logger for the process to use
         :type logger: :class:`logging.Logger`
         """
-        super(Process, self).__init__()
-
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
         # Setup runtime state
-        self._loop = loop
-        self.__init(logger)
-        self.store.callback_fn = None
-        self.store.callback_args = None
+        self.__init(logger, loop=loop)
 
         # Input/output
         self._check_inputs(inputs)
@@ -243,6 +245,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self._outputs = {}
 
         # Set up a process ID
+        self._uuid = uuid.uuid4()
         if pid is None:
             self._pid = self.uuid
         else:
@@ -250,6 +253,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
         # State stuff
         self.__CREATION_TIME = time.time()
+
+        super(Process, self).__init__()
 
     @property
     def creation_time(self):
@@ -263,6 +268,10 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     @property
     def pid(self):
         return self._pid
+
+    @property
+    def uuid(self):
+        return self._uuid
 
     @property
     def raw_inputs(self):
@@ -295,6 +304,12 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             return self.__logger
         else:
             return _LOGGER
+
+    def loop(self):
+        return self._loop
+
+    def future(self):
+        return self._future
 
     def has_finished(self):
         """
@@ -347,8 +362,6 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self.__CREATION_TIME = saved_state[BundleKeys.CREATION_TIME]
         self._pid = saved_state[BundleKeys.PID]
 
-        self.loop()._insert_process(self)
-
     def add_process_listener(self, listener):
         assert (listener != self), "Cannot listen to yourself!"
         self.__event_helper.add_listener(listener)
@@ -365,47 +378,45 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self.logger.log(level, "{}: {}".format(self.pid, msg))
 
     # region Process messages
+
+    def on_running(self):
+        super(Process, self).on_running()
+        self._fire_event(ProcessListener.on_process_running)
+
     def on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
 
+    def on_waiting(self, data):
+        super(Process, self).on_waiting(data)
+        self._fire_event(ProcessListener.on_process_waiting, data)
+
+    def on_paused(self):
+        super(Process, self).on_paused()
+        self._fire_event(ProcessListener.on_process_paused)
+
+    def on_finished(self, result):
+        super(Process, self).on_finished(result)
+        self.future().set_result(result)
+        self._fire_event(ProcessListener.on_process_finished, result)
+
+    def on_failed(self, exception):
+        super(Process, self).on_failed(exception)
+        self.future().set_exception(exception)
+        self._fire_event(ProcessListener.on_process_failed, exception)
+
+    def on_cancelled(self, msg):
+        super(Process, self).on_cancelled(msg)
+        self.future().cancel()
+        self._fire_event(ProcessListener.on_process_cancelled, msg)
+
     # endregion
 
     def run(self):
-        next_state = None
-        try:
-            command = self.run_fn(*self.args, **self.kwargs)
-
-            # Cancelling takes precedence over everything else
-            if self.cancelling:
-                command = self.cancelling
-            elif not isinstance(command, Command):
-                command = Stop(command)
-
-            if isinstance(command, Cancel):
-                next_state = Cancelled(self.process, command.msg)
-            else:
-                if isinstance(command, Stop):
-                    next_state = DONE(self.process, command.result)
-                elif isinstance(command, Wait):
-                    next_state = Waiting(
-                        self.process, command.continue_fn, command.desc
-                    )
-                elif isinstance(command, Continue):
-                    next_state = Running(
-                        self.process, command.continue_fn, *command.args
-                    )
-
-                if self.pausing:
-                    next_state = Paused(self.process, next_state)
-
-        except BaseException as e:
-            next_state = Failed(self.process, e)
-
-        self.process._transition(next_state)
-
-
         return self._run(**(self.inputs if self.inputs is not None else {}))
+
+    def execute(self, return_on_idle=False):
+        return Executor(return_on_idle).execute(self)
 
     @protected
     def out(self, output_port, value):
@@ -497,21 +508,22 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
                 self.loop(), subject, body, self.uuid, sender_id
             )
 
-    def __init(self, logger):
+    def __init(self, logger, loop=None):
         """
         Common place to put all runtime state variables i.e. those that don't need
         to be persisted.  This can be called from the constructor or
         load_instance_state.
         """
+        self._loop = loop if loop is not None else events.get_event_loop()
         self.__logger = logger
-
+        self._future = trollius.Future(loop=self.loop())
         # Events and running
         self.__event_helper = utils.EventHelper(ProcessListener, self.loop())
 
     # region State entry/exit events
 
-    def _fire_event(self, event):
-        self.__event_helper.fire_event(event, self)
+    def _fire_event(self, event, *args, **kwargs):
+        self.__event_helper.fire_event(event, self, *args, **kwargs)
 
     def _send_message(self, subject, body=None, to=None):
         body_ = {'uuid': self.uuid}

@@ -11,37 +11,31 @@ from . import util
 
 class TestWaitingProcess(util.TestCaseWithLoop):
     def test_instance_state(self):
-        proc = self.loop.create(TwoCheckpoint)
+        proc = TwoCheckpoint()
         proc.play()
         wl = ProcessSaver(proc)
-        self.loop.run_until_complete(proc)
+        proc.execute()
 
         for bundle, outputs in zip(wl.snapshots, wl.outputs):
             self.assertEqual(outputs, bundle[plum.process.BundleKeys.OUTPUTS])
 
     def test_saving_each_step(self):
         for proc_class in TEST_WAITING_PROCESSES:
-            proc = self.loop.create(proc_class)
+            proc = proc_class()
             proc.play()
             saver = ProcessSaver(proc)
             try:
-                self.loop.run_until_complete(proc)
+                proc.execute()
             except BaseException:
                 pass
 
             self.assertTrue(check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
 
     def test_abort(self):
-        p = WaitForSignalProcess().play()
-
-        # Wait until it is waiting
-        run_until(p, ProcessState.WAITING, self.loop)
-
-        # Abort it
-        p.abort()
-
-        # Wait until it's completely finished
-        run_until(p, ProcessState.STOPPED, self.loop)
+        p = WaitForSignalProcess()
+        p.play()
+        p.execute(True)
+        p.cancel()
         self.assertTrue(p.cancelled())
 
     def _check_process_against_snapshot(self, snapshot, proc):

@@ -1,3 +1,5 @@
+import functools
+
 _PENDING = 0
 _CHECKING = 1
 _CALLED = 2

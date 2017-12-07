@@ -1,6 +1,6 @@
 from enum import Enum
 import unittest
-from plum.base import statemachine
+from plum.base import state_machine
 import time
 
 # Events
@@ -14,16 +14,16 @@ PAUSED = 'Paused'
 STOPPED = 'Stopped'
 
 
-class Playing(statemachine.State):
+class Playing(state_machine.State):
     LABEL = PLAYING
     ALLOWED = {PAUSED, STOPPED}
     TRANSITIONS = {
         STOP: STOPPED
     }
 
-    def __init__(self, state_machine, track):
+    def __init__(self, player, track):
         assert track is not None, "Must provide a track name"
-        super(Playing, self).__init__(state_machine)
+        super(Playing, self).__init__(player)
         self.track = track
         self._last_time = None
         self._played = 0.
@@ -41,11 +41,8 @@ class Playing(statemachine.State):
         super(Playing, self).exit()
         self._update_time()
 
-    def evt(self, event, *args, **kwargs):
-        if event == PAUSE:
-            self.transition_to(PAUSED, playing_state=self)
-        else:
-            super(Playing, self).evt(event, *args, **kwargs)
+    def play(self, track=None):
+        return state_machine.EventResponse.IGNORED
 
     def _update_time(self):
         current_time = time.time()
@@ -53,32 +50,30 @@ class Playing(statemachine.State):
         self._last_time = current_time
 
 
-class Paused(statemachine.State):
+class Paused(state_machine.State):
     LABEL = PAUSED
     ALLOWED = {PLAYING, STOPPED}
     TRANSITIONS = {
         STOP: STOPPED
     }
 
-    def __init__(self, state_machine, playing_state):
-        assert isinstance(
-            playing_state,
-            state_machine.get_state_class(PLAYING)), \
+    def __init__(self, player, playing_state):
+        assert isinstance(playing_state, Playing), \
             "Must provide the playing state to pause"
-        super(Paused, self).__init__(state_machine)
+        super(Paused, self).__init__(player)
         self.playing_state = playing_state
 
     def __str__(self):
         return "|| ({})".format(self.playing_state)
 
-    def evt(self, event, *args, **kwargs):
-        if event == PLAY:
-            self.transition_to(self.playing_state)
+    def play(self, track=None):
+        if track is not None:
+            self.transition_to(Playing, track)
         else:
-            super(Paused, self).evt(event, *args, **kwargs)
+            self.transition_to(self.playing_state)
 
 
-class Stopped(statemachine.State):
+class Stopped(state_machine.State):
     LABEL = STOPPED
     ALLOWED = {PLAYING, }
     TRANSITIONS = {
@@ -88,8 +83,11 @@ class Stopped(statemachine.State):
     def __str__(self):
         return "[]"
 
+    def play(self, track):
+        self.transition_to(Playing, track)
 
-class CdPlayer(statemachine.StateMachine):
+
+class CdPlayer(state_machine.StateMachine):
     STATES = (Stopped, Playing, Paused)
 
     def on_entered(self):
@@ -100,21 +98,40 @@ class CdPlayer(statemachine.StateMachine):
         print("Exiting {}".format(self.state))
         print(self._state)
 
+    @state_machine.event(to_states=Playing)
+    def play(self, track=None):
+        return self._state.play(track)
+
+    @state_machine.event(from_states=Playing, to_states=Paused)
+    def pause(self):
+        self.transition_to(Paused, self._state)
+
+    @state_machine.event(from_states=(Playing, Paused), to_states=Stopped)
+    def stop(self):
+        self.transition_to(Stopped)
+
 
 class TestStateMachine(unittest.TestCase):
     def test_basic(self):
         cd_player = CdPlayer()
         self.assertEqual(cd_player.state, STOPPED)
 
-        cd_player.evt(PLAY, 'Eminem - The Real Slim Shady')
+        cd_player.play('Eminem - The Real Slim Shady')
         self.assertEqual(cd_player.state, PLAYING)
         time.sleep(1.)
 
-        cd_player.evt(PAUSE)
+        cd_player.pause()
         self.assertEqual(cd_player.state, PAUSED)
 
-        cd_player.evt(PLAY)
+        cd_player.play()
         self.assertEqual(cd_player.state, PLAYING)
 
-        cd_player.evt(STOP)
+        self.assertEqual(cd_player.play(), state_machine.EventResponse.IGNORED)
+
+        cd_player.stop()
         self.assertEqual(cd_player.state, STOPPED)
+
+    def test_invalid_event(self):
+        cd_player = CdPlayer()
+        with self.assertRaises(state_machine.TransitionFailed):
+            cd_player.play()
