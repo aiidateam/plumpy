@@ -4,7 +4,9 @@ import functools
 import inspect
 import logging
 import os
+import six
 import sys
+import traceback
 from utils import call_with_super_check, super_check
 
 __all__ = ['StateMachine', 'event', 'TransitionFailed']
@@ -32,10 +34,17 @@ class EventError(StateMachineError):
 
 
 class TransitionFailed(BaseException):
-    def __init__(self, initial_state, final_state=None, msg=None):
-        super(TransitionFailed, self).__init__(msg)
+    def __init__(self, initial_state, final_state=None, traceback_str=None):
         self.initial_state = initial_state
         self.final_state = final_state
+        self.traceback_str = traceback_str
+        super(TransitionFailed, self).__init__(self._format_msg())
+
+    def _format_msg(self):
+        msg = ["{} -> {}".format(self.initial_state, self.final_state)]
+        if self.traceback_str is not None:
+            msg.append(self.traceback_str)
+        return "\n".join(msg)
 
 
 def event(from_states='*', to_states='*'):
@@ -96,6 +105,8 @@ class State(object):
     # from this one
     ALLOWED = set()
 
+    in_state = False
+
     @classmethod
     def is_terminal(cls):
         return not cls.ALLOWED
@@ -106,7 +117,6 @@ class State(object):
         :type state_machine: :class:`StateMachine`
         """
         self.state_machine = state_machine
-        self.in_state = False
 
     def __str__(self):
         return str(self.LABEL)
@@ -226,8 +236,9 @@ class StateMachine(object):
             call_with_super_check(new_state.enter)
             self._state = new_state
             self.on_entered()
-        except Exception as e:
-            self.transition_failed(TransitionFailed(initial_state, new_state, e.message))
+        except Exception:
+            exc = TransitionFailed(initial_state, new_state, traceback.format_exc())
+            self.transition_failed(exc)
 
         finally:
             self._transitioning = False
@@ -238,7 +249,7 @@ class StateMachine(object):
         to change the default behaviour which is to raise the exception.
 
         :param exception: The transition failed exception
-        :type exception: :class:`TransitionFailedException`
+        :type exception: :class:`TransitionFailed`
         """
         raise exception
 

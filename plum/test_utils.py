@@ -24,7 +24,6 @@ class DummyProcessWithOutput(Process):
     @classmethod
     def define(cls, spec):
         super(DummyProcessWithOutput, cls).define(spec)
-
         spec.dynamic_input()
         spec.dynamic_output()
 
@@ -216,23 +215,27 @@ class ProcessSaver(ProcessListener, Saver):
         p.add_process_listener(self)
 
     @override
-    def on_process_start(self, process):
+    def on_process_running(self, process):
         self._save(process)
 
     @override
-    def on_process_run(self, process):
+    def on_process_waiting(self, process, data):
         self._save(process)
 
     @override
-    def on_process_wait(self, process):
+    def on_process_paused(self, process):
         self._save(process)
 
     @override
-    def on_process_finish(self, process):
+    def on_process_finished(self, process, outputs):
         self._save(process)
 
     @override
-    def on_process_stop(self, process):
+    def on_process_failed(self, process, exception):
+        self._save(process)
+
+    @override
+    def on_process_cancelled(self, process, msg):
         self._save(process)
 
 
@@ -268,10 +271,10 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     :rtype: bool
     """
     for i, bundle in zip(range(0, len(snapshots)), snapshots):
-        loaded = bundle.unbundle(loop).play()
+        loaded = bundle.unbundle(loop)
         ps = ProcessSaver(loaded)
         try:
-            loop.run_until_complete(loaded)
+            loaded.execute()
         except BaseException:
             import traceback
             traceback.print_exc()

@@ -1,6 +1,16 @@
 import abc
 from enum import Enum
-import plum.utils
+import sys
+import traceback
+import yaml
+
+try:
+    import tblib
+
+    _HAS_TBLIB = True
+except ImportError:
+    _HAS_TBLIB = False
+
 from . import state_machine
 from .state_machine import InvalidStateError, event
 from .utils import super_check, call_with_super_check
@@ -53,16 +63,6 @@ class Continue(Command):
 # endregion
 
 
-class ProcessEvent(Enum):
-    PLAY = 0
-    PAUSE = 1
-    WAIT = 2
-    RESUME = 3
-    FINISH = 4
-    FAIL = 5
-    CANCEL = 6
-
-
 # region States
 
 class ProcessState(Enum):
@@ -79,6 +79,7 @@ class ProcessState(Enum):
 
 
 KEY_STATE = 'state'
+KEY_IN_STATE = 'in_state'
 
 
 class State(state_machine.State):
@@ -88,10 +89,12 @@ class State(state_machine.State):
 
     def save_instance_state(self, out_state):
         out_state[KEY_STATE] = self.LABEL
+        out_state[KEY_IN_STATE] = self.in_state
 
     @super_check
     def load_instance_state(self, process, saved_state):
         self.state_machine = process
+        self.in_state = saved_state[KEY_IN_STATE]
 
 
 class Created(State):
@@ -120,12 +123,28 @@ class Running(State):
                ProcessState.CANCELLED,
                ProcessState.FAILED}
 
+    RUN_FN = 'run_fn'
+    ARGS = 'args'
+    KWARGS = 'kwargs'
+
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Running, self).__init__(process)
         assert run_fn is not None
         self.run_fn = run_fn
         self.args = args
         self.kwargs = kwargs
+
+    def save_instance_state(self, out_state):
+        super(Running, self).save_instance_state(out_state)
+        out_state[self.RUN_FN] = self.run_fn.__name__
+        out_state[self.ARGS] = self.args
+        out_state[self.KWARGS] = self.kwargs
+
+    def load_instance_state(self, process, saved_state):
+        super(Running, self).load_instance_state(process, saved_state)
+        self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
+        self.args = saved_state[self.ARGS]
+        self.kwargs = saved_state[self.KWARGS]
 
     def resume(self, run_fn, value=NULL):
         if value == NULL:
@@ -136,8 +155,8 @@ class Running(State):
     def _run(self):
         try:
             command = self.run_fn(*self.args, **self.kwargs)
-        except BaseException as e:
-            self.process.fail(e)
+        except BaseException:
+            self.process.fail(*sys.exc_info()[1:])
         else:
             if not isinstance(command, Command):
                 command = Stop(command)
@@ -229,21 +248,43 @@ class Paused(State):
 class Failed(State):
     LABEL = ProcessState.FAILED
 
-    def __init__(self, process, exception):
+    EXC_VALUE = 'ex_value'
+    TRACEBACK = 'traceback'
+
+    def __init__(self, process, exception, trace_back=None):
         """
         :param process: The associated process
-        :param exception: The exception that caused the failure
+        :param exception: The exception instance
+        :param trace_back: An optional exception traceback
         """
         super(Failed, self).__init__(process)
         self.exception = exception
+        self.traceback = trace_back
 
     def __str__(self):
-        exc = str(type(self.exception))
-        try:
-            exc += " - {}".format(self.exception.message)
-        except AttributeError:
-            pass
-        return "{} ({})".format(self.LABEL, exc)
+        return "{} ({})".format(
+            super(Failed, self).__str__(),
+            traceback.format_exception_only(type(self.exception), self.exception)[0]
+        )
+
+    def save_instance_state(self, out_state):
+        super(Failed, self).save_instance_state(out_state)
+        out_state[self.EXC_VALUE] = yaml.dump(self.exception)
+        if self.traceback is not None:
+            out_state[self.TRACEBACK] = "".join(traceback.format_tb(self.traceback))
+
+    def load_instance_state(self, process, saved_state):
+        super(Failed, self).load_instance_state(process, saved_state)
+        self.exception = yaml.load(saved_state[self.EXC_VALUE])
+        if _HAS_TBLIB:
+            try:
+                self.traceback = \
+                    tblib.Traceback.from_string(saved_state[self.TRACEBACK],
+                                                strict=False)
+            except KeyError:
+                self.traceback = None
+        else:
+            self.traceback = None
 
 
 class Finished(State):
@@ -419,8 +460,9 @@ class ProcessStateMachine(state_machine.StateMachine):
     def save_state(self, out_state):
         return call_with_super_check(self.save_instance_state, out_state)
 
-    def load_state(self, saved_state):
-        return call_with_super_check(self.load_instance_state, saved_state)
+    def load_state(self, saved_state, *args, **kwargs):
+        return call_with_super_check(
+            self.load_instance_state, saved_state, *args, **kwargs)
 
     @super_check
     def save_instance_state(self, out_state):
@@ -487,12 +529,13 @@ class ProcessStateMachine(state_machine.StateMachine):
         self.transition_to(ProcessState.FINISHED, result)
 
     @event(to_states=Failed)
-    def fail(self, exception):
+    def fail(self, exception, trace_back=None):
         """
         Fail the process in response to an exception
         :param exception: The exception that caused the failure
+        :param trace_back: Optional exception traceback
         """
-        self.transition_to(ProcessState.FAILED, exception)
+        self.transition_to(ProcessState.FAILED, exception, trace_back)
 
     @event(to_states=Cancelled)
     def cancel(self, msg=None):

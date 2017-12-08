@@ -78,6 +78,11 @@ class Running(base.Running):
         self._run_handle.cancel()
         self._run_handle = None
 
+    def load_instance_state(self, process, saved_state):
+        super(Running, self).load_instance_state(process, saved_state)
+        if self.in_state:
+            self._run_handle = self.process._loop.call_soon(self._run)
+
 
 class Executor(ProcessListener):
     _future = None
@@ -97,13 +102,20 @@ class Executor(ProcessListener):
         process.add_process_listener(self)
         try:
             self._future = trollius.Future(loop=process.loop())
+            process.future().add_done_callback(self._proc_done)
             if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
                 process.play()
-            return process.loop().run_until_complete(
-                next(trollius.as_completed((self._future, process.future())))
-            )
+            return process.loop().run_until_complete(self._future)
         finally:
             process.remove_process_listener(self)
+
+    def _proc_done(self, future):
+        try:
+            self._future.set_result(future.result())
+        except trollius.CancelledError:
+            self._future.cancel()
+        except Exception as e:
+            self._future.set_exception(e)
 
 
 class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
@@ -214,7 +226,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         :return: An instance of the object with its state loaded from the save state.
         """
         obj = cls.__new__(cls)
-        obj.load_state(saved_state)
+        obj.load_state(saved_state, loop)
         return obj
 
     def __init__(self, inputs=None, pid=None, logger=None, loop=None):
@@ -335,14 +347,13 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         # Inputs/outputs
         if self.raw_inputs is not None:
             out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
-        out_state[BundleKeys.OUTPUTS] = self._outputs
+        out_state[BundleKeys.OUTPUTS] = copy.deepcopy(self._outputs)
 
     @protected
-    def load_instance_state(self, saved_state):
-        super(Process, self).load_instance_state(saved_state)
-
+    def load_instance_state(self, saved_state, loop=None):
         # Set up runtime state
-        self.__init(None)
+        self.__init(None, loop)
+        super(Process, self).load_instance_state(saved_state)
 
         # Inputs/outputs
         try:
@@ -357,6 +368,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         # Immutable stuff
         self.__CREATION_TIME = saved_state[BundleKeys.CREATION_TIME]
         self._pid = saved_state[BundleKeys.PID]
+
+        self._update_future()
 
     def add_process_listener(self, listener):
         assert (listener != self), "Cannot listen to yourself!"
@@ -550,6 +563,14 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
                 raise RuntimeError(
                     "Process {} failed because {}".format(self.get_name(), msg)
                 )
+
+    def _update_future(self):
+        if self.state == ProcessState.FINISHED:
+            self._future.set_result(self.outputs)
+        elif self.state == ProcessState.CANCELLED:
+            self._future.cancel()
+        elif self.state == ProcessState.FAILED:
+            self._future.set_exception(self._state.exception)
 
 
 def get_pid_from_bundle(process_bundle):

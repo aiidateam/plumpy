@@ -29,13 +29,13 @@ setup(
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
     install_requires=[
-        'apricotpy', 'frozendict', 'portalocker', 'trollius'
+        'apricotpy', 'frozendict', 'portalocker', 'yaml', 'six'
     ],
     extras_require={
         'rmq': ['pika'],
+        ':python_version<="3.2"': ['trollius'],
         ':python_version<"3.4"': ['enum34'],
-        ':python_version<"3.2"': ['futures'],
-        ':python_version<"3.2"': ['backports.tempfile']
+        ':python_version<"3.2"': ['futures', 'backports.tempfile']
     },
     packages=['plum', 'plum.persistence'],
     test_suite='test'

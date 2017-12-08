@@ -1,4 +1,10 @@
 import logging
+try:
+    # Use builtin asyncio on Python 3.4+, or asyncio on Python 3.3
+    import asyncio
+except ImportError:
+    # Use Trollius on Python <= 3.2
+    import trollius as asyncio
 from .base import *
 from .events import *
 from .process import *

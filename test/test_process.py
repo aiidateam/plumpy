@@ -136,8 +136,8 @@ class TestProcess(util.TestCaseWithLoop):
     def test_run_from_class(self):
         # Test running through class method
         proc = DummyProcessWithOutput()
-        proc.play()
-        results = self.loop.run_until_complete(proc.future())
+        proc.execute()
+        results = proc.outputs
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
@@ -196,7 +196,7 @@ class TestProcess(util.TestCaseWithLoop):
 
         saver = ProcessSaver(proc)
         proc.play()
-        self.loop.run_until_complete(proc.future())
+        proc.execute()
 
         for bundle, outputs in zip(saver.snapshots, saver.outputs):
             # Check that it is a copy
@@ -212,8 +212,7 @@ class TestProcess(util.TestCaseWithLoop):
         for proc_class in TEST_PROCESSES:
             proc = proc_class()
             saver = ProcessSaver(proc)
-            proc.play()
-            self.loop.run_until_complete(proc.future())
+            proc.execute()
 
             self.assertEqual(proc.state, ProcessState.FINISHED)
             self.assertTrue(
@@ -336,26 +335,6 @@ class TestProcess(util.TestCaseWithLoop):
 
         # Check results match
         self.assertEqual(result, result2)
-
-    def test_status_request(self):
-        """ Test that a status request is acknowledged by a process. """
-        results = []
-        _got_status = util.get_message_capture_fn(results)
-
-        my_id = uuid.uuid4()
-        self.loop.messages().add_listener(_got_status, subject_filter=plum.ProcessMessage.STATUS_REPORT)
-        proc = DummyProcess().play()
-        self.loop.messages().send(
-            sender_id=my_id,
-            to=proc.uuid,
-            subject=plum.ProcessAction.REPORT_STATUS
-        )
-        self.loop.run_until_complete(util.HansKlok(proc))
-
-        self.assertEqual(len(results), 1)
-        result = results[0]
-        self.assertEqual(result['subject'], plum.ProcessMessage.STATUS_REPORT)
-        self.assertIn('body', result)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
