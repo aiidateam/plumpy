@@ -59,7 +59,7 @@ class MultithreadedEngine(execution_engine.ExecutionEngine, ProcessMonitorListen
 
     @override
     def run(self, process):
-        f = self._executor.submit(Process.run_until_complete, process)
+        f = self._executor.submit(type(process).run_until_complete, process)
         self._processes[process.pid] = f
         return self.Future(process, f)
 

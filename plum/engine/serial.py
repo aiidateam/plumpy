@@ -127,7 +127,7 @@ class SerialEngine(ExecutionEngine):
         if not isinstance(process, Process):
             raise TypeError("process must be of type Process")
 
-        return SerialEngine.Future(Process.run_until_complete, process)
+        return SerialEngine.Future(type(process).run_until_complete, process)
 
     def run_and_block(self, process_class, inputs):
         """
@@ -154,6 +154,3 @@ class SerialEngine(ExecutionEngine):
 
     def stop(self, pid):
         pass
-
-
-
