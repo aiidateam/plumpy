@@ -105,7 +105,7 @@ class Executor(ProcessListener):
         try:
             loop = process.loop()
             self._future = futures.Future()
-            futures.chain_future(process.future(), self._future)
+            futures.chain(process.future(), self._future)
             self._future.add_done_callback(lambda _: loop.stop())
 
             if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
