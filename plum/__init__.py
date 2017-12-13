@@ -1,17 +1,14 @@
 import logging
-try:
-    # Use builtin asyncio on Python 3.4+, or asyncio on Python 3.3
-    import asyncio
-except ImportError:
-    # Use Trollius on Python <= 3.2
-    import trollius as asyncio
 from .base import *
 from .events import *
+from .exceptions import *
+from .futures import *
 from .process import *
 from .utils import *
 from . import persistence
 
-__all__ = (events.__all__ + process.__all__ + utils.__all__)
+__all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
+           utils.__all__ + futures.__all__)
 
 Bundle = persistence.Bundle
 

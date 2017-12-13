@@ -4,20 +4,21 @@ from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 import copy
 import logging
+import plum
 import time
-import trollius
+import tornado.concurrent
 import uuid
 
 from future.utils import with_metaclass
 
-import plum.stack as _stack
 from plum.process_listener import ProcessListener
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
 from plum.port import _NULL
 from . import events
-from . import utils
+from . import futures
 from . import base
+from . import utils
 
 __all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
            'get_pid_from_bundle']
@@ -71,21 +72,22 @@ class Running(base.Running):
 
     def enter(self):
         super(Running, self).enter()
-        self._run_handle = self.process._loop.call_soon(self._run)
-
-    def exit(self):
-        super(Running, self).exit()
-        self._run_handle.cancel()
-        self._run_handle = None
+        self.process._call_soon(self._run)
 
     def load_instance_state(self, process, saved_state):
         super(Running, self).load_instance_state(process, saved_state)
         if self.in_state:
-            self._run_handle = self.process._loop.call_soon(self._run)
+            self.process._call_soon(self._run)
+
+    def _run(self):
+        # Guard, in case we left the state before the callback was actioned
+        if self.in_state:
+            super(Running, self)._run()
 
 
 class Executor(ProcessListener):
     _future = None
+    _loop = None
 
     def __init__(self, interrupt_on_pause_or_wait=False):
         self._interrupt_on_pause_or_wait = interrupt_on_pause_or_wait
@@ -101,18 +103,25 @@ class Executor(ProcessListener):
     def execute(self, process):
         process.add_process_listener(self)
         try:
-            self._future = trollius.Future(loop=process.loop())
-            process.future().add_done_callback(self._proc_done)
+            loop = process.loop()
+            self._future = futures.Future()
+            futures.chain_future(process.future(), self._future)
+            self._future.add_done_callback(lambda _: loop.stop())
+
             if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
                 process.play()
-            return process.loop().run_until_complete(self._future)
+
+            loop.start()
+            return self._future.result()
         finally:
+            self._future = None
+            self._loop = None
             process.remove_process_listener(self)
 
     def _proc_done(self, future):
         try:
             self._future.set_result(future.result())
-        except trollius.CancelledError:
+        except plum.CancelledError:
             self._future.cancel()
         except Exception as e:
             self._future.set_exception(e)
@@ -525,7 +534,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         """
         self._loop = loop if loop is not None else events.get_event_loop()
         self.__logger = logger
-        self._future = trollius.Future(loop=self.loop())
+        self._future = futures.Future()
         # Events and running
         self.__event_helper = utils.EventHelper(ProcessListener, self.loop())
 
@@ -571,6 +580,9 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             self._future.cancel()
         elif self.state == ProcessState.FAILED:
             self._future.set_exception(self._state.exception)
+
+    def _call_soon(self, fn, *args, **kwargs):
+        self._loop.add_callback(fn, *args, **kwargs)
 
 
 def get_pid_from_bundle(process_bundle):

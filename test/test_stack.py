@@ -18,7 +18,4 @@ class StackTest(plum.Process):
 
 class TestStack(TestCase):
     def test_simple(self):
-        loop = plum.new_event_loop()
-        stack_test = StackTest(loop=loop)
-        stack_test.play()
-        stack_test.execute()
+        StackTest().execute()

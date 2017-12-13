@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 
-import frozendict
 import importlib
 import inspect
 import logging
-import plum.lang
 import threading
-from plum.settings import check_protected, check_override
 from collections import deque
+
+import frozendict
+
+import plum.lang
+from plum.settings import check_protected, check_override
 
 __all__ = []
 
@@ -245,3 +247,5 @@ def load_module(fullname):
         raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
 
     return mod, remainder
+
+
