@@ -10,6 +10,7 @@ from . import persistence
 __all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
            utils.__all__ + futures.__all__)
 
+PersistableEventLoop = events.ProcessEventLoop
 Bundle = persistence.Bundle
 
 
