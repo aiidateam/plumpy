@@ -267,7 +267,6 @@ class TestProcess(util.TestCaseWithLoop):
         except RuntimeError as e:
             self.assertEqual(proc.exception(), e)
 
-    @unittest.skip("TODO: enable")
     def test_restart(self):
         proc = _RestartProcess()
         proc.execute(True)

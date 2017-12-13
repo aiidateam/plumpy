@@ -16,7 +16,7 @@ class TestPicklePersister(TestCaseWithLoop):
         Test the PicklePersister by taking a dummpy process, saving a checkpoint
         and recreating it from the same checkpoint
         """
-        process = self.loop.create(ProcessWithCheckpoint)
+        process = ProcessWithCheckpoint()
 
         with tempfile.TemporaryDirectory() as directory:
             persister = PicklePersister(directory)
@@ -28,8 +28,8 @@ class TestPicklePersister(TestCaseWithLoop):
     def test_get_checkpoints_without_tags(self):
         """
         """
-        process_a = self.loop.create(ProcessWithCheckpoint)
-        process_b = self.loop.create(ProcessWithCheckpoint)
+        process_a = ProcessWithCheckpoint()
+        process_b = ProcessWithCheckpoint()
 
         checkpoint_a = PersistedCheckpoint(process_a.pid, None)
         checkpoint_b = PersistedCheckpoint(process_b.pid, None)
@@ -48,8 +48,8 @@ class TestPicklePersister(TestCaseWithLoop):
     def test_get_checkpoints_with_tags(self):
         """
         """
-        process_a = self.loop.create(ProcessWithCheckpoint)
-        process_b = self.loop.create(ProcessWithCheckpoint)
+        process_a = ProcessWithCheckpoint()
+        process_b = ProcessWithCheckpoint()
         tag_a = 'tag_a'
         tag_b = 'tag_b'
 
@@ -70,8 +70,8 @@ class TestPicklePersister(TestCaseWithLoop):
     def test_get_process_checkpoints(self):
         """
         """
-        process_a = self.loop.create(ProcessWithCheckpoint)
-        process_b = self.loop.create(ProcessWithCheckpoint)
+        process_a = ProcessWithCheckpoint()
+        process_b = ProcessWithCheckpoint()
 
         checkpoint_a1 = PersistedCheckpoint(process_a.pid, '1')
         checkpoint_a2 = PersistedCheckpoint(process_a.pid, '2')
@@ -94,8 +94,8 @@ class TestPicklePersister(TestCaseWithLoop):
     def test_delete_process_checkpoints(self):
         """
         """
-        process_a = self.loop.create(ProcessWithCheckpoint)
-        process_b = self.loop.create(ProcessWithCheckpoint)
+        process_a = ProcessWithCheckpoint()
+        process_b = ProcessWithCheckpoint()
 
         checkpoint_a1 = PersistedCheckpoint(process_a.pid, '1')
         checkpoint_a2 = PersistedCheckpoint(process_a.pid, '2')
@@ -124,8 +124,8 @@ class TestPicklePersister(TestCaseWithLoop):
     def test_delete_checkpoint(self):
         """
         """
-        process_a = self.loop.create(ProcessWithCheckpoint)
-        process_b = self.loop.create(ProcessWithCheckpoint)
+        process_a = ProcessWithCheckpoint()
+        process_b = ProcessWithCheckpoint()
 
         checkpoint_a1 = PersistedCheckpoint(process_a.pid, '1')
         checkpoint_a2 = PersistedCheckpoint(process_a.pid, '2')

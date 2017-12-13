@@ -2,10 +2,20 @@
 Keep track of the per-thread call stack of processes.
 """
 
+import contextlib
 import threading
 
 # Use thread-local storage for the stack
 _thread_local = threading.local()
+
+
+@contextlib.contextmanager
+def in_stack(process):
+    push(process)
+    try:
+        yield
+    finally:
+        pop(process)
 
 
 def top():

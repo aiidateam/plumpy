@@ -6,7 +6,6 @@ import copy
 import logging
 import plum
 import time
-import tornado.concurrent
 import uuid
 
 from future.utils import with_metaclass
@@ -18,6 +17,7 @@ from plum.port import _NULL
 from . import events
 from . import futures
 from . import base
+from . import stack
 from . import utils
 
 __all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
@@ -82,7 +82,8 @@ class Running(base.Running):
     def _run(self):
         # Guard, in case we left the state before the callback was actioned
         if self.in_state:
-            super(Running, self)._run()
+            with stack.in_stack(self.process):
+                super(Running, self)._run()
 
 
 class Executor(ProcessListener):
@@ -415,6 +416,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
     def on_finished(self, result):
         super(Process, self).on_finished(result)
+        self._check_outputs()
         self.future().set_result(result)
         self._fire_event(ProcessListener.on_process_finished, result)
 
@@ -548,13 +550,6 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         if body is not None:
             body_.update(body)
         self.send_message(subject, to=to, body=body_)
-
-    def _terminate(self):
-        self._call_with_super_check(self.on_terminate)
-
-    def on_done(self, result):
-        super(Process, self).on_done(result)
-        self._check_outputs()
 
     # endregion
 

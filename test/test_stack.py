@@ -1,7 +1,6 @@
 from test.util import TestCase
 import plum
 import plum.stack as stack
-from . import util
 
 
 class StackTest(plum.Process):

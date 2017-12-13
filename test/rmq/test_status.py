@@ -19,7 +19,8 @@ from plum.wait_ons import run_until
 from .. import util
 
 
-@unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
+# @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
+@unittest.skip("Refactoring RMQ support")
 class TestStatusRequesterAndProvider(util.TestCaseWithLoop):
     def setUp(self):
         super(TestStatusRequesterAndProvider, self).setUp()
@@ -58,7 +59,8 @@ class TestStatusRequesterAndProvider(util.TestCaseWithLoop):
         self.assertSetEqual(set(procs_info.keys()), {p.pid for p in procs})
 
 
-@unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
+# @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
+@unittest.skip("Refactoring RMQ support")
 class TestStatusProvider(util.TestCaseWithLoop):
     def setUp(self):
         super(TestStatusProvider, self).setUp()
