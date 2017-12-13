@@ -1,3 +1,4 @@
+from tornado import ioloop
 import logging
 from .base import *
 from .events import *
@@ -8,9 +9,9 @@ from .utils import *
 from . import persistence
 
 __all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
-           utils.__all__ + futures.__all__)
+           utils.__all__ + futures.__all__ + base.__all__)
 
-PersistableEventLoop = events.ProcessEventLoop
+PersistableEventLoop = ioloop
 Bundle = persistence.Bundle
 
 
