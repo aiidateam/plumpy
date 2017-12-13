@@ -1,5 +1,5 @@
-from util import TestCase
-from plum.util import AttributesFrozendict
+from .util import TestCase
+from plum.utils import AttributesFrozendict
 
 
 class TestAttributesFrozendict(TestCase):

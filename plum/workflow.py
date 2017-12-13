@@ -9,10 +9,13 @@ value is passed to all of them when the workflow starts.
 
 from abc import ABCMeta
 import threading
+
+from future.utils import with_metaclass
+
 from plum.port import DynamicOutputPort
 from plum.process import Process, ProcessSpec
 from plum.process_listener import ProcessListener
-import plum.util as util
+import plum.utils as util
 
 
 class ProcessLink(object):
@@ -43,8 +46,7 @@ class ProcessLink(object):
             self.sink_process, self.sink_port)
 
 
-class WorkflowListener(object):
-    __metaclass__ = ABCMeta
+class WorkflowListener(with_metaclass(ABCMeta, object)):
 
     def on_workflow_starting(self, workflow):
         """
@@ -115,8 +117,7 @@ class WorkflowListener(object):
         pass
 
 
-class WorkflowSpec(ProcessSpec):
-    __metaclass__ = ABCMeta
+class WorkflowSpec(with_metaclass(ABCMeta, ProcessSpec)):
 
     def __init__(self):
         super(WorkflowSpec, self).__init__()
@@ -141,14 +142,14 @@ class WorkflowSpec(ProcessSpec):
 
     def exposed_inputs(self, process_name):
         proc = self.get_process(process_name)
-        for name, port in proc.spec().raw_inputs.iteritems():
+        for name, port in proc.spec().raw_inputs.items():
             self.input_port(name, port)
             self.link(":{}".format(name),
                       "{}:{}".format(process_name, name))
 
     def exposed_outputs(self, process_name):
         proc = self.get_process(process_name)
-        for name, port in proc.spec().outputs.iteritems():
+        for name, port in proc.spec().outputs.items():
             self.output_port(name, port)
             self.link("{}:{}".format(process_name, name),
                       ":{}".format(name))
@@ -205,8 +206,7 @@ class WorkflowSpec(ProcessSpec):
         return link
 
 
-class Workflow(Process, ProcessListener):
-    __metaclass__ = ABCMeta
+class Workflow(with_metaclass(ABCMeta, Process, ProcessListener)):
 
     # Static class stuff ######################
     _spec_type = WorkflowSpec
@@ -222,7 +222,7 @@ class Workflow(Process, ProcessListener):
         self._wait_event = None
 
         # Create all our subprocess classes
-        for name, proc_class in self.spec().processes.iteritems():
+        for name, proc_class in self.spec().processes.items():
             proc = proc_class.new()
             proc.add_process_listener(self)
             self._process_instances[name] = proc
@@ -279,7 +279,7 @@ class Workflow(Process, ProcessListener):
 
         self._wait_event = threading.Event()
 
-        for proc in self._process_instances.itervalues():
+        for proc in self._process_instances.values():
             try:
                 inputs = self._generate_inputs_for(proc)
                 self._launch_subprocess(proc, inputs)
@@ -291,13 +291,13 @@ class Workflow(Process, ProcessListener):
         self._wait_event = None
 
     def get_local_name(self, process):
-        for name, proc in self._process_instances.iteritems():
+        for name, proc in self._process_instances.items():
             if process == proc:
                 return name
         raise ValueError("Process not in workflow")
 
     def _initialise_inputs(self, **kwargs):
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             try:
                 # Push the input value to the links
                 link = self.spec().get_link(":{}".format(key))

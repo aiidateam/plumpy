@@ -10,15 +10,17 @@ try:
     _HAS_PIKA = True
 except ImportError:
     _HAS_PIKA = False
+import apricotpy.persistable
 import uuid
-from plum.process_controller import ProcessController
+
 from plum.test_utils import WaitForSignalProcess
 from plum.process import ProcessState
-from plum.wait_ons import wait_until
+from plum.wait_ons import run_until
+from .. import util
 
 
 @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
-class TestStatusRequesterAndProvider(TestCase):
+class TestStatusRequesterAndProvider(util.TestCaseWithLoop):
     def setUp(self):
         super(TestStatusRequesterAndProvider, self).setUp()
 
@@ -28,48 +30,36 @@ class TestStatusRequesterAndProvider(TestCase):
         try:
             self._connection = pika.BlockingConnection()
         except pika.exceptions.ConnectionClosed:
-            self.fail("Couldn't open connection.  Make sure _rmq server is running")
+            self.fail("Couldn't open connection.  Make sure rmq server is running")
 
         exchange = "{}.{}.status_request".format(self.__class__.__name__, uuid.uuid4())
-        self.requester = ProcessStatusRequester(self._connection, exchange=exchange)
-        self.controller = ProcessController()
-        self.provider = ProcessStatusSubscriber(
-            self._connection, exchange=exchange, process_controller=self.controller)
+
+        self.requester = self.loop.create(ProcessStatusRequester, self._connection, exchange=exchange)
+        self.subscriber = self.loop.create(ProcessStatusSubscriber, self._connection, exchange=exchange)
 
     def tearDown(self):
-        self.controller.remove_all(timeout=10.)
-        self.assertEqual(self.controller.get_num_processes(), 0, "Failed to remove all processes")
         super(TestStatusRequesterAndProvider, self).tearDown()
         self._connection.close()
 
     def test_request(self):
         procs = []
-        for i in range(0, 10):
-            p = WaitForSignalProcess.new()
-            procs.append(p)
-            self.controller.insert_and_play(p)
+        for i in range(10):
+            procs.append(self.loop.create(WaitForSignalProcess))
 
-        responses = self._send_request_poll_response(0.2)
+        run_until(procs, ProcessState.WAITING, self.loop)
+
+        future = self.requester.send_request(timeout=0.1)
+        self.loop.run_until_complete(future)
+
+        responses = future.result()
         self.assertEqual(len(responses), 1)
         procs_info = responses[0][status.PROCS_KEY]
         self.assertEqual(len(procs_info), len(procs))
         self.assertSetEqual(set(procs_info.keys()), {p.pid for p in procs})
 
-        self.controller.remove_all(timeout=10.)
-        self.assertEqual(self.controller.get_num_processes(), 0, "Failed to abort all processes")
-
-        responses = self._send_request_poll_response(0.2)
-        self.assertEqual(len(responses), 1)
-        self.assertEqual(len(responses[0][status.PROCS_KEY]), 0)
-
-    def _send_request_poll_response(self, timeout):
-        self.requester.send_request()
-        self.provider.poll(timeout)
-        return self.requester.poll_response(timeout=timeout)
-
 
 @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
-class TestStatusProvider(TestCase):
+class TestStatusProvider(util.TestCaseWithLoop):
     def setUp(self):
         super(TestStatusProvider, self).setUp()
         self._response = None
@@ -83,24 +73,17 @@ class TestStatusProvider(TestCase):
         self.channel = self._connection.channel()
 
         # Set up the request exchange
-        self.request_exchange = '{}.{}.task_control'.format(
-            self.__class__, uuid.uuid4())
-        self.channel.exchange_declare(exchange=self.request_exchange, type='fanout')
+        self.request_exchange = '{}.{}.task_control'.format(self.__class__, uuid.uuid4())
+        self.channel.exchange_declare(exchange=self.request_exchange, exchange_type='fanout')
 
         # Set up the response queue
         result = self.channel.queue_declare(exclusive=True)
         self.response_queue = result.method.queue
-        self.channel.basic_consume(
-            self._on_response, no_ack=True, queue=self.response_queue)
+        self.channel.basic_consume(self._on_response, no_ack=True, queue=self.response_queue)
 
-        self.controller = ProcessController()
-        self.provider = ProcessStatusSubscriber(
-            self._connection, exchange=self.request_exchange,
-            process_controller=self.controller)
+        self.subscriber = self.loop.create(ProcessStatusSubscriber, self._connection, exchange=self.request_exchange)
 
     def tearDown(self):
-        self.controller.abort_all(timeout=10.)
-        self.assertEqual(self.controller.get_num_processes(), 0, "Failed to abort all processes")
         super(TestStatusProvider, self).tearDown()
         self.channel.close()
         self._connection.close()
@@ -111,28 +94,20 @@ class TestStatusProvider(TestCase):
 
     def test_status(self):
         procs = []
-        for i in range(0, 20):
-            p = WaitForSignalProcess.new()
-            procs.append(p)
-            self.controller.insert_and_play(p)
+        for _ in range(20):
+            procs.append(self.loop.create(WaitForSignalProcess))
 
-        self.assertTrue(wait_until(procs, ProcessState.WAITING, timeout=2.))
+        run_until(procs, ProcessState.WAITING, self.loop)
 
         procs_dict = status_decode(self._send_and_get())[status.PROCS_KEY]
         self.assertEqual(len(procs_dict), len(procs))
-        self.assertSetEqual(
-            set([p.pid for p in procs]),
-            set(procs_dict.keys())
-        )
+        self.assertSetEqual(set([p.pid for p in procs]), set(procs_dict.keys()))
 
-        playing = set([entry['playing'] for entry in procs_dict.itervalues()])
-        self.assertSetEqual(playing, {True})
+        # Check they are all waiting on the same thing
+        waiting_on = set([entry['waiting_on'] for entry in procs_dict.values()])
+        self.assertSetEqual(waiting_on, {str(procs[0].get_waiting_on())})
 
-        self.assertTrue(
-            self.controller.abort_all(timeout=5.),
-            "Couldn't abort all processes in timeout")
-
-        self.controller.remove_all()
+        ~apricotpy.persistable.gather([proc.abort() for proc in procs], self.loop)
 
         response = status_decode(self._send_and_get())
         self.assertEqual(len(response[status.PROCS_KEY]), 0)
@@ -143,7 +118,7 @@ class TestStatusProvider(TestCase):
         return self._response
 
     def _send_request(self):
-        self._response = None
+        self._response_future = self.loop.create_future()
         self._corr_id = str(uuid.uuid4())
         self.channel.basic_publish(
             exchange=self.request_exchange, routing_key='',
@@ -153,9 +128,14 @@ class TestStatusProvider(TestCase):
         )
 
     def _get_response(self):
-        self.provider.poll(1)
+        self.loop.call_soon(self._keep_polling)
+        self._response = self.loop.run_until_complete(self._response_future)
+
+    def _keep_polling(self):
         self.channel.connection.process_data_events(time_limit=0.1)
+        if not self._response_future.done():
+            self.loop.call_soon(self._keep_polling)
 
     def _on_response(self, ch, method, props, body):
         if self._corr_id == props.correlation_id:
-            self._response = body
+            self._response_future.set_result(body)

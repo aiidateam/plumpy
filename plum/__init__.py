@@ -1,4 +1,16 @@
 import logging
+from .base import *
+from .events import *
+from .exceptions import *
+from .futures import *
+from .process import *
+from .utils import *
+from . import persistence
+
+__all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
+           utils.__all__ + futures.__all__)
+
+Bundle = persistence.Bundle
 
 
 # Do this se we don't get the "No handlers could be found..." warnings that will be produced

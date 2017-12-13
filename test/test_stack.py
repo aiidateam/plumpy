@@ -1,14 +1,21 @@
 from test.util import TestCase
-import plum.test_utils
+import plum
 import plum.stack as stack
-from plum.thread_executor import async
+from . import util
+
+
+class StackTest(plum.Process):
+    def _run(self):
+        assert len(stack.stack()) == 1
+        assert stack.top() is self
+
+    def total_ancestors(self):
+        try:
+            return 1 + self.inputs.parent.total_ancestors()
+        except AttributeError:
+            return 0
 
 
 class TestStack(TestCase):
     def test_simple(self):
-        p = plum.test_utils.WaitForSignalProcess.new()
-        self.assertEqual(len(stack.stack()), 0)
-        async(p)
-        self.assertEqual(len(stack.stack()), 0)
-        self.assertTrue(p.abort(timeout=2.))
-        self.assertEqual(len(stack.stack()), 0)
+        StackTest().execute()

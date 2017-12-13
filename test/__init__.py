@@ -2,7 +2,7 @@ import logging
 import tempfile
 import os
 
-testfile = os.path.join(tempfile.gettempdir(), 'plum_unittest.log')
+testfile = os.path.join(tempfile.gettempdir(), 'plumpy_unittest.log')
 try:
     os.remove(testfile)
 except OSError:

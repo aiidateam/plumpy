@@ -1,3 +1,10 @@
+__all__ = ['CancelledError']
+
+
+class CancelledError(Exception):
+    pass
+
+
 class ClassNotFoundException(Exception):
     pass
 
@@ -19,4 +26,8 @@ class ProcessFailed(Exception):
 
 
 class Interrupted(Exception):
+    pass
+
+
+class InvalidStateError(Exception):
     pass

@@ -1,9 +1,8 @@
-
-
-from plum.port import InputPort, InputGroupPort, OutputPort,\
+import logging
+from plum.port import InputPort, InputGroupPort, OutputPort, \
     DynamicOutputPort, DynamicInputPort
-from plum._base import LOGGER
-from plum.util import protected
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ProcessSpec(object):
@@ -54,13 +53,13 @@ class ProcessSpec(object):
             desc.append("Inputs")
             desc.append("======")
             desc.extend([p.get_description() for k, p in
-                         sorted(self.inputs.iteritems(), key=lambda x: x[0])])
+                         sorted(self.inputs.items(), key=lambda x: x[0])])
 
         if self.outputs:
             desc.append("Outputs")
             desc.append("=======")
             desc.extend([p.get_description() for k, p in
-                         sorted(self.outputs.iteritems(), key=lambda x: x[0])])
+                         sorted(self.outputs.items(), key=lambda x: x[0])])
 
         return "\n".join(desc)
 
@@ -126,6 +125,7 @@ class ProcessSpec(object):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._inputs.pop(name)
+
     # endregion
 
     # region Outputs
@@ -175,6 +175,7 @@ class ProcessSpec(object):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
         self._outputs.pop(name)
+
     # end region
 
     def validator(self, fn):
@@ -208,14 +209,14 @@ class ProcessSpec(object):
 
         # Check the inputs meet the requirements
         if not self.has_dynamic_input():
-            unexpected = set(inputs.iterkeys()) - set(self.inputs.iterkeys())
+            unexpected = set(inputs.keys()) - set(self.inputs.keys())
             if unexpected:
                 return False, \
                        "Unexpected inputs found: '{}'.  If you want to allow " \
                        "dynamic inputs add dynamic_input() to the spec " \
                        "definition.".format(unexpected)
 
-        for name, port in self.inputs.iteritems():
+        for name, port in self.inputs.items():
             valid, msg = port.validate(inputs.get(name, None))
             if not valid:
                 return False, msg

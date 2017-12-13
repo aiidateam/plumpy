@@ -1,15 +1,14 @@
-from plum.persistence.bundle import Bundle
-from plum.process import Process, ProcessState
-from plum.process_monitor import MONITOR
-from plum.thread_executor import ThreadExecutor
-from plum.test_utils import DummyProcess, ExceptionProcess, TwoCheckpoint, \
-    DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, check_process_against_snapshots, \
-    WaitForSignalProcess, Barrier
+import apricotpy
+import plum
+from plum import Process, ProcessState
+from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, \
+    check_process_against_snapshots, \
+    WaitForSignalProcess
 from plum.test_utils import ProcessListenerTester
-from plum.util import override
-from plum.persistence.util import save_on_next_transition
-from plum.wait_ons import wait_until
-from util import TestCase
+from plum import process
+import unittest
+
+from . import util
 
 
 class ForgetToCallParent(Process):
@@ -18,55 +17,36 @@ class ForgetToCallParent(Process):
         super(ForgetToCallParent, cls).define(spec)
         spec.input('forget_on', valid_type=str)
 
-    @override
     def _run(self, forget_on):
         pass
 
-    @override
-    def on_start(self):
-        if self.inputs.forget_on != 'start':
-            super(ForgetToCallParent, self).on_start()
+    def on_created(self):
+        if self.inputs.forget_on != 'created':
+            super(ForgetToCallParent, self).on_created()
 
-    @override
-    def on_run(self):
-        if self.inputs.forget_on != 'run':
-            super(ForgetToCallParent, self).on_start()
+    def on_running(self):
+        if self.inputs.forget_on != 'running':
+            super(ForgetToCallParent, self).on_running()
 
-    @override
-    def on_fail(self):
-        if self.inputs.forget_on != 'fail':
-            super(ForgetToCallParent, self).on_start()
+    def on_failed(self, exception):
+        if self.inputs.forget_on != 'failed':
+            super(ForgetToCallParent, self).on_failed(exception)
 
-    @override
-    def on_finish(self):
-        if self.inputs.forget_on != 'finish':
-            super(ForgetToCallParent, self).on_start()
+    def on_finished(self, result):
+        if self.inputs.forget_on != 'finished':
+            super(ForgetToCallParent, self).on_finished(result)
 
-    @override
-    def on_stop(self):
-        if self.inputs.forget_on != 'stop':
-            super(ForgetToCallParent, self).on_start()
+    def on_cancelled(self, msg):
+        if self.inputs.forget_on != 'cancelled':
+            super(ForgetToCallParent, self).on_cancelled(msg)
 
 
-class TestProcess(TestCase):
-    def setUp(self):
-        super(TestProcess, self).setUp()
-
-        self.events_tester = ProcessListenerTester()
-        self.proc = DummyProcessWithOutput.new()
-        self.proc.add_process_listener(self.events_tester)
-        self.executor = ThreadExecutor()
-
-    def tearDown(self):
-        self.proc.remove_process_listener(self.events_tester)
-        self.executor.shutdown()
-        super(TestProcess, self).tearDown()
-
+class TestProcess(util.TestCaseWithLoop):
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
         """
-        dp = DummyProcess.new()
+        dp = DummyProcess()
         self.assertIsNot(DummyProcess.spec(), Process.spec())
         self.assertIs(dp.spec(), DummyProcess.spec())
 
@@ -75,7 +55,7 @@ class TestProcess(TestCase):
 
         self.assertIsNot(Proc.spec(), Process.spec())
         self.assertIsNot(Proc.spec(), DummyProcess.spec())
-        p = Proc.new()
+        p = Proc()
         self.assertIs(p.spec(), Proc.spec())
 
     def test_dynamic_inputs(self):
@@ -94,8 +74,10 @@ class TestProcess(TestCase):
                 pass
 
         with self.assertRaises(ValueError):
-            NoDynamic.run(a=5)
-        WithDynamic.run(a=5)
+            NoDynamic(inputs={'a': 5}).play()
+
+        proc = WithDynamic(inputs={'a': 5})
+        proc.execute()
 
     def test_inputs(self):
         class Proc(Process):
@@ -107,7 +89,7 @@ class TestProcess(TestCase):
             def _run(self, a):
                 pass
 
-        p = Proc.new({'a': 5})
+        p = Proc({'a': 5})
 
         # Check that we can access the inputs after creating
         self.assertEqual(p.raw_inputs.a, 5)
@@ -119,51 +101,68 @@ class TestProcess(TestCase):
             @classmethod
             def define(cls, spec):
                 super(Proc, cls).define(spec)
-                spec.input("input", default=5, required=False)
+                spec.input('input', default=5, required=False)
 
         # Supply a value
-        p = Proc.new(inputs={'input': 2})
+        p = Proc(inputs={'input': 2}, loop=self.loop)
         self.assertEqual(p.inputs['input'], 2)
 
         # Don't supply, use default
-        p = Proc.new()
+        p = Proc()
         self.assertEqual(p.inputs['input'], 5)
 
-    def test_run(self):
-        p = DummyProcessWithOutput.new()
-        p.play()
+    def test_inputs_default_that_evaluate_to_false(self):
+        for def_val in (True, False, 0, 1):
+            class Proc(DummyProcess):
+                @classmethod
+                def define(cls, spec):
+                    super(Proc, cls).define(spec)
+                    spec.input('input', default=def_val)
 
-        self.assertTrue(p.has_finished())
-        self.assertEqual(p.state, ProcessState.STOPPED)
-        self.assertEqual(p.outputs, {'default': 5})
+            # Don't supply, use default
+            p = Proc()
+            self.assertIn('input', p.inputs)
+            self.assertEqual(p.inputs['input'], def_val)
+
+    def test_execute(self):
+        proc = DummyProcessWithOutput()
+        proc.execute()
+
+        self.assertTrue(proc.has_finished())
+        self.assertEqual(proc.state, ProcessState.FINISHED)
+        self.assertEqual(proc.outputs, {'default': 5})
 
     def test_run_from_class(self):
         # Test running through class method
-        results = DummyProcessWithOutput.run()
+        proc = DummyProcessWithOutput()
+        proc.execute()
+        results = proc.outputs
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
-        for event in ('start', 'run', 'finish', 'stop'):
-            with self.assertRaises(AssertionError):
-                ForgetToCallParent.run(forget_on=event)
+        for event in ('created', 'running', 'finished'):
+            with self.assertRaises(plum.TransitionFailed):
+                proc = ForgetToCallParent(inputs={'forget_on': event})
+                proc.execute()
 
     def test_pid(self):
         # Test auto generation of pid
-        p = DummyProcessWithOutput.new()
+        p = DummyProcessWithOutput()
         self.assertIsNotNone(p.pid)
 
         # Test using integer as pid
-        p = DummyProcessWithOutput.new(pid=5)
+        p = DummyProcessWithOutput(pid=5)
         self.assertEquals(p.pid, 5)
 
         # Test using string as pid
-        p = DummyProcessWithOutput.new(pid='a')
+        p = DummyProcessWithOutput(pid='a')
         self.assertEquals(p.pid, 'a')
 
     def test_exception(self):
-        proc = ExceptionProcess.new()
+        proc = ExceptionProcess()
+        proc.play()
         with self.assertRaises(RuntimeError):
-            proc.play()
+            proc.execute()
         self.assertEqual(proc.state, ProcessState.FAILED)
 
     def test_get_description(self):
@@ -183,50 +182,54 @@ class TestProcess(TestCase):
         Check that the bundle after just creating a process is as we expect
         :return:
         """
-        proc = DummyProcessWithOutput.new()
-        b = Bundle()
-        proc.save_instance_state(b)
-        self.assertIsNone(b.get('inputs', None))
-        self.assertEqual(len(b['outputs']), 0)
+        proc = DummyProcessWithOutput()
+        b = plum.Bundle(proc)
+
+        self.assertIsNone(b.get(process.BundleKeys.INPUTS, None))
+        self.assertEqual(len(b[process.BundleKeys.OUTPUTS]), 0)
 
     def test_instance_state(self):
-        proc = DummyProcessWithOutput.new()
+        BundleKeys = process.BundleKeys
+        proc = DummyProcessWithOutput()
 
         saver = ProcessSaver(proc)
         proc.play()
+        proc.execute()
 
-        for info, outputs in zip(saver.snapshots, saver.outputs):
-            state, bundle = info
+        for bundle, outputs in zip(saver.snapshots, saver.outputs):
             # Check that it is a copy
-            self.assertIsNot(
-                outputs, bundle[Process.BundleKeys.OUTPUTS.value].get_dict())
+            self.assertIsNot(outputs, bundle[BundleKeys.OUTPUTS])
             # Check the contents are the same
-            self.assertEqual(
-                outputs, bundle[Process.BundleKeys.OUTPUTS.value].get_dict())
+            self.assertEqual(outputs, bundle[BundleKeys.OUTPUTS])
 
         self.assertIsNot(
-            proc.outputs, saver.snapshots[-1][1][Process.BundleKeys.OUTPUTS.value])
+            proc.outputs, saver.snapshots[-1][BundleKeys.OUTPUTS]
+        )
 
     def test_saving_each_step(self):
-        for ProcClass in TEST_PROCESSES:
-            proc = ProcClass.new()
-
+        for proc_class in TEST_PROCESSES:
+            proc = proc_class()
             saver = ProcessSaver(proc)
-            proc.play()
+            proc.execute()
 
-            self.assertEqual(proc.state, ProcessState.STOPPED)
-            self.assertTrue(check_process_against_snapshots(ProcClass, saver.snapshots))
+            self.assertEqual(proc.state, ProcessState.FINISHED)
+            self.assertTrue(
+                check_process_against_snapshots(self.loop, proc_class, saver.snapshots)
+            )
 
     def test_saving_each_step_interleaved(self):
         for ProcClass in TEST_PROCESSES:
-            proc = ProcClass.new()
+            proc = ProcClass()
+            proc.play()
             ps = ProcessSaver(proc)
             try:
-                proc.play()
+                self.loop.run_until_complete(util.HansKlok(proc))
             except BaseException:
                 pass
 
-            self.assertTrue(check_process_against_snapshots(ProcClass, ps.snapshots))
+            self.assertTrue(
+                check_process_against_snapshots(self.loop, ProcClass, ps.snapshots)
+            )
 
     def test_logging(self):
         class LoggerTester(Process):
@@ -234,154 +237,107 @@ class TestProcess(TestCase):
                 self.logger.info("Test")
 
         # TODO: Test giving a custom logger to see if it gets used
-        p = LoggerTester.new()
-        p.play()
+        proc = LoggerTester()
+        proc.execute()
 
-    def test_abort(self):
-        proc = DummyProcess.new()
-        proc.abort()
-        self.assertTrue(proc.has_aborted())
-        self.assertEqual(proc.state, ProcessState.STOPPED)
+    def test_cancel(self):
+        proc = DummyProcess(loop=self.loop)
+
+        proc.cancel('Farewell!')
+        self.assertTrue(proc.cancelled())
+        self.assertEqual(proc.cancelled_msg(), 'Farewell!')
+        self.assertEqual(proc.state, ProcessState.CANCELLED)
 
     def test_wait_continue(self):
-        p = WaitForSignalProcess.new()
-        self.executor.play(p)
-        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=1.))
-        p.continue_()
-        self.assertTrue(p.wait(timeout=2.))
-        self.assertTrue(p.has_finished())
+        proc = WaitForSignalProcess()
+        # Wait - Execute the process and wait until it is waiting
+        proc.execute(True)
+        print("GOT HERE")
+        proc.resume()
+        proc.execute(True)
 
-    def test_wait_pause_continue_play(self):
-        p = WaitForSignalProcess.new()
-
-        # Play the process and wait until it is waiting
-        self.executor.play(p)
-
-        # Wait
-        self.assertTrue(wait_until(p, ProcessState.WAITING, 1.))
-
-        # Pause
-        self.assertTrue(p.pause(timeout=1.))
-
-        # Continue
-        p.continue_()
-
-        # Play
-        p.play()
-
-        self.assertTrue(p.wait(timeout=1.))
-        self.assertEqual(p.state, ProcessState.STOPPED)
-
-    def test_wait_pause_play_continue(self):
-        p = WaitForSignalProcess.new()
-
-        fut = self.executor.play(p)
-
-        # Wait
-        self.assertTrue(wait_until(p, ProcessState.WAITING, 1.))
-        self.assertTrue(p.is_playing())
-
-        # Pause
-        self.assertTrue(p.pause(timeout=1.))
-        self.assertFalse(p.is_playing())
-
-        # Play
-        fut.play()
-        self.assertEqual(p.state, ProcessState.WAITING)
-
-        # Continue
-        p.continue_()
-        self.assertTrue(wait_until(p, ProcessState.STOPPED), 1.)
+        # Check it's done
+        self.assertEqual(proc.state, ProcessState.FINISHED)
+        self.assertTrue(proc.has_finished())
 
     def test_exc_info(self):
-        p = ExceptionProcess.new()
+        proc = ExceptionProcess()
         try:
-            p.play()
-        except BaseException:
-            import sys
-            exc_info = sys.exc_info()
-            p_exc_info = p.get_exc_info()
-            self.assertEqual(p_exc_info[0], exc_info[0])
-            self.assertEqual(p_exc_info[1], exc_info[1])
+            proc.execute()
+        except RuntimeError as e:
+            self.assertEqual(proc.exception(), e)
 
-    def test_exception_in_on_playing(self):
-        class P(DummyProcess):
-            def on_playing(self):
-                raise RuntimeError("Cope with this")
-
-        p = P.new()
-        with self.assertRaises(RuntimeError):
-            p.play()
-
-    def test_exception_in_done_playing(self):
-        class P(DummyProcess):
-            def on_done_playing(self):
-                raise RuntimeError("Cope with this")
-
-        p = P.new()
-        with self.assertRaises(RuntimeError):
-            p.play()
-
+    @unittest.skip("TODO: enable")
     def test_restart(self):
-        p = _RestartProcess.new()
-
-        future = self.executor.play(p)
-        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
+        proc = _RestartProcess()
+        proc.execute(True)
 
         # Save the state of the process
-        bundle = Bundle()
-        p.save_instance_state(bundle)
-        self.assertTrue(future.abort(timeout=2.))
+        saved_state = plum.Bundle(proc)
 
         # Load a process from the saved state
-        p = _RestartProcess.create_from(bundle)
-        self.assertEqual(p.state, ProcessState.WAITING)
+        proc = saved_state.unbundle()
+        self.assertEqual(proc.state, ProcessState.WAITING)
 
         # Now play it
-        future = self.executor.play(p)
-        p.continue_()
-        self.assertEqual(future.result(timeout=1.0), {'finished': True})
+        proc.resume()
+        result = proc.execute(True)
+        self.assertEqual(proc.outputs, {'finished': True})
 
-    def test_wait(self):
-        p = DummyProcess.new()
-        self.assertTrue(p.wait(timeout=2.), "Not running process didn't return from wait")
-        self.executor.play(p)
-        self.assertTrue(p.wait(timeout=2.), "Process failed to return from wait when done")
+    def test_run_done(self):
+        proc = DummyProcess()
+        proc.execute()
+        self.assertTrue(proc.done())
 
-    def test_wait_pause_play(self):
-        p = WaitForSignalProcess.new()
-        self.executor.play(p)
-
-        # Wait
-        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
-
-        # Pause
-        self.assertTrue(p.pause(timeout=1.))
-
-        # Play
-        self.executor.play(p)
-        self.assertTrue(wait_until(p, ProcessState.WAITING, timeout=2.))
-
-    def test_pause_play(self):
+    def test_wait_pause_play_resume(self):
         """
-        Pausing a process that is not playing should have no effect and next 
-        time it is played it should continue normally.
+        Test that if you pause a process that and its awaitable finishes that it
+        completes correctly when played again.
         """
-        p = DummyProcess.new()
-        self.assertTrue(p.pause(timeout=1.))
-        p.play()
-        self.assertEqual(p.state, ProcessState.STOPPED)
+        proc = WaitForSignalProcess()
 
-    def test_play_terminated(self):
-        p = DummyProcess()
-        p.play()
-        self.assertTrue(p.has_terminated())
-        p.play()
+        # Wait - Run the process and wait until it is waiting
+        proc.execute(True)
+
+        proc.pause()
+        self.assertEqual(proc.state, ProcessState.PAUSED)
+        proc.play()
+        self.assertEqual(proc.state, ProcessState.WAITING)
+        proc.resume()
+
+        # Run
+        proc.execute(True)
+
+        # Check it's done
+        self.assertEqual(proc.state, ProcessState.FINISHED)
+        self.assertTrue(proc.has_finished())
+
+    def test_wait_save_continue(self):
+        """ Test that process saved while in WAITING state restarts correctly when loaded """
+        proc = WaitForSignalProcess()
+        proc.play()
+
+        # Wait - Run the process until it enters the WAITING state
+        proc.execute(True)
+
+        saved_state = plum.Bundle(proc)
+
+        # Run the process to the end
+        proc.resume()
+        result = proc.execute()
+
+        # Load from saved state and run again
+        proc = saved_state.unbundle(self.loop)
+        proc.resume()
+        result2 = proc.execute()
+
+        # Check results match
+        self.assertEqual(result, result2)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
-        new_bundle = Bundle()
+        new_bundle = apricotpy.Bundle()
         proc.save_instance_state(new_bundle)
         self.assertEqual(snapshot.bundle, new_bundle,
                          "Bundle mismatch with process class {}\n"
@@ -396,51 +352,36 @@ class TestProcess(TestCase):
                              proc.__class__, snapshot.outputs, proc.outputs))
 
 
-class TestProcessEvents(TestCase):
+class TestProcessEvents(util.TestCaseWithLoop):
     def setUp(self):
         super(TestProcessEvents, self).setUp()
-
         self.events_tester = ProcessListenerTester()
-        self.proc = DummyProcessWithOutput.new()
+        self.proc = DummyProcessWithOutput()
         self.proc.add_process_listener(self.events_tester)
+        self.proc.play()
 
     def tearDown(self):
         self.proc.remove_process_listener(self.events_tester)
         super(TestProcessEvents, self).tearDown()
 
-    def test_on_play(self):
-        self.proc.play()
-        self.assertTrue(self.events_tester.play)
+    def test_basic_events(self):
+        self.proc.execute()
+        for evt in ['running', 'output_emitted', 'finished']:
+            self.assertIn(evt, self.events_tester.called)
 
-    def test_on_start(self):
-        self.proc.play()
-        self.assertTrue(self.events_tester.start)
+    def test_cancelled(self):
+        self.proc.cancel()
+        self.assertTrue(self.proc.cancelled())
+        self.assertIn('cancelled', self.events_tester.called)
 
-    def test_on_run(self):
-        self.proc.play()
-        self.assertTrue(self.events_tester.run)
+    def test_failed(self):
+        self.proc.fail(RuntimeError('See ya later suckers'))
+        self.assertIsNotNone(self.proc.exception())
+        self.assertIn('failed', self.events_tester.called)
 
-    def test_on_output_emitted(self):
-        self.proc.play()
-        self.assertTrue(self.events_tester.emitted)
-
-    def test_on_finished(self):
-        self.proc.play()
-        self.assertTrue(self.events_tester.finish)
-
-    def test_on_done_playing(self):
-        self.proc.play()
-        self.assertTrue(self.events_tester.done_playing)
-
-    def test_events_run_through(self):
-        self.proc.play()
-        self.assertTrue(self.events_tester.play)
-        self.assertTrue(self.events_tester.start)
-        self.assertTrue(self.events_tester.run)
-        self.assertTrue(self.events_tester.emitted)
-        self.assertTrue(self.events_tester.finish)
-        self.assertTrue(self.events_tester.stop)
-        self.assertTrue(self.events_tester.done_playing)
+    def test_paused(self):
+        self.proc.pause()
+        self.assertIn('paused', self.events_tester.called)
 
 
 class _RestartProcess(WaitForSignalProcess):
@@ -449,5 +390,5 @@ class _RestartProcess(WaitForSignalProcess):
         super(_RestartProcess, cls).define(spec)
         spec.dynamic_output()
 
-    def finish(self, wait_on):
+    def last_step(self):
         self.out("finished", True)

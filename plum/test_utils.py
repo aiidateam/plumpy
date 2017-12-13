@@ -1,18 +1,13 @@
+import collections
 from collections import namedtuple
 
-from plum.persistence.bundle import Bundle
+import plum
+from plum import process
 from plum.process import Process
 from plum.process_listener import ProcessListener
-from plum.util import override
-from plum.wait_ons import Checkpoint, Barrier
+from plum.utils import override
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
-
-
-def create_snapshot(proc):
-    b = Bundle()
-    proc.save_instance_state(b)
-    return Snapshot(proc.state, b, proc.outputs.copy())
 
 
 class DummyProcess(Process):
@@ -29,7 +24,6 @@ class DummyProcessWithOutput(Process):
     @classmethod
     def define(cls, spec):
         super(DummyProcessWithOutput, cls).define(spec)
-
         spec.dynamic_input()
         spec.dynamic_output()
 
@@ -46,59 +40,35 @@ class KeyboardInterruptProc(Process):
 class ProcessWithCheckpoint(Process):
     @override
     def _run(self):
-        return Checkpoint(), self.finish
+        return plum.Continue(self.last_step)
 
-    def finish(self, wait_on):
+    def last_step(self):
         pass
 
 
 class WaitForSignalProcess(Process):
-    BARRIER = 'barrier'
-
-    def __init__(self, inputs=None, pid=None, logger=None):
-        super(WaitForSignalProcess, self).__init__(inputs, pid, logger)
-        self._barrier = Barrier()
-
-    def load_instance_state(self, saved_state, logger=None):
-        # Have to create the barrier before because create_wait_on will be called by
-        # the super call which returns out barrier
-        self._barrier = Barrier.create_from(saved_state[self.BARRIER])
-        super(WaitForSignalProcess, self).load_instance_state(saved_state, logger)
-
-    def save_instance_state(self, bundle):
-        super(WaitForSignalProcess, self).save_instance_state(bundle)
-        bundle[self.BARRIER] = Bundle()
-        self._barrier.save_instance_state(bundle[self.BARRIER])
-
     @override
     def _run(self):
-        return self._barrier, self.finish
+        return plum.Wait(self.last_step)
 
-    def finish(self, wait_on):
+    def last_step(self):
         pass
-
-    def continue_(self):
-        self._barrier.open()
-
-    def create_wait_on(self, saved_state, callback):
-        return self._barrier
 
 
 class EventsTesterMixin(object):
-    EVENTS = ["create", "run", "resume", "finish", "emitted", "wait",
-              "stop"]
+    EVENTS = ["create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate"]
 
     called_events = []
 
     @classmethod
     def called(cls, event):
-        assert event in cls.EVENTS
+        assert event in cls.EVENTS, "Unknown event '{}'".format(event)
         cls.called_events.append(event)
 
-    def __init__(self, inputs=None, pid=None, logger=None):
+    def __init__(self, *args, **kwargs):
         assert isinstance(self, Process), \
             "Mixin has to be used with a type derived from a Process"
-        super(EventsTesterMixin, self).__init__(inputs, pid, logger)
+        super(EventsTesterMixin, self).__init__(*args, **kwargs)
         self.__class__.called_events = []
 
     @override
@@ -137,6 +107,11 @@ class EventsTesterMixin(object):
         super(EventsTesterMixin, self).on_stop()
         self.called('stop')
 
+    @override
+    def on_terminate(self):
+        super(EventsTesterMixin, self).on_terminate()
+        self.called('terminate')
+
 
 class ProcessEventsTester(EventsTesterMixin, Process):
     @classmethod
@@ -150,19 +125,19 @@ class ProcessEventsTester(EventsTesterMixin, Process):
 
 
 class TwoCheckpoint(ProcessEventsTester):
-    def __init__(self, inputs=None, pid=None, logger=None):
-        super(TwoCheckpoint, self).__init__(inputs, pid, logger)
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None):
+        super(TwoCheckpoint, self).__init__(inputs, pid, logger, loop)
         self._last_checkpoint = None
 
     @override
     def _run(self):
         self.out("test", 5)
-        return Checkpoint(), self.middle_step
+        return plum.Continue(self.middle_step)
 
-    def middle_step(self, wait_on):
-        return Checkpoint(), self.finish
+    def middle_step(self, ):
+        return plum.Continue(self.last_step)
 
-    def finish(self, wait_on):
+    def last_step(self):
         pass
 
 
@@ -170,10 +145,10 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
     @override
     def _run(self):
         self.out("test", 5)
-        return Checkpoint(), self.middle_step
+        return plum.Continue(self.middle_step)
 
-    def middle_step(self, wait_on):
-        return Checkpoint(), None
+    def middle_step(self):
+        pass
 
 
 class ExceptionProcess(ProcessEventsTester):
@@ -185,65 +160,37 @@ class ExceptionProcess(ProcessEventsTester):
 
 class TwoCheckpointThenException(TwoCheckpoint):
     @override
-    def finish(self, wait_on):
+    def last_step(self):
         raise RuntimeError("Great scott!")
 
 
 class ProcessListenerTester(ProcessListener):
     def __init__(self):
-        self.play = False
-        self.start = False
-        self.run = False
-        self.continue_ = False
-        self.emitted = False
-        self.finish = False
-        self.stop = False
-        self.done_playing = False
+        self.called = set()
 
-    @override
-    def on_process_playing(self, process):
-        assert isinstance(process, Process)
-        self.play = True
+    def on_process_created(self, process):
+        self.called.add('created')
 
-    @override
-    def on_process_start(self, process):
-        assert isinstance(process, Process)
-        self.start = True
+    def on_process_running(self, process):
+        self.called.add('running')
 
-    @override
-    def on_process_run(self, process):
-        assert isinstance(process, Process)
-        self.run = True
+    def on_process_waiting(self, process, data):
+        self.called.add('waiting')
 
-    @override
+    def on_process_paused(self, process):
+        self.called.add('paused')
+
     def on_output_emitted(self, process, output_port, value, dynamic):
-        assert isinstance(process, Process)
-        self.emitted = True
+        self.called.add('output_emitted')
 
-    @override
-    def on_process_wait(self, process):
-        assert isinstance(process, Process)
-        self.wait = True
+    def on_process_finished(self, process, outputs):
+        self.called.add('finished')
 
-    @override
-    def on_process_continue(self, process, wait_on):
-        assert isinstance(process, Process)
-        self.continue_ = True
+    def on_process_failed(self, process, exception):
+        self.called.add('failed')
 
-    @override
-    def on_process_finish(self, process):
-        assert isinstance(process, Process)
-        self.finish = True
-
-    @override
-    def on_process_stop(self, process):
-        assert isinstance(process, Process)
-        self.stop = True
-
-    @override
-    def on_process_done_playing(self, process):
-        assert isinstance(process, Process)
-        self.done_playing = True
+    def on_process_cancelled(self, process, msg):
+        self.called.add('cancelled')
 
 
 class Saver(object):
@@ -252,9 +199,8 @@ class Saver(object):
         self.outputs = []
 
     def _save(self, p):
-        b = Bundle()
-        p.save_instance_state(b)
-        self.snapshots.append((p.state, b))
+        b = plum.Bundle(p)
+        self.snapshots.append(b)
         self.outputs.append(p.outputs.copy())
 
 
@@ -269,23 +215,27 @@ class ProcessSaver(ProcessListener, Saver):
         p.add_process_listener(self)
 
     @override
-    def on_process_start(self, process):
+    def on_process_running(self, process):
         self._save(process)
 
     @override
-    def on_process_run(self, process):
+    def on_process_waiting(self, process, data):
         self._save(process)
 
     @override
-    def on_process_wait(self, p):
-        self._save(p)
-
-    @override
-    def on_process_finish(self, process):
+    def on_process_paused(self, process):
         self._save(process)
 
     @override
-    def on_process_stop(self, process):
+    def on_process_finished(self, process, outputs):
+        self._save(process)
+
+    @override
+    def on_process_failed(self, process, exception):
+        self._save(process)
+
+    @override
+    def on_process_cancelled(self, process, msg):
         self._save(process)
 
 
@@ -302,7 +252,7 @@ TEST_WAITING_PROCESSES = [
 ]
 
 
-def check_process_against_snapshots(proc_class, snapshots):
+def check_process_against_snapshots(loop, proc_class, snapshots):
     """
     Take the series of snapshots from a Process that executed and run it
     forward from each one.  Check that the subsequent snapshots match.
@@ -311,6 +261,8 @@ def check_process_against_snapshots(proc_class, snapshots):
 
     Return True if they match, False otherwise.
 
+    :param loop: The event loop
+    :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
     :param proc_class: The process class to check
     :type proc_class: :class:`Process`
     :param snapshots: The snapshots taken from from an execution of that
@@ -318,13 +270,14 @@ def check_process_against_snapshots(proc_class, snapshots):
     :return: True if snapshots match False otherwise
     :rtype: bool
     """
-    for i, info in zip(range(0, len(snapshots)), snapshots):
-        loaded = proc_class.create_from(info[1])
+    for i, bundle in zip(range(0, len(snapshots)), snapshots):
+        loaded = bundle.unbundle(loop)
         ps = ProcessSaver(loaded)
         try:
-            loaded.play()
+            loaded.execute()
         except BaseException:
-            pass
+            import traceback
+            traceback.print_exc()
 
         # Now check going backwards until running that the saved states match
         j = 1
@@ -332,7 +285,45 @@ def check_process_against_snapshots(proc_class, snapshots):
             if j >= min(len(snapshots), len(ps.snapshots)):
                 break
 
-            if snapshots[-j] != ps.snapshots[-j]:
-                return False
+            compare_dictionaries(
+                snapshots[-j], ps.snapshots[-j],
+                snapshots[-j], ps.snapshots[-j],
+                exclude={
+                    str(process.BundleKeys.LOOP_CALLBACK),
+                    str(process.BundleKeys.AWAITING),
+                    'CALLBACKS', 'DONE_CALLBACKS', 'SCHEDULED_CALLBACKS', 'PERSISTABLE_ID'
+                })
             j += 1
-        return True
+
+    return True
+
+
+def compare_dictionaries(bundle1, bundle2, dict1, dict2, exclude=None):
+    keys = set(dict1.iterkeys()) & set(dict2.iterkeys())
+    if exclude is not None:
+        keys -= exclude
+
+    for key in keys:
+        if key not in dict1:
+            raise ValueError("Key '{}' in dict 1 but not 2".format(key))
+
+        if key not in dict2:
+            raise ValueError("Key '{}' in dict 2 but not 1".format(key))
+
+        v1 = dict1[key]
+        v2 = dict2[key]
+
+        compare_value(bundle1, bundle2, v1, v2, exclude)
+
+
+def compare_value(bundle1, bundle2, v1, v2, exclude=None):
+    if isinstance(v1, collections.Mapping) and isinstance(v2, collections.Mapping):
+        compare_dictionaries(bundle1, bundle2, v1, v2, exclude)
+    elif isinstance(v1, list) and isinstance(v2, list):
+        for vv1, vv2 in zip(v1, v2):
+            compare_value(bundle1, bundle2, vv1, vv2, exclude)
+    else:
+        if v1 != v2:
+            raise ValueError(
+                "Dict values mismatch for :\n{} != {}".format(v1, v2)
+            )
