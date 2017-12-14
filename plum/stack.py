@@ -19,20 +19,20 @@ def in_stack(process):
 
 
 def top():
-    return stack()[-1]
+    return _stack()[-1]
 
 
 def stack():
-    global _thread_local
-    try:
-        return _thread_local.wf_stack
-    except AttributeError:
-        _thread_local.wf_stack = []
-        return _thread_local.wf_stack
+    """Get an immutable tuple of the stack"""
+    return tuple(_stack())
 
 
 def push(process):
-    stack().append(process)
+    _stack().append(process)
+
+
+def is_empty():
+    return len(_stack()) == 0
 
 
 def pop(process):
@@ -44,6 +44,15 @@ def pop(process):
     :param process: The process instance
     """
     global _thread_local
-
     assert process is top(), "Can't pop a process that is not top of the stack"
-    stack().pop()
+    _stack().pop()
+
+
+def _stack():
+    """Access the private live stack"""
+    global _thread_local
+    try:
+        return _thread_local.wf_stack
+    except AttributeError:
+        _thread_local.wf_stack = []
+        return _thread_local.wf_stack

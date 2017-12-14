@@ -332,7 +332,8 @@ class Cancelled(State):
 class ProcessStateMachine(state_machine.StateMachine):
     """
     CREATED --- RUNNING --- STOPPED (o)
-              /  v   ^     /
+              /  |   ^      /
+             /   v   |     /
       PAUSED --- WAITING---
 
 

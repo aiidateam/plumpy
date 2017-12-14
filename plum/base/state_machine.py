@@ -212,6 +212,10 @@ class StateMachine(object):
         """ We're just about the exit the state in self._state"""
         pass
 
+    def on_terminated(self):
+        """ Called when a terminal state is entered """
+        pass
+
     def transition_to(self, new_state, *args, **kwargs):
         assert not self._transitioning, \
             "Cannot call transition_to when already transitioning state"
@@ -235,11 +239,13 @@ class StateMachine(object):
 
             call_with_super_check(new_state.enter)
             self._state = new_state
+
             self.on_entered()
+            if self._state.is_terminal():
+                self.on_terminated()
         except Exception:
             exc = TransitionFailed(initial_state, new_state, traceback.format_exc())
             self.transition_failed(exc)
-
         finally:
             self._transitioning = False
 

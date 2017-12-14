@@ -7,7 +7,7 @@ import plum.rmq.launch
 import plum.test_utils
 from plum import test_utils
 from test.test_rmq import _HAS_PIKA
-from test.util import TestCase, HansKlok
+from test.util import TestCase
 
 if _HAS_PIKA:
     import pika.exceptions

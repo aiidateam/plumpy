@@ -223,7 +223,7 @@ class TestProcess(util.TestCaseWithLoop):
             proc.play()
             ps = ProcessSaver(proc)
             try:
-                self.loop.run_until_complete(util.HansKlok(proc))
+                proc.execute()
             except BaseException:
                 pass
 
