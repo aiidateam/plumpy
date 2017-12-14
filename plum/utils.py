@@ -154,6 +154,23 @@ class SimpleNamespace(object):
         return self.__dict__ == other.__dict__
 
 
+class AttributesDict(SimpleNamespace):
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __getitem__(self, item):
+        return getattr(self, item)
+
+    def __delitem__(self, item):
+        return delattr(self, item)
+
+    def setdefault(self, key, value):
+        return self.__dict__.setdefault(key, value)
+
+    def get(self, *args, **kwargs):
+        return self.__dict__.get(*args, **kwargs)
+
+
 def function_name(fn):
     try:
         name = fn.__module__ + '.' + fn.__qualname__

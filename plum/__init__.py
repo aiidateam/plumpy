@@ -4,12 +4,13 @@ from .base import *
 from .events import *
 from .exceptions import *
 from .futures import *
-from .process import *
+from .mixins import *
+from . import process
 from .utils import *
 from . import persistence
 
 __all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
-           utils.__all__ + futures.__all__ + base.__all__)
+           utils.__all__ + futures.__all__ + base.__all__ + mixins.__all__)
 
 PersistableEventLoop = ioloop
 Bundle = persistence.Bundle

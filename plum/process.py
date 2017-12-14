@@ -21,7 +21,7 @@ from . import stack
 from . import utils
 
 __all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
-           'get_pid_from_bundle']
+           'get_pid_from_bundle'] + base.__all__
 
 _LOGGER = logging.getLogger(__name__)
 
