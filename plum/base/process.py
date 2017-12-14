@@ -13,7 +13,7 @@ except ImportError:
 
 from . import state_machine
 from .state_machine import InvalidStateError, event
-from .utils import super_check, call_with_super_check
+from .utils import super_check, call_with_super_check, flag
 
 __all__ = ['ProcessStateMachine', 'ProcessState',
            'Created', 'Running', 'Waiting', 'Paused', 'Finished', 'Failed',
@@ -135,9 +135,8 @@ class Running(State):
     RUN_FN = 'run_fn'
     ARGS = 'args'
     KWARGS = 'kwargs'
-    _message = None
-    _cancelling = False
-    _pausing = False
+    _command = None
+    _running = False
 
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Running, self).__init__(process)
@@ -159,11 +158,19 @@ class Running(State):
         self.kwargs = saved_state[self.KWARGS]
 
     def cancel(self, message=None):
-        self._cancelling = True
-        self._message = message
+        if self._running:
+            self._command = Cancel(message)
+            return state_machine.EventResponse.DELAYED
+        else:
+            super(Running, self).cancel(message)
 
     def pause(self):
-        self._pausing = True
+        if self._running:
+            if self._command is None:
+                self._command = Pause()
+            return state_machine.EventResponse.DELAYED
+        else:
+            super(Running, self).pause()
 
     def resume(self, run_fn, value=NULL):
         if value == NULL:
@@ -172,34 +179,37 @@ class Running(State):
             self.transition_to(ProcessState.RUNNING, run_fn, value)
 
     def _run(self):
-        if self._cancelling:
-            super(Running, self).cancel(self._message)
-        elif self._pausing:
-            super(Running, self).pause()
+        if self._command is not None:
+            command = self._command
         else:
             try:
-                command = self.run_fn(*self.args, **self.kwargs)
+                with flag(self._running):
+                    command = self.run_fn(*self.args, **self.kwargs)
             except BaseException:
                 self.process.fail(*sys.exc_info()[1:])
+                return
             else:
-                if not isinstance(command, Command):
+                if self._command is not None:
+                    # Overwrite with the command we got while running
+                    command = self._command
+                elif not isinstance(command, Command):
                     command = Stop(command)
 
-                if self._cancelling:
-                    command = Cancel(self._message)
-                elif self._pausing:
-                    command = Pause()
+        self._action_command(command)
 
-                if isinstance(command, Cancel):
-                    self.process.cancel(command.msg)
-                elif isinstance(command, Pause):
-                    self.process.pause()
-                elif isinstance(command, Stop):
-                    self.process.finish(command.result)
-                elif isinstance(command, Wait):
-                    self.process.wait(command.continue_fn, command.msg)
-                elif isinstance(command, Continue):
-                    self.process.resume(command.continue_fn, *command.args)
+    def _action_command(self, command):
+        if isinstance(command, Cancel):
+            self.process.cancel(command.msg)
+        elif isinstance(command, Pause):
+            self.process.pause()
+        elif isinstance(command, Stop):
+            self.process.finish(command.result)
+        elif isinstance(command, Wait):
+            self.process.wait(command.continue_fn, command.msg)
+        elif isinstance(command, Continue):
+            self.process.resume(command.continue_fn, *command.args)
+        else:
+            raise ValueError("Unrecognised command")
 
 
 class Waiting(State):

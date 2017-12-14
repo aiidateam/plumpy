@@ -16,7 +16,7 @@ class StackTest(plum.Process):
 
 class TestStack(TestCase):
     def test_simple(self):
-        StackTest().execute()
+        st = StackTest().execute()
 
     def test_stack_push_pop(self):
         p = plum.Process()

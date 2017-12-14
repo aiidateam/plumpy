@@ -9,7 +9,7 @@ import sys
 import traceback
 from utils import call_with_super_check, super_check
 
-__all__ = ['StateMachine', 'event', 'TransitionFailed']
+__all__ = ['StateMachine', 'event', 'TransitionFailed', 'EventResponse']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 # Events to be ignored
 class EventResponse(Enum):
     IGNORED = 0
+    DELAYED = 1
 
 
 class StateMachineError(BaseException):
@@ -76,7 +77,7 @@ def event(from_states='*', to_states='*'):
                 )
 
             result = wrapped(self, *a, **kw)
-            if result != EventResponse.IGNORED:
+            if result not in [EventResponse.IGNORED, EventResponse.DELAYED]:
                 if to_states != '*' and not \
                         any(isinstance(self._state, state)
                             for state in to_states):

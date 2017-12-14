@@ -252,7 +252,6 @@ class TestProcess(util.TestCaseWithLoop):
         proc = WaitForSignalProcess()
         # Wait - Execute the process and wait until it is waiting
         proc.execute(True)
-        print("GOT HERE")
         proc.resume()
         proc.execute(True)
 

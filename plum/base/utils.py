@@ -1,4 +1,4 @@
-import functools
+import contextlib
 
 _PENDING = 0
 _CHECKING = 1
@@ -34,3 +34,12 @@ def call_with_super_check(fn, *args, **kwargs):
         "{} was not called\n" \
         "Hint: Did you forget to call the " \
         "superclass method?".format(fn.__name__)
+
+
+@contextlib.contextmanager
+def flag(var):
+    var = True
+    try:
+        yield
+    finally:
+        var = False
