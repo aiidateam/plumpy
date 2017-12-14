@@ -40,7 +40,7 @@ def _copy(a, b):
         try:
             b.set_result(a.result())
         except Exception as e:
-            b.set_exception(e)
+            b.set_exc_info(a.exc_info())
 
 
 def chain(a, b):

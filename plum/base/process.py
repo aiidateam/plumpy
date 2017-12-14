@@ -286,6 +286,12 @@ class Failed(State):
         else:
             self.traceback = None
 
+    def get_exc_info(self):
+        """
+        Recreate the exc_info tuple and return it
+        """
+        return (type(self.exception), self.exception, self.traceback)
+
 
 class Finished(State):
     LABEL = ProcessState.FINISHED
@@ -408,7 +414,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         elif state == ProcessState.FINISHED:
             call_with_super_check(self.on_finished, self.result())
         elif state == ProcessState.FAILED:
-            call_with_super_check(self.on_failed, self.exception())
+            call_with_super_check(self.on_failed, self._state.get_exc_info())
         elif state == ProcessState.CANCELLED:
             call_with_super_check(self.on_cancelled, self._state.msg)
 
@@ -448,7 +454,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         pass
 
     @super_check
-    def on_failed(self, exception):
+    def on_failed(self, exc_info):
         pass
 
     @super_check

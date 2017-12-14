@@ -5,6 +5,7 @@ from collections import namedtuple
 import copy
 import logging
 import plum
+import sys
 import time
 import uuid
 
@@ -118,14 +119,6 @@ class Executor(ProcessListener):
             self._future = None
             self._loop = None
             process.remove_process_listener(self)
-
-    def _proc_done(self, future):
-        try:
-            self._future.set_result(future.result())
-        except plum.CancelledError:
-            self._future.cancel()
-        except Exception as e:
-            self._future.set_exception(e)
 
 
 class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
@@ -420,10 +413,10 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self.future().set_result(result)
         self._fire_event(ProcessListener.on_process_finished, result)
 
-    def on_failed(self, exception):
-        super(Process, self).on_failed(exception)
-        self.future().set_exception(exception)
-        self._fire_event(ProcessListener.on_process_failed, exception)
+    def on_failed(self, exc_info):
+        super(Process, self).on_failed(exc_info)
+        self.future().set_exc_info(exc_info)
+        self._fire_event(ProcessListener.on_process_failed, exc_info)
 
     def on_cancelled(self, msg):
         super(Process, self).on_cancelled(msg)

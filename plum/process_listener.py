@@ -64,7 +64,7 @@ class ProcessListener(with_metaclass(ABCMeta, object)):
         """
         pass
 
-    def on_process_failed(self, process, exception):
+    def on_process_failed(self, process, exc_info):
         """
         Called when the process has finished running successfully
 
