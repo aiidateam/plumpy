@@ -186,7 +186,7 @@ class ProcessListenerTester(ProcessListener):
     def on_process_finished(self, process, outputs):
         self.called.add('finished')
 
-    def on_process_failed(self, process, exception):
+    def on_process_failed(self, process, exc_info):
         self.called.add('failed')
 
     def on_process_cancelled(self, process, msg):
@@ -231,7 +231,7 @@ class ProcessSaver(ProcessListener, Saver):
         self._save(process)
 
     @override
-    def on_process_failed(self, process, exception):
+    def on_process_failed(self, process, exc_info):
         self._save(process)
 
     @override
