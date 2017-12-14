@@ -67,7 +67,6 @@ class ProcessMessage(object):
 
 
 class Running(base.Running):
-    _run_handle = None
 
     def enter(self):
         super(Running, self).enter()

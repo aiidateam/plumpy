@@ -115,7 +115,7 @@ class ProcessLaunchPublisher(pubsub.BasicRmqClient):
                  loop=None):
         if loop is None:
             loop = plum.get_event_loop()
-        super(ProcessLaunchSubscriber, self).__init__(
+        super(ProcessLaunchPublisher, self).__init__(
             amqp_url, auto_reconnect_timeout=5., loop=loop)
 
         self._queue_name = queue_name

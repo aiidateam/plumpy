@@ -44,6 +44,10 @@ class Cancel(Command):
         self.msg = msg
 
 
+class Pause(Command):
+    pass
+
+
 class Wait(Command):
     def __init__(self, continue_fn=None, msg=None):
         self.continue_fn = continue_fn
@@ -98,6 +102,9 @@ class State(state_machine.State):
         self.state_machine = process
         self.in_state = saved_state[KEY_IN_STATE]
 
+    def cancel(self, msg=None):
+        self.transition_to(ProcessState.CANCELLED, msg)
+
 
 class Created(State):
     LABEL = ProcessState.CREATED
@@ -128,6 +135,9 @@ class Running(State):
     RUN_FN = 'run_fn'
     ARGS = 'args'
     KWARGS = 'kwargs'
+    _message = None
+    _cancelling = False
+    _pausing = False
 
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Running, self).__init__(process)
@@ -148,6 +158,13 @@ class Running(State):
         self.args = saved_state[self.ARGS]
         self.kwargs = saved_state[self.KWARGS]
 
+    def cancel(self, message=None):
+        self._cancelling = True
+        self._message = message
+
+    def pause(self):
+        self._pausing = True
+
     def resume(self, run_fn, value=NULL):
         if value == NULL:
             self.transition_to(ProcessState.RUNNING, run_fn)
@@ -155,22 +172,34 @@ class Running(State):
             self.transition_to(ProcessState.RUNNING, run_fn, value)
 
     def _run(self):
-        try:
-            command = self.run_fn(*self.args, **self.kwargs)
-        except BaseException:
-            self.process.fail(*sys.exc_info()[1:])
+        if self._cancelling:
+            super(Running, self).cancel(self._message)
+        elif self._pausing:
+            super(Running, self).pause()
         else:
-            if not isinstance(command, Command):
-                command = Stop(command)
+            try:
+                command = self.run_fn(*self.args, **self.kwargs)
+            except BaseException:
+                self.process.fail(*sys.exc_info()[1:])
+            else:
+                if not isinstance(command, Command):
+                    command = Stop(command)
 
-            if isinstance(command, Cancel):
-                self.process.cancel(command.msg)
-            if isinstance(command, Stop):
-                self.process.finish(command.result)
-            elif isinstance(command, Wait):
-                self.process.wait(command.continue_fn, command.msg)
-            elif isinstance(command, Continue):
-                self.process.resume(command.continue_fn, *command.args)
+                if self._cancelling:
+                    command = Cancel(self._message)
+                elif self._pausing:
+                    command = Pause()
+
+                if isinstance(command, Cancel):
+                    self.process.cancel(command.msg)
+                elif isinstance(command, Pause):
+                    self.process.pause()
+                elif isinstance(command, Stop):
+                    self.process.finish(command.result)
+                elif isinstance(command, Wait):
+                    self.process.wait(command.continue_fn, command.msg)
+                elif isinstance(command, Continue):
+                    self.process.resume(command.continue_fn, *command.args)
 
 
 class Waiting(State):
@@ -553,7 +582,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         :param msg: An optional cancellation message
         :type msg: basestring
         """
-        self.transition_to(ProcessState.CANCELLED, msg)
+        self._state.cancel(msg)
 
         # endregion
 

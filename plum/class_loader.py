@@ -13,7 +13,7 @@ class ClassLoader(object):
         """
         Load a class from a string
         """
-        return utils.load_class(name)
+        return utils.load_object(name)
 
     def load_class(self, name):
         # Try the parent first
