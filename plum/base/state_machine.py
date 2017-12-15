@@ -152,6 +152,20 @@ class StateMachine(object):
 
     # Class defaults
     _transitioning = False
+    __initial_transition_state = None
+
+    # TODO: Fix this
+    # @staticmethod
+    # def __new__(cls, *args, **kwargs):
+    #     instance = super(StateMachine, cls).__new__(cls)
+    #     init = instance.__init__
+    #
+    #     def new_init(self, *ar, **kw):
+    #         init(*ar, **kw)
+    #         self.transition_to(self.__initial_transition_state)
+    #         self.__initial_transition_state = None
+    #     cls.__init__ = new_init
+    #     return instance
 
     @classmethod
     def get_states(cls):
@@ -196,7 +210,8 @@ class StateMachine(object):
         self.set_debug((not sys.flags.ignore_environment
                         and bool(os.environ.get('PYTHONSMDEBUG'))))
         initial_state = self.get_state_class(self.initial_state_label())
-        self.transition_to(initial_state(self, *args, **kwargs))
+        self.__initial_transition_state = initial_state(self, *args, **kwargs)
+        # self.transition_to(initial_state(self, *args, **kwargs))
 
     def __str__(self):
         return "<{}> ({})".format(self.__class__.__name__, self.state)
