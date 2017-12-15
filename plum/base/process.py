@@ -170,7 +170,7 @@ class Running(State):
                 self._command = Pause()
             return state_machine.EventResponse.DELAYED
         else:
-            super(Running, self).pause()
+            self.transition_to(ProcessState.PAUSED, self)
 
     def resume(self, run_fn, value=NULL):
         if value == NULL:
@@ -183,17 +183,24 @@ class Running(State):
             command = self._command
         else:
             try:
-                with flag(self._running):
-                    command = self.run_fn(*self.args, **self.kwargs)
+                try:
+                    self._running = True
+                    result = self.run_fn(*self.args, **self.kwargs)
+                finally:
+                    self._running = False
             except BaseException:
                 self.process.fail(*sys.exc_info()[1:])
                 return
             else:
+                if not isinstance(result, Command):
+                    result = Stop(result)
+
                 if self._command is not None:
                     # Overwrite with the command we got while running
                     command = self._command
-                elif not isinstance(command, Command):
-                    command = Stop(command)
+                    self._command = result
+                else:
+                    command = result
 
         self._action_command(command)
 
@@ -543,12 +550,12 @@ class ProcessStateMachine(state_machine.StateMachine):
         """
         Play the process if in the CREATED or PAUSED state
         """
-        self._state.play()
+        return self._state.play()
 
     @event(from_states=(Running, Waiting), to_states=Paused)
     def pause(self):
         """ Pause the process """
-        self.transition_to(ProcessState.PAUSED, self._state)
+        return self._state.pause()
 
     @event(from_states=Running, to_states=Waiting)
     def wait(self, done_callback=None, msg=None, data=None):
@@ -566,7 +573,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         """
         Start running the process again
         """
-        self._state.resume(*args)
+        return self._state.resume(*args)
 
     @event(from_states=(Running, Waiting), to_states=Finished)
     def finish(self, result=None):
@@ -592,7 +599,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         :param msg: An optional cancellation message
         :type msg: basestring
         """
-        self._state.cancel(msg)
+        return self._state.cancel(msg)
 
         # endregion
 
