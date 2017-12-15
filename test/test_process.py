@@ -332,6 +332,21 @@ class TestProcess(util.TestCaseWithLoop):
         # Check results match
         self.assertEqual(result, result2)
 
+    def test_cancel_in_run(self):
+        class CancelProcess(Process):
+            after_cancel = False
+
+            def _run(self, **kwargs):
+                self.cancel()
+                self.after_cancel = True
+
+        proc = CancelProcess()
+        with self.assertRaises(plum.CancelledError):
+            proc.execute()
+
+        self.assertFalse(proc.after_cancel)
+        self.assertEqual(proc.state, ProcessState.CANCELLED)
+
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 

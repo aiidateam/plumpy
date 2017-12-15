@@ -124,6 +124,10 @@ class Created(State):
         self.transition_to(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
 
 
+class CancelInterruption(BaseException):
+    pass
+
+
 class Running(State):
     LABEL = ProcessState.RUNNING
     ALLOWED = {ProcessState.RUNNING,
@@ -160,8 +164,7 @@ class Running(State):
 
     def cancel(self, message=None):
         if self._running:
-            self._command = Cancel(message)
-            return state_machine.EventResponse.DELAYED
+            raise CancelInterruption(message)
         else:
             super(Running, self).cancel(message)
 
@@ -189,6 +192,8 @@ class Running(State):
                     result = self.run_fn(*self.args, **self.kwargs)
                 finally:
                     self._running = False
+            except CancelInterruption as e:
+                command = Cancel(e.message)
             except BaseException:
                 self.process.fail(*sys.exc_info()[1:])
                 return
