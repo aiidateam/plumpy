@@ -1,5 +1,6 @@
 import abc
 from enum import Enum
+import six
 import sys
 import traceback
 import yaml
@@ -208,7 +209,7 @@ class Running(State):
         if isinstance(command, Cancel):
             self.process.cancel(command.msg)
         elif isinstance(command, Pause):
-            self.process.pause()
+            self.pause()
         elif isinstance(command, Stop):
             self.process.finish(command.result)
         elif isinstance(command, Wait):
@@ -253,6 +254,9 @@ class Waiting(State):
         self.done_callback = getattr(self.process, saved_state[self.DONE_CALLBACK])
         self.msg = saved_state[self.MSG]
         self.data = saved_state[self.DATA]
+
+    def pause(self):
+        self.transition_to(ProcessState.PAUSED, self)
 
     def resume(self, value=NULL):
         if value == NULL:
@@ -383,6 +387,12 @@ class Cancelled(State):
 
 # endregion
 
+
+class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
+    pass
+
+
+@six.add_metaclass(ProcessStateMachineMeta)
 class ProcessStateMachine(state_machine.StateMachine):
     """
     CREATED --- RUNNING --- FINISHED (o)
@@ -396,7 +406,6 @@ class ProcessStateMachine(state_machine.StateMachine):
 
       * = any non terminal state
     """
-    __metaclass__ = abc.ABCMeta
 
     @classmethod
     def get_states(cls):
@@ -419,8 +428,8 @@ class ProcessStateMachine(state_machine.StateMachine):
             ProcessState.CANCELLED: Cancelled
         }
 
-    def __init__(self):
-        super(ProcessStateMachine, self).__init__(self.run)
+    def create_initial_state(self):
+        return self.get_state_class(ProcessState.CREATED)(self, self.run)
 
     def cancelled(self):
         return self.state == ProcessState.CANCELLED

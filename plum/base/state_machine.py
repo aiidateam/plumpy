@@ -9,7 +9,7 @@ import sys
 import traceback
 from utils import call_with_super_check, super_check
 
-__all__ = ['StateMachine', 'event', 'TransitionFailed', 'EventResponse']
+__all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed', 'EventResponse']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -145,6 +145,14 @@ class State(object):
         self.state_machine.transition_to(state, *args, **kwargs)
 
 
+class StateMachineMeta(type):
+    def __call__(cls, *args, **kwargs):
+        inst = super(StateMachineMeta, cls).__call__(*args, **kwargs)
+        inst.transition_to(inst.create_initial_state())
+        return inst
+
+
+@six.add_metaclass(StateMachineMeta)
 class StateMachine(object):
     STATES = None
     STATES_MAP = None
@@ -152,20 +160,6 @@ class StateMachine(object):
 
     # Class defaults
     _transitioning = False
-    __initial_transition_state = None
-
-    # TODO: Fix this
-    # @staticmethod
-    # def __new__(cls, *args, **kwargs):
-    #     instance = super(StateMachine, cls).__new__(cls)
-    #     init = instance.__init__
-    #
-    #     def new_init(self, *ar, **kw):
-    #         init(*ar, **kw)
-    #         self.transition_to(self.__initial_transition_state)
-    #         self.__initial_transition_state = None
-    #     cls.__init__ = new_init
-    #     return instance
 
     @classmethod
     def get_states(cls):
@@ -209,12 +203,12 @@ class StateMachine(object):
         self._exception_handler = None
         self.set_debug((not sys.flags.ignore_environment
                         and bool(os.environ.get('PYTHONSMDEBUG'))))
-        initial_state = self.get_state_class(self.initial_state_label())
-        self.__initial_transition_state = initial_state(self, *args, **kwargs)
-        # self.transition_to(initial_state(self, *args, **kwargs))
 
     def __str__(self):
         return "<{}> ({})".format(self.__class__.__name__, self.state)
+
+    def create_initial_state(self):
+        return self.get_state_class(self.initial_state_label())(self)
 
     @property
     def state(self):
