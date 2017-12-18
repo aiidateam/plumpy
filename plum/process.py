@@ -24,7 +24,7 @@ from . import utils
 
 __all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
            'get_pid_from_bundle', 'Cancel', 'Wait', 'Stop', 'Continue',
-           'TransitionFailed']
+           'TransitionFailed', 'Executor']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -423,7 +423,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     # endregion
 
     def run(self):
-        return self._run(**(self.inputs if self.inputs is not None else {}))
+        return self._run()
 
     def execute(self, return_on_idle=False):
         return Executor(return_on_idle).execute(self)

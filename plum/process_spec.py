@@ -52,14 +52,16 @@ class ProcessSpec(object):
         if self.inputs:
             desc.append("Inputs")
             desc.append("======")
-            desc.extend([p.get_description() for k, p in
-                         sorted(self.inputs.items(), key=lambda x: x[0])])
+            desc.append("".join([p.get_description() for k, p in
+                                 sorted(self.inputs.items(),
+                                        key=lambda x: x[0])]))
 
         if self.outputs:
             desc.append("Outputs")
             desc.append("=======")
-            desc.extend([p.get_description() for k, p in
-                         sorted(self.outputs.items(), key=lambda x: x[0])])
+            desc.append("".join([p.get_description() for k, p in
+                                 sorted(self.outputs.items(),
+                                        key=lambda x: x[0])]))
 
         return "\n".join(desc)
 

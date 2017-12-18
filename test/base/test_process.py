@@ -64,9 +64,7 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(p.state, ProcessState.WAITING)
         d = {}
         p.save_state(d)
-        print(p)
         p.resume()
-        print(p)
 
     @unittest.skip("Until we have a way to know which attributes should be persisted, skip")
     def test_state_saving_created(self):
