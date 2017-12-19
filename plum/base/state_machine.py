@@ -7,7 +7,7 @@ import os
 import six
 import sys
 import traceback
-from utils import call_with_super_check, super_check
+from .utils import call_with_super_check, super_check
 
 __all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed', 'EventResponse']
 
