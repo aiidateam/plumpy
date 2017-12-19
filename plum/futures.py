@@ -63,12 +63,17 @@ def gather(*args):
 class _GatheringFuture(Future):
     def __init__(self, *args):
         super(_GatheringFuture, self).__init__()
-        self.__total = len(args)
-        self.__num_set = 0
-        self.__result = [None] * self.__total
+        self._children = list(args)
+        self._nchildren = len(self._children)
+        self._nfinished = 0
+        self._result = [None] * self._nchildren
 
-        for i in range(self.__total):
-            args[i].add_done_callback(partial(self._completed, i))
+        for i, future in enumerate(self._children):
+            future.add_done_callback(partial(self._completed, i))
+
+    def cancel(self):
+        for child in self._children:
+            child.cancel()
 
     def _completed(self, i, future):
         if self.cancelled():
@@ -78,11 +83,11 @@ class _GatheringFuture(Future):
             self.cancel()
         else:
             if future.exception() is not None:
-                self.__result[i] = future.exception()
+                self._result[i] = future.exception()
             else:
-                self.__result[i] = future.result()
+                self._result[i] = future.result()
 
             # Check if we're all done
-            self.__num_set += 1
-            if self.__num_set == self.__total:
-                self.set_result(self.__result)
+            self._nfinished += 1
+            if self._nfinished == self._nchildren:
+                self.set_result(self._result)

@@ -1,5 +1,3 @@
-import apricotpy
-import apricotpy.persistable
 import functools
 import plum
 import plum.stack as stack
@@ -23,6 +21,7 @@ class TestCaseWithLoop(TestCase):
     def tearDown(self):
         self.loop.close()
         self.loop = None
+        plum.set_event_loop(None)
 
 
 def get_message(receive_list, loop, subject, to, body, sender_id):

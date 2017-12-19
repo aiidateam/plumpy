@@ -1,4 +1,4 @@
-from test.util import TestCase
+from test.util import TestCaseWithLoop
 import plum
 
 
@@ -14,7 +14,7 @@ class StackTest(plum.Process):
             return 0
 
 
-class TestStack(TestCase):
+class TestStack(TestCaseWithLoop):
     def test_simple(self):
         st = StackTest().execute()
 

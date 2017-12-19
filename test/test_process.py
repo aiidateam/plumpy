@@ -6,7 +6,6 @@ from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutp
     WaitForSignalProcess
 from plum.test_utils import ProcessListenerTester
 from plum import process
-import unittest
 
 from . import util
 
@@ -17,7 +16,7 @@ class ForgetToCallParent(Process):
         super(ForgetToCallParent, cls).define(spec)
         spec.input('forget_on', valid_type=str)
 
-    def _run(self, forget_on):
+    def _run(self):
         pass
 
     def on_created(self):
@@ -86,7 +85,7 @@ class TestProcess(util.TestCaseWithLoop):
                 super(Proc, cls).define(spec)
                 spec.input('a')
 
-            def _run(self, a):
+            def _run(self):
                 pass
 
         p = Proc({'a': 5})
@@ -346,6 +345,10 @@ class TestProcess(util.TestCaseWithLoop):
 
         self.assertFalse(proc.after_cancel)
         self.assertEqual(proc.state, ProcessState.CANCELLED)
+
+    def test_run_multiple(self):
+        gathered = plum.gather(*[proc_class().future() for proc_class in TEST_PROCESSES])
+        results = plum.run_until_complete(gathered, self.loop)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)

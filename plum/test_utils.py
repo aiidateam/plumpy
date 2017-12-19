@@ -125,9 +125,7 @@ class ProcessEventsTester(EventsTesterMixin, Process):
 
 
 class TwoCheckpoint(ProcessEventsTester):
-    def __init__(self, inputs=None, pid=None, logger=None, loop=None):
-        super(TwoCheckpoint, self).__init__(inputs, pid, logger, loop)
-        self._last_checkpoint = None
+    _last_checkpoint = None
 
     @override
     def _run(self):
@@ -240,11 +238,10 @@ class ProcessSaver(ProcessListener, Saver):
 
 
 # All the Processes that can be used
-TEST_PROCESSES = [DummyProcess, DummyProcessWithOutput]
+TEST_PROCESSES = [DummyProcess, DummyProcessWithOutput, TwoCheckpoint]
 
 TEST_WAITING_PROCESSES = [
     ProcessWithCheckpoint,
-    TwoCheckpoint,
     TwoCheckpointNoFinish,
     ExceptionProcess,
     ProcessEventsTester,

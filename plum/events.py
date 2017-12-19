@@ -1,10 +1,20 @@
 from tornado import ioloop
 
-__all__ = ['new_event_loop', 'set_event_loop', 'get_event_loop']
+__all__ = ['new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete']
 
 get_event_loop = ioloop.IOLoop.current
 new_event_loop = ioloop.IOLoop
 
 
 def set_event_loop(loop):
-    loop.make_current()
+    if loop is None:
+        ioloop.IOLoop.clear_instance()
+    else:
+        loop.make_current()
+
+
+def run_until_complete(future, loop):
+    def _stop(future):
+        loop.stop()
+    future.add_done_callback(_stop)
+    return future.result()
