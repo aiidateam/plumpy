@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta, abstractmethod
-from collections import namedtuple
+from abc import ABCMeta
 import copy
 import logging
 import plum
-import sys
 import time
 import uuid
 
@@ -18,13 +16,14 @@ from plum.port import _NULL
 from . import events
 from . import futures
 from . import base
-from .base import Continue, Wait, Cancel, Stop, ProcessState, TransitionFailed
+from .base import Continue, Wait, Cancel, Stop, ProcessState, \
+    TransitionFailed, Waiting
 from . import stack
 from . import utils
 
 __all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
            'get_pid_from_bundle', 'Cancel', 'Wait', 'Stop', 'Continue',
-           'TransitionFailed', 'Executor']
+           'TransitionFailed', 'Executor', 'Waiting']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,7 +66,6 @@ class ProcessMessage(object):
 
 
 class Running(base.Running):
-
     def enter(self):
         super(Running, self).enter()
         self.process._call_soon(self._run)
@@ -392,6 +390,9 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         super(Process, self).on_running()
         self._fire_event(ProcessListener.on_process_running)
 
+    def on_output_emitting(self, output_port, value):
+        pass
+
     def on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
@@ -430,6 +431,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
     @protected
     def out(self, output_port, value):
+        self.on_output_emitting(output_port, value)
         dynamic = False
         # Do checks on the outputs
         try:

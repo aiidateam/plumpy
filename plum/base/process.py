@@ -50,9 +50,10 @@ class Pause(Command):
 
 
 class Wait(Command):
-    def __init__(self, continue_fn=None, msg=None):
+    def __init__(self, continue_fn=None, msg=None, data=None):
         self.continue_fn = continue_fn
         self.msg = msg
+        self.data = data
 
 
 class Stop(Command):
@@ -218,7 +219,7 @@ class Running(State):
         elif isinstance(command, Stop):
             self.process.finish(command.result)
         elif isinstance(command, Wait):
-            self.process.wait(command.continue_fn, command.msg)
+            self.process.wait(command.continue_fn, command.msg, command.data)
         elif isinstance(command, Continue):
             self.process.resume(command.continue_fn, *command.args)
         else:
@@ -400,6 +401,8 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
 @six.add_metaclass(ProcessStateMachineMeta)
 class ProcessStateMachine(state_machine.StateMachine):
     """
+                  ___
+                 |   v
     CREATED --- RUNNING --- FINISHED (o)
               /  |   ^      /
              /   v   |     /
