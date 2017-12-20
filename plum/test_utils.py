@@ -124,7 +124,7 @@ class ProcessEventsTester(EventsTesterMixin, Process):
         self.out("test", 5)
 
 
-class TwoCheckpoint(ProcessEventsTester):
+class ThreeSteps(ProcessEventsTester):
     _last_checkpoint = None
 
     @override
@@ -156,7 +156,7 @@ class ExceptionProcess(ProcessEventsTester):
         raise RuntimeError("Great scott!")
 
 
-class TwoCheckpointThenException(TwoCheckpoint):
+class ThreeStepsThenException(ThreeSteps):
     @override
     def last_step(self):
         raise RuntimeError("Great scott!")
@@ -238,14 +238,21 @@ class ProcessSaver(ProcessListener, Saver):
 
 
 # All the Processes that can be used
-TEST_PROCESSES = [DummyProcess, DummyProcessWithOutput, TwoCheckpoint]
+TEST_PROCESSES = [
+    DummyProcess,
+    DummyProcessWithOutput,
+    ThreeSteps]
 
 TEST_WAITING_PROCESSES = [
     ProcessWithCheckpoint,
     TwoCheckpointNoFinish,
     ExceptionProcess,
     ProcessEventsTester,
-    TwoCheckpointThenException
+    ThreeStepsThenException]
+
+TEST_EXCEPTION_PROCESSES = [
+    ExceptionProcess,
+    ThreeStepsThenException
 ]
 
 

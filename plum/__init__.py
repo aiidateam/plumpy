@@ -1,5 +1,7 @@
+from __future__ import absolute_import
 from tornado import ioloop
 import logging
+
 from .events import *
 from .exceptions import *
 from .futures import *

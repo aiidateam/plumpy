@@ -1,7 +1,7 @@
 import apricotpy
 import plum
 from plum import Process, ProcessState
-from plum.test_utils import TwoCheckpoint, \
+from plum.test_utils import ThreeSteps, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plum.test_utils import check_process_against_snapshots
 from plum.test_utils import ProcessSaver
@@ -11,7 +11,7 @@ from . import util
 
 class TestWaitingProcess(util.TestCaseWithLoop):
     def test_instance_state(self):
-        proc = TwoCheckpoint()
+        proc = ThreeSteps()
         proc.play()
         wl = ProcessSaver(proc)
         proc.execute()

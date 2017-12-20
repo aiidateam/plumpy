@@ -1,9 +1,9 @@
 import apricotpy
 import plum
 from plum import Process, ProcessState
-from plum.test_utils import DummyProcess, ExceptionProcess, DummyProcessWithOutput, TEST_PROCESSES, ProcessSaver, \
-    check_process_against_snapshots, \
-    WaitForSignalProcess
+
+from plum.test_utils import check_process_against_snapshots
+from plum import test_utils
 from plum.test_utils import ProcessListenerTester
 from plum import process
 
@@ -45,15 +45,15 @@ class TestProcess(util.TestCaseWithLoop):
         """
         Check that the references to specs are doing the right thing...
         """
-        dp = DummyProcess()
-        self.assertIsNot(DummyProcess.spec(), Process.spec())
-        self.assertIs(dp.spec(), DummyProcess.spec())
+        dp = test_utils.DummyProcess()
+        self.assertIsNot(test_utils.DummyProcess.spec(), Process.spec())
+        self.assertIs(dp.spec(), test_utils.DummyProcess.spec())
 
-        class Proc(DummyProcess):
+        class Proc(test_utils.DummyProcess):
             pass
 
         self.assertIsNot(Proc.spec(), Process.spec())
-        self.assertIsNot(Proc.spec(), DummyProcess.spec())
+        self.assertIsNot(Proc.spec(), test_utils.DummyProcess.spec())
         p = Proc()
         self.assertIs(p.spec(), Proc.spec())
 
@@ -96,7 +96,7 @@ class TestProcess(util.TestCaseWithLoop):
             p.raw_inputs.b
 
     def test_inputs_default(self):
-        class Proc(DummyProcess):
+        class Proc(test_utils.DummyProcess):
             @classmethod
             def define(cls, spec):
                 super(Proc, cls).define(spec)
@@ -112,7 +112,7 @@ class TestProcess(util.TestCaseWithLoop):
 
     def test_inputs_default_that_evaluate_to_false(self):
         for def_val in (True, False, 0, 1):
-            class Proc(DummyProcess):
+            class Proc(test_utils.DummyProcess):
                 @classmethod
                 def define(cls, spec):
                     super(Proc, cls).define(spec)
@@ -124,7 +124,7 @@ class TestProcess(util.TestCaseWithLoop):
             self.assertEqual(p.inputs['input'], def_val)
 
     def test_execute(self):
-        proc = DummyProcessWithOutput()
+        proc = test_utils.DummyProcessWithOutput()
         proc.execute()
 
         self.assertTrue(proc.has_finished())
@@ -133,7 +133,7 @@ class TestProcess(util.TestCaseWithLoop):
 
     def test_run_from_class(self):
         # Test running through class method
-        proc = DummyProcessWithOutput()
+        proc = test_utils.DummyProcessWithOutput()
         proc.execute()
         results = proc.outputs
         self.assertEqual(results['default'], 5)
@@ -146,19 +146,19 @@ class TestProcess(util.TestCaseWithLoop):
 
     def test_pid(self):
         # Test auto generation of pid
-        p = DummyProcessWithOutput()
-        self.assertIsNotNone(p.pid)
+        process = test_utils.DummyProcessWithOutput()
+        self.assertIsNotNone(process.pid)
 
         # Test using integer as pid
-        p = DummyProcessWithOutput(pid=5)
-        self.assertEquals(p.pid, 5)
+        process = test_utils.DummyProcessWithOutput(pid=5)
+        self.assertEquals(process.pid, 5)
 
         # Test using string as pid
-        p = DummyProcessWithOutput(pid='a')
-        self.assertEquals(p.pid, 'a')
+        process = test_utils.DummyProcessWithOutput(pid='a')
+        self.assertEquals(process.pid, 'a')
 
     def test_exception(self):
-        proc = ExceptionProcess()
+        proc = test_utils.ExceptionProcess()
         proc.play()
         with self.assertRaises(RuntimeError):
             proc.execute()
@@ -167,13 +167,13 @@ class TestProcess(util.TestCaseWithLoop):
     def test_get_description(self):
         # Not all that much we can test for, but check if it's a string at
         # least
-        for ProcClass in TEST_PROCESSES:
-            desc = ProcClass.get_description()
+        for proc_class in test_utils.TEST_PROCESSES:
+            desc = proc_class.get_description()
             self.assertIsInstance(desc, str)
 
         # Dummy process should at least use the docstring as part of the
         # description and so it shouldn't be empty
-        desc = DummyProcess.get_description()
+        desc = test_utils.DummyProcess.get_description()
         self.assertNotEqual(desc, "")
 
     def test_created_bundle(self):
@@ -181,7 +181,7 @@ class TestProcess(util.TestCaseWithLoop):
         Check that the bundle after just creating a process is as we expect
         :return:
         """
-        proc = DummyProcessWithOutput()
+        proc = test_utils.DummyProcessWithOutput()
         b = plum.Bundle(proc)
 
         self.assertIsNone(b.get(process.BundleKeys.INPUTS, None))
@@ -189,9 +189,9 @@ class TestProcess(util.TestCaseWithLoop):
 
     def test_instance_state(self):
         BundleKeys = process.BundleKeys
-        proc = DummyProcessWithOutput()
+        proc = test_utils.DummyProcessWithOutput()
 
-        saver = ProcessSaver(proc)
+        saver = test_utils.ProcessSaver(proc)
         proc.play()
         proc.execute()
 
@@ -206,9 +206,9 @@ class TestProcess(util.TestCaseWithLoop):
         )
 
     def test_saving_each_step(self):
-        for proc_class in TEST_PROCESSES:
+        for proc_class in test_utils.TEST_PROCESSES:
             proc = proc_class()
-            saver = ProcessSaver(proc)
+            saver = test_utils.ProcessSaver(proc)
             proc.execute()
 
             self.assertEqual(proc.state, ProcessState.FINISHED)
@@ -217,17 +217,17 @@ class TestProcess(util.TestCaseWithLoop):
             )
 
     def test_saving_each_step_interleaved(self):
-        for ProcClass in TEST_PROCESSES:
+        for ProcClass in test_utils.TEST_PROCESSES:
             proc = ProcClass()
             proc.play()
-            ps = ProcessSaver(proc)
+            saver = test_utils.ProcessSaver(proc)
             try:
                 proc.execute()
             except BaseException:
                 pass
 
             self.assertTrue(
-                check_process_against_snapshots(self.loop, ProcClass, ps.snapshots)
+                check_process_against_snapshots(self.loop, ProcClass, saver.snapshots)
             )
 
     def test_logging(self):
@@ -240,7 +240,7 @@ class TestProcess(util.TestCaseWithLoop):
         proc.execute()
 
     def test_cancel(self):
-        proc = DummyProcess(loop=self.loop)
+        proc = test_utils.DummyProcess(loop=self.loop)
 
         proc.cancel('Farewell!')
         self.assertTrue(proc.cancelled())
@@ -248,7 +248,7 @@ class TestProcess(util.TestCaseWithLoop):
         self.assertEqual(proc.state, ProcessState.CANCELLED)
 
     def test_wait_continue(self):
-        proc = WaitForSignalProcess()
+        proc = test_utils.WaitForSignalProcess()
         # Wait - Execute the process and wait until it is waiting
         proc.execute(True)
         proc.resume()
@@ -259,7 +259,7 @@ class TestProcess(util.TestCaseWithLoop):
         self.assertTrue(proc.has_finished())
 
     def test_exc_info(self):
-        proc = ExceptionProcess()
+        proc = test_utils.ExceptionProcess()
         try:
             proc.execute()
         except RuntimeError as e:
@@ -282,7 +282,7 @@ class TestProcess(util.TestCaseWithLoop):
         self.assertEqual(proc.outputs, {'finished': True})
 
     def test_run_done(self):
-        proc = DummyProcess()
+        proc = test_utils.DummyProcess()
         proc.execute()
         self.assertTrue(proc.done())
 
@@ -291,7 +291,7 @@ class TestProcess(util.TestCaseWithLoop):
         Test that if you pause a process that and its awaitable finishes that it
         completes correctly when played again.
         """
-        proc = WaitForSignalProcess()
+        proc = test_utils.WaitForSignalProcess()
 
         # Wait - Run the process and wait until it is waiting
         proc.execute(True)
@@ -311,7 +311,7 @@ class TestProcess(util.TestCaseWithLoop):
 
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
-        proc = WaitForSignalProcess()
+        proc = test_utils.WaitForSignalProcess()
         proc.play()
 
         # Wait - Run the process until it enters the WAITING state
@@ -347,8 +347,16 @@ class TestProcess(util.TestCaseWithLoop):
         self.assertEqual(proc.state, ProcessState.CANCELLED)
 
     def test_run_multiple(self):
-        gathered = plum.gather(*[proc_class().future() for proc_class in TEST_PROCESSES])
-        results = plum.run_until_complete(gathered, self.loop)
+        # Create and play some processes
+        procs = []
+        for proc_class in test_utils.TEST_PROCESSES + test_utils.TEST_EXCEPTION_PROCESSES:
+            proc = proc_class(loop=self.loop)
+            proc.play()
+            procs.append(proc)
+
+        # Check that they all run
+        gathered = plum.gather(*[proc.future() for proc in procs])
+        plum.run_until_complete(gathered, self.loop)
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
@@ -372,7 +380,7 @@ class TestProcessEvents(util.TestCaseWithLoop):
     def setUp(self):
         super(TestProcessEvents, self).setUp()
         self.events_tester = ProcessListenerTester()
-        self.proc = DummyProcessWithOutput()
+        self.proc = test_utils.DummyProcessWithOutput()
         self.proc.add_process_listener(self.events_tester)
         self.proc.play()
 
@@ -400,7 +408,7 @@ class TestProcessEvents(util.TestCaseWithLoop):
         self.assertIn('paused', self.events_tester.called)
 
 
-class _RestartProcess(WaitForSignalProcess):
+class _RestartProcess(test_utils.WaitForSignalProcess):
     @classmethod
     def define(cls, spec):
         super(_RestartProcess, cls).define(spec)
