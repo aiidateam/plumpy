@@ -17,4 +17,5 @@ def run_until_complete(future, loop):
     def _stop(future):
         loop.stop()
     future.add_done_callback(_stop)
+    loop.start()
     return future.result()
