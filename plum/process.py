@@ -476,7 +476,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         # inputs
         for name, port in self.spec().inputs.items():
             if name not in ins:
-                if port.default != _NULL:
+                if port.has_default():
                     ins[name] = port.default
                 elif port.required:
                     raise ValueError(

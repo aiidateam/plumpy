@@ -88,8 +88,13 @@ class Attribute(ValueSpec):
                                         help=help, required=required)
         self._default = default
 
+    def has_default(self):
+        return self._default is not _NULL
+
     @property
     def default(self):
+        if not self.has_default():
+            raise RuntimeError("No default")
         return self._default
 
 
@@ -138,8 +143,13 @@ class InputPort(Port):
 
         return "->" + ",".join(desc)
 
+    def has_default(self):
+        return self._default is not _NULL
+
     @property
     def default(self):
+        if not self.has_default():
+            raise RuntimeError("No default")
         return self._default
 
 

@@ -31,7 +31,7 @@ def call_with_super_check(fn, *args, **kwargs):
     self._called = call_count + 1
     fn(*args, **kwargs)
     assert self._called == call_count, \
-        "{} was not called\n" \
+        "'{}' was not called\n" \
         "Hint: Did you forget to call the " \
         "superclass method?".format(fn.__name__)
 

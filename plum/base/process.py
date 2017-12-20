@@ -230,6 +230,7 @@ class Waiting(State):
     LABEL = ProcessState.WAITING
     ALLOWED = {ProcessState.RUNNING,
                ProcessState.PAUSED,
+               ProcessState.WAITING,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
 
@@ -348,7 +349,7 @@ class Failed(State):
         """
         Recreate the exc_info tuple and return it
         """
-        return (type(self.exception), self.exception, self.traceback)
+        return type(self.exception), self.exception, self.traceback
 
 
 class Finished(State):
@@ -407,6 +408,8 @@ class ProcessStateMachine(state_machine.StateMachine):
               /  |   ^      /
              /   v   |     /
       PAUSED --- WAITING---
+                 |   ^
+                  ----
 
 
       * -- FAILED (o)
@@ -574,7 +577,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         """ Pause the process """
         return self._state.pause()
 
-    @event(from_states=Running, to_states=Waiting)
+    @event(from_states=(Running, Waiting), to_states=Waiting)
     def wait(self, done_callback=None, msg=None, data=None):
         """
         Wait for something
