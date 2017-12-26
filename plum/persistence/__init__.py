@@ -13,7 +13,7 @@ class Bundle(dict):
 
     def unbundle(self, loop=None):
         cls = plum.utils.load_object(self['CLASS_NAME'])
-        return cls.create_from(self, loop)
+        return cls.recreate_from(self, loop)
 
 
 class Persister(object):

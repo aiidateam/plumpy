@@ -358,6 +358,27 @@ class TestProcess(util.TestCaseWithLoop):
         gathered = plum.gather(*[proc.future() for proc in procs])
         plum.run_until_complete(gathered, self.loop)
 
+    def test_recreate_from(self):
+        proc = test_utils.DummyProcess()
+        p2 = self._assert_same(proc)
+        self._procs_same(proc, p2)
+
+        proc.play()
+        p2 = self._assert_same(proc)
+        self._procs_same(proc, p2)
+
+        proc.finish()
+        p2 = self._assert_same(proc)
+        self._procs_same(proc, p2)
+
+    def _assert_same(self, proc):
+        return plum.Bundle(proc).unbundle(loop=proc.loop())
+
+    def _procs_same(self, p1, p2):
+        self.assertEqual(p1.state, p2.state)
+        if p1.state == ProcessState.FINISHED:
+            self.assertEqual(p1.result(), p2.result())
+
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 

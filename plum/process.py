@@ -214,17 +214,17 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         return "\n".join(desc)
 
     @classmethod
-    def create_from(cls, saved_state, loop=None):
+    def recreate_from(cls, *args, **kwargs):
+        """"""
         """
-        Create a process from the saved state providing a loop to load_instance_state()
+        Recreate a process from a saved state
 
-        :param saved_state: The saved state
-        :type saved_state: :class:`Bundle`
-        :param loop: The event loop
+        :param args: The positional arguments for load_instance_state
+        :param kwargs: The keyword arguments for load_instance_state
         :return: An instance of the object with its state loaded from the save state.
         """
         obj = cls.__new__(cls)
-        obj.load_state(saved_state, loop)
+        base.call_with_super_check(obj.load_instance_state, *args, **kwargs)
         return obj
 
     def __init__(self, inputs=None, pid=None, logger=None, loop=None):

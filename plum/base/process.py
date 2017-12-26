@@ -535,9 +535,9 @@ class ProcessStateMachine(state_machine.StateMachine):
     def save_state(self, out_state):
         return call_with_super_check(self.save_instance_state, out_state)
 
-    def load_state(self, saved_state, *args, **kwargs):
+    def load_state(self, *args, **kwargs):
         return call_with_super_check(
-            self.load_instance_state, saved_state, *args, **kwargs)
+            self.load_instance_state, *args, **kwargs)
 
     @super_check
     def save_instance_state(self, out_state):
