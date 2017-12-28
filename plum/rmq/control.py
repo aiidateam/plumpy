@@ -69,6 +69,8 @@ class ProcessControlPublisher(pubsub.ConnectionListener):
         if connector.is_connected:
             self._open_channel(connector.connection())
 
+    # region control methods
+
     def cancel_process(self, pid, msg=None):
         future = plum.Future()
         message = {'pid': pid, 'intent': Action.CANCEL, 'msg': msg}
@@ -96,6 +98,8 @@ class ProcessControlPublisher(pubsub.ConnectionListener):
             self._queued_messages.append((message, future))
         return future
 
+    # endregion
+
     def on_connection_opened(self, connector, connection):
         self._open_channel(connection)
 
@@ -114,7 +118,6 @@ class ProcessControlPublisher(pubsub.ConnectionListener):
         self._channel = channel
         channel.add_on_close_callback(self._on_channel_close)
         channel.add_on_return_callback(self._on_channel_return)
-        channel.confirm_delivery(self._on_delivery_confirmation)
         declare_exchange(channel, self._exchange_name, self._on_exchange_declareok)
 
         # Declare the response queue
@@ -127,12 +130,6 @@ class ProcessControlPublisher(pubsub.ConnectionListener):
         if props.correlation_id in self._responses:
             future = self._responses.pop(props.correlation_id)
             future.set_exception(RuntimeError("Message could not be delivered"))
-
-    def _on_delivery_confirmation(self, frame):
-        confirmation_type = frame.method.NAME.split('.')[1].lower()
-        LOGGER.info('Received %s for delivery tag: %i',
-                    confirmation_type,
-                    frame.method.delivery_tag)
 
     def _on_exchange_declareok(self, frame):
         self._exchange_bound = True
