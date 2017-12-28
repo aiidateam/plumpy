@@ -3,8 +3,7 @@ import tempfile
 if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
 
-from plum.persistence.pickle_persistence import PicklePersister
-from plum.persistence import PersistedCheckpoint
+from plum.persisters import PersistedCheckpoint, PicklePersister
 from plum.test_utils import ProcessWithCheckpoint
 from test.util import TestCaseWithLoop
 

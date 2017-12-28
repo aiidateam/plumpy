@@ -1,17 +1,107 @@
-import os
-import re
+from abc import ABCMeta, abstractmethod
+from collections import namedtuple
 import errno
 import fnmatch
+import os
 import pickle
-from collections import namedtuple
+from future.utils import with_metaclass
 
-import plum
-from plum.persistence import Persister
-from plum.persistence import PersistedCheckpoint
+from . import utils
+
+__all__ = ['Bundle', 'Persister', 'PicklePersister']
+
+PersistedCheckpoint = namedtuple('PersistedCheckpoint', ['pid', 'tag'])
+
+
+class Bundle(dict):
+    @classmethod
+    def from_dict(cls, *args, **kwargs):
+        self = Bundle.__new__(*args, **kwargs)
+        super(Bundle, self).from_dict(*args, **kwargs)
+        return self
+
+    def __init__(self, persistable):
+        super(Bundle, self).__init__()
+        self['CLASS_NAME'] = utils.class_name(persistable)
+        persistable.save_state(self)
+
+    def unbundle(self, loop=None):
+        cls = utils.load_object(self['CLASS_NAME'])
+        return cls.recreate_from(self, loop)
+
+
+class Persister(with_metaclass(ABCMeta, object)):
+    @abstractmethod
+    def save_checkpoint(self, process, tag=None):
+        """
+        Persist a Process instance
+
+        :param process: :class:`plum.process.Process`
+        :param tag: optional checkpoint identifier to allow distinguishing
+            multiple checkpoints for the same process
+        """
+        pass
+
+    @abstractmethod
+    def load_checkpoint(self, pid, tag=None):
+        """
+        Load a process from a persisted checkpoint by its process id
+
+        :param pid: the process id of the :class:`plum.process.Process`
+        :param tag: optional checkpoint identifier to allow retrieving
+            a specific sub checkpoint for the corresponding process
+        :return: a bundle with the process state
+        :rtype: :class:`plum.Bundle`
+        """
+        pass
+
+    @abstractmethod
+    def get_checkpoints(self):
+        """
+        Return a list of all the current persisted process checkpoints
+        with each element containing the process id and optional checkpoint tag
+
+        :return: list of PersistedCheckpoint tuples
+        """
+        pass
+
+    @abstractmethod
+    def get_process_checkpoints(self, pid):
+        """
+        Return a list of all the current persisted process checkpoints for the
+        specified process with each element containing the process id and
+        optional checkpoint tag
+
+        :param pid: the process pid
+        :return: list of PersistedCheckpoint tuples
+        """
+        pass
+
+    @abstractmethod
+    def delete_checkpoint(self, pid, tag=None):
+        """
+        Delete a persisted process checkpoint. No error will be raised if
+        the checkpoint does not exist
+
+        :param pid: the process id of the :class:`plum.process.Process`
+        :param tag: optional checkpoint identifier to allow retrieving
+            a specific sub checkpoint for the corresponding process
+        """
+        pass
+
+    @abstractmethod
+    def delete_process_checkpoints(self, pid):
+        """
+        Delete all persisted checkpoints related to the given process id
+
+        :param pid: the process id of the :class:`plum.process.Process`
+        """
+        pass
+
 
 PersistedPickle = namedtuple('PersistedPickle', ['checkpoint', 'bundle'])
-
 _PICKLE_SUFFIX = 'pickle'
+
 
 class PicklePersister(Persister):
     """
@@ -90,7 +180,7 @@ class PicklePersister(Persister):
         :param tag: optional checkpoint identifier to allow distinguishing
             multiple checkpoints for the same process
         """
-        bundle = plum.Bundle(process)
+        bundle = Bundle(process)
         checkpoint = PersistedCheckpoint(process.pid, tag)
         persisted_pickle = PersistedPickle(checkpoint, bundle)
 

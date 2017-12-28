@@ -1,11 +1,5 @@
 import os
 import socket
-import threading
-
-from abc import ABCMeta, abstractmethod
-from collections import Sequence
-
-from plum.utils import override
 
 # The key used in messages to give information about the host that send a message
 HOST_KEY = 'host'
@@ -19,3 +13,5 @@ def add_host_info(msg):
         'hostname': socket.gethostname(),
         'pid': os.getpid()
     }
+
+

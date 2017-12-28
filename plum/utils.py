@@ -21,11 +21,10 @@ _default_loop = None
 
 
 class EventHelper(object):
-    def __init__(self, listener_type, loop):
-        assert (listener_type is not None), "Must provide valid listener type"
+    def __init__(self, listener_type):
+        assert listener_type is not None, "Must provide valid listener type"
 
         self._listener_type = listener_type
-        self._loop = loop
         self._listeners = set()
 
     def add_listener(self, listener):
@@ -264,5 +263,3 @@ def load_module(fullname):
         raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
 
     return mod, remainder
-
-

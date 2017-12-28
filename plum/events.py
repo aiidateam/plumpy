@@ -13,7 +13,9 @@ def set_event_loop(loop):
         loop.make_current()
 
 
-def run_until_complete(future, loop):
+def run_until_complete(future, loop=None):
+    if loop is None:
+        loop = get_event_loop()
     def _stop(future):
         loop.stop()
     future.add_done_callback(_stop)

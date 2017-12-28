@@ -5,17 +5,17 @@ import logging
 from .events import *
 from .exceptions import *
 from .futures import *
+from .persisters import *
 from .process import *
 from . import stack
 from .mixins import *
 from .utils import *
-from . import persistence
 
 __all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
-           utils.__all__ + futures.__all__ + mixins.__all__ + ['stack'])
+           utils.__all__ + futures.__all__ + mixins.__all__ + ['stack'] +
+           persisters.__all__)
 
 PersistableEventLoop = ioloop
-Bundle = persistence.Bundle
 
 
 # Do this se we don't get the "No handlers could be found..." warnings that will be produced

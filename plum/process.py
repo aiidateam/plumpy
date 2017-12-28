@@ -530,7 +530,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self.__logger = logger
         self._future = futures.Future()
         # Events and running
-        self.__event_helper = utils.EventHelper(ProcessListener, self.loop())
+        self.__event_helper = utils.EventHelper(ProcessListener)
 
     # region State entry/exit events
 
