@@ -118,6 +118,8 @@ class ProcessControlPublisher(pubsub.ConnectionListener):
         self._channel = channel
         channel.add_on_close_callback(self._on_channel_close)
         channel.add_on_return_callback(self._on_channel_return)
+        # Need to confirm delivery so unroutable messages generate a return callback
+        channel.confirm_delivery()
         declare_exchange(channel, self._exchange_name, self._on_exchange_declareok)
 
         # Declare the response queue
