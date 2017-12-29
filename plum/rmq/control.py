@@ -9,7 +9,7 @@ import uuid
 import yaml
 
 import plum
-from plum.rmq.util import add_host_info
+from plum.rmq.utils import add_host_info
 from plum.utils import override
 from . import defaults
 from . import pubsub
@@ -36,8 +36,7 @@ _ACTION_FAILED = 'ACTION_FAILED'
 
 def declare_exchange(channel, name, done_callback):
     channel.exchange_declare(
-        done_callback,
-        exchange=name, exchange_type='topic')
+        done_callback, exchange=name, exchange_type='topic', auto_delete=True)
 
 
 class ProcessControlPublisher(pubsub.ConnectionListener):
@@ -123,7 +122,7 @@ class ProcessControlPublisher(pubsub.ConnectionListener):
         declare_exchange(channel, self._exchange_name, self._on_exchange_declareok)
 
         # Declare the response queue
-        channel.queue_declare(self._on_queue_declareok, exclusive=True)
+        channel.queue_declare(self._on_queue_declareok, exclusive=True, auto_delete=True)
 
     def _on_channel_close(self, channel, reply_code, reply_text):
         self._reset_channel()
@@ -200,7 +199,7 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
         # Set up communications
         self._channel = connection.channel()
         self._channel.exchange_declare(exchange, exchange_type='fanout')
-        result = self._channel.queue_declare(exclusive=True)
+        result = self._channel.queue_declare(exclusive=True, auto_delete=True)
         queue = result.method.queue
         self._channel.queue_bind(queue, exchange)
         self._channel.basic_consume(self._on_control, queue=queue, no_ack=True)
@@ -304,7 +303,7 @@ class RmqProcessController(pubsub.ConnectionListener):
         The exchange is up, now create an temporary, exclusive queue for us
         to receive messages on.
         """
-        self._channel.queue_declare(self._on_queue_declareok, exclusive=True)
+        self._channel.queue_declare(self._on_queue_declareok, exclusive=True, auto_delete=True)
 
     def _on_queue_declareok(self, frame):
         """

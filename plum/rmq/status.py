@@ -7,7 +7,7 @@ import uuid
 
 import plum
 from plum.rmq.defaults import Defaults
-from . import util
+from . import utils
 from plum.utils import override
 
 __all__ = ['ProcessStatusRequester', 'ProcessStatusSubscriber']
@@ -131,7 +131,7 @@ class ProcessStatusSubscriber(apricotpy.TickingLoopObject):
     def message_received(self, subject, body, sender_id):
         if subject == plum.ProcessMessage.STATUS_REPORT:
             response = dict(body)
-            util.add_host_info(response)
+            utils.add_host_info(response)
             self._channel.basic_publish(
                 exchange='', routing_key=self._last_props.reply_to,
                 properties=pika.BasicProperties(correlation_id=self._last_props.correlation_id),

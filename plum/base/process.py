@@ -5,6 +5,9 @@ import sys
 import traceback
 import yaml
 
+# TODO: Remove this later
+import plum.utils
+
 try:
     import tblib
 
@@ -114,12 +117,28 @@ class Created(State):
                ProcessState.CANCELLED,
                ProcessState.FAILED}
 
+    RUN_FN = 'run_fn'
+    ARGS = 'args'
+    KWARGS = 'kwargs'
+
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Created, self).__init__(process)
         assert run_fn is not None
         self.run_fn = run_fn
         self.args = args
         self.kwargs = kwargs
+
+    def save_instance_state(self, out_state):
+        super(Created, self).save_instance_state(out_state)
+        out_state[self.RUN_FN] = self.run_fn.__name__
+        out_state[self.ARGS] = self.args
+        out_state[self.KWARGS] = self.kwargs
+
+    def load_instance_state(self, process, saved_state):
+        super(Created, self).load_instance_state(process, saved_state)
+        self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
+        self.args = saved_state[self.ARGS]
+        self.kwargs = saved_state[self.KWARGS]
 
     def play(self):
         self.transition_to(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)

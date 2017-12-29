@@ -17,7 +17,6 @@ class TestControl(TestCaseWithLoop):
     def setUp(self):
         super(TestControl, self).setUp()
 
-        self.loop = plum.get_event_loop()
         self.connector = rmq.RmqConnector('amqp://guest:guest@localhost:5672/', loop=self.loop)
         self.exchange_name = "{}.{}.control".format(self.__class__.__name__, uuid.uuid4())
 
