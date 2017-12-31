@@ -68,12 +68,12 @@ class ProcessMessage(object):
 class Running(base.Running):
     def enter(self):
         super(Running, self).enter()
-        self.process._call_soon(self._run)
+        self.process.call_soon(self._run)
 
     def load_instance_state(self, process, saved_state):
         super(Running, self).load_instance_state(process, saved_state)
         if self.in_state:
-            self.process._call_soon(self._run)
+            self.process.call_soon(self._run)
 
     def _run(self):
         # Guard, in case we left the state before the callback was actioned
@@ -520,6 +520,20 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
                 self.loop(), subject, body, self.uuid, sender_id
             )
 
+    def call_soon(self, callback, *args, **kwargs):
+        """ Schedule a callback as soon as possible """
+        self._loop.add_callback(callback, *args, **kwargs)
+
+    def call_later(self, delay, callback, *args, **kwargs):
+        """ Schedule a callback delayed by some time in seconds """
+        self._loop.call_later(delay, callback, *args, **kwargs)
+
+    def call_at(self, when, callback, *args, **kwargs):
+        """ Schedule a callback at a particular time """
+        self._loop.call_at(when, callback, *args, **kwargs)
+
+    # region State entry/exit events
+
     def __init(self, logger, loop=None):
         """
         Common place to put all runtime state variables i.e. those that don't need
@@ -532,18 +546,16 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         # Events and running
         self.__event_helper = utils.EventHelper(ProcessListener)
 
-    # region State entry/exit events
-
     def _fire_event(self, event, *args, **kwargs):
         self.__event_helper.fire_event(event, self, *args, **kwargs)
+
+    # endregion
 
     def _send_message(self, subject, body=None, to=None):
         body_ = {'uuid': self.uuid}
         if body is not None:
             body_.update(body)
         self.send_message(subject, to=to, body=body_)
-
-    # endregion
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
@@ -567,9 +579,6 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             self._future.cancel()
         elif self.state == ProcessState.FAILED:
             self._future.set_exception(self._state.exception)
-
-    def _call_soon(self, fn, *args, **kwargs):
-        self._loop.add_callback(fn, *args, **kwargs)
 
 
 def get_pid_from_bundle(process_bundle):
