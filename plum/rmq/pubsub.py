@@ -141,9 +141,11 @@ class RmqConnector(object):
             self._channels.append(channel)
             channel.add_on_close_callback(self._on_channel_closed)
 
-    def _on_channel_closed(self, channel):
+    def _on_channel_closed(self, channel, reply_code, reply_text):
         try:
             self._channels.remove(channel)
+            LOGGER.info("Channel '{}' closed.  Code '{}', text '{}'".format(
+                channel.channel_number, reply_code, reply_text))
         except ValueError:
             pass
 
