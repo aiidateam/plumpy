@@ -70,7 +70,9 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
                  decoder=yaml.load,
                  response_encoder=yaml.dump,
                  loop=None,
-                 persister=None):
+                 persister=None,
+                 unbunble_args=(),
+                 unbunble_kwargs=None):
         """
         :param connector: An RMQ connector
         :type connector: :class:`pubsub.RmqConnector`
@@ -80,6 +82,10 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
         :param loop: The event loop
         :param persister: The persister for continuing a process
         :type persister: :class:`plum.Persister`
+        :param unbunble_args: Positional arguments passed to saved_state.unbundle
+            when continuing a process
+        :param unbunble_kwargs: Keyword arguments passed to saved_state.unbundle
+            when continuing a process (by default will pass loop)
         """
         self._connector = connector
         self._queue_name = queue_name
@@ -88,6 +94,8 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
         self._response_encode = response_encoder
         self._loop = loop if loop is not None else plum.get_event_loop()
         self._persister = persister
+        self._unbundle_args = unbunble_args
+        self._unbundle_kwargs = unbunble_kwargs if unbunble_kwargs is not None else {'loop': loop}
 
         # Start RMQ communication
         self._reset_channel()
@@ -162,7 +170,7 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
             raise RuntimeError("Cannot continue process no persister")
         tag = task.get(TAG_KEY, None)
         saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
-        proc = saved_state.unbundle(self._loop)
+        proc = saved_state.unbundle(*self._unbundle_args, **self._unbundle_kwargs)
         proc.play()
         return True
 

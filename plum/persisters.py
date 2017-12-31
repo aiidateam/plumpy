@@ -25,9 +25,17 @@ class Bundle(dict):
         self['CLASS_NAME'] = utils.class_name(persistable)
         persistable.save_state(self)
 
-    def unbundle(self, loop=None):
+    def unbundle(self, *args, **kwargs):
+        """
+        This method loads the class of the object and calls its recreate_from
+        method passing the positional and keyword arguments.
+
+        :param args: Positional arguments for recreate_from
+        :param kwargs: Keyword arguments for recreate_from
+        :return: An instance of the Persistable
+        """
         cls = utils.load_object(self['CLASS_NAME'])
-        return cls.recreate_from(self, loop)
+        return cls.recreate_from(self, *args, **kwargs)
 
 
 class Persister(with_metaclass(ABCMeta, object)):

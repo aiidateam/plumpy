@@ -217,7 +217,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     def recreate_from(cls, *args, **kwargs):
         """"""
         """
-        Recreate a process from a saved state
+        Recreate a process from a saved state, passing any positional and 
+        keyword arguments on to load_instance_state
 
         :param args: The positional arguments for load_instance_state
         :param kwargs: The keyword arguments for load_instance_state
