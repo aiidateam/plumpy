@@ -63,72 +63,85 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
         finally:
             shutil.rmtree(tmppath)
 
+    def test_launch_callback(self):
+        """Test simply launching a valid process"""
+        launched_futures = []
 
-            # def test_launch(self):
-            #     # Try launching a process
-            #     launch = self._launch(plum.test_utils.DummyProcessWithOutput)
-            #
-            #     proc = None
-            #     t0 = time.time()
-            #     while proc is None and time.time() - t0 < 3.:
-            #         self.runner_loop.tick()
-            #         try:
-            #             proc = self.runner_loop.get_process(launch.pid)
-            #             break
-            #         except ValueError:
-            #             pass
-            #     self.assertIsNotNone(proc)
-            #
-            #     result = proc.loop().run_until_complete(HansKlok(proc))
-            #     awaitable_result = self.launcher_loop.run_until_complete(HansKlok(launch))
-            #
-            #     self.assertEqual(result, awaitable_result)
-            #
-            # def test_launch_cancel(self):
-            #     # Try launching a process
-            #     awaitable = self._launch(plum.test_utils.DummyProcessWithOutput)
-            #
-            #     proc = None
-            #     t0 = time.time()
-            #     while proc is None and time.time() - t0 < 3.:
-            #         self.runner_loop.tick()
-            #         try:
-            #             proc = self.runner_loop.get_process(awaitable.pid)
-            #             break
-            #         except ValueError:
-            #             pass
-            #     self.assertIsNotNone(proc)
-            #
-            #     # Now cancel it
-            #     proc.cancel()
-            #     self.runner_loop.tick()
-            #
-            #     with self.assertRaises(apricotpy.CancelledError):
-            #         self.launcher_loop.run_until_complete(HansKlok(awaitable))
-            #
-            # def test_launch_exception(self):
-            #     # Try launching a process
-            #     awaitable = self._launch(plum.test_utils.ExceptionProcess)
-            #
-            #     proc = None
-            #     t0 = time.time()
-            #     while proc is None and time.time() - t0 < 3.:
-            #         self.runner_loop.tick()
-            #         try:
-            #             proc = self.runner_loop.get_process(awaitable.pid)
-            #             break
-            #         except ValueError:
-            #             pass
-            #     self.assertIsNotNone(proc)
-            #
-            #     # Now let it run
-            #     with self.assertRaises(RuntimeError):
-            #         result = proc.loop().run_until_complete(HansKlok(proc))
-            #
-            #     with self.assertRaises(RuntimeError):
-            #         result = self.launcher_loop.run_until_complete(HansKlok(awaitable))
-            #
-            # def _launch(self, proc_class, *args, **kwargs):
-            #     proc = self.launcher_loop.create(proc_class, *args, **kwargs)
-            #     bundle = plum.Bundle(proc)
-            #     return self.publisher.launch(bundle)
+        def launched(future):
+            launched_futures.append(future)
+
+        launch_future = self.publisher.launch_process(
+            test_utils.DummyProcessWithOutput, published_callback=launched)
+        result = plum.run_until_complete(launch_future)
+        self.assertEqual(launch_future, launched_futures[0])
+        self.assertIsNotNone(result)
+
+
+        # def test_launch(self):
+        #     # Try launching a process
+        #     launch = self._launch(plum.test_utils.DummyProcessWithOutput)
+        #
+        #     proc = None
+        #     t0 = time.time()
+        #     while proc is None and time.time() - t0 < 3.:
+        #         self.runner_loop.tick()
+        #         try:
+        #             proc = self.runner_loop.get_process(launch.pid)
+        #             break
+        #         except ValueError:
+        #             pass
+        #     self.assertIsNotNone(proc)
+        #
+        #     result = proc.loop().run_until_complete(HansKlok(proc))
+        #     awaitable_result = self.launcher_loop.run_until_complete(HansKlok(launch))
+        #
+        #     self.assertEqual(result, awaitable_result)
+        #
+        # def test_launch_cancel(self):
+        #     # Try launching a process
+        #     awaitable = self._launch(plum.test_utils.DummyProcessWithOutput)
+        #
+        #     proc = None
+        #     t0 = time.time()
+        #     while proc is None and time.time() - t0 < 3.:
+        #         self.runner_loop.tick()
+        #         try:
+        #             proc = self.runner_loop.get_process(awaitable.pid)
+        #             break
+        #         except ValueError:
+        #             pass
+        #     self.assertIsNotNone(proc)
+        #
+        #     # Now cancel it
+        #     proc.cancel()
+        #     self.runner_loop.tick()
+        #
+        #     with self.assertRaises(apricotpy.CancelledError):
+        #         self.launcher_loop.run_until_complete(HansKlok(awaitable))
+        #
+        # def test_launch_exception(self):
+        #     # Try launching a process
+        #     awaitable = self._launch(plum.test_utils.ExceptionProcess)
+        #
+        #     proc = None
+        #     t0 = time.time()
+        #     while proc is None and time.time() - t0 < 3.:
+        #         self.runner_loop.tick()
+        #         try:
+        #             proc = self.runner_loop.get_process(awaitable.pid)
+        #             break
+        #         except ValueError:
+        #             pass
+        #     self.assertIsNotNone(proc)
+        #
+        #     # Now let it run
+        #     with self.assertRaises(RuntimeError):
+        #         result = proc.loop().run_until_complete(HansKlok(proc))
+        #
+        #     with self.assertRaises(RuntimeError):
+        #         result = self.launcher_loop.run_until_complete(HansKlok(awaitable))
+        #
+        # def _launch(self, proc_class, *args, **kwargs):
+        #     proc = self.launcher_loop.create(proc_class, *args, **kwargs)
+        #     bundle = plum.Bundle(proc)
+        #     return self.publisher.launch(bundle)

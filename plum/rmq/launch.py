@@ -214,6 +214,9 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
             properties=pika.BasicProperties(correlation_id=correlation_id))
 
 
+TaskInfo = namedtuple("TaskInfo", ['task', 'future', 'seq_id', 'published_callback'])
+
+
 class ProcessLaunchPublisher(pubsub.ConnectionListener):
     """
     Class used to publishes messages requesting a process to be launched
@@ -246,8 +249,8 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         self._loop = loop if loop is not None else plum.get_event_loop()
 
         self._publish_queue = []
-        # A mapping of correlation id: future
-        self._futures = {}
+        # A mapping of correlation id to TaskInfo tuple
+        self._task_info = {}
 
         # Start RMQ communication
         self._reset_channel()
@@ -265,20 +268,23 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         self._connector.remove_connection_listener(self)
         self._connector = None
 
-    def launch_process(self, process_class, init_args=None, init_kwargs=None):
+    def launch_process(self, process_class, init_args=None, init_kwargs=None,
+                       published_callback=None):
         """
         Send a request to continue a Process from the provided bundle
 
         :param process_class: The Process to launch
         :param init_args: positional args for process class constructor
         :param init_kwargs: keyword args for process class constructor
+        :param published_callback: A callback function called when the launch
+            task has been received by the broker
         """
         task = create_launch_task(process_class, init_args, init_kwargs)
-        return self._action_task(task)
+        return self._action_task(task, published_callback)
 
-    def continue_process(self, pid, tag=None):
+    def continue_process(self, pid, tag=None, published_callback=None):
         task = create_continue_task(pid, tag)
-        return self._action_task(task)
+        return self._action_task(task, published_callback)
 
     def initialised_future(self):
         return self._initialised_future
@@ -288,12 +294,14 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         self._initialised_future.add_done_callback(self._on_ready)
         self._channel = None
         self._queues_created = 0
+        self._num_tasks = 0
 
     def _open_channel(self):
         self._connector.open_channel(self._on_channel_open)
 
     def _on_channel_open(self, channel):
         self._channel = channel
+        channel.confirm_delivery(self._delivery_confirmed)
         # The task queue
         channel.queue_declare(
             self._on_launch_queue_declareok,
@@ -314,23 +322,24 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         self._queue_created()
 
     def _queue_created(self):
-        """ Count the number of queues we've opened, when both response and """
+        """ When all queues have been declared we are initialised """
         if self._queues_created == self.ALL_QUEUES_CREATED:
             self._initialised_future.set_result(True)
 
-    def _action_task(self, task):
+    def _action_task(self, task, published_callback=None):
+        task_info = TaskInfo(task, plum.Future(), self._num_tasks + 1, published_callback)
+
         correlation_id = self._new_correlation_id()
-        future = plum.Future()
         if self._publishing:
             # Publish it
-            future = plum.Future()
-            self._futures[correlation_id] = future
-            self._publish_task(task, correlation_id)
+            self._publish_task(task_info.task, correlation_id)
         else:
             # Queue it
-            self._publish_queue.append((task, correlation_id, future))
+            self._publish_queue.append(correlation_id)
 
-        return future
+        self._task_info[correlation_id] = task_info
+        self._num_tasks += 1
+        return task_info.future
 
     def _publish_task(self, task, correlation_id):
         properties = pika.BasicProperties(
@@ -344,9 +353,9 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
 
     def _on_response(self, ch, method, props, body):
         try:
-            future = self._futures.pop(props.correlation_id)
+            task_info = self._task_info.pop(props.correlation_id)
             response = self._response_decode(body)
-            utils.response_to_future(response[utils.RESPONSE_KEY], future)
+            utils.response_to_future(response[utils.RESPONSE_KEY], task_info.future)
         except ValueError:
             pass
 
@@ -354,20 +363,31 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         return str(uuid.uuid4())
 
     def _publish_queued(self):
-        for task, correlation_id, future in self._publish_queue:
+        for correlation_id in self._publish_queue:
             try:
-                self._publish_task(task, correlation_id)
-                self._futures[correlation_id] = future
-            except KeyboardInterrupt:
-                raise
-            except Exception:
-                future.set_exc_info(sys.exc_info())
+                task_info = self._task_info[correlation_id]
+                try:
+                    self._publish_task(task_info.task, correlation_id)
+                except KeyboardInterrupt:
+                    raise
+                except Exception:
+                    task_info.future.set_exc_info(sys.exc_info())
+            except IndexError:
+                _LOGGER.error(
+                    "The task info for queued task '{}' could not be found".format(correlation_id))
         self._publish_queue = []
 
     def _on_ready(self, future):
         if future.exception():
             self.close()
         self._publish_queued()
+
+    def _delivery_confirmed(self, frame):
+        for task_info in self._task_info.values():
+            if task_info.seq_id == frame.method.delivery_tag:
+                if task_info.published_callback is not None:
+                    task_info.published_callback(task_info.future)
+                break
 
     @property
     def _publishing(self):
