@@ -1,5 +1,7 @@
 from collections import namedtuple
+from functools import partial
 import logging
+import plum
 import plum.utils
 import pika
 import sys
@@ -29,12 +31,12 @@ LAUNCH_TASK = 'launch'
 CONTINUE_TASK = 'continue'
 
 
-def create_launch_task(process_class, *args, **kwargs):
+def create_launch_task(process_class, init_args=None, init_kwargs=None):
     task = {TASK_KEY: LAUNCH_TASK, PROCESS_CLASS_KEY: plum.utils.class_name(process_class)}
-    if args:
-        task[ARGS_KEY] = args
-    if kwargs:
-        task[KWARGS_KEY] = kwargs
+    if init_args:
+        task[ARGS_KEY] = init_args
+    if init_kwargs:
+        task[KWARGS_KEY] = init_kwargs
     return task
 
 
@@ -106,8 +108,12 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
     def on_connection_opened(self, connector, connection):
         self._open_channel()
 
+    def initialised_future(self):
+        return self._initialised_future
+
     def _reset_channel(self):
         self._channel = None
+        self._initialised_future = plum.Future()
 
     def _open_channel(self):
         self._connector.open_channel(self._on_channel_open)
@@ -120,8 +126,9 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
             durable=not self._testing_mode, auto_delete=self._testing_mode)
 
     def _on_queue_declaredok(self, frame):
-        self._consumer_tag = self._channel.basic_consume(
-            self._on_task, self._queue_name)
+        self._consumer_tag = \
+            self._channel.basic_consume(self._on_task, self._queue_name)
+        self._initialised_future.set_result(True)
 
     def _on_task(self, ch, method, props, body):
         """
@@ -136,24 +143,45 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
             task = self._decode(body)
             task_type = task[TASK_KEY]
             if task_type == LAUNCH_TASK:
-                response = utils.result_response(self._launch(task))
+                result = self._launch(task)
             elif task_type == CONTINUE_TASK:
                 # If we don't have a persister then we reject the message and
-                # allow it to be requeued
+                # allow it to be requeued, this way another launcher can potentially
+                # deal with it
                 if self._persister is None:
                     self._channel.basic_reject(delivery_tag=method.delivery_tag)
                     return
-                response = utils.result_response(self._continue(task))
+                result = self._continue(task)
             else:
                 raise ValueError("Invalid task type '{}'".format(task_type))
+
+            if isinstance(result, plum.Future):
+                result.add_done_callback(partial(self._on_task_done, props, method))
+            else:
+                # Finished
+                self._task_finished(props, method, utils.result_response(result))
         except KeyboardInterrupt:
             raise
         except Exception as e:
-            response = utils.exception_response(e)
+            self._task_finished(props, method, utils.exception_response(e))
 
-        # Send the response
-        self._send_response(
-            self._channel, props.correlation_id, props.reply_to, response)
+    def _on_task_done(self, props, method, future):
+        try:
+            response = utils.result_response(future.result())
+        except Exception as e:
+            response = utils.exception_response(e)
+        self._task_finished(props, method, response)
+
+    def _task_finished(self, props, method, response):
+        """
+        Send an acknowledgement of the task being actioned and a response to the
+        initiator.
+
+        :param props: The message properties
+        :param method: The message method
+        :param response: The response to send to the initiator
+        """
+        self._send_response(self._channel, props.correlation_id, props.reply_to, response)
         self._channel.basic_ack(delivery_tag=method.delivery_tag)
 
     def _launch(self, task):
@@ -172,7 +200,7 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
         saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
         proc = saved_state.unbundle(*self._unbundle_args, **self._unbundle_kwargs)
         proc.play()
-        return True
+        return proc.future()
 
     def _send_response(self, ch, correlation_id, reply_to, response):
         # Build full response
@@ -190,6 +218,7 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
     """
     Class used to publishes messages requesting a process to be launched
     """
+    # Bitmasks for starting up the launcher
     TASK_QUEUE_CREATED = 0b01
     RESPONSE_QUEUE_CREATED = 0b10
     ALL_QUEUES_CREATED = 0b11
@@ -207,8 +236,6 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         :param encoder: A message encoder
         :param response_decoder: A response encoder
         :param loop: The event loop
-        :param persister: The persister for continuing a process
-        :type persister: :class:`plum.Persister`
         """
         self._connector = connector
         self._queue_name = queue_name
@@ -232,30 +259,35 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         self._open_channel()
 
     def close(self):
+        self._channel.close()
+        self._initialised_future = None
+        self._channel = None
         self._connector.remove_connection_listener(self)
         self._connector = None
-        self._channel.close()
-        self._channel = None
 
-    def launch(self, process_class, *args, **kwargs):
+    def launch_process(self, process_class, init_args=None, init_kwargs=None):
         """
         Send a request to continue a Process from the provided bundle
 
         :param process_class: The Process to launch
-        :param args: positional args for process class constructor
-        :param kwargs: keyword args for process class constructor
+        :param init_args: positional args for process class constructor
+        :param init_kwargs: keyword args for process class constructor
         """
-        task = create_launch_task(process_class, *args, **kwargs)
+        task = create_launch_task(process_class, init_args, init_kwargs)
         return self._action_task(task)
 
     def continue_process(self, pid, tag=None):
         task = create_continue_task(pid, tag)
         return self._action_task(task)
 
+    def initialised_future(self):
+        return self._initialised_future
+
     def _reset_channel(self):
+        self._initialised_future = plum.Future()
+        self._initialised_future.add_done_callback(self._on_ready)
         self._channel = None
         self._queues_created = 0
-        self._publishing = False
 
     def _open_channel(self):
         self._connector.open_channel(self._on_channel_open)
@@ -284,8 +316,7 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
     def _queue_created(self):
         """ Count the number of queues we've opened, when both response and """
         if self._queues_created == self.ALL_QUEUES_CREATED:
-            self._publishing = True
-            self._publish_queued()
+            self._initialised_future.set_result(True)
 
     def _action_task(self, task):
         correlation_id = self._new_correlation_id()
@@ -332,3 +363,12 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
             except Exception:
                 future.set_exc_info(sys.exc_info())
         self._publish_queue = []
+
+    def _on_ready(self, future):
+        if future.exception():
+            self.close()
+        self._publish_queued()
+
+    @property
+    def _publishing(self):
+        return self._initialised_future.done() and self._initialised_future.result()

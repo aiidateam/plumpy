@@ -27,6 +27,9 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
         self.publisher = ProcessLaunchPublisher(self.connector, self.queue_name, testing_mode=True)
 
         self.connector.connect()
+        # Run the loop until until both are ready
+        plum.run_until_complete(
+            plum.gather(self.subscriber.initialised_future(), self.publisher.initialised_future()))
 
     def tearDown(self):
         # Close the connector before calling super because it will
@@ -36,7 +39,7 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
 
     def test_simple_launch(self):
         """Test simply launching a valid process"""
-        launch_future = self.publisher.launch(test_utils.DummyProcessWithOutput)
+        launch_future = self.publisher.launch_process(test_utils.DummyProcessWithOutput)
         result = plum.run_until_complete(launch_future)
         self.assertIsNotNone(result)
 
@@ -45,7 +48,7 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
         try:
             persister = plum.PicklePersister(tmppath)
 
-            process = test_utils.WaitForSignalProcess()
+            process = test_utils.DummyProcessWithOutput()
             persister.save_checkpoint(process)
             pid = process.pid
             del process

@@ -16,8 +16,10 @@ def set_event_loop(loop):
 def run_until_complete(future, loop=None):
     if loop is None:
         loop = get_event_loop()
+
     def _stop(future):
         loop.stop()
+
     future.add_done_callback(_stop)
     loop.start()
     return future.result()
