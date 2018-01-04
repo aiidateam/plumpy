@@ -1,4 +1,3 @@
-import apricotpy
 import collections
 import json
 import pickle
@@ -27,15 +26,13 @@ def status_request_decode(msg):
 RequestInfo = collections.namedtuple('RequestInfo', ['future', 'responses', 'callback'])
 
 
-class ProcessStatusRequester(apricotpy.TickingLoopObject):
+class ProcessStatusRequester(object):
     """
     This class can be used to request the status of processes
     """
 
     def __init__(self, connection, exchange=Defaults.STATUS_REQUEST_EXCHANGE,
                  decoder=pickle.loads, loop=None):
-        super(ProcessStatusRequester, self).__init__(loop)
-
         self._exchange = exchange
         self._decode = decoder
         self._requests = {}
@@ -92,7 +89,7 @@ class ProcessStatusRequester(apricotpy.TickingLoopObject):
         rinfo.future.set_result(rinfo.responses)
 
 
-class ProcessStatusSubscriber(apricotpy.TickingLoopObject):
+class ProcessStatusSubscriber(object):
     """
     This class listens for messages asking for a status update from a group of 
     processes.
@@ -101,8 +98,6 @@ class ProcessStatusSubscriber(apricotpy.TickingLoopObject):
     def __init__(self, connection,
                  exchange=Defaults.STATUS_REQUEST_EXCHANGE,
                  decoder=status_request_decode, encoder=pickle.dumps, loop=None):
-        super(ProcessStatusSubscriber, self).__init__(loop)
-
         self._decode = decoder
         self._encode = encoder
         self._stopping = False

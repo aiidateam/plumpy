@@ -1,11 +1,9 @@
-import apricotpy
 import plum
 from plum import Process, ProcessState
 from plum.test_utils import ThreeSteps, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plum.test_utils import check_process_against_snapshots
 from plum.test_utils import ProcessSaver
-from plum.wait_ons import run_until
 from . import util
 
 
@@ -41,7 +39,7 @@ class TestWaitingProcess(util.TestCaseWithLoop):
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
-        new_bundle = apricotpy.Bundle()
+        new_bundle = plum.Bundle()
         proc.save_instance_state(new_bundle)
         self.assertEqual(snapshot.bundle, new_bundle,
                          "Bundle mismatch with process class {}\n"

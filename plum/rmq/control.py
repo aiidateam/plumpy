@@ -1,4 +1,3 @@
-import apricotpy
 import json
 from functools import partial
 import logging
@@ -178,7 +177,7 @@ class ProcessControlPublisher(pubsub.ConnectionListener):
         self._queued_messages = []
 
 
-class ProcessControlSubscriber(apricotpy.TickingLoopObject):
+class ProcessControlSubscriber(object):
     def __init__(self, connection, exchange=defaults.CONTROL_EXCHANGE,
                  decoder=pickle.loads, response_encoder=json.dumps, loop=None):
         """
@@ -189,8 +188,6 @@ class ProcessControlSubscriber(apricotpy.TickingLoopObject):
         :param exchange: The name of the exchange to use
         :param decoder:
         """
-        super(ProcessControlSubscriber, self).__init__(loop)
-
         self._decode = decoder
         self._response_encode = response_encoder
         self._stopping = False
