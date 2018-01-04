@@ -112,6 +112,7 @@ class ProcessControlPublisher(pubsub.ConnectionListener):
         self._callback_queue_name = None
         self._channel = None
         self._exchange_bound = False
+        self._num_published = 0
 
     def _on_channel_open(self, channel):
         self._channel = channel

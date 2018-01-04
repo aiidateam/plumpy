@@ -65,16 +65,51 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
 
     def test_launch_callback(self):
         """Test simply launching a valid process"""
-        launched_futures = []
+        # Don't let the subscriber respond to any messages
+        self.subscriber.close()
+
+        num_to_launch = 10
+
+        # Keep track of the launched callbacks we get
+        futures_from_callback = set()
+        got_all_launched = plum.Future()
 
         def launched(future):
-            launched_futures.append(future)
+            futures_from_callback.add(future)
+            if len(futures_from_callback) == num_to_launch:
+                got_all_launched.set_result(True)
 
-        launch_future = self.publisher.launch_process(
-            test_utils.DummyProcessWithOutput, published_callback=launched)
-        result = plum.run_until_complete(launch_future)
-        self.assertEqual(launch_future, launched_futures[0])
-        self.assertIsNotNone(result)
+        launch_futures = set()
+        for _ in range(num_to_launch):
+            future = self.publisher.launch_process(
+                test_utils.DummyProcessWithOutput, published_callback=launched)
+            launch_futures.add(future)
+
+        self.assertTrue(plum.run_until_complete(got_all_launched))
+        self.assertSetEqual(launch_futures, futures_from_callback)
+
+    def test_launch_callback_with_response(self):
+        """Test simply launching a valid process"""
+        num_to_launch = 10
+
+        # Keep track of the launched callbacks we get
+        futures_from_callback = set()
+        got_all_launched = plum.Future()
+
+        def launched(future):
+            futures_from_callback.add(future)
+            if len(futures_from_callback) == num_to_launch:
+                got_all_launched.set_result(True)
+
+        launch_futures = set()
+        for _ in range(num_to_launch):
+            future = self.publisher.launch_process(
+                test_utils.DummyProcessWithOutput, published_callback=launched)
+            launch_futures.add(future)
+
+        results = plum.run_until_complete(plum.gather(got_all_launched, *launch_futures))
+        self.assertSetEqual(launch_futures, futures_from_callback)
+        self.assertNotIn(None, results)
 
 
         # def test_launch(self):

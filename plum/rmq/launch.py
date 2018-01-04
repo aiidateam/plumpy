@@ -1,3 +1,4 @@
+import collections
 from collections import namedtuple
 from functools import partial
 import logging
@@ -111,6 +112,13 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
     def initialised_future(self):
         return self._initialised_future
 
+    def close(self):
+        self._connector.remove_connection_listener(self)
+        self._connector = None
+        self._channel.close()
+        self._channel = None
+        self._initialised_future = None
+
     def _reset_channel(self):
         self._channel = None
         self._initialised_future = plum.Future()
@@ -214,7 +222,15 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
             properties=pika.BasicProperties(correlation_id=correlation_id))
 
 
-TaskInfo = namedtuple("TaskInfo", ['task', 'future', 'seq_id', 'published_callback'])
+class TaskInfo(object):
+    delivery_confirmed = False
+    published_callback = None
+
+    def __init__(self, task, correlation_id):
+        self.task = task
+        self.correlation_id = correlation_id
+        self.future = plum.Future()
+        self.publish_future = plum.Future()
 
 
 class ProcessLaunchPublisher(pubsub.ConnectionListener):
@@ -249,8 +265,9 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         self._loop = loop if loop is not None else plum.get_event_loop()
 
         self._publish_queue = []
-        # A mapping of correlation id to TaskInfo tuple
-        self._task_info = {}
+        # The list of TaskInfo objects are they were sent
+        self._task_info = collections.OrderedDict()
+        self._num_tasks = 0
 
         # Start RMQ communication
         self._reset_channel()
@@ -294,7 +311,6 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         self._initialised_future.add_done_callback(self._on_ready)
         self._channel = None
         self._queues_created = 0
-        self._num_tasks = 0
 
     def _open_channel(self):
         self._connector.open_channel(self._on_channel_open)
@@ -327,18 +343,20 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
             self._initialised_future.set_result(True)
 
     def _action_task(self, task, published_callback=None):
-        task_info = TaskInfo(task, plum.Future(), self._num_tasks + 1, published_callback)
-
         correlation_id = self._new_correlation_id()
+        self._num_tasks += 1
+        task_info = TaskInfo(task, correlation_id)
+        task_info.publish_future.add_done_callback(lambda x: published_callback(task_info.future))
+
+        seq_no = self._num_tasks
+        self._task_info[self._num_tasks] = task_info
         if self._publishing:
             # Publish it
             self._publish_task(task_info.task, correlation_id)
         else:
             # Queue it
-            self._publish_queue.append(correlation_id)
+            self._publish_queue.append(seq_no)
 
-        self._task_info[correlation_id] = task_info
-        self._num_tasks += 1
         return task_info.future
 
     def _publish_task(self, task, correlation_id):
@@ -353,28 +371,29 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
 
     def _on_response(self, ch, method, props, body):
         try:
-            task_info = self._task_info.pop(props.correlation_id)
+            seq_no, task_info = self._get_task_info(props.correlation_id)
             response = self._response_decode(body)
             utils.response_to_future(response[utils.RESPONSE_KEY], task_info.future)
-        except ValueError:
+            del self._task_info[seq_no]
+        except IndexError:
             pass
 
     def _new_correlation_id(self):
         return str(uuid.uuid4())
 
     def _publish_queued(self):
-        for correlation_id in self._publish_queue:
+        for i in self._publish_queue:
             try:
-                task_info = self._task_info[correlation_id]
+                task_info = self._task_info[i]
                 try:
-                    self._publish_task(task_info.task, correlation_id)
+                    self._publish_task(task_info.task, task_info.correlation_id)
                 except KeyboardInterrupt:
                     raise
                 except Exception:
                     task_info.future.set_exc_info(sys.exc_info())
             except IndexError:
                 _LOGGER.error(
-                    "The task info for queued task '{}' could not be found".format(correlation_id))
+                    "The task info for queued task '{}' could not be found".format(i))
         self._publish_queue = []
 
     def _on_ready(self, future):
@@ -383,11 +402,18 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         self._publish_queued()
 
     def _delivery_confirmed(self, frame):
-        for task_info in self._task_info.values():
-            if task_info.seq_id == frame.method.delivery_tag:
-                if task_info.published_callback is not None:
-                    task_info.published_callback(task_info.future)
+        for seq_no, task_info in self._task_info.items():
+            if seq_no == frame.method.delivery_tag or frame.method.multiple:
+                if not task_info.publish_future.done():
+                    task_info.publish_future.set_result(True)
+
+            if seq_no == frame.method.delivery_tag:
                 break
+
+    def _get_task_info(self, correlation_id):
+        for seq_no, task_info in self._task_info.items():
+            if task_info.correlation_id == correlation_id:
+                return seq_no, task_info
 
     @property
     def _publishing(self):

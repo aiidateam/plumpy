@@ -1,5 +1,6 @@
 from functools import partial
 import pika
+import pika.exceptions
 import plum
 import plum.utils
 import logging
@@ -161,8 +162,10 @@ class RmqConnector(object):
     def _close_channels(self):
         LOGGER.info('Closing channels')
         for ch in self._channels:
-            if not ch.is_closed:
+            try:
                 ch.close()
+            except pika.exceptions.ChannelAlreadyClosing:
+                pass
 
     def _close_connection(self):
         """This method closes the connection to RabbitMQ."""
