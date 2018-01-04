@@ -36,6 +36,6 @@ setup(
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['futures', 'backports.tempfile']
     },
-    packages=['plum', 'plum.persistence'],
+    packages=['plum'],
     test_suite='test'
 )
