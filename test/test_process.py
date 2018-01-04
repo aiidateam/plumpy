@@ -1,4 +1,3 @@
-import apricotpy
 import plum
 from plum import Process, ProcessState
 
@@ -382,7 +381,7 @@ class TestProcess(util.TestCaseWithLoop):
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
-        new_bundle = apricotpy.Bundle()
+        new_bundle = plum.Bundle()
         proc.save_instance_state(new_bundle)
         self.assertEqual(snapshot.bundle, new_bundle,
                          "Bundle mismatch with process class {}\n"

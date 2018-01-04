@@ -10,9 +10,9 @@ try:
     _HAS_PIKA = True
 except ImportError:
     _HAS_PIKA = False
-import apricotpy.persistable
 import uuid
 
+from plum.futures import gather
 from plum.test_utils import WaitForSignalProcess
 from plum.process import ProcessState
 from plum.wait_ons import run_until
@@ -109,7 +109,7 @@ class TestStatusProvider(util.TestCaseWithLoop):
         waiting_on = set([entry['waiting_on'] for entry in procs_dict.values()])
         self.assertSetEqual(waiting_on, {str(procs[0].get_waiting_on())})
 
-        ~apricotpy.persistable.gather([proc.abort() for proc in procs], self.loop)
+        ~gather([proc.abort() for proc in procs], self.loop)
 
         response = status_decode(self._send_and_get())
         self.assertEqual(len(response[status.PROCS_KEY]), 0)

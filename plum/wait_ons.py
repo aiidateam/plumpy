@@ -2,7 +2,6 @@
 
 from abc import ABCMeta
 
-from apricotpy import persistable
 from collections import Sequence
 from plum.wait import WaitOn
 from plum.utils import override
@@ -10,7 +9,7 @@ from plum.process import ProcessState
 from . import process
 
 
-class WaitOnProcessState(persistable.AwaitableLoopObject):
+class WaitOnProcessState(object):
     STATE_REACHED = 'state_reached'
     STATE_UNREACHABLE = 'state_unreachable'
 

@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import apricotpy.persistable as apricotpy
-
-
-class WaitOn(apricotpy.AwaitableLoopObject):
+class WaitOn(object):
     """
     An object that represents something that is being waited on.
     """
