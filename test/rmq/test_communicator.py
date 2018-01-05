@@ -2,7 +2,6 @@ import unittest
 import uuid
 
 from plum import rmq
-from plum.rmq import utils
 import plum.rmq
 import plum.rmq.launch
 import plum.test_utils
@@ -11,6 +10,7 @@ from test.util import TestCaseWithLoop
 
 if _HAS_PIKA:
     import pika.exceptions
+
 
 @unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
 class TestCommunicator(TestCaseWithLoop):

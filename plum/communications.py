@@ -31,7 +31,17 @@ class Communicator(with_metaclass(abc.ABCMeta)):
 
 class Receiver(object):
     def on_rpc_receive(self, msg):
+        """
+        Receive a remote procedure call sent directly to this receiver.
+        :param msg: The RPC message
+        :return: The return value will be returned to the sender
+        """
         pass
 
     def on_broadcast_receive(self, msg):
+        """
+        Receive a broadcast message.
+        :param msg: The broadcast message
+        :return:
+        """
         pass

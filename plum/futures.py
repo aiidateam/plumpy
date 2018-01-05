@@ -37,19 +37,19 @@ class Future(tornado.concurrent.Future):
         return super(Future, self).result(timeout)
 
 
-def copy_future(a, b):
+def copy_future(source, target):
     """ Copy the status of future a to b unless b is already done in
     which case return"""
-    if b.done():
+    if target.done():
         return
 
-    if a.cancelled():
-        b.cancel()
+    if source.cancelled():
+        target.cancel()
     else:
         try:
-            b.set_result(a.result())
-        except Exception as e:
-            b.set_exc_info(a.exc_info())
+            target.set_result(source.result())
+        except Exception:
+            target.set_exc_info(source.exc_info())
 
 
 def chain(a, b):

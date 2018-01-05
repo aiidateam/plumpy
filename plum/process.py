@@ -12,12 +12,12 @@ from future.utils import with_metaclass
 from plum.process_listener import ProcessListener
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
-from plum.port import _NULL
 from . import events
 from . import futures
 from . import base
 from .base import Continue, Wait, Cancel, Stop, ProcessState, \
     TransitionFailed, Waiting
+from . import process_comms
 from . import stack
 from . import utils
 
@@ -120,33 +120,18 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plum.
 
-    Once a process is created it may be started by calling play() at which
-    point it is said to be 'playing', like a tape.  It can then be paused by
-    calling pause() which will only be acted on at the next state transition
-    OR if the process is in the WAITING state in which case it will pause
-    immediately.  It can be resumed with a call to play().
-
     A process can be in one of the following states:
 
     * CREATED
+    * STARTED
     * RUNNING
     * WAITING
+    * FINISHED
     * STOPPED
-    * FAILED
+    * DESTROYED
 
     as defined in the :class:`ProcessState` enum.
 
-    The possible transitions between states are::
-
-                              _(reenter)_
-                              |         |
-        CREATED---on_start,on_run-->RUNNING---on_finish,on_stop-->STOPPED
-                                    |     ^               |         ^
-                               on_wait on_resume,on_run   |   on_abort,on_stop
-                                    v     |               |         |
-                                    WAITING----------------     [any state]
-
-        [any state]---on_fail-->FAILED
 
     ::
 
@@ -154,10 +139,6 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     on entering RUNNING it will receive the on_run message.  These are
     always called immediately after that state is entered but before being
     executed.
-
-    This class sends event messages via the event loop on state transitions
-    with the subject:
-    process.[uuid].[start|run|wait|finish|stop|fail]
     """
 
     # Static class stuff ######################
@@ -228,7 +209,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         base.call_with_super_check(obj.load_instance_state, *args, **kwargs)
         return obj
 
-    def __init__(self, inputs=None, pid=None, logger=None, loop=None):
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         """
         The signature of the constructor should not be changed by subclassing
         processes.
@@ -238,6 +219,9 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         :param pid: The process ID, if not a unique pid will be chosen
         :param logger: An optional logger for the process to use
         :type logger: :class:`logging.Logger`
+        :param loop: The event loop
+        :param communicator: The (optional) communicator
+        :type communicator: :class:`plum.Communicator`
         """
         # Don't allow the spec to be changed anymore
         self.spec().seal()
@@ -260,6 +244,10 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
         # State stuff
         self.__CREATION_TIME = time.time()
+
+        if communicator is not None:
+            communicator.register_receiver(
+                process_comms.ProcessReceiver(self), identifier=str(self.pid))
 
         super(Process, self).__init__()
 

@@ -2,19 +2,20 @@ from __future__ import absolute_import
 from tornado import ioloop
 import logging
 
-from .communication import *
+from .communications import *
 from .events import *
 from .exceptions import *
 from .futures import *
 from .persisters import *
 from .process import *
+from .process_comms import *
 from . import stack
 from .mixins import *
 from .utils import *
 
 __all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
            utils.__all__ + futures.__all__ + mixins.__all__ + ['stack'] +
-           persisters.__all__ + communication.__all__)
+           persisters.__all__ + communications.__all__ + process_comms.__all__)
 
 PersistableEventLoop = ioloop
 

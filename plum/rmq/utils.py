@@ -32,7 +32,7 @@ def result_response(result):
 
 
 def exception_response(exception):
-    return {EXCEPTION_KEY: exception}
+    return {EXCEPTION_KEY: str(exception)}
 
 
 def cancelled_response(msg=None):
