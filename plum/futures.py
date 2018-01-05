@@ -3,11 +3,20 @@ from functools import partial
 
 from .exceptions import CancelledError
 
-__all__ = ['Future', 'gather']
+__all__ = ['Future', 'gather', 'copy_future', 'InvalidStateError']
+
+
+class InvalidStateError(BaseException):
+    pass
 
 
 class Future(tornado.concurrent.Future):
     _cancelled = False
+
+    def set_result(self, result):
+        if self.done():
+            raise InvalidStateError('Future already done')
+        super(Future, self).set_result(result)
 
     def cancel(self):
         if self.done():
@@ -28,7 +37,7 @@ class Future(tornado.concurrent.Future):
         return super(Future, self).result(timeout)
 
 
-def _copy(a, b):
+def copy_future(a, b):
     """ Copy the status of future a to b unless b is already done in
     which case return"""
     if b.done():
@@ -51,7 +60,7 @@ def chain(a, b):
     """
 
     def copy(future):
-        _copy(future, b)
+        copy_future(future, b)
 
     a.add_done_callback(copy)
 

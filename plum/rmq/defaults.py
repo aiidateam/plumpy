@@ -1,5 +1,6 @@
 CONTROL_EXCHANGE = 'plum.process.control'
 TASK_QUEUE = 'plum.task_queue'
+MESSAGE_EXCHANGE = 'plum.process.message'
 
 
 class Defaults(object):

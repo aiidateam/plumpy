@@ -203,7 +203,7 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
 
     def _continue(self, task):
         if not self._persister:
-            raise RuntimeError("Cannot continue process no persister")
+            raise RuntimeError("Cannot continue process, no persister")
         tag = task.get(TAG_KEY, None)
         saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
         proc = saved_state.unbundle(*self._unbundle_args, **self._unbundle_kwargs)

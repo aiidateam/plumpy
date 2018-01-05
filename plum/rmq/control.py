@@ -1,7 +1,4 @@
-import json
-from functools import partial
 import logging
-import pickle
 import pika
 import pika.exceptions
 import uuid
@@ -9,11 +6,10 @@ import yaml
 
 import plum
 from plum.rmq.utils import add_host_info
-from plum.utils import override
 from . import defaults
 from . import pubsub
 
-__all__ = ['ProcessControlPublisher', 'ProcessControlSubscriber', 'RmqProcessController']
+__all__ = ['ProcessControlPublisher', 'RmqProcessController']
 
 LOGGER = logging.getLogger(__name__)
 
@@ -178,87 +174,6 @@ class ProcessControlPublisher(pubsub.ConnectionListener):
         self._queued_messages = []
 
 
-class ProcessControlSubscriber(object):
-    def __init__(self, connection, exchange=defaults.CONTROL_EXCHANGE,
-                 decoder=pickle.loads, response_encoder=json.dumps, loop=None):
-        """
-        Subscribes and listens for process control messages and acts on them
-        by calling the corresponding methods of the process manager.
-
-        :param connection: The RMQ connection object
-        :param exchange: The name of the exchange to use
-        :param decoder:
-        """
-        self._decode = decoder
-        self._response_encode = response_encoder
-        self._stopping = False
-        self._last_correlation_id = None
-
-        # Set up communications
-        self._channel = connection.channel()
-        self._channel.exchange_declare(exchange, exchange_type='fanout')
-        result = self._channel.queue_declare(exclusive=True, auto_delete=True)
-        queue = result.method.queue
-        self._channel.queue_bind(queue, exchange)
-        self._channel.basic_consume(self._on_control, queue=queue, no_ack=True)
-
-    @override
-    def tick(self):
-        self._channel.connection.process_data_events(time_limit=0.01)
-
-    def _on_control(self, ch, method, props, body):
-        d = self._decode(body)
-        pid = d['pid']
-
-        try:
-            proc = self.loop().get_process(pid)
-        except ValueError:
-            # Not an object our loop knows about
-            return
-
-        intent = d['intent']
-        try:
-            if intent == Action.PLAY:
-                proc.play()
-                result = _ACTION_DONE
-            elif intent == Action.PAUSE:
-                proc.pause()
-                result = _ACTION_DONE
-            elif intent == Action.CANCEL:
-                fut = proc.abort(msg=d.get('msg', None))
-
-                # When the abort is finished send another message to say it's done
-                fut.add_done_callback(
-                    partial(self._action_done, ch, props.reply_to, props.correlation_id)
-                )
-
-                result = _ACTION_SCHEDULED
-            else:
-                raise RuntimeError("Unknown intent")
-        except ValueError as e:
-            result = str(e)
-        else:
-            # Tell the sender that we've dealt with it
-            self._send_response(ch, props.reply_to, props.correlation_id, result)
-
-    def _action_done(self, ch, reply_to, correlation_id, future):
-        if future.result():
-            result = _ACTION_DONE
-        else:
-            result = _ACTION_FAILED
-
-        self._send_response(ch, reply_to, correlation_id, result)
-
-    def _send_response(self, ch, reply_to, correlation_id, result):
-        response = {_RESULT_KEY: result}
-        add_host_info(response)
-        ch.basic_publish(
-            exchange='', routing_key=reply_to,
-            properties=pika.BasicProperties(correlation_id=correlation_id),
-            body=self._response_encode(response)
-        )
-
-
 class RmqProcessController(pubsub.ConnectionListener):
     def __init__(self, process, connector,
                  exchange_name=defaults.CONTROL_EXCHANGE,
@@ -292,7 +207,7 @@ class RmqProcessController(pubsub.ConnectionListener):
         self._connector.open_channel(self._on_channel_open)
 
     def _on_channel_open(self, channel):
-        """ We have a channel, now declare teh exchange """
+        """ We have a channel, now declare the exchange """
         self._channel = channel
         declare_exchange(channel, self._exchange_name, self._on_exchange_declareok)
 

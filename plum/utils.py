@@ -50,7 +50,7 @@ class EventHelper(object):
                 getattr(l, event_function.__name__)(*args, **kwargs)
             except Exception as e:
                 _LOGGER.error(
-                    "Listener {} produced an exception:\n".format(l, e))
+                    "Listener {} produced an exception:\n{}".format(l, e))
 
 
 class ListenContext(object):

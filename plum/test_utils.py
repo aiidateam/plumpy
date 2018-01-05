@@ -29,6 +29,7 @@ class DummyProcessWithOutput(Process):
 
     def _run(self, **kwargs):
         self.out("default", 5)
+        return self.outputs
 
 
 class KeyboardInterruptProc(Process):

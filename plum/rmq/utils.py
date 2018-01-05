@@ -43,19 +43,10 @@ def pending_response(msg=None):
     return {PENDING_KEY: msg}
 
 
-# def result(response):
-#     try:
-#         raise plum.CancelledError(response[CANCELLED_KEY])
-#     except KeyError:
-#         pass
-#     try:
-#         msg = response[PENDING_KEY]
-#         if msg is None:
-#             msg = 'Result is not ready'
-#         raise plum.InvalidStateError(msg)
-#     except KeyError:
-#         pass
-#
+def response_result(response):
+    future = plum.Future()
+    response_to_future(response, future)
+    return future.result()
 
 
 def response_to_future(response, future=None):
@@ -65,8 +56,10 @@ def response_to_future(response, future=None):
     if CANCELLED_KEY in response:
         future.cancel()
     elif EXCEPTION_KEY in response:
-        future.set_exception(BaseException(response[EXCEPTION_KEY]))
+        future.set_exception(plum.RemoteException(response[EXCEPTION_KEY]))
     elif RESULT_KEY in response:
-        future.set_result(response)
+        future.set_result(response[RESULT_KEY])
+    elif not PENDING_KEY in response:
+        raise ValueError("Unknown response type '{}'".format(response))
 
     return future
