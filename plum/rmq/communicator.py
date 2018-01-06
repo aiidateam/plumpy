@@ -1,13 +1,13 @@
-import abc
 import collections
 from functools import partial
-from future.utils import with_metaclass
+
 import pika
-import plum
-import uuid
 import yaml
 
+import plum
+from plum.rmq.messages import RpcMessage
 from . import defaults
+from . import messages
 from . import pubsub
 from . import utils
 
@@ -27,188 +27,22 @@ def declare_exchange(channel, name, done_callback):
         done_callback, exchange=name, exchange_type='topic', auto_delete=True)
 
 
-class Message(with_metaclass(abc.ABCMeta)):
-    @abc.abstractmethod
-    def send(self):
-        """
-        :return:
-        """
-        pass
-
-    @abc.abstractmethod
-    def on_delivery(self, successful):
-        pass
+EXCHANGE_PROPERTIES = {
+    'exchange_type': 'topic',
+    'auto_delete': True
+}
 
 
-class RpcMessage(Message):
-    def __init__(self, communicator, recipient_id, body):
-        self.communicator = communicator
-        self.recipient_id = recipient_id
-        self.body = body
-        self.correlation_id = None
-        self.future = plum.Future()
-
-    def send(self):
-        self.correlation_id = str(uuid.uuid4())
-        routing_key = "rpc.{}".format(self.recipient_id)
-        self.communicator.publish_msg(self.body, routing_key, self.correlation_id)
-        return self.future
-
-    def on_delivery(self, successful):
-        if successful:
-            self.communicator.await_response(self.correlation_id, self.on_response)
-        else:
-            self.future.set_exception(RuntimeError("Message could not be delivered"))
-
-    def on_response(self, done_future):
-        plum.copy_future(done_future, self.future)
-
-
-class RmqPublisher(pubsub.ConnectionListener):
+class RmqPublisher(messages.BasePublisherWithResponseQueue):
     """
 
     """
-    # Bitmasks for starting up the launcher
-    EXCHANGE_BOUND = 0b01
-    RESPONSE_QUEUE_CREATED = 0b10
-    RMQ_INITAILISED = 0b11
-
-    def __init__(self, connector,
-                 exchange_name=defaults.CONTROL_EXCHANGE,
-                 encoder=yaml.dump,
-                 decoder=yaml.load):
-
-        self._exchange_name = exchange_name
-        self._encode = encoder
-        self._response_decode = decoder
-        self._queued_messages = []
-        self._reset_channel()
-
-        self._awaiting_response = {}
-        connector.add_connection_listener(self)
-        if connector.is_connected:
-            self._open_channel(connector.connection())
-
-    def initialised_future(self):
-        return self._initialising
+    DEFAULT_EXCHANGE_PARAMS = EXCHANGE_PROPERTIES
 
     def rpc_send(self, recipient_id, msg):
-        message = RpcMessage(self, recipient_id, body=msg)
-        self._action_message(message)
+        message = RpcMessage(recipient_id, body=msg)
+        self.action_message(message)
         return message.future
-
-    def await_response(self, correlation_id, callback):
-        self._awaiting_response[correlation_id] = callback
-
-    def publish_msg(self, msg, routing_key, correlation_id=None):
-        self._channel.basic_publish(
-            exchange=self._exchange_name, routing_key=routing_key,
-            properties=pika.BasicProperties(
-                reply_to=self._callback_queue_name, correlation_id=correlation_id,
-                delivery_mode=1,
-                content_type='text/json',
-                # expiration="600"
-            ),
-            body=self._encode(msg),
-            mandatory=True
-        )
-
-    def on_connection_opened(self, connector, connection):
-        self._open_channel(connection)
-
-    def _action_message(self, message):
-        if self._initialising.done():
-            self._send_message(message)
-        else:
-            self._queued_messages.append(message)
-
-    def _on_response(self, ch, method, props, body):
-        correlation_id = props.correlation_id
-        try:
-            callback = self._awaiting_response[correlation_id]
-        except IndexError:
-            pass
-        else:
-            response = self._response_decode(body)
-            response_future = plum.Future()
-            utils.response_to_future(response, response_future)
-            if response_future.done():
-                self._awaiting_response.pop(correlation_id)
-                callback(response_future)
-            else:
-                pass  # Keep waiting
-
-    def _send_queued_messages(self):
-        for msg in self._queued_messages:
-            self._send_message(msg)
-        self._queued_messages = []
-
-    def _send_message(self, message):
-        message.send()
-        self._num_published += 1
-        self._sent_messages[self._num_published] = message
-
-    # region RMQ communications
-    def _reset_channel(self):
-        """ Reset all channel specific members """
-        self._callback_queue_name = None
-        self._channel = None
-        self._num_published = 0
-        self._initialisation_state = 0
-        self._sent_messages = collections.OrderedDict()
-        self._initialising = plum.Future()
-        self._initialising.add_done_callback(lambda x: self._send_queued_messages())
-
-    def _open_channel(self, connection):
-        # Set up communications
-        connection.channel(self._on_channel_open)
-
-    def _on_channel_open(self, channel):
-        self._channel = channel
-        channel.add_on_close_callback(self._on_channel_close)
-        channel.add_on_return_callback(self._on_channel_return)
-        # Need to confirm delivery so unroutable messages generate a return callback
-        channel.confirm_delivery(self._on_delivery_confirmed)
-        declare_exchange(channel, self._exchange_name, self._on_exchange_declareok)
-
-        # Declare the response queue
-        channel.queue_declare(self._on_queue_declareok, exclusive=True, auto_delete=True)
-
-    def _on_channel_close(self, channel, reply_code, reply_text):
-        self._reset_channel()
-
-    def _on_channel_return(self, channel, method, props, body):
-        correlation_id = props.correlation_id
-        try:
-            message = self._sent_messages.pop(method.delivery_tag)
-        except ValueError:
-            pass
-        else:
-            message.on_delivery(False)
-
-    def _on_exchange_declareok(self, frame):
-        self._initialisation_state |= self.EXCHANGE_BOUND
-        if self._initialisation_state == self.RMQ_INITAILISED:
-            self._initialising.set_result(True)
-
-    def _on_queue_declareok(self, frame):
-        self._callback_queue_name = frame.method.queue
-        self._channel.basic_consume(
-            self._on_response, no_ack=True, queue=self._callback_queue_name)
-        self._initialisation_state |= self.RESPONSE_QUEUE_CREATED
-        if self._initialisation_state == self.RMQ_INITAILISED:
-            self._initialising.set_result(True)
-
-    def _on_delivery_confirmed(self, frame):
-        delivery_tag = frame.method.delivery_tag
-        try:
-            message = self._sent_messages.pop(delivery_tag)
-        except ValueError:
-            pass
-        else:
-            message.on_delivery(True)
-
-            # endregion
 
 
 class RmqSubscriber(pubsub.ConnectionListener):
@@ -269,7 +103,8 @@ class RmqSubscriber(pubsub.ConnectionListener):
     def _on_channel_open(self, channel):
         """ We have a channel, now declare the exchange """
         self._channel = channel
-        declare_exchange(channel, self._exchange_name, self._on_exchange_declareok)
+        channel.exchange_declare(
+            self._on_exchange_declareok, exchange=self._exchange_name, **EXCHANGE_PROPERTIES)
 
     def _on_exchange_declareok(self, unused_frame):
         """
@@ -310,7 +145,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
         self._initialisation_state |= self.BROADCAST_QUEUE_CREATED
         if self._initialisation_state == self.RMQ_INITAILISED:
             self._initialising.set_result(True)
-        # end region
+            # end region
 
     def _on_rpc(self, ch, method, props, body):
         identifier = method.routing_key[len('rpc.'):]
@@ -352,6 +187,10 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
 
 class RmqCommunicator(plum.Communicator):
+    """
+    A publisher and subscriber that implements the Communicator interface.
+    """
+
     def __init__(self, connector,
                  exchange_name=defaults.CONTROL_EXCHANGE,
                  encoder=yaml.dump,
@@ -360,7 +199,8 @@ class RmqCommunicator(plum.Communicator):
         self._subscriber = RmqSubscriber(connector, exchange_name, encoder=encoder, decoder=decoder)
 
     def initialised_future(self):
-        return plum.gather(self._publisher.initialised_future(), self._subscriber.initialised_future())
+        return plum.gather(self._publisher.initialised_future(),
+                           self._subscriber.initialised_future())
 
     def register_receiver(self, receiver, identifier=None):
         return self._subscriber.register_receiver(receiver, identifier)

@@ -25,6 +25,8 @@ class TestProcessReceiver(TestCaseWithLoop):
 
         self.connector.connect()
         # Run the loop until until both are ready
+
+        plum.run_until_complete(self.communicator._subscriber.initialised_future())
         plum.run_until_complete(self.communicator.initialised_future())
 
     def tearDown(self):
