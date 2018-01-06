@@ -346,7 +346,9 @@ class ProcessLaunchPublisher(pubsub.ConnectionListener):
         correlation_id = self._new_correlation_id()
         self._num_tasks += 1
         task_info = TaskInfo(task, correlation_id)
-        task_info.publish_future.add_done_callback(lambda x: published_callback(task_info.future))
+        if published_callback is not None:
+            task_info.publish_future.add_done_callback(
+                lambda x: published_callback(task_info.future))
 
         seq_no = self._num_tasks
         self._task_info[self._num_tasks] = task_info
