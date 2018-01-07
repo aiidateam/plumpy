@@ -271,13 +271,16 @@ class Waiting(State):
 
     def save_instance_state(self, out_state):
         super(Waiting, self).save_instance_state(out_state)
-        out_state[self.DONE_CALLBACK] = self.done_callback.__name__
+        if self.done_callback is not None:
+            out_state[self.DONE_CALLBACK] = self.done_callback.__name__
         out_state[self.MSG] = self.msg
         out_state[self.DATA] = self.data
 
     def load_instance_state(self, process, saved_state):
         super(Waiting, self).load_instance_state(process, saved_state)
-        self.done_callback = getattr(self.process, saved_state[self.DONE_CALLBACK])
+        callback_name = saved_state.get(self.DONE_CALLBACK, None)
+        if callback_name is not None:
+            self.done_callback = getattr(self.process, callback_name)
         self.msg = saved_state[self.MSG]
         self.data = saved_state[self.DATA]
 

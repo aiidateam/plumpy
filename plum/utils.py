@@ -204,12 +204,14 @@ def load_function(name, instance=None):
         raise ValueError("Invalid function name '{}'".format(name))
 
 
-def class_name(obj, class_loader=None):
+def class_name(obj, class_loader=None, verify=True):
     """
     Given a class or an instance this function will give the fully qualified name
     e.g. 'my_module.MyClass'
 
     :param obj: The object to get the name from.
+    :param class_loader: Class loader used to verify that the resulting name
+        can be loaded
     :return: The fully qualified name.
     """
 
@@ -219,13 +221,14 @@ def class_name(obj, class_loader=None):
 
     name = obj.__module__ + '.' + obj.__name__
 
-    try:
-        if class_loader is not None:
-            class_loader.load_class(name)
-        else:
-            load_object(name)
-    except ValueError:
-        raise ValueError("Could not create a consistent full name for object '{}'".format(obj))
+    if verify:
+        try:
+            if class_loader is not None:
+                class_loader.load_class(name)
+            else:
+                load_object(name)
+        except ValueError:
+            raise ValueError("Could not create a consistent full name for object '{}'".format(obj))
 
     return name
 

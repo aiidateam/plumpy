@@ -6,6 +6,7 @@ import os
 import pickle
 from future.utils import with_metaclass
 
+from . import class_loader
 from . import utils
 
 __all__ = ['Bundle', 'Persister', 'PicklePersister']
@@ -14,16 +15,23 @@ PersistedCheckpoint = namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
 
 class Bundle(dict):
+    _class_loader = class_loader.ClassLoader()
+
     @classmethod
     def from_dict(cls, *args, **kwargs):
         self = Bundle.__new__(*args, **kwargs)
         super(Bundle, self).from_dict(*args, **kwargs)
         return self
 
-    def __init__(self, persistable):
+    def __init__(self, persistable, cl=None):
         super(Bundle, self).__init__()
-        self['CLASS_NAME'] = utils.class_name(persistable)
+        if cl is not None:
+            self.set_class_loader(cl)
+        self['CLASS_NAME'] = utils.class_name(persistable, self._class_loader)
         persistable.save_state(self)
+
+    def set_class_loader(self, cl):
+        self._class_loader = cl
 
     def unbundle(self, *args, **kwargs):
         """
@@ -34,7 +42,7 @@ class Bundle(dict):
         :param kwargs: Keyword arguments for recreate_from
         :return: An instance of the Persistable
         """
-        cls = utils.load_object(self['CLASS_NAME'])
+        cls = self._class_loader.load_class(self['CLASS_NAME'])
         return cls.recreate_from(self, *args, **kwargs)
 
 
