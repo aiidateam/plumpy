@@ -21,10 +21,13 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
         super(TestTaskControllerAndRunner, self).setUp()
 
         self.connector = plum.rmq.RmqConnector('amqp://guest:guest@localhost:5672/', loop=self.loop)
+        self.exchange_name = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
         self.queue_name = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
 
-        self.subscriber = ProcessLaunchSubscriber(self.connector, self.queue_name, testing_mode=True)
-        self.publisher = ProcessLaunchPublisher(self.connector, self.queue_name, testing_mode=True)
+        self.subscriber = ProcessLaunchSubscriber(
+            self.connector, exchange_name=self.exchange_name, task_queue_name=self.queue_name, testing_mode=True)
+        self.publisher = ProcessLaunchPublisher(
+            self.connector, exchange_name=self.exchange_name, task_queue_name=self.queue_name, testing_mode=True)
 
         self.connector.connect()
         # Run the loop until until both are ready
@@ -44,6 +47,7 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
         self.assertIsNotNone(result)
 
     def test_simple_continue(self):
+        # self.subscriber.close()
         tmppath = tempfile.mkdtemp()
         try:
             persister = plum.PicklePersister(tmppath)
@@ -55,128 +59,95 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
 
             subscriber = ProcessLaunchSubscriber(
                 self.connector,
-                self.queue_name,
+                exchange_name=self.exchange_name,
+                task_queue_name=self.queue_name,
                 testing_mode=True,
                 persister=persister)
+
             future = self.publisher.continue_process(pid)
             self.assertTrue(plum.run_until_complete(future))
         finally:
             shutil.rmtree(tmppath)
 
-    def test_launch_callback(self):
-        """Test simply launching a valid process"""
-        # Don't let the subscriber respond to any messages
-        self.subscriber.close()
-
+    def test_launch_many(self):
+        """Test launching multiple processes"""
         num_to_launch = 10
 
-        # Keep track of the launched callbacks we get
-        futures_from_callback = set()
-        got_all_launched = plum.Future()
-
-        def launched(future):
-            futures_from_callback.add(future)
-            if len(futures_from_callback) == num_to_launch:
-                got_all_launched.set_result(True)
-
-        launch_futures = set()
+        launch_futures = []
         for _ in range(num_to_launch):
-            future = self.publisher.launch_process(
-                test_utils.DummyProcessWithOutput, published_callback=launched)
-            launch_futures.add(future)
+            future = self.publisher.launch_process(test_utils.DummyProcessWithOutput)
+            launch_futures.append(future)
 
-        self.assertTrue(plum.run_until_complete(got_all_launched))
-        self.assertSetEqual(launch_futures, futures_from_callback)
-
-    def test_launch_callback_with_response(self):
-        """Test simply launching a valid process"""
-        num_to_launch = 10
-
-        # Keep track of the launched callbacks we get
-        futures_from_callback = set()
-        got_all_launched = plum.Future()
-
-        def launched(future):
-            futures_from_callback.add(future)
-            if len(futures_from_callback) == num_to_launch:
-                got_all_launched.set_result(True)
-
-        launch_futures = set()
-        for _ in range(num_to_launch):
-            future = self.publisher.launch_process(
-                test_utils.DummyProcessWithOutput, published_callback=launched)
-            launch_futures.add(future)
-
-        results = plum.run_until_complete(plum.gather(got_all_launched, *launch_futures))
-        self.assertSetEqual(launch_futures, futures_from_callback)
-        self.assertNotIn(None, results)
+        results = plum.run_until_complete(plum.gather(*launch_futures))
+        for result in results:
+            self.assertIsInstance(result, uuid.UUID)
 
 
-        # def test_launch(self):
-        #     # Try launching a process
-        #     launch = self._launch(plum.test_utils.DummyProcessWithOutput)
-        #
-        #     proc = None
-        #     t0 = time.time()
-        #     while proc is None and time.time() - t0 < 3.:
-        #         self.runner_loop.tick()
-        #         try:
-        #             proc = self.runner_loop.get_process(launch.pid)
-        #             break
-        #         except ValueError:
-        #             pass
-        #     self.assertIsNotNone(proc)
-        #
-        #     result = proc.loop().run_until_complete(HansKlok(proc))
-        #     awaitable_result = self.launcher_loop.run_until_complete(HansKlok(launch))
-        #
-        #     self.assertEqual(result, awaitable_result)
-        #
-        # def test_launch_cancel(self):
-        #     # Try launching a process
-        #     awaitable = self._launch(plum.test_utils.DummyProcessWithOutput)
-        #
-        #     proc = None
-        #     t0 = time.time()
-        #     while proc is None and time.time() - t0 < 3.:
-        #         self.runner_loop.tick()
-        #         try:
-        #             proc = self.runner_loop.get_process(awaitable.pid)
-        #             break
-        #         except ValueError:
-        #             pass
-        #     self.assertIsNotNone(proc)
-        #
-        #     # Now cancel it
-        #     proc.cancel()
-        #     self.runner_loop.tick()
-        #
-        #     with self.assertRaises(apricotpy.CancelledError):
-        #         self.launcher_loop.run_until_complete(HansKlok(awaitable))
-        #
-        # def test_launch_exception(self):
-        #     # Try launching a process
-        #     awaitable = self._launch(plum.test_utils.ExceptionProcess)
-        #
-        #     proc = None
-        #     t0 = time.time()
-        #     while proc is None and time.time() - t0 < 3.:
-        #         self.runner_loop.tick()
-        #         try:
-        #             proc = self.runner_loop.get_process(awaitable.pid)
-        #             break
-        #         except ValueError:
-        #             pass
-        #     self.assertIsNotNone(proc)
-        #
-        #     # Now let it run
-        #     with self.assertRaises(RuntimeError):
-        #         result = proc.loop().run_until_complete(HansKlok(proc))
-        #
-        #     with self.assertRaises(RuntimeError):
-        #         result = self.launcher_loop.run_until_complete(HansKlok(awaitable))
-        #
-        # def _launch(self, proc_class, *args, **kwargs):
-        #     proc = self.launcher_loop.create(proc_class, *args, **kwargs)
-        #     bundle = plum.Bundle(proc)
-        #     return self.publisher.launch(bundle)
+            # def test_launch(self):
+            #     # Try launching a process
+            #     launch = self._launch(plum.test_utils.DummyProcessWithOutput)
+            #
+            #     proc = None
+            #     t0 = time.time()
+            #     while proc is None and time.time() - t0 < 3.:
+            #         self.runner_loop.tick()
+            #         try:
+            #             proc = self.runner_loop.get_process(launch.pid)
+            #             break
+            #         except ValueError:
+            #             pass
+            #     self.assertIsNotNone(proc)
+            #
+            #     result = proc.loop().run_until_complete(HansKlok(proc))
+            #     awaitable_result = self.launcher_loop.run_until_complete(HansKlok(launch))
+            #
+            #     self.assertEqual(result, awaitable_result)
+            #
+            # def test_launch_cancel(self):
+            #     # Try launching a process
+            #     awaitable = self._launch(plum.test_utils.DummyProcessWithOutput)
+            #
+            #     proc = None
+            #     t0 = time.time()
+            #     while proc is None and time.time() - t0 < 3.:
+            #         self.runner_loop.tick()
+            #         try:
+            #             proc = self.runner_loop.get_process(awaitable.pid)
+            #             break
+            #         except ValueError:
+            #             pass
+            #     self.assertIsNotNone(proc)
+            #
+            #     # Now cancel it
+            #     proc.cancel()
+            #     self.runner_loop.tick()
+            #
+            #     with self.assertRaises(apricotpy.CancelledError):
+            #         self.launcher_loop.run_until_complete(HansKlok(awaitable))
+            #
+            # def test_launch_exception(self):
+            #     # Try launching a process
+            #     awaitable = self._launch(plum.test_utils.ExceptionProcess)
+            #
+            #     proc = None
+            #     t0 = time.time()
+            #     while proc is None and time.time() - t0 < 3.:
+            #         self.runner_loop.tick()
+            #         try:
+            #             proc = self.runner_loop.get_process(awaitable.pid)
+            #             break
+            #         except ValueError:
+            #             pass
+            #     self.assertIsNotNone(proc)
+            #
+            #     # Now let it run
+            #     with self.assertRaises(RuntimeError):
+            #         result = proc.loop().run_until_complete(HansKlok(proc))
+            #
+            #     with self.assertRaises(RuntimeError):
+            #         result = self.launcher_loop.run_until_complete(HansKlok(awaitable))
+            #
+            # def _launch(self, proc_class, *args, **kwargs):
+            #     proc = self.launcher_loop.create(proc_class, *args, **kwargs)
+            #     bundle = plum.Bundle(proc)
+            #     return self.publisher.launch(bundle)

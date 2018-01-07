@@ -33,7 +33,7 @@ EXCHANGE_PROPERTIES = {
 }
 
 
-class RmqPublisher(messages.BasePublisherWithResponseQueue):
+class RmqPublisher(messages.BasePublisherWithReplyQueue):
     """
 
     """

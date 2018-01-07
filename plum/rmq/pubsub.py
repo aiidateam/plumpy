@@ -85,6 +85,10 @@ class RmqConnector(object):
         self._connection.channel(
             on_open_callback=partial(self._on_channel_open, callback))
 
+    def close_channel(self, channel):
+        self._channels.remove(channel)
+        channel.close()
+
     def connection(self):
         return self._connection
 

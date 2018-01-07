@@ -30,6 +30,32 @@ LAUNCH_TASK = 'launch'
 CONTINUE_TASK = 'continue'
 
 
+class TaskMessage(messages.Message):
+    def __init__(self, task_queue, task):
+        self.task_queue = task_queue
+        self.body = task
+        self.correlation_id = None
+        self.future = plum.Future()
+        self._publisher = None
+
+    def send(self, publisher):
+        self._publisher = publisher
+        self.correlation_id = str(uuid.uuid4())
+        routing_key = self.task_queue
+        publisher.publish_msg(self.body, routing_key, self.correlation_id)
+        return self.future
+
+    def on_delivered(self):
+        self._publisher.await_response(self.correlation_id, self.on_response)
+
+    def on_delivery_failed(self, reason):
+        self.future.set_exception(
+            RuntimeError("Message could not be delivered: {}".format(reason)))
+
+    def on_response(self, done_future):
+        plum.copy_future(done_future, self.future)
+
+
 def create_launch_task(process_class, init_args=None, init_kwargs=None):
     task = {TASK_KEY: LAUNCH_TASK, PROCESS_CLASS_KEY: plum.utils.class_name(process_class)}
     if init_args:
@@ -46,7 +72,7 @@ def create_continue_task(pid, tag=None):
     return task
 
 
-class ProcessLaunchSubscriber(pubsub.ConnectionListener):
+class ProcessLaunchSubscriber(messages.BaseConnectionWithExchange):
     """
     Run tasks as they come form the RabbitMQ task queue.
     Expected format of task:
@@ -66,20 +92,23 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
     """
 
     def __init__(self, connector,
-                 queue_name=defaults.TASK_QUEUE,
+                 task_queue_name=defaults.TASK_QUEUE,
                  testing_mode=False,
                  decoder=yaml.load,
-                 response_encoder=yaml.dump,
+                 encoder=yaml.dump,
                  loop=None,
                  persister=None,
                  unbunble_args=(),
-                 unbunble_kwargs=None):
+                 unbunble_kwargs=None,
+                 exchange_name=defaults.MESSAGE_EXCHANGE,
+                 exchange_params=None,
+                 ):
         """
         :param connector: An RMQ connector
         :type connector: :class:`pubsub.RmqConnector`
-        :param queue_name: The name of the queue to use
+        :param task_queue_name: The name of the queue to use
         :param decoder: A message decoder
-        :param response_encoder: A response encoder
+        :param encoder: A response encoder
         :param loop: The event loop
         :param persister: The persister for continuing a process
         :type persister: :class:`plum.Persister`
@@ -88,53 +117,44 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
         :param unbunble_kwargs: Keyword arguments passed to saved_state.unbundle
             when continuing a process (by default will pass loop)
         """
-        self._connector = connector
-        self._queue_name = queue_name
+        super(ProcessLaunchSubscriber, self).__init__(
+            connector,
+            exchange_name=exchange_name,
+            exchange_params=exchange_params
+        )
+
+        self._task_queue_name = task_queue_name
         self._testing_mode = testing_mode
         self._decode = decoder
-        self._response_encode = response_encoder
+        self._encode = encoder
         self._loop = loop if loop is not None else plum.get_event_loop()
         self._persister = persister
         self._unbundle_args = unbunble_args
         self._unbundle_kwargs = unbunble_kwargs if unbunble_kwargs is not None else {'loop': loop}
 
-        # Start RMQ communication
-        self._reset_channel()
-        connector.add_connection_listener(self)
-        if connector.is_connected:
-            self._open_channel()
-
-    def on_connection_opened(self, connector, connection):
-        self._open_channel()
-
-    def initialised_future(self):
-        return self._initialised_future
-
-    def close(self):
-        self._connector.remove_connection_listener(self)
-        self._connector = None
-        self._channel.close()
-        self._channel = None
-        self._initialised_future = None
-
-    def _reset_channel(self):
-        self._channel = None
-        self._initialised_future = plum.Future()
-
-    def _open_channel(self):
-        self._connector.open_channel(self._on_channel_open)
-
-    def _on_channel_open(self, channel):
-        self._channel = channel
+    @messages.initialiser()
+    def on_channel_open(self, channel):
+        super(ProcessLaunchSubscriber, self).on_channel_open(channel)
         channel.basic_qos(prefetch_count=1)
-        channel.queue_declare(
-            self._on_queue_declaredok, queue=self._queue_name,
+
+    @messages.initialiser()
+    def on_exchange_declareok(self, unused_frame):
+        super(ProcessLaunchSubscriber, self).on_exchange_declareok(unused_frame)
+        self.get_channel().queue_declare(
+            self._on_task_queue_declaredok, queue=self._task_queue_name,
             durable=not self._testing_mode, auto_delete=self._testing_mode)
 
-    def _on_queue_declaredok(self, frame):
+    @messages.initialiser()
+    def _on_task_queue_declaredok(self, frame):
+        queue_name = frame.method.queue
+        self.get_channel().queue_bind(
+            self._on_task_queue_bindok, queue_name, self._exchange_name,
+            routing_key=queue_name)
+
+    @messages.initialiser()
+    def _on_task_queue_bindok(self, unused_frame):
         self._consumer_tag = \
-            self._channel.basic_consume(self._on_task, self._queue_name)
-        self._initialised_future.set_result(True)
+            self.get_channel().basic_consume(self._on_task, self._task_queue_name)
 
     def _on_task(self, ch, method, props, body):
         """
@@ -187,7 +207,7 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
         :param method: The message method
         :param response: The response to send to the initiator
         """
-        self._send_response(self._channel, props.correlation_id, props.reply_to, response)
+        self._send_response(props.correlation_id, props.reply_to, response)
         self._channel.basic_ack(delivery_tag=method.delivery_tag)
 
     def _launch(self, task):
@@ -208,78 +228,39 @@ class ProcessLaunchSubscriber(pubsub.ConnectionListener):
         proc.play()
         return proc.future()
 
-    def _send_response(self, ch, correlation_id, reply_to, response):
+    def _send_response(self, correlation_id, reply_to, response):
         # Build full response
-        full_response = {
-            utils.RESPONSE_KEY: response,
-            utils.HOST_KEY: utils.get_host_info()
-        }
-        ch.basic_publish(
+        response[utils.HOST_KEY] = utils.get_host_info()
+        self.get_channel().basic_publish(
             exchange='', routing_key=reply_to,
-            body=self._response_encode(full_response),
+            body=self._encode(response),
             properties=pika.BasicProperties(correlation_id=correlation_id))
 
 
-class TaskMessage(messages.RpcMessage):
-    pass
-
-
-class ProcessLaunchPublisher(messages.BasePublisherWithResponseQueue):
+class ProcessLaunchPublisher(messages.BasePublisherWithReplyQueue):
     """
     Class used to publishes messages requesting a process to be launched
     """
-    DEFAULT_EXCHANGE_PARAMS = {
 
-    }
+    def __init__(self, connector,
+                 task_queue_name=defaults.TASK_QUEUE,
+                 testing_mode=False,
+                 exchange_name=defaults.MESSAGE_EXCHANGE,
+                 exchange_params=None,
+                 encoder=yaml.dump,
+                 decoder=yaml.load,
+                 confirm_deliveries=True, ):
+        super(ProcessLaunchPublisher, self).__init__(
+            connector,
+            exchange_name=exchange_name,
+            exchange_params=exchange_params,
+            encoder=encoder,
+            decoder=decoder,
+            confirm_deliveries=confirm_deliveries
+        )
+        self._task_queue_name = task_queue_name
+        self._testing_mode = testing_mode
 
-    # # Bitmasks for starting up the launcher
-    # TASK_QUEUE_CREATED = 0b01
-    # RESPONSE_QUEUE_CREATED = 0b10
-    # ALL_QUEUES_CREATED = 0b11
-    #
-    # def __init__(self, connector,
-    #              queue_name=defaults.TASK_QUEUE,
-    #              testing_mode=False,
-    #              encoder=yaml.dump,
-    #              response_decoder=yaml.load,
-    #              loop=None):
-    #     """
-    #     :param connector: An RMQ connector
-    #     :type connector: :class:`pubsub.RmqConnector`
-    #     :param queue_name: The name of the queue to use
-    #     :param encoder: A message encoder
-    #     :param response_decoder: A response encoder
-    #     :param loop: The event loop
-    #     """
-    #     self._connector = connector
-    #     self._queue_name = queue_name
-    #     self._testing_mode = testing_mode
-    #     self._response_queue_name = None
-    #     self._encode = encoder
-    #     self._response_decode = response_decoder
-    #     self._loop = loop if loop is not None else plum.get_event_loop()
-    #
-    #     self._queued_messages = []
-    #     # The list of TaskInfo objects are they were sent
-    #     self._task_info = collections.OrderedDict()
-    #     self._num_tasks = 0
-    #
-    #     # Start RMQ communication
-    #     self._reset_channel()
-    #     connector.add_connection_listener(self)
-    #     if connector.is_connected:
-    #         self._open_channel()
-    #
-    # def on_connection_opened(self, connector, reconnecting):
-    #     self._open_channel()
-    #
-    # def close(self):
-    #     self._channel.close()
-    #     self._initialising = None
-    #     self._channel = None
-    #     self._connector.remove_connection_listener(self)
-    #     self._connector = None
-    #
     def launch_process(self, process_class, init_args=None, init_kwargs=None):
         """
         Send a request to continue a Process from the provided bundle
@@ -289,118 +270,41 @@ class ProcessLaunchPublisher(messages.BasePublisherWithResponseQueue):
         :param init_kwargs: keyword args for process class constructor
         """
         task = create_launch_task(process_class, init_args, init_kwargs)
-        return self.action_message(task)
+        message = TaskMessage(self._task_queue_name, task)
+        return self.action_message(message)
 
-    def continue_process(self, pid, tag=None, published_callback=None):
+    def continue_process(self, pid, tag=None):
         task = create_continue_task(pid, tag)
-        return self.action_message(task)
-    #
-    # def initialised_future(self):
-    #     return self._initialising
-    #
-    # def task_send(self, task):
-    #     task_message = TaskMessage(task)
-    #     self.action_message(task_message)
-    #     return task_message.future
-    #
-    # def action_message(self, message):
-    #     if self._initialising.done():
-    #         self._send_message(message)
-    #     else:
-    #         self._queued_messages.append(message)
-    #
-    # def _reset_channel(self):
-    #     self._initialising = plum.Future()
-    #     self._initialising.add_done_callback(self._on_ready)
-    #     self._channel = None
-    #     self._queues_created = 0
-    #
-    # def _open_channel(self):
-    #     self._connector.open_channel(self._on_channel_open)
-    #
-    # def _on_channel_open(self, channel):
-    #     self._channel = channel
-    #     channel.confirm_delivery(self._delivery_confirmed)
-    #     # The task queue
-    #     channel.queue_declare(
-    #         self._on_launch_queue_declareok,
-    #         self._queue_name, durable=not self._testing_mode,
-    #         auto_delete=self._testing_mode)
-    #     # The response queue
-    #     channel.queue_declare(
-    #         self._on_response_queue_declareok, exclusive=True, auto_delete=True)
-    #
-    # def _on_launch_queue_declareok(self, frame):
-    #     self._queues_created |= self.TASK_QUEUE_CREATED
-    #     self._queue_created()
-    #
-    # def _on_response_queue_declareok(self, frame):
-    #     self._response_queue_name = frame.method.queue
-    #     self._channel.basic_consume(self._on_response, no_ack=True)
-    #     self._queues_created |= self.RESPONSE_QUEUE_CREATED
-    #     self._queue_created()
-    #
-    # def _queue_created(self):
-    #     """ When all queues have been declared we are initialised """
-    #     if self._queues_created == self.ALL_QUEUES_CREATED:
-    #         self._initialising.set_result(True)
-    
+        message = TaskMessage(self._task_queue_name, task)
+        return self.action_message(message)
+
+    @messages.initialiser()
+    def on_exchange_declareok(self, frame):
+        super(ProcessLaunchPublisher, self).on_exchange_declareok(frame)
+
+        # The task queue
+        self.get_channel().queue_declare(
+            self._on_task_queue_declareok,
+            self._task_queue_name, durable=not self._testing_mode,
+            auto_delete=self._testing_mode)
+
     def publish_msg(self, task, routing_key, correlation_id):
         properties = pika.BasicProperties(
-            reply_to=self.reply_queue_name(),
+            reply_to=self.get_reply_queue_name(),
             delivery_mode=2,  # Persistent
             correlation_id=correlation_id
         )
         self._channel.basic_publish(
-            exchange='', routing_key=routing_key, body=self._encode(task),
+            exchange=self.get_exchange_name(), routing_key=routing_key, body=self._encode(task),
             properties=properties)
-    #
-    # def _on_response(self, ch, method, props, body):
-    #     try:
-    #         seq_no, task_info = self._get_task_info(props.correlation_id)
-    #         response = self._response_decode(body)
-    #         utils.response_to_future(response[utils.RESPONSE_KEY], task_info.future)
-    #         del self._task_info[seq_no]
-    #     except IndexError:
-    #         pass
-    #
-    # def _new_correlation_id(self):
-    #     return str(uuid.uuid4())
-    #
-    # def _publish_queued(self):
-    #     for i in self._queued_messages:
-    #         try:
-    #             task_info = self._task_info[i]
-    #             try:
-    #                 self.publish_msg(task_info.task, task_info.correlation_id)
-    #             except KeyboardInterrupt:
-    #                 raise
-    #             except Exception:
-    #                 task_info.future.set_exc_info(sys.exc_info())
-    #         except IndexError:
-    #             _LOGGER.error(
-    #                 "The task info for queued task '{}' could not be found".format(i))
-    #     self._queued_messages = []
-    #
-    # def _on_ready(self, future):
-    #     if future.exception():
-    #         self.close()
-    #     self._publish_queued()
-    #
-    # def _delivery_confirmed(self, frame):
-    #     for seq_no, task_info in self._task_info.items():
-    #         if seq_no == frame.method.delivery_tag or frame.method.multiple:
-    #             if not task_info.publish_future.done():
-    #                 task_info.publish_future.set_result(True)
-    #
-    #         if seq_no == frame.method.delivery_tag:
-    #             break
-    #
-    # def _get_task_info(self, correlation_id):
-    #     for seq_no, task_info in self._task_info.items():
-    #         if task_info.correlation_id == correlation_id:
-    #             return seq_no, task_info
-    #
-    # @property
-    # def _publishing(self):
-    #     return self._initialising.done() and self._initialising.result()
+
+    @messages.initialiser()
+    def _on_task_queue_declareok(self, frame):
+        queue_name = frame.method.queue
+        self.get_channel().queue_bind(
+            self._on_task_queue_bindok, queue_name, self._exchange_name,
+            routing_key=queue_name)
+
+    @messages.initialiser()
+    def _on_task_queue_bindok(self, unused_frame):
+        pass

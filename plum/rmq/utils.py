@@ -6,7 +6,6 @@ import socket
 HOST_KEY = 'host'
 HOSTNAME_KEY = 'hostname'
 PID_KEY = 'pid'
-RESPONSE_KEY = 'response'
 RESULT_KEY = 'result'
 EXCEPTION_KEY = 'exception'
 CANCELLED_KEY = 'cancelled'
