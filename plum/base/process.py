@@ -492,6 +492,14 @@ class ProcessStateMachine(state_machine.StateMachine):
 
     # region State entry/exit events
 
+    @super_check
+    def on_init(self):
+        """
+        Called after the constructor but just before entering the initial
+        state.
+        """
+        pass
+
     def on_entered(self):
         state = self.state
         if state == ProcessState.CREATED:
@@ -556,10 +564,6 @@ class ProcessStateMachine(state_machine.StateMachine):
 
     def save_state(self, out_state):
         return call_with_super_check(self.save_instance_state, out_state)
-
-    def load_state(self, *args, **kwargs):
-        return call_with_super_check(
-            self.load_instance_state, *args, **kwargs)
 
     @super_check
     def save_instance_state(self, out_state):
