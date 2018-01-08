@@ -216,7 +216,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
         :param inputs: A dictionary of the process inputs
         :type inputs: dict
-        :param pid: The process ID, if not a unique pid will be chosen
+        :param pid: The process ID, can be manually set, if not a unique pid
+            will be chosen
         :param logger: An optional logger for the process to use
         :type logger: :class:`logging.Logger`
         :param loop: The event loop
