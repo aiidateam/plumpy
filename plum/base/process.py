@@ -17,7 +17,7 @@ except ImportError:
 
 from . import state_machine
 from .state_machine import InvalidStateError, event
-from .utils import super_check, call_with_super_check, flag
+from .utils import super_check, call_with_super_check
 
 __all__ = ['ProcessStateMachine', 'ProcessState',
            'Created', 'Running', 'Waiting', 'Paused', 'Finished', 'Failed',

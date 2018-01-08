@@ -130,6 +130,7 @@ class State(object):
     @super_check
     def enter(self):
         """ Entering the state """
+        self.state_machine.on_entering(self)
         self.in_state = True
 
     @super_check
@@ -139,9 +140,11 @@ class State(object):
             raise InvalidStateError(
                 "Cannot exit a terminal state {}".format(self.LABEL)
             )
+        self.state_machine.on_exiting()
         self.in_state = False
 
     def transition_to(self, state, *args, **kwargs):
+        """ A convenience method to transition to a new state from this state """
         self.state_machine.transition_to(state, *args, **kwargs)
 
 
@@ -214,6 +217,13 @@ class StateMachine(object):
     def state(self):
         return self._state.LABEL
 
+    def on_entering(self, state):
+        """
+        We are just about the enter the state with the given label
+        :param state: The state instance
+        """
+        pass
+
     def on_entered(self):
         """ We've just entered the new state as stored in self._state"""
         pass
@@ -244,13 +254,12 @@ class StateMachine(object):
                 assert label in self._state.ALLOWED, \
                     "Cannot transition from {} to {}".format(
                         self._state.LABEL, label)
-                self.on_exiting()
                 call_with_super_check(self._state.exit)
 
             call_with_super_check(new_state.enter)
             self._state = new_state
-
             self.on_entered()
+
             if self._state.is_terminal():
                 self.on_terminated()
         except Exception:
