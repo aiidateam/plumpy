@@ -22,7 +22,7 @@ class TestPicklePersister(TestCaseWithLoop):
             persister.save_checkpoint(process)
 
             bundle = persister.load_checkpoint(process.pid)
-            recreated = bundle.unbundle(self.loop)
+            recreated = bundle.unbundle(loop=self.loop)
 
     def test_get_checkpoints_without_tags(self):
         """

@@ -202,7 +202,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         return "\n".join(desc)
 
     @classmethod
-    def recreate_from(cls, *args, **kwargs):
+    def recreate_from(cls, saved_state, *args, **kwargs):
         """"""
         """
         Recreate a process from a saved state, passing any positional and 
@@ -213,14 +213,10 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         :return: An instance of the object with its state loaded from the save state.
         """
         obj = cls.__new__(cls)
-        base.call_with_super_check(obj.load_instance_state, *args, **kwargs)
+        obj.__init__(*args, **kwargs)
+        base.call_with_super_check(obj.load_instance_state, saved_state)
+        base.call_with_super_check(obj.init)
         return obj
-
-    # Set in on_create or load_instance_state
-    _uuid = None
-    _parsed_inputs = None
-    _outputs = None
-    __CREATION_TIME = None
 
     def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         """
@@ -244,8 +240,14 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
         self._pid = pid
         self._logger = logger
-        self._loop = loop
+        self._loop = loop if loop is not None else events.get_event_loop()
         self._communicator = communicator
+
+        self._future = plum.Future()
+        self._parsed_inputs = None
+        self._outputs = {}
+        self._uuid = None
+        self.__event_helper = utils.EventHelper(ProcessListener)
 
         super(Process, self).__init__()
 
@@ -335,9 +337,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         out_state[BundleKeys.OUTPUTS] = copy.deepcopy(self._outputs)
 
     @protected
-    def load_instance_state(self, saved_state, loop=None):
+    def load_instance_state(self, saved_state):
         # Set up runtime state
-        self.__init(None, loop)
         super(Process, self).load_instance_state(saved_state)
 
         # Inputs/outputs
@@ -346,8 +347,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             self._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._raw_inputs = None
-
         self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+
         self._outputs = copy.deepcopy(saved_state[BundleKeys.OUTPUTS])
 
         # Immutable stuff
@@ -379,18 +380,22 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         # State stuff
         self.__CREATION_TIME = time.time()
 
-        # Setup runtime state
-        self.__init(self._logger, loop=self._loop)
-
         # Input/output
         self._check_inputs(self._raw_inputs)
         self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
-        self._outputs = {}
 
         # Set up a process ID
         self._uuid = uuid.uuid4()
         if self._pid is None:
             self._pid = self._uuid
+
+    def on_created(self):
+        super(Process, self).on_created()
+        base.call_with_super_check(self.init)
+
+    @base.super_check
+    def init(self):
+        self.__logger = self._logger
 
         if self._communicator is not None:
             self._communicator.register_receiver(
@@ -546,18 +551,6 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self._loop.call_at(when, callback, *args, **kwargs)
 
     # region State entry/exit events
-
-    def __init(self, logger, loop=None):
-        """
-        Common place to put all runtime state variables i.e. those that don't need
-        to be persisted.  This can be called from the constructor or
-        load_instance_state.
-        """
-        self._loop = loop if loop is not None else events.get_event_loop()
-        self.__logger = logger
-        self._future = futures.Future()
-        # Events and running
-        self.__event_helper = utils.EventHelper(ProcessListener)
 
     def _fire_event(self, event, *args, **kwargs):
         self.__event_helper.fire_event(event, self, *args, **kwargs)

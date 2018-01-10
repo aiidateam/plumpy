@@ -281,7 +281,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     :rtype: bool
     """
     for i, bundle in zip(range(0, len(snapshots)), snapshots):
-        loaded = bundle.unbundle(loop)
+        loaded = bundle.unbundle(loop=loop)
         ps = ProcessSaver(loaded)
         try:
             loaded.execute()

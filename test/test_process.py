@@ -323,7 +323,7 @@ class TestProcess(util.TestCaseWithLoop):
         result = proc.execute()
 
         # Load from saved state and run again
-        proc = saved_state.unbundle(self.loop)
+        proc = saved_state.unbundle(loop=self.loop)
         proc.resume()
         result2 = proc.execute()
 
