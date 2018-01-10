@@ -30,9 +30,9 @@ class ForgetToCallParent(Process):
         if self.inputs.forget_on != 'failed':
             super(ForgetToCallParent, self).on_failed(exception)
 
-    def on_finished(self, result):
-        if self.inputs.forget_on != 'finished':
-            super(ForgetToCallParent, self).on_finished(result)
+    def on_finish(self, result):
+        if self.inputs.forget_on != 'finish':
+            super(ForgetToCallParent, self).on_finish(result)
 
     def on_cancelled(self, msg):
         if self.inputs.forget_on != 'cancelled':
@@ -138,8 +138,8 @@ class TestProcess(util.TestCaseWithLoop):
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
-        for event in ('created', 'running', 'finished'):
-            with self.assertRaises(plum.TransitionFailed):
+        for event in ('created', 'running', 'finish'):
+            with self.assertRaises(AssertionError):
                 proc = ForgetToCallParent(inputs={'forget_on': event})
                 proc.execute()
 

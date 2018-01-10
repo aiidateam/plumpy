@@ -103,7 +103,14 @@ class Executor(ProcessListener):
             loop = process.loop()
             self._future = futures.Future()
             futures.chain(process.future(), self._future)
-            self._future.add_done_callback(lambda _: loop.stop())
+
+            def stop(x):
+                loop.stop()
+
+            self._future.add_done_callback(
+                stop
+                # lambda _: loop.stop()
+            )
 
             if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
                 process.play()
@@ -209,6 +216,12 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         base.call_with_super_check(obj.load_instance_state, *args, **kwargs)
         return obj
 
+    # Set in on_create or load_instance_state
+    _uuid = None
+    _parsed_inputs = None
+    _outputs = None
+    __CREATION_TIME = None
+
     def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         """
         The signature of the constructor should not be changed by subclassing
@@ -227,28 +240,12 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        # Setup runtime state
-        self.__init(logger, loop=loop)
-
         # Input/output
-        self._check_inputs(inputs)
         self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
-        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
-        self._outputs = {}
-
-        # Set up a process ID
-        self._uuid = uuid.uuid4()
-        if pid is None:
-            self._pid = self.uuid
-        else:
-            self._pid = pid
-
-        # State stuff
-        self.__CREATION_TIME = time.time()
-
-        if communicator is not None:
-            communicator.register_receiver(
-                process_comms.ProcessReceiver(self), identifier=str(self.pid))
+        self._pid = pid
+        self._logger = logger
+        self._loop = loop
+        self._communicator = communicator
 
         super(Process, self).__init__()
 
@@ -376,6 +373,29 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
     # region Process messages
 
+    def on_create(self):
+        super(Process, self).on_create()
+
+        # State stuff
+        self.__CREATION_TIME = time.time()
+
+        # Setup runtime state
+        self.__init(self._logger, loop=self._loop)
+
+        # Input/output
+        self._check_inputs(self._raw_inputs)
+        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        self._outputs = {}
+
+        # Set up a process ID
+        self._uuid = uuid.uuid4()
+        if self._pid is None:
+            self._pid = self._uuid
+
+        if self._communicator is not None:
+            self._communicator.register_receiver(
+                process_comms.ProcessReceiver(self), identifier=str(self.pid))
+
     def on_running(self):
         super(Process, self).on_running()
         self._fire_event(ProcessListener.on_process_running)
@@ -395,11 +415,14 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         super(Process, self).on_paused()
         self._fire_event(ProcessListener.on_process_paused)
 
-    def on_finished(self, result):
-        super(Process, self).on_finished(result)
+    def on_finish(self, result):
+        super(Process, self).on_finish(result)
         self._check_outputs()
         self.future().set_result(result)
-        self._fire_event(ProcessListener.on_process_finished, result)
+
+    def on_finished(self):
+        super(Process, self).on_finished()
+        self._fire_event(ProcessListener.on_process_finished, self.result())
 
     def on_failed(self, exc_info):
         super(Process, self).on_failed(exc_info)

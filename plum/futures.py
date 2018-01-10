@@ -30,26 +30,35 @@ class Future(tornado.concurrent.Future):
     def cancelled(self):
         return self._cancelled
 
-    def result(self, timeout=None):
+    def result(self):
         if self.cancelled():
             raise CancelledError
+        if not self.done():
+            raise InvalidStateError("Not done yet so no result")
 
-        return super(Future, self).result(timeout)
+        return super(Future, self).result(timeout=0.)
 
 
 def copy_future(source, target):
     """ Copy the status of future a to b unless b is already done in
-    which case return"""
+    which case return
+
+    :param source: The source future
+    :type source: :class:`Future`
+    :param target: The target future
+    :type target: :class:`Future`
+    """
+
     if target.done():
         return
 
     if source.cancelled():
         target.cancel()
     else:
-        try:
-            target.set_result(source.result())
-        except Exception:
+        if source.exc_info() is not None:
             target.set_exc_info(source.exc_info())
+        else:
+            target.set_result(source.result())
 
 
 def chain(a, b):
@@ -59,10 +68,7 @@ def chain(a, b):
     ``b`` has already been completed or cancelled by the time ``a`` finishes.
     """
 
-    def copy(future):
-        copy_future(future, b)
-
-    a.add_done_callback(copy)
+    a.add_done_callback(lambda first: copy_future(first, b))
 
 
 def gather(*args):

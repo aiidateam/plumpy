@@ -133,5 +133,5 @@ class TestStateMachine(unittest.TestCase):
 
     def test_invalid_event(self):
         cd_player = CdPlayer()
-        with self.assertRaises(state_machine.TransitionFailed):
+        with self.assertRaises(AssertionError):
             cd_player.play()

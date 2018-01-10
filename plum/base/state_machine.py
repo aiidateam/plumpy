@@ -131,7 +131,6 @@ class State(object):
     def enter(self):
         """ Entering the state """
         self.state_machine.on_entering(self)
-        self.in_state = True
 
     @super_check
     def exit(self):
@@ -141,7 +140,6 @@ class State(object):
                 "Cannot exit a terminal state {}".format(self.LABEL)
             )
         self.state_machine.on_exiting()
-        self.in_state = False
 
     def transition_to(self, state, *args, **kwargs):
         """ A convenience method to transition to a new state from this state """
@@ -161,8 +159,8 @@ class StateMachine(object):
     STATES_MAP = None
     sealed = False
 
-    # Class defaults
     _transitioning = False
+    _transition_failing = False
 
     @classmethod
     def get_states(cls):
@@ -206,6 +204,7 @@ class StateMachine(object):
         self._exception_handler = None
         self.set_debug((not sys.flags.ignore_environment
                         and bool(os.environ.get('PYTHONSMDEBUG'))))
+        self._transitioning = False
 
     def __str__(self):
         return "<{}> ({})".format(self.__class__.__name__, self.state)
@@ -239,8 +238,10 @@ class StateMachine(object):
     def transition_to(self, new_state, *args, **kwargs):
         assert not self._transitioning, \
             "Cannot call transition_to when already transitioning state"
+
+        initial_state_label = self._state.LABEL if self._state is not None else None
+        label = None
         try:
-            initial_state = self._state.LABEL if self._state is not None else None
             self._transitioning = True
 
             if not isinstance(new_state, State):
@@ -255,28 +256,33 @@ class StateMachine(object):
                     "Cannot transition from {} to {}".format(
                         self._state.LABEL, label)
                 call_with_super_check(self._state.exit)
+                self._state.in_state = False
 
             call_with_super_check(new_state.enter)
             self._state = new_state
+            new_state.in_state = True
             self.on_entered()
-
             if self._state.is_terminal():
                 self.on_terminated()
-        except Exception:
-            exc = TransitionFailed(initial_state, new_state, traceback.format_exc())
-            self.transition_failed(exc)
+        except Exception as exc:
+            self._transitioning = False
+            if self._transition_failing:
+                raise
+            self._transition_failing = True
+            self.transition_failed(initial_state_label, label, *sys.exc_info()[1:])
         finally:
+            self._transition_failing = False
             self._transitioning = False
 
-    def transition_failed(self, exception):
+    def transition_failed(self, initial_state, final_state, exception, trace):
         """
         Called when a state transitions fails.  This method can be overwritten
         to change the default behaviour which is to raise the exception.
 
         :param exception: The transition failed exception
-        :type exception: :class:`TransitionFailed`
+        :type exception: :class:`Exception`
         """
-        raise exception
+        six.reraise(type(exception), exception, trace)
 
     def get_debug(self):
         return self._debug
