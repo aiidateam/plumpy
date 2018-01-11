@@ -2,13 +2,17 @@
 
 from setuptools import setup
 
+__author__ = "Martin Uhrin"
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__version__ = "0.9.1"
-__contributors__ = "Martin Uhrin"
+__contributors__ = "Sebastiaan Huber"
+
+about = {}
+with open('plum/version.py') as f:
+    exec (f.read(), about)
 
 setup(
     name="plumpy",
-    version=__version__,
+    version=about['__version__'],
     description='A python workflow library',
     long_description=open('README.md').read(),
     url='https://github.com/aiidateam/plumpy.git',

@@ -12,10 +12,12 @@ from .process_comms import *
 from . import stack
 from .mixins import *
 from .utils import *
+from .version import *
 
 __all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
            utils.__all__ + futures.__all__ + mixins.__all__ + ['stack'] +
-           persisters.__all__ + communications.__all__ + process_comms.__all__)
+           persisters.__all__ + communications.__all__ + process_comms.__all__ +
+           version.__all__)
 
 PersistableEventLoop = ioloop
 
