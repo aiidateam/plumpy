@@ -96,11 +96,11 @@ class Executor(ProcessListener):
         self._interrupt_on_pause_or_wait = interrupt_on_pause_or_wait
 
     def on_process_waiting(self, process, data):
-        if self._interrupt_on_pause_or_wait:
+        if self._interrupt_on_pause_or_wait and not self._future.done():
             self._future.set_result('waiting')
 
     def on_process_paused(self, process):
-        if self._interrupt_on_pause_or_wait:
+        if self._interrupt_on_pause_or_wait and not self._future.done():
             self._future.set_result('paused')
 
     def execute(self, process):
@@ -109,14 +109,7 @@ class Executor(ProcessListener):
             loop = process.loop()
             self._future = futures.Future()
             futures.chain(process.future(), self._future)
-
-            def stop(x):
-                loop.stop()
-
-            self._future.add_done_callback(
-                stop
-                # lambda _: loop.stop()
-            )
+            self._future.add_done_callback(lambda _: loop.stop())
 
             if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
                 process.play()
@@ -532,11 +525,20 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     # region callbacks
     def call_soon(self, callback, *args, **kwargs):
         """
-        Schedule a callback as soon as possible
+        Schedule a callback to what is considered an internal process function
+        (this needn't be a method).  If it raises an exception it will cause
+        the process to fail.
         """
         handle = events.Handle(self, callback, args, kwargs)
         self._loop.add_callback(handle._run)
         return handle
+
+    def call_soon_external(self, callback, *args, **kwargs):
+        """
+        Schedule a callback to an external method.  If there is an
+        exception in the callback it will not cause the process to fail.
+        """
+        self._loop.add_callback(callback, *args, **kwargs)
 
     def callback_failed(self, exception, trace):
         if self.state != ProcessState.FAILED:
@@ -547,7 +549,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     # region State entry/exit events
 
     def _fire_event(self, event, *args, **kwargs):
-        self.__event_helper.fire_event(event, self, *args, **kwargs)
+        self.call_soon_external(self.__event_helper.fire_event, event, self, *args, **kwargs)
 
     # endregion
 

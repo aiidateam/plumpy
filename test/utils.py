@@ -35,3 +35,8 @@ def get_message(receive_list, loop, subject, to, body, sender_id):
 
 def get_message_capture_fn(capture_list):
     return functools.partial(get_message, capture_list)
+
+
+def run_loop_with_timeout(loop, timeout=2.):
+    loop.call_later(timeout, loop.stop)
+    loop.start()

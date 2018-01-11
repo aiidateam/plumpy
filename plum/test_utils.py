@@ -169,32 +169,47 @@ class ThreeStepsThenException(ThreeSteps):
 
 
 class ProcessListenerTester(ProcessListener):
-    def __init__(self):
+    def __init__(self, process, expected_events, done_callback):
+        process.add_process_listener(self)
+        self.expected_events = set(expected_events)
+        self._done_callback = done_callback
         self.called = set()
 
     def on_process_created(self, process):
         self.called.add('created')
+        self._check_done()
 
     def on_process_running(self, process):
         self.called.add('running')
+        self._check_done()
 
     def on_process_waiting(self, process, data):
         self.called.add('waiting')
+        self._check_done()
 
     def on_process_paused(self, process):
         self.called.add('paused')
+        self._check_done()
 
     def on_output_emitted(self, process, output_port, value, dynamic):
         self.called.add('output_emitted')
+        self._check_done()
 
     def on_process_finished(self, process, outputs):
         self.called.add('finished')
+        self._check_done()
 
     def on_process_failed(self, process, exc_info):
         self.called.add('failed')
+        self._check_done()
 
     def on_process_cancelled(self, process, msg):
         self.called.add('cancelled')
+        self._check_done()
+
+    def _check_done(self):
+        if self.called == self.expected_events:
+            self._done_callback()
 
 
 class Saver(object):

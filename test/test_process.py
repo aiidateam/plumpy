@@ -6,7 +6,7 @@ from plum import test_utils
 from plum.test_utils import ProcessListenerTester
 from plum import process
 
-from . import util
+from . import utils
 
 
 class ForgetToCallParent(Process):
@@ -38,7 +38,7 @@ class ForgetToCallParent(Process):
             super(ForgetToCallParent, self).on_cancelled(msg)
 
 
-class TestProcess(util.TestCaseWithLoop):
+class TestProcess(utils.TestCaseWithLoop):
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
@@ -395,36 +395,48 @@ class TestProcess(util.TestCaseWithLoop):
                              proc.__class__, snapshot.outputs, proc.outputs))
 
 
-class TestProcessEvents(util.TestCaseWithLoop):
+class TestProcessEvents(utils.TestCaseWithLoop):
     def setUp(self):
         super(TestProcessEvents, self).setUp()
-        self.events_tester = ProcessListenerTester()
         self.proc = test_utils.DummyProcessWithOutput()
-        self.proc.add_process_listener(self.events_tester)
-        self.proc.play()
 
     def tearDown(self):
-        self.proc.remove_process_listener(self.events_tester)
         super(TestProcessEvents, self).tearDown()
 
     def test_basic_events(self):
-        self.proc.execute()
-        for evt in ['running', 'output_emitted', 'finished']:
-            self.assertIn(evt, self.events_tester.called)
+        events_tester = ProcessListenerTester(
+            self.proc, ('running', 'output_emitted', 'finished'),
+            self.loop.stop)
+        self.proc.play()
+
+        utils.run_loop_with_timeout(self.loop)
+        self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_cancelled(self):
+        events_tester = ProcessListenerTester(self.proc, ('cancelled',), self.loop.stop)
         self.proc.cancel()
+        utils.run_loop_with_timeout(self.loop)
+
+        # Do the checks
         self.assertTrue(self.proc.cancelled())
-        self.assertIn('cancelled', self.events_tester.called)
+        self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_failed(self):
+        events_tester = ProcessListenerTester(self.proc, ('failed',), self.loop.stop)
         self.proc.fail(RuntimeError('See ya later suckers'))
+        utils.run_loop_with_timeout(self.loop)
+
+        # Do the checks
         self.assertIsNotNone(self.proc.exception())
-        self.assertIn('failed', self.events_tester.called)
+        self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_paused(self):
+        events_tester = ProcessListenerTester(self.proc, ('paused',), self.loop.stop)
         self.proc.pause()
-        self.assertIn('paused', self.events_tester.called)
+        utils.run_loop_with_timeout(self.loop)
+
+        # Do the checks
+        self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
 
 class _RestartProcess(test_utils.WaitForSignalProcess):

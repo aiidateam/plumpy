@@ -4,10 +4,10 @@ from plum.test_utils import ThreeSteps, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plum.test_utils import check_process_against_snapshots
 from plum.test_utils import ProcessSaver
-from . import util
+from . import utils
 
 
-class TestWaitingProcess(util.TestCaseWithLoop):
+class TestWaitingProcess(utils.TestCaseWithLoop):
     def test_instance_state(self):
         proc = ThreeSteps()
         proc.play()
@@ -20,7 +20,6 @@ class TestWaitingProcess(util.TestCaseWithLoop):
     def test_saving_each_step(self):
         for proc_class in TEST_WAITING_PROCESSES:
             proc = proc_class()
-            proc.play()
             saver = ProcessSaver(proc)
             try:
                 proc.execute()

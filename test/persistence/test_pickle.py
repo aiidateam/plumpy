@@ -5,7 +5,7 @@ if getattr(tempfile, 'TemporaryDirectory', None) is None:
 
 from plum.persisters import PersistedCheckpoint, PicklePersister
 from plum.test_utils import ProcessWithCheckpoint
-from test.util import TestCaseWithLoop
+from test.utils import TestCaseWithLoop
 
 
 class TestPicklePersister(TestCaseWithLoop):

@@ -1,4 +1,4 @@
-from test.util import TestCaseWithLoop
+from test.utils import TestCaseWithLoop
 import plum
 
 
