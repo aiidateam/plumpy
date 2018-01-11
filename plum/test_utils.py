@@ -2,25 +2,25 @@ import collections
 from collections import namedtuple
 
 import plum
-from plum import process
-from plum.process import Process
 from plum.process_listener import ProcessListener
-from plum.utils import override
+from . import process
+from . import persisters
+from . import utils
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
 
-class DummyProcess(Process):
+class DummyProcess(process.Process):
     """
     Process with no inputs or ouputs and does nothing when ran.
     """
 
-    @override
+    @utils.override
     def _run(self):
         pass
 
 
-class DummyProcessWithOutput(Process):
+class DummyProcessWithOutput(process.Process):
     @classmethod
     def define(cls, spec):
         super(DummyProcessWithOutput, cls).define(spec)
@@ -32,25 +32,25 @@ class DummyProcessWithOutput(Process):
         return self.outputs
 
 
-class KeyboardInterruptProc(Process):
-    @override
+class KeyboardInterruptProc(process.Process):
+    @utils.override
     def _run(self):
         raise KeyboardInterrupt()
 
 
-class ProcessWithCheckpoint(Process):
-    @override
+class ProcessWithCheckpoint(process.Process):
+    @utils.override
     def _run(self):
-        return plum.Continue(self.last_step)
+        return process.Continue(self.last_step)
 
     def last_step(self):
         pass
 
 
-class WaitForSignalProcess(Process):
-    @override
+class WaitForSignalProcess(process.Process):
+    @utils.override
     def _run(self):
-        return plum.Wait(self.last_step)
+        return process.Wait(self.last_step)
 
     def last_step(self):
         pass
@@ -67,60 +67,60 @@ class EventsTesterMixin(object):
         cls.called_events.append(event)
 
     def __init__(self, *args, **kwargs):
-        assert isinstance(self, Process), \
+        assert isinstance(self, process.Process), \
             "Mixin has to be used with a type derived from a Process"
         super(EventsTesterMixin, self).__init__(*args, **kwargs)
         self.__class__.called_events = []
 
-    @override
+    @utils.override
     def on_create(self):
         super(EventsTesterMixin, self).on_create()
         self.called('create')
 
-    @override
+    @utils.override
     def on_run(self):
         super(EventsTesterMixin, self).on_run()
         self.called('run')
 
-    @override
+    @utils.override
     def _on_output_emitted(self, output_port, value, dynamic):
         super(EventsTesterMixin, self)._on_output_emitted(
             output_port, value, dynamic)
         self.called('emitted')
 
-    @override
+    @utils.override
     def on_wait(self, wait_on):
         super(EventsTesterMixin, self).on_wait(wait_on)
         self.called('wait')
 
-    @override
+    @utils.override
     def on_resume(self):
         super(EventsTesterMixin, self).on_resume()
         self.called('resume')
 
-    @override
+    @utils.override
     def on_finish(self, result):
         super(EventsTesterMixin, self).on_finish(result)
         self.called('finish')
 
-    @override
+    @utils.override
     def on_stop(self):
         super(EventsTesterMixin, self).on_stop()
         self.called('stop')
 
-    @override
+    @utils.override
     def on_terminate(self):
         super(EventsTesterMixin, self).on_terminate()
         self.called('terminate')
 
 
-class ProcessEventsTester(EventsTesterMixin, Process):
+class ProcessEventsTester(EventsTesterMixin, process.Process):
     @classmethod
     def define(cls, spec):
         super(ProcessEventsTester, cls).define(spec)
         spec.dynamic_output()
 
-    @override
+    @utils.override
     def _run(self):
         self.out("test", 5)
 
@@ -128,37 +128,37 @@ class ProcessEventsTester(EventsTesterMixin, Process):
 class ThreeSteps(ProcessEventsTester):
     _last_checkpoint = None
 
-    @override
+    @utils.override
     def _run(self):
         self.out("test", 5)
-        return plum.Continue(self.middle_step)
+        return process.Continue(self.middle_step)
 
     def middle_step(self, ):
-        return plum.Continue(self.last_step)
+        return process.Continue(self.last_step)
 
     def last_step(self):
         pass
 
 
 class TwoCheckpointNoFinish(ProcessEventsTester):
-    @override
+    @utils.override
     def _run(self):
         self.out("test", 5)
-        return plum.Continue(self.middle_step)
+        return process.Continue(self.middle_step)
 
     def middle_step(self):
         pass
 
 
 class ExceptionProcess(ProcessEventsTester):
-    @override
+    @utils.override
     def _run(self):
         self.out("test", 5)
         raise RuntimeError("Great scott!")
 
 
 class ThreeStepsThenException(ThreeSteps):
-    @override
+    @utils.override
     def last_step(self):
         raise RuntimeError("Great scott!")
 
@@ -213,7 +213,7 @@ class Saver(object):
         self.outputs = []
 
     def _save(self, p):
-        b = plum.Bundle(p)
+        b = persisters.Bundle(p)
         self.snapshots.append(b)
         self.outputs.append(p.outputs.copy())
 
@@ -237,31 +237,31 @@ class ProcessSaver(ProcessListener, Saver):
             self._future.add_done_callback(lambda _: self.process.loop().stop())
             self.process.loop().start()
 
-    @override
+    @utils.override
     def on_process_running(self, process):
         self._save(process)
 
-    @override
+    @utils.override
     def on_process_waiting(self, process, data):
         self._save(process)
 
-    @override
+    @utils.override
     def on_process_paused(self, process):
         self._save(process)
 
     # Terminal states:
 
-    @override
+    @utils.override
     def on_process_finished(self, process, outputs):
         self._save(process)
         self._future.set_result(True)
 
-    @override
+    @utils.override
     def on_process_failed(self, process, exc_info):
         self._save(process)
         self._future.set_result(True)
 
-    @override
+    @utils.override
     def on_process_cancelled(self, process, msg):
         self._save(process)
         self._future.set_result(True)
@@ -357,3 +357,27 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
             raise ValueError(
                 "Dict values mismatch for :\n{} != {}".format(v1, v2)
             )
+
+
+class TestPersister(persisters.Persister):
+    """
+    Test persister, just creates the bundle, noting else
+    """
+    def save_checkpoint(self, process, tag=None):
+        """ Create the checkpoint bundle """
+        persisters.Bundle(process)
+
+    def load_checkpoint(self, pid, tag=None):
+        raise NotImplementedError
+
+    def get_checkpoints(self):
+        raise NotImplementedError
+
+    def get_process_checkpoints(self, pid):
+        raise NotImplementedError
+
+    def delete_checkpoint(self, pid, tag=None):
+        raise NotImplementedError
+
+    def delete_process_checkpoints(self, pid):
+        raise NotImplementedError

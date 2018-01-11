@@ -119,8 +119,9 @@ class Handle(object):
         return self._cancelled
 
     def _run(self):
-        try:
-            self._callback(*self._args, **self._kwargs)
-        except BaseException:
-            exc_info = sys.exc_info()
-            self._process.callback_failed(self._callback, exc_info[1], exc_info[2])
+        if not self._cancelled:
+            try:
+                self._callback(*self._args, **self._kwargs)
+            except BaseException:
+                exc_info = sys.exc_info()
+                self._process.callback_failed(self._callback, exc_info[1], exc_info[2])
