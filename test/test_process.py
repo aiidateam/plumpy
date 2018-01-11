@@ -10,32 +10,31 @@ from . import util
 
 
 class ForgetToCallParent(Process):
-    @classmethod
-    def define(cls, spec):
-        super(ForgetToCallParent, cls).define(spec)
-        spec.input('forget_on', valid_type=str)
+    def __init__(self, forget_on):
+        super(ForgetToCallParent, self).__init__()
+        self.forget_on = forget_on
 
     def _run(self):
         pass
 
-    def on_created(self):
-        if self.inputs.forget_on != 'created':
-            super(ForgetToCallParent, self).on_created()
+    def on_create(self):
+        if self.forget_on != 'create':
+            super(ForgetToCallParent, self).on_create()
 
     def on_running(self):
-        if self.inputs.forget_on != 'running':
+        if self.forget_on != 'running':
             super(ForgetToCallParent, self).on_running()
 
-    def on_failed(self, exception):
-        if self.inputs.forget_on != 'failed':
-            super(ForgetToCallParent, self).on_failed(exception)
+    def on_fail(self, exception):
+        if self.forget_on != 'fail':
+            super(ForgetToCallParent, self).on_fail(exception)
 
     def on_finish(self, result):
-        if self.inputs.forget_on != 'finish':
+        if self.forget_on != 'finish':
             super(ForgetToCallParent, self).on_finish(result)
 
     def on_cancelled(self, msg):
-        if self.inputs.forget_on != 'cancelled':
+        if self.forget_on != 'cancelled':
             super(ForgetToCallParent, self).on_cancelled(msg)
 
 
@@ -126,7 +125,7 @@ class TestProcess(util.TestCaseWithLoop):
         proc = test_utils.DummyProcessWithOutput()
         proc.execute()
 
-        self.assertTrue(proc.has_finished())
+        self.assertTrue(proc.done())
         self.assertEqual(proc.state, ProcessState.FINISHED)
         self.assertEqual(proc.outputs, {'default': 5})
 
@@ -138,9 +137,9 @@ class TestProcess(util.TestCaseWithLoop):
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
-        for event in ('created', 'running', 'finish'):
+        for event in ('create', 'running', 'finish'):
             with self.assertRaises(AssertionError):
-                proc = ForgetToCallParent(inputs={'forget_on': event})
+                proc = ForgetToCallParent(event)
                 proc.execute()
 
     def test_pid(self):
@@ -254,8 +253,8 @@ class TestProcess(util.TestCaseWithLoop):
         proc.execute(True)
 
         # Check it's done
+        self.assertTrue(proc.done())
         self.assertEqual(proc.state, ProcessState.FINISHED)
-        self.assertTrue(proc.has_finished())
 
     def test_exc_info(self):
         proc = test_utils.ExceptionProcess()
@@ -305,8 +304,8 @@ class TestProcess(util.TestCaseWithLoop):
         proc.execute(True)
 
         # Check it's done
+        self.assertTrue(proc.done())
         self.assertEqual(proc.state, ProcessState.FINISHED)
-        self.assertTrue(proc.has_finished())
 
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """

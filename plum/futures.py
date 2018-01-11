@@ -72,6 +72,10 @@ def chain(a, b):
 
 
 def gather(*args):
+    if not args:
+        future = Future()
+        future.set_result([])
+        return future
     return _GatheringFuture(*args)
 
 

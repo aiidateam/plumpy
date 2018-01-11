@@ -108,12 +108,14 @@ class State(state_machine.State):
         self.in_state = saved_state[KEY_IN_STATE]
 
     def cancel(self, msg=None):
-        return self.transition_to(ProcessState.CANCELLED, msg)
+        self.transition_to(ProcessState.CANCELLED, msg)
+        return True
 
 
 class Created(State):
     LABEL = ProcessState.CREATED
-    ALLOWED = {ProcessState.RUNNING,
+    ALLOWED = {ProcessState.PAUSED,
+               ProcessState.RUNNING,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
 
@@ -140,8 +142,13 @@ class Created(State):
         self.args = saved_state[self.ARGS]
         self.kwargs = saved_state[self.KWARGS]
 
+    def pause(self):
+        self.transition_to(ProcessState.PAUSED, self)
+        return True
+
     def play(self):
-        return self.transition_to(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
+        self.transition_to(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
+        return True
 
 
 class CancelInterruption(BaseException):
@@ -186,7 +193,7 @@ class Running(State):
         if self._running:
             raise CancelInterruption(message)
         else:
-            super(Running, self).cancel(message)
+            return super(Running, self).cancel(message)
 
     def pause(self):
         if self._running:
@@ -194,13 +201,15 @@ class Running(State):
                 self._command = Pause()
             return state_machine.EventResponse.DELAYED
         else:
-            return self.transition_to(ProcessState.PAUSED, self)
+            self.transition_to(ProcessState.PAUSED, self)
+            return True
 
     def resume(self, run_fn, value=NULL):
         if value == NULL:
-            return self.transition_to(ProcessState.RUNNING, run_fn)
+            self.transition_to(ProcessState.RUNNING, run_fn)
         else:
-            return self.transition_to(ProcessState.RUNNING, run_fn, value)
+            self.transition_to(ProcessState.RUNNING, run_fn, value)
+        return True
 
     def _run(self):
         if self._command is not None:
@@ -286,6 +295,7 @@ class Waiting(State):
 
     def pause(self):
         self.transition_to(ProcessState.PAUSED, self)
+        return True
 
     def resume(self, value=NULL):
         if value == NULL:
@@ -323,7 +333,12 @@ class Paused(State):
         self.paused_state = process.create_state(saved_state[self.PAUSED_STATE])
 
     def play(self):
-        self.transition_to(self.paused_state)
+        if self.paused_state.LABEL == ProcessState.CREATED:
+            # Go direct to the next state
+            self.paused_state.play()
+        else:
+            self.transition_to(self.paused_state)
+        return True
 
 
 class Failed(State):
@@ -427,8 +442,8 @@ class ProcessStateMachine(state_machine.StateMachine):
                   ___
                  |   v
     CREATED --- RUNNING --- FINISHED (o)
-              /  |   ^      /
-             /   v   |     /
+        |     /  |   ^      /
+        v    /   v   |     /
       PAUSED --- WAITING---
                  |   ^
                   ----
@@ -492,26 +507,20 @@ class ProcessStateMachine(state_machine.StateMachine):
 
     # region State entry/exit events
 
-    @super_check
-    def on_init(self):
-        """
-        Called after the constructor but just before entering the initial
-        state.
-        """
-        pass
-
     def on_entering(self, state):
         state_label = state.LABEL
         if state_label == ProcessState.CREATED:
             call_with_super_check(self.on_create)
+        elif state_label == ProcessState.WAITING:
+            call_with_super_check(self.on_wait, state.data)
         elif state_label == ProcessState.FINISHED:
             call_with_super_check(self.on_finish, state.result)
+        elif state_label == ProcessState.FAILED:
+            call_with_super_check(self.on_fail, state.get_exc_info())
 
     def on_entered(self):
         state_label = self.state
-        if state_label == ProcessState.CREATED:
-            call_with_super_check(self.on_created)
-        elif state_label == ProcessState.RUNNING:
+        if state_label == ProcessState.RUNNING:
             call_with_super_check(self.on_running)
         elif state_label == ProcessState.PAUSED:
             call_with_super_check(self.on_paused)
@@ -526,6 +535,8 @@ class ProcessStateMachine(state_machine.StateMachine):
 
     def on_exiting(self):
         state = self.state
+        if state == ProcessState.PAUSED:
+            call_with_super_check(self.on_exit_paused)
         if state == ProcessState.WAITING:
             call_with_super_check(self.on_exit_waiting)
         elif state == ProcessState.RUNNING:
@@ -543,15 +554,15 @@ class ProcessStateMachine(state_machine.StateMachine):
         pass
 
     @super_check
-    def on_created(self):
-        pass
-
-    @super_check
     def on_running(self):
         pass
 
     @super_check
     def on_exit_running(self):
+        pass
+
+    @super_check
+    def on_wait(self, data):
         pass
 
     @super_check
@@ -567,11 +578,19 @@ class ProcessStateMachine(state_machine.StateMachine):
         pass
 
     @super_check
+    def on_exit_paused(self):
+        pass
+
+    @super_check
     def on_finish(self, result):
         pass
 
     @super_check
     def on_finished(self):
+        pass
+
+    @super_check
+    def on_fail(self, exc_info):
         pass
 
     @super_check
@@ -620,7 +639,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         """
         return self._state.play()
 
-    @event(from_states=(Running, Waiting), to_states=(Paused, Failed))
+    @event(from_states=(Created, Running, Waiting), to_states=(Paused, Failed))
     def pause(self):
         """ Pause the process """
         return self._state.pause()

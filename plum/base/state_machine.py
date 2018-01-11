@@ -150,6 +150,7 @@ class StateMachineMeta(type):
     def __call__(cls, *args, **kwargs):
         inst = super(StateMachineMeta, cls).__call__(*args, **kwargs)
         inst.transition_to(inst.create_initial_state())
+        call_with_super_check(inst.init)
         return inst
 
 
@@ -206,6 +207,11 @@ class StateMachine(object):
                         and bool(os.environ.get('PYTHONSMDEBUG'))))
         self._transitioning = False
 
+    @super_check
+    def init(self):
+        """ Called after entering initial state. """
+        pass
+
     def __str__(self):
         return "<{}> ({})".format(self.__class__.__name__, self.state)
 
@@ -214,6 +220,8 @@ class StateMachine(object):
 
     @property
     def state(self):
+        if self._state is None:
+            return None
         return self._state.LABEL
 
     def on_entering(self, state):

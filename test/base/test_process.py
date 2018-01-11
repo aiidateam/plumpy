@@ -20,8 +20,7 @@ def execute(proc):
 class TestProc(ProcessStateMachine):
     def do_run(self):
         while self.state in [ProcessState.CREATED, ProcessState.PAUSED, ProcessState.RUNNING]:
-            if self.state in [ProcessState.CREATED,
-                              ProcessState.PAUSED]:
+            if self.state in [ProcessState.CREATED, ProcessState.PAUSED]:
                 self.play()
             elif self.state == ProcessState.RUNNING:
                 self._state._run()

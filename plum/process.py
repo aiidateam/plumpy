@@ -66,9 +66,17 @@ class ProcessMessage(object):
 
 
 class Running(base.Running):
+    _run_handle = None
+
     def enter(self):
         super(Running, self).enter()
-        self.process.call_soon(self._run)
+        self._run_handle = self.process.call_soon(self._run)
+
+    def exit(self):
+        super(Running, self).exit()
+        # Make sure the run callback doesn't get actioned if it wasn't already
+        if self._run_handle is not None:
+            self._run_handle.cancel()
 
     def load_instance_state(self, process, saved_state):
         super(Running, self).load_instance_state(process, saved_state)
@@ -76,10 +84,8 @@ class Running(base.Running):
             self.process.call_soon(self._run)
 
     def _run(self):
-        # Guard, in case we left the state before the callback was actioned
-        if self.in_state:
-            with stack.in_stack(self.process):
-                super(Running, self)._run()
+        with stack.in_stack(self.process):
+            super(Running, self)._run()
 
 
 class Executor(ProcessListener):
@@ -295,8 +301,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         :return: The logger.
         :rtype: :class:`logging.Logger`
         """
-        if self.__logger is not None:
-            return self.__logger
+        if self._logger is not None:
+            return self._logger
         else:
             return _LOGGER
 
@@ -305,16 +311,6 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
     def future(self):
         return self._future
-
-    def has_finished(self):
-        """
-        Has the process finished i.e. completed running normally, without abort
-        or an exception.
-
-        :return: True if finished, False otherwise
-        :rtype: bool
-        """
-        return self.done()
 
     def has_aborted(self):
         return self.cancelled()
@@ -366,7 +362,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
     @protected
     def set_logger(self, logger):
-        self.__logger = logger
+        self._logger = logger
 
     @protected
     def log_with_pid(self, level, msg):
@@ -389,14 +385,9 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         if self._pid is None:
             self._pid = self._uuid
 
-    def on_created(self):
-        super(Process, self).on_created()
-        base.call_with_super_check(self.init)
-
     @base.super_check
     def init(self):
-        self.__logger = self._logger
-
+        """ Any common initialisation stuff after create or load goes here """
         if self._communicator is not None:
             self._communicator.register_receiver(
                 process_comms.ProcessReceiver(self), identifier=str(self.pid))
@@ -429,8 +420,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         super(Process, self).on_finished()
         self._fire_event(ProcessListener.on_process_finished, self.result())
 
-    def on_failed(self, exc_info):
-        super(Process, self).on_failed(exc_info)
+    def on_fail(self, exc_info):
+        super(Process, self).on_fail(exc_info)
         self.future().set_exc_info(exc_info)
         self._fire_event(ProcessListener.on_process_failed, exc_info)
 
@@ -538,17 +529,20 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
                 self.loop(), subject, body, self.uuid, sender_id
             )
 
+    # region callbacks
     def call_soon(self, callback, *args, **kwargs):
-        """ Schedule a callback as soon as possible """
-        self._loop.add_callback(callback, *args, **kwargs)
+        """
+        Schedule a callback as soon as possible
+        """
+        handle = events.Handle(self, callback, args, kwargs)
+        self._loop.add_callback(handle._run)
+        return handle
 
-    def call_later(self, delay, callback, *args, **kwargs):
-        """ Schedule a callback delayed by some time in seconds """
-        self._loop.call_later(delay, callback, *args, **kwargs)
+    def callback_failed(self, exception, trace):
+        if self.state != ProcessState.FAILED:
+            self.fail(exception, trace)
 
-    def call_at(self, when, callback, *args, **kwargs):
-        """ Schedule a callback at a particular time """
-        self._loop.call_at(when, callback, *args, **kwargs)
+    # endregion
 
     # region State entry/exit events
 

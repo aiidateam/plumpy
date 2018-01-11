@@ -105,6 +105,7 @@ class CdPlayer(state_machine.StateMachine):
     @state_machine.event(from_states=Playing, to_states=Paused)
     def pause(self):
         self.transition_to(Paused, self._state)
+        return True
 
     @state_machine.event(from_states=(Playing, Paused), to_states=Stopped)
     def stop(self):
