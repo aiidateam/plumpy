@@ -122,4 +122,5 @@ class Handle(object):
         try:
             self._callback(*self._args, **self._kwargs)
         except BaseException:
-            self._process.callback_failed(*sys.exc_info[1:])
+            exc_info = sys.exc_info()
+            self._process.callback_failed(self._callback, exc_info[1], exc_info[2])

@@ -503,7 +503,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         :rtype: bool
         """
         return self._state.is_terminal()
-    
+
     @abc.abstractmethod
     def run(self):
         pass
@@ -516,25 +516,16 @@ class ProcessStateMachine(state_machine.StateMachine):
             call_with_super_check(self.on_create)
         elif state_label == ProcessState.RUNNING:
             call_with_super_check(self.on_run)
+        elif state_label == ProcessState.PAUSED:
+            call_with_super_check(self.on_pause)
         elif state_label == ProcessState.WAITING:
             call_with_super_check(self.on_wait, state.data)
         elif state_label == ProcessState.FINISHED:
             call_with_super_check(self.on_finish, state.result)
+        elif state_label == ProcessState.CANCELLED:
+            call_with_super_check(self.on_cancel, state.msg)
         elif state_label == ProcessState.FAILED:
             call_with_super_check(self.on_fail, state.get_exc_info())
-
-    def on_entered(self):
-        state_label = self.state
-        if state_label == ProcessState.PAUSED:
-            call_with_super_check(self.on_paused)
-        elif state_label == ProcessState.WAITING:
-            call_with_super_check(self.on_waiting, self._state.data)
-        elif state_label == ProcessState.FINISHED:
-            call_with_super_check(self.on_finished)
-        elif state_label == ProcessState.FAILED:
-            call_with_super_check(self.on_failed, self._state.get_exc_info())
-        elif state_label == ProcessState.CANCELLED:
-            call_with_super_check(self.on_cancelled, self._state.msg)
 
     def on_exiting(self):
         state = self.state
@@ -569,11 +560,11 @@ class ProcessStateMachine(state_machine.StateMachine):
         pass
 
     @super_check
-    def on_waiting(self, data):
+    def on_exit_waiting(self):
         pass
 
     @super_check
-    def on_exit_waiting(self):
+    def on_pause(self):
         pass
 
     @super_check
@@ -589,19 +580,11 @@ class ProcessStateMachine(state_machine.StateMachine):
         pass
 
     @super_check
-    def on_finished(self):
-        pass
-
-    @super_check
     def on_fail(self, exc_info):
         pass
 
     @super_check
-    def on_failed(self, exc_info):
-        pass
-
-    @super_check
-    def on_cancelled(self, msg):
+    def on_cancel(self, sg):
         pass
 
     # endregion

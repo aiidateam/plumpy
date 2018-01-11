@@ -33,9 +33,9 @@ class ForgetToCallParent(Process):
         if self.forget_on != 'finish':
             super(ForgetToCallParent, self).on_finish(result)
 
-    def on_cancelled(self, msg):
-        if self.forget_on != 'cancelled':
-            super(ForgetToCallParent, self).on_cancelled(msg)
+    def on_cancel(self, msg):
+        if self.forget_on != 'cancel':
+            super(ForgetToCallParent, self).on_cancel(msg)
 
 
 class TestProcess(utils.TestCaseWithLoop):
@@ -141,6 +141,12 @@ class TestProcess(utils.TestCaseWithLoop):
             with self.assertRaises(AssertionError):
                 proc = ForgetToCallParent(event)
                 proc.execute()
+
+    def test_forget_to_call_parent_cancel(self):
+        with self.assertRaises(AssertionError):
+            proc = ForgetToCallParent('cancel')
+            proc.cancel()
+            proc.execute()
 
     def test_pid(self):
         # Test auto generation of pid

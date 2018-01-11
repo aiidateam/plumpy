@@ -396,30 +396,27 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
 
-    def on_waiting(self, data):
-        super(Process, self).on_waiting(data)
+    def on_wait(self, data):
+        super(Process, self).on_wait(data)
         self._fire_event(ProcessListener.on_process_waiting, data)
 
-    def on_paused(self):
-        super(Process, self).on_paused()
+    def on_pause(self):
+        super(Process, self).on_pause()
         self._fire_event(ProcessListener.on_process_paused)
 
     def on_finish(self, result):
         super(Process, self).on_finish(result)
         self._check_outputs()
         self.future().set_result(result)
-
-    def on_finished(self):
-        super(Process, self).on_finished()
-        self._fire_event(ProcessListener.on_process_finished, self.result())
+        self._fire_event(ProcessListener.on_process_finished, result)
 
     def on_fail(self, exc_info):
         super(Process, self).on_fail(exc_info)
         self.future().set_exc_info(exc_info)
         self._fire_event(ProcessListener.on_process_failed, exc_info)
 
-    def on_cancelled(self, msg):
-        super(Process, self).on_cancelled(msg)
+    def on_cancel(self, msg):
+        super(Process, self).on_cancel(msg)
         self.future().cancel()
         self._fire_event(ProcessListener.on_process_cancelled, msg)
 
@@ -540,7 +537,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         """
         self._loop.add_callback(callback, *args, **kwargs)
 
-    def callback_failed(self, exception, trace):
+    def callback_failed(self, callback, exception, trace):
         if self.state != ProcessState.FAILED:
             self.fail(exception, trace)
 

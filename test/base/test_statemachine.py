@@ -90,11 +90,13 @@ class Stopped(state_machine.State):
 class CdPlayer(state_machine.StateMachine):
     STATES = (Stopped, Playing, Paused)
 
-    def on_entered(self):
-        print("Entered {}".format(self.state))
+    def on_entering(self, state):
+        super(CdPlayer, self).on_entering(state)
+        print("Entering {}".format(state))
         print(self._state)
 
     def on_exiting(self):
+        super(CdPlayer, self).on_exiting()
         print("Exiting {}".format(self.state))
         print(self._state)
 

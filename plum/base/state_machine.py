@@ -231,10 +231,6 @@ class StateMachine(object):
         """
         pass
 
-    def on_entered(self):
-        """ We've just entered the new state as stored in self._state"""
-        pass
-
     def on_exiting(self):
         """ We're just about the exit the state in self._state"""
         pass
@@ -269,7 +265,6 @@ class StateMachine(object):
             call_with_super_check(new_state.enter)
             self._state = new_state
             new_state.in_state = True
-            self.on_entered()
             if self._state.is_terminal():
                 self.on_terminated()
         except Exception as exc:

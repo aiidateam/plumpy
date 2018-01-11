@@ -57,7 +57,7 @@ class WaitForSignalProcess(Process):
 
 
 class EventsTesterMixin(object):
-    EVENTS = ["create", "run", "finish", "finished", "emitted", "wait", "resume", "stop", "terminate"]
+    EVENTS = ("create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate")
 
     called_events = []
 
@@ -102,11 +102,6 @@ class EventsTesterMixin(object):
     def on_finish(self, result):
         super(EventsTesterMixin, self).on_finish(result)
         self.called('finish')
-
-    @override
-    def on_finished(self):
-        super(EventsTesterMixin, self).on_finished()
-        self.called('finished')
 
     @override
     def on_stop(self):
