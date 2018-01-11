@@ -107,6 +107,9 @@ class State(state_machine.State):
         self.state_machine = process
         self.in_state = saved_state[KEY_IN_STATE]
 
+    def play(self):
+        return state_machine.EventResponse.IGNORED
+
     def cancel(self, msg=None):
         self.transition_to(ProcessState.CANCELLED, msg)
         return True
@@ -499,8 +502,8 @@ class ProcessStateMachine(state_machine.StateMachine):
         Return True if the call was successfully cancelled or finished running.
         :rtype: bool
         """
-        return self.cancelled() or self.state == ProcessState.FINISHED
-
+        return self._state.is_terminal()
+    
     @abc.abstractmethod
     def run(self):
         pass
@@ -511,6 +514,8 @@ class ProcessStateMachine(state_machine.StateMachine):
         state_label = state.LABEL
         if state_label == ProcessState.CREATED:
             call_with_super_check(self.on_create)
+        elif state_label == ProcessState.RUNNING:
+            call_with_super_check(self.on_run)
         elif state_label == ProcessState.WAITING:
             call_with_super_check(self.on_wait, state.data)
         elif state_label == ProcessState.FINISHED:
@@ -520,9 +525,7 @@ class ProcessStateMachine(state_machine.StateMachine):
 
     def on_entered(self):
         state_label = self.state
-        if state_label == ProcessState.RUNNING:
-            call_with_super_check(self.on_running)
-        elif state_label == ProcessState.PAUSED:
+        if state_label == ProcessState.PAUSED:
             call_with_super_check(self.on_paused)
         elif state_label == ProcessState.WAITING:
             call_with_super_check(self.on_waiting, self._state.data)
@@ -554,7 +557,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         pass
 
     @super_check
-    def on_running(self):
+    def on_run(self):
         pass
 
     @super_check
@@ -632,7 +635,7 @@ class ProcessStateMachine(state_machine.StateMachine):
             raise InvalidStateError
 
     # region commands
-    @event(from_states=(Created, Paused), to_states=(Running, Waiting, Failed))
+    @event(to_states=(Running, Waiting, Failed))
     def play(self):
         """
         Play the process if in the CREATED or PAUSED state

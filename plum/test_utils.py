@@ -228,10 +228,19 @@ class ProcessSaver(ProcessListener, Saver):
     Save the instance state of a process each time it is about to enter a new state
     """
 
-    def __init__(self, p):
+    def __init__(self, proc):
         ProcessListener.__init__(self)
         Saver.__init__(self)
-        p.add_process_listener(self)
+        self.process = proc
+        proc.add_process_listener(self)
+        self._future = plum.Future()
+
+    def capture(self):
+        self._save(self.process)
+        if not self.process.done():
+            self.process.play()
+            self._future.add_done_callback(lambda _: self.process.loop().stop())
+            self.process.loop().start()
 
     @override
     def on_process_running(self, process):
@@ -245,17 +254,22 @@ class ProcessSaver(ProcessListener, Saver):
     def on_process_paused(self, process):
         self._save(process)
 
+    # Terminal states:
+
     @override
     def on_process_finished(self, process, outputs):
         self._save(process)
+        self._future.set_result(True)
 
     @override
     def on_process_failed(self, process, exc_info):
         self._save(process)
+        self._future.set_result(True)
 
     @override
     def on_process_cancelled(self, process, msg):
         self._save(process)
+        self._future.set_result(True)
 
 
 # All the Processes that can be used
@@ -297,24 +311,18 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     """
     for i, bundle in zip(range(0, len(snapshots)), snapshots):
         loaded = bundle.unbundle(loop=loop)
-        ps = ProcessSaver(loaded)
-        try:
-            loaded.execute()
-        except (SystemExit, KeyboardInterrupt):
-            raise
-        except BaseException:
-            import traceback
-            traceback.print_exc()
+        saver = ProcessSaver(loaded)
+        saver.capture()
 
         # Now check going backwards until running that the saved states match
         j = 1
         while True:
-            if j >= min(len(snapshots), len(ps.snapshots)):
+            if j >= min(len(snapshots), len(saver.snapshots)):
                 break
 
             compare_dictionaries(
-                snapshots[-j], ps.snapshots[-j],
-                snapshots[-j], ps.snapshots[-j],
+                snapshots[-j], saver.snapshots[-j],
+                snapshots[-j], saver.snapshots[-j],
                 exclude={
                     str(process.BundleKeys.LOOP_CALLBACK),
                     str(process.BundleKeys.AWAITING),

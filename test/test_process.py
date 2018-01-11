@@ -21,9 +21,9 @@ class ForgetToCallParent(Process):
         if self.forget_on != 'create':
             super(ForgetToCallParent, self).on_create()
 
-    def on_running(self):
-        if self.forget_on != 'running':
-            super(ForgetToCallParent, self).on_running()
+    def on_run(self):
+        if self.forget_on != 'run':
+            super(ForgetToCallParent, self).on_run()
 
     def on_fail(self, exception):
         if self.forget_on != 'fail':
@@ -137,7 +137,7 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertEqual(results['default'], 5)
 
     def test_forget_to_call_parent(self):
-        for event in ('create', 'running', 'finish'):
+        for event in ('create', 'run', 'finish'):
             with self.assertRaises(AssertionError):
                 proc = ForgetToCallParent(event)
                 proc.execute()
@@ -207,8 +207,7 @@ class TestProcess(utils.TestCaseWithLoop):
         for proc_class in test_utils.TEST_PROCESSES:
             proc = proc_class()
             saver = test_utils.ProcessSaver(proc)
-            proc.execute()
-
+            saver.capture()
             self.assertEqual(proc.state, ProcessState.FINISHED)
             self.assertTrue(
                 check_process_against_snapshots(self.loop, proc_class, saver.snapshots)
@@ -217,12 +216,8 @@ class TestProcess(utils.TestCaseWithLoop):
     def test_saving_each_step_interleaved(self):
         for ProcClass in test_utils.TEST_PROCESSES:
             proc = ProcClass()
-            proc.play()
             saver = test_utils.ProcessSaver(proc)
-            try:
-                proc.execute()
-            except BaseException:
-                pass
+            saver.capture()
 
             self.assertTrue(
                 check_process_against_snapshots(self.loop, ProcClass, saver.snapshots)

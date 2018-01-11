@@ -385,8 +385,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             self._communicator.register_receiver(
                 process_comms.ProcessReceiver(self), identifier=str(self.pid))
 
-    def on_running(self):
-        super(Process, self).on_running()
+    def on_run(self):
+        super(Process, self).on_run()
         self._fire_event(ProcessListener.on_process_running)
 
     def on_output_emitting(self, output_port, value):

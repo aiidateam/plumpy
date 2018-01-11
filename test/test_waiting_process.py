@@ -21,10 +21,7 @@ class TestWaitingProcess(utils.TestCaseWithLoop):
         for proc_class in TEST_WAITING_PROCESSES:
             proc = proc_class()
             saver = ProcessSaver(proc)
-            try:
-                proc.execute()
-            except BaseException:
-                pass
+            saver.capture()
 
             self.assertTrue(check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
 

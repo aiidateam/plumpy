@@ -79,10 +79,9 @@ class TestProcess(unittest.TestCase):
                 raise RuntimeError("You're on yer own pal")
 
         p = FailProc()
-        p.do_run()
-        self.assertIsNotNone(p.exception())
         with self.assertRaises(RuntimeError):
-            p.result()
+            p.do_run()
+        self.assertIsNotNone(p.exception())
 
     def test_immediate_cancel(self):
         """ Check that if a process is cancelled from within it's method
