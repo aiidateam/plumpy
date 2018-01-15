@@ -32,14 +32,14 @@ class Message(with_metaclass(abc.ABCMeta)):
         pass
 
     @abc.abstractmethod
-    def on_delivered(self):
+    def on_delivered(self, publisher):
         pass
 
     @abc.abstractmethod
-    def on_delivery_failed(self, reason):
+    def on_delivery_failed(self, publisher, reason):
         """
         The delivery of the message failed
-        :param reason: Text containng the error
+        :param reason: Text containing the error
         :type reason: str
         """
         pass
@@ -64,10 +64,10 @@ class RpcMessage(Message):
         publisher.publish_msg(self.body, routing_key, self.correlation_id)
         return self.future
 
-    def on_delivered(self):
+    def on_delivered(self, publisher):
         self._publisher.await_response(self.correlation_id, self.on_response)
 
-    def on_delivery_failed(self, reason):
+    def on_delivery_failed(self, publisher, reason):
         self.future.set_exception(
             RuntimeError("Message could not be delivered: {}".format(reason)))
 
@@ -331,14 +331,14 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         except ValueError:
             pass
         else:
-            message.on_delivery_failed("Channel returned the message")
+            message.on_delivery_failed(self, "Channel returned the message")
 
     def _on_delivery_confirmed(self, frame):
         delivery_tag = frame.method.delivery_tag
 
         for tag, message in self._sent_messages.items():
             if tag <= delivery_tag:
-                message.on_delivered()
+                message.on_delivered(self)
                 self._sent_messages.pop(tag)
             else:
                 break

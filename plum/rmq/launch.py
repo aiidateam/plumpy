@@ -28,32 +28,81 @@ TAG_KEY = 'tag'
 # Task types
 LAUNCH_TASK = 'launch'
 CONTINUE_TASK = 'continue'
+LAUNCH_CONTINUE_TASK = 'launch_continue'
 
 
 class TaskMessage(messages.Message):
-    def __init__(self, task_queue, task):
-        self.task_queue = task_queue
-        self.body = task
-        self.correlation_id = None
+    def __init__(self, correlation_id=None):
+        self.correlation_id = correlation_id if correlation_id is not None else str(uuid.uuid4())
         self.future = plum.Future()
-        self._publisher = None
 
-    def send(self, publisher):
-        self._publisher = publisher
-        self.correlation_id = str(uuid.uuid4())
-        routing_key = self.task_queue
-        publisher.publish_msg(self.body, routing_key, self.correlation_id)
-        return self.future
+    def on_delivered(self, publisher):
+        publisher.await_response(self.correlation_id, self.on_response)
 
-    def on_delivered(self):
-        self._publisher.await_response(self.correlation_id, self.on_response)
-
-    def on_delivery_failed(self, reason):
+    def on_delivery_failed(self, publisher, reason):
         self.future.set_exception(
             RuntimeError("Message could not be delivered: {}".format(reason)))
 
     def on_response(self, done_future):
         plum.copy_future(done_future, self.future)
+
+
+class SimpleTaskMessage(TaskMessage):
+    def __init__(self, body, correlation_id=None):
+        super(SimpleTaskMessage, self).__init__(correlation_id)
+        self.body = body
+
+    def send(self, publisher):
+        if self.correlation_id is None:
+            self.correlation_id = str(uuid.uuid4())
+        publisher.publish_msg(self.body, None, self.correlation_id)
+        return self.future
+
+    def on_delivered(self, publisher):
+        publisher.await_response(self.correlation_id, self.on_response)
+
+    def on_delivery_failed(self, publisher, reason):
+        self.future.set_exception(
+            RuntimeError("Message could not be delivered: {}".format(reason)))
+
+    def on_response(self, done_future):
+        plum.copy_future(done_future, self.future)
+
+
+class LaunchContinueTask(TaskMessage):
+    def __init__(self, process_class, init_args, init_kwargs, correlation_id=None):
+        super(LaunchContinueTask, self).__init__(correlation_id)
+        self._process_class = process_class
+        self._init_args = init_args
+        self._init_kwargs = init_kwargs
+
+    def send(self, publisher):
+        launch = create_launch_task(self._process_class, self._init_args, self._init_kwargs)
+        launch.future.add_done_callback(partial(self._on_launch_done, publisher))
+        publisher.action_task(launch)
+        return self.future
+
+    def on_delivered(self, publisher):
+        publisher.await_response(self.correlation_id, self.on_response)
+
+    def on_delivery_failed(self, publisher, reason):
+        self.future.set_exception(
+            RuntimeError("Message could not be delivered: {}".format(reason)))
+
+    def on_response(self, done_future):
+        plum.copy_future(done_future, self.future)
+
+    def _on_launch_done(self, publisher, launch_future):
+        if launch_future.cancelled():
+            self.future.cancel()
+        elif launch_future.exception() is not None:
+            self.futrue.set_exception(launch_future.exception())
+        else:
+            # Action the continue task
+            continue_task = create_continue_task(launch_future.result())
+
+
+
 
 
 def create_launch_task(process_class, init_args=None, init_kwargs=None):
@@ -62,14 +111,18 @@ def create_launch_task(process_class, init_args=None, init_kwargs=None):
         task[ARGS_KEY] = init_args
     if init_kwargs:
         task[KWARGS_KEY] = init_kwargs
-    return task
+    return SimpleTaskMessage(task)
 
 
 def create_continue_task(pid, tag=None):
     task = {TASK_KEY: CONTINUE_TASK, PID_KEY: pid}
     if tag is not None:
         task[TAG_KEY] = tag
-    return task
+    return SimpleTaskMessage(task)
+
+
+def create_launch_continue_task(process_class, init_args=None, init_kwargs=None):
+    return LaunchContinueTask(process_class, init_args, init_kwargs)
 
 
 class ProcessLaunchSubscriber(messages.BaseConnectionWithExchange):
@@ -270,13 +323,11 @@ class ProcessLaunchPublisher(messages.BasePublisherWithReplyQueue):
         :param init_kwargs: keyword args for process class constructor
         """
         task = create_launch_task(process_class, init_args, init_kwargs)
-        message = TaskMessage(self._task_queue_name, task)
-        return self.action_message(message)
+        return self.action_message(task)
 
     def continue_process(self, pid, tag=None):
         task = create_continue_task(pid, tag)
-        message = TaskMessage(self._task_queue_name, task)
-        return self.action_message(message)
+        return self.action_message(task)
 
     @messages.initialiser()
     def on_exchange_declareok(self, frame):
@@ -289,13 +340,19 @@ class ProcessLaunchPublisher(messages.BasePublisherWithReplyQueue):
             auto_delete=self._testing_mode)
 
     def publish_msg(self, task, routing_key, correlation_id):
+        if routing_key is not None:
+            _LOGGER.warn(
+                "Routing key '{}' passed but is ignored for all tasks".format(routing_key))
+
         properties = pika.BasicProperties(
             reply_to=self.get_reply_queue_name(),
             delivery_mode=2,  # Persistent
             correlation_id=correlation_id
         )
         self._channel.basic_publish(
-            exchange=self.get_exchange_name(), routing_key=routing_key, body=self._encode(task),
+            exchange=self.get_exchange_name(),
+            routing_key=self._task_queue_name,
+            body=self._encode(task),
             properties=properties)
 
     @messages.initialiser()
