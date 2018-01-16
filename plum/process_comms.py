@@ -25,6 +25,9 @@ class ProcessReceiver(communications.Receiver):
     """
 
     def __init__(self, process):
+        """
+        :param process: :class:`plum.Process`
+        """
         self._process = process
 
     def on_rpc_receive(self, msg):
@@ -36,12 +39,9 @@ class ProcessReceiver(communications.Receiver):
         elif intent == Intent.CANCEL:
             return self._process.cancel(msg=msg.get('msg', None))
         elif intent == Intent.STATUS:
-            status = {
-                'process_string': str(self._process),
-                'state': self._process.state,
-                'state_info': str(self._process._state)
-            }
-            return status
+            status_info = {}
+            self._process.get_status_info(status_info)
+            return status_info
         else:
             raise RuntimeError("Unknown intent")
 
