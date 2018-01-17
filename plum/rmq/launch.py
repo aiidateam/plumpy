@@ -16,7 +16,8 @@ from . import utils
 
 _LOGGER = logging.getLogger(__name__)
 
-__all__ = ['ProcessLaunchSubscriber', 'ProcessLaunchPublisher']
+__all__ = ['ProcessLaunchSubscriber', 'ProcessLaunchPublisher',
+           'LaunchProcessAction', 'ExecuteProcessAction', 'ContinueProcessAction']
 
 TASK_KEY = 'task'
 PLAY_KEY = 'play'
@@ -40,15 +41,15 @@ class TaskRejected(BaseException):
 class ExecuteProcessAction(Action):
     def __init__(self, process_class, init_args=None, init_kwargs=None):
         super(ExecuteProcessAction, self).__init__()
-        self._process_class = process_class
-        self._init_args = init_args
-        self._init_kwargs = init_kwargs
+        self._launch_action = LaunchProcessAction(
+            process_class, init_args, init_kwargs, play=False, persist=True)
+
+    def get_launch_future(self):
+        return self._launch_action
 
     def execute(self, publisher):
-        launch = LaunchProcessAction(
-            self._process_class, self._init_args, self._init_kwargs, play=False, persist=True)
-        launch.add_done_callback(partial(self._on_launch_done, publisher))
-        launch.execute(publisher)
+        self._launch_action.add_done_callback(partial(self._on_launch_done, publisher))
+        self._launch_action.execute(publisher)
 
     def _on_launch_done(self, publisher, launch_future):
         if launch_future.cancelled():
