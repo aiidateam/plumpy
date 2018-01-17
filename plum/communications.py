@@ -1,6 +1,8 @@
 import abc
 from future.utils import with_metaclass
 
+from . import futures
+
 __all__ = ['Communicator', 'RemoteException', 'Receiver']
 
 
@@ -44,4 +46,9 @@ class Receiver(object):
         :param msg: The broadcast message
         :return:
         """
+        pass
+
+
+class Action(futures.Future):
+    def execute(self, publisher):
         pass

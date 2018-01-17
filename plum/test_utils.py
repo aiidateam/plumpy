@@ -21,6 +21,8 @@ class DummyProcess(process.Process):
 
 
 class DummyProcessWithOutput(process.Process):
+    EXPECTED_OUTPUTS = {'default': 5}
+
     @classmethod
     def define(cls, spec):
         super(DummyProcessWithOutput, cls).define(spec)

@@ -1,13 +1,14 @@
-import collections
-from functools import partial
 import logging
-import plum
-import plum.utils
-import pika
-import sys
 import uuid
+from functools import partial
+
+import pika
 import yaml
 
+import plum
+import plum.utils
+from plum.rmq.actions import MessageAction
+from plum.communications import Action
 from . import defaults
 from . import messages
 from . import pubsub
@@ -18,6 +19,8 @@ _LOGGER = logging.getLogger(__name__)
 __all__ = ['ProcessLaunchSubscriber', 'ProcessLaunchPublisher']
 
 TASK_KEY = 'task'
+PLAY_KEY = 'play'
+PERSIST_KEY = 'persist'
 # Launch
 PROCESS_CLASS_KEY = 'process_class'
 ARGS_KEY = 'args'
@@ -28,29 +31,75 @@ TAG_KEY = 'tag'
 # Task types
 LAUNCH_TASK = 'launch'
 CONTINUE_TASK = 'continue'
-LAUNCH_CONTINUE_TASK = 'launch_continue'
+
+
+class TaskRejected(BaseException):
+    pass
+
+
+class ExecuteProcessAction(Action):
+    def __init__(self, process_class, init_args=None, init_kwargs=None):
+        super(ExecuteProcessAction, self).__init__()
+        self._process_class = process_class
+        self._init_args = init_args
+        self._init_kwargs = init_kwargs
+
+    def execute(self, publisher):
+        launch = LaunchProcessAction(
+            self._process_class, self._init_args, self._init_kwargs, play=False, persist=True)
+        launch.add_done_callback(partial(self._on_launch_done, publisher))
+        launch.execute(publisher)
+
+    def _on_launch_done(self, publisher, launch_future):
+        if launch_future.cancelled():
+            self.cancel()
+        elif launch_future.exception() is not None:
+            self.set_exception(launch_future.exception())
+        else:
+            # Action the continue task
+            continue_action = ContinueProcessAction(launch_future.result(), play=True)
+            plum.chain(continue_action, self)
+            continue_action.execute(publisher)
+
+
+class LaunchProcessAction(MessageAction):
+    def __init__(self, *args, **kwargs):
+        """
+        Calls through to create_launch_body to create the message and so has
+        the same signature.
+        """
+        body = create_launch_body(*args, **kwargs)
+        message = TaskMessage(body)
+        super(LaunchProcessAction, self).__init__(message)
+
+
+class ContinueProcessAction(MessageAction):
+    def __init__(self, *args, **kwargs):
+        """
+        Calls through to create_continue_body to create the message and so
+        has the same signature.
+        """
+        body = create_continue_body(*args, **kwargs)
+        message = TaskMessage(body)
+        super(ContinueProcessAction, self).__init__(message)
 
 
 class TaskMessage(messages.Message):
-    def __init__(self, correlation_id=None):
-        self.correlation_id = correlation_id if correlation_id is not None else str(uuid.uuid4())
-        self.future = plum.Future()
+    @staticmethod
+    def create_launch(process_class, init_args=None, init_kwargs=None, play=True):
+        body = create_launch_body(process_class, init_args, init_kwargs, play)
+        return TaskMessage(body)
 
-    def on_delivered(self, publisher):
-        publisher.await_response(self.correlation_id, self.on_response)
+    @staticmethod
+    def create_continue(pid, tag=None, play=True):
+        body = create_continue_body(pid, tag, play)
+        return TaskMessage(body)
 
-    def on_delivery_failed(self, publisher, reason):
-        self.future.set_exception(
-            RuntimeError("Message could not be delivered: {}".format(reason)))
-
-    def on_response(self, done_future):
-        plum.copy_future(done_future, self.future)
-
-
-class SimpleTaskMessage(TaskMessage):
     def __init__(self, body, correlation_id=None):
-        super(SimpleTaskMessage, self).__init__(correlation_id)
+        super(TaskMessage, self).__init__()
+        self.correlation_id = correlation_id if correlation_id is not None else str(uuid.uuid4())
         self.body = body
+        self.future = plum.Future()
 
     def send(self, publisher):
         if self.correlation_id is None:
@@ -62,67 +111,36 @@ class SimpleTaskMessage(TaskMessage):
         publisher.await_response(self.correlation_id, self.on_response)
 
     def on_delivery_failed(self, publisher, reason):
-        self.future.set_exception(
-            RuntimeError("Message could not be delivered: {}".format(reason)))
+        self.future.set_exception(RuntimeError("Message could not be delivered: {}".format(reason)))
 
     def on_response(self, done_future):
         plum.copy_future(done_future, self.future)
 
 
-class LaunchContinueTask(TaskMessage):
-    def __init__(self, process_class, init_args, init_kwargs, correlation_id=None):
-        super(LaunchContinueTask, self).__init__(correlation_id)
-        self._process_class = process_class
-        self._init_args = init_args
-        self._init_kwargs = init_kwargs
-
-    def send(self, publisher):
-        launch = create_launch_task(self._process_class, self._init_args, self._init_kwargs)
-        launch.future.add_done_callback(partial(self._on_launch_done, publisher))
-        publisher.action_task(launch)
-        return self.future
-
-    def on_delivered(self, publisher):
-        publisher.await_response(self.correlation_id, self.on_response)
-
-    def on_delivery_failed(self, publisher, reason):
-        self.future.set_exception(
-            RuntimeError("Message could not be delivered: {}".format(reason)))
-
-    def on_response(self, done_future):
-        plum.copy_future(done_future, self.future)
-
-    def _on_launch_done(self, publisher, launch_future):
-        if launch_future.cancelled():
-            self.future.cancel()
-        elif launch_future.exception() is not None:
-            self.futrue.set_exception(launch_future.exception())
-        else:
-            # Action the continue task
-            continue_task = create_continue_task(launch_future.result())
-
-
-
-
-
-def create_launch_task(process_class, init_args=None, init_kwargs=None):
-    task = {TASK_KEY: LAUNCH_TASK, PROCESS_CLASS_KEY: plum.utils.class_name(process_class)}
+def create_launch_body(process_class, init_args=None, init_kwargs=None, play=True,
+                       persist=False):
+    msg_body = {
+        TASK_KEY: LAUNCH_TASK,
+        PROCESS_CLASS_KEY: plum.utils.class_name(process_class),
+        PLAY_KEY: play,
+        PERSIST_KEY: persist,
+    }
     if init_args:
-        task[ARGS_KEY] = init_args
+        msg_body[ARGS_KEY] = init_args
     if init_kwargs:
-        task[KWARGS_KEY] = init_kwargs
-    return SimpleTaskMessage(task)
+        msg_body[KWARGS_KEY] = init_kwargs
+    return msg_body
 
 
-def create_continue_task(pid, tag=None):
-    task = {TASK_KEY: CONTINUE_TASK, PID_KEY: pid}
+def create_continue_body(pid, tag=None, play=True):
+    msg_body = {
+        TASK_KEY: CONTINUE_TASK,
+        PID_KEY: pid,
+        PLAY_KEY: play,
+    }
     if tag is not None:
-        task[TAG_KEY] = tag
-    return SimpleTaskMessage(task)
-
-
-def create_launch_continue_task(process_class, init_args=None, init_kwargs=None):
-    return LaunchContinueTask(process_class, init_args, init_kwargs)
+        msg_body[TAG_KEY] = tag
+    return msg_body
 
 
 class ProcessLaunchSubscriber(messages.BaseConnectionWithExchange):
@@ -224,12 +242,6 @@ class ProcessLaunchSubscriber(messages.BaseConnectionWithExchange):
             if task_type == LAUNCH_TASK:
                 result = self._launch(task)
             elif task_type == CONTINUE_TASK:
-                # If we don't have a persister then we reject the message and
-                # allow it to be requeued, this way another launcher can potentially
-                # deal with it
-                if self._persister is None:
-                    self._channel.basic_reject(delivery_tag=method.delivery_tag)
-                    return
                 result = self._continue(task)
             else:
                 raise ValueError("Invalid task type '{}'".format(task_type))
@@ -239,6 +251,8 @@ class ProcessLaunchSubscriber(messages.BaseConnectionWithExchange):
             else:
                 # Finished
                 self._task_finished(props, method, utils.result_response(result))
+        except TaskRejected:
+            self._channel.basic_reject(delivery_tag=method.delivery_tag)
         except KeyboardInterrupt:
             raise
         except Exception as e:
@@ -264,17 +278,24 @@ class ProcessLaunchSubscriber(messages.BaseConnectionWithExchange):
         self._channel.basic_ack(delivery_tag=method.delivery_tag)
 
     def _launch(self, task):
+        if task[PERSIST_KEY] and not self._persister:
+            raise TaskRejected("Cannot persist process, no persister")
+
         proc_class = plum.utils.load_object(task[PROCESS_CLASS_KEY])
         args = task.get(ARGS_KEY, ())
         kwargs = task.get(KWARGS_KEY, {})
         kwargs['loop'] = self._loop
         proc = proc_class(*args, **kwargs)
-        proc.play()
+        if task[PERSIST_KEY]:
+            self._persister.save_checkpoint(proc)
+        if task[PLAY_KEY]:
+            proc.play()
         return proc.pid
 
     def _continue(self, task):
         if not self._persister:
-            raise RuntimeError("Cannot continue process, no persister")
+            raise TaskRejected("Cannot continue process, no persister")
+
         tag = task.get(TAG_KEY, None)
         saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
         proc = saved_state.unbundle(*self._unbundle_args, **self._unbundle_kwargs)
@@ -322,12 +343,14 @@ class ProcessLaunchPublisher(messages.BasePublisherWithReplyQueue):
         :param init_args: positional args for process class constructor
         :param init_kwargs: keyword args for process class constructor
         """
-        task = create_launch_task(process_class, init_args, init_kwargs)
-        return self.action_message(task)
+        action = LaunchProcessAction(process_class, init_args, init_kwargs)
+        action.execute(self)
+        return action
 
     def continue_process(self, pid, tag=None):
-        task = create_continue_task(pid, tag)
-        return self.action_message(task)
+        action = ContinueProcessAction(pid, tag)
+        action.execute(self)
+        return action
 
     @messages.initialiser()
     def on_exchange_declareok(self, frame):

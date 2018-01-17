@@ -224,6 +224,13 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         return self._initialising
 
     def action_message(self, message):
+        """
+        Execute an action that involves communication.
+
+        :param message: The message to execute
+        :return: A future corresponding to action
+        :rtype: :class:`plum.Future`
+        """
         if self._initialising.done():
             self._send_message(message)
         else:

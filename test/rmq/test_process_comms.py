@@ -66,3 +66,39 @@ class TestProcessReceiver(TestCaseWithLoop):
         status = plum.run_until_complete(future)
 
         self.assertIsNotNone(status)
+
+    def test_pause_action(self):
+        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        proc.play()
+        # Send a pause message
+        action = plum.PauseAction(proc.pid)
+        action.execute(self.communicator)
+        plum.run_until_complete(action)
+
+        self.assertEqual(proc.state, plum.ProcessState.PAUSED)
+
+    def test_play_action(self):
+        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Send a play message
+        action = plum.PlayAction(proc.pid)
+        action.execute(self.communicator)
+        plum.run_until_complete(action)
+
+        self.assertEqual(proc.state, plum.ProcessState.WAITING)
+
+    def test_cancel_action(self):
+        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Send a cancel message
+        action = plum.CancelAction(proc.pid)
+        action.execute(self.communicator)
+        plum.run_until_complete(action)
+
+        self.assertEqual(proc.state, plum.ProcessState.CANCELLED)
+
+    def test_status(self):
+        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Send a status message
+        action = plum.StatusAction(proc.pid)
+        action.execute(self.communicator)
+        status = plum.run_until_complete(action)
+        self.assertIsNotNone(status)

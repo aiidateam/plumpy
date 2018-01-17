@@ -5,6 +5,7 @@ import tempfile
 
 import plum.rmq
 import plum.rmq.launch
+from plum.rmq import launch
 import plum.test_utils
 from plum import test_utils
 from test.test_rmq import _HAS_PIKA
@@ -44,29 +45,37 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
         """Test simply launching a valid process"""
         launch_future = self.publisher.launch_process(test_utils.DummyProcessWithOutput)
         result = plum.run_until_complete(launch_future)
-        self.assertIsNotNone(result)
+        # We should get back the PID
+        self.assertIsInstance(result, uuid.UUID)
+
+    def test_launch_action(self):
+        action = launch.LaunchProcessAction(test_utils.DummyProcessWithOutput)
+        action.execute(self.publisher)
+        result = plum.run_until_complete(action)
+        self.assertIsInstance(result, uuid.UUID)
 
     def test_simple_continue(self):
         # self.subscriber.close()
         tmppath = tempfile.mkdtemp()
+        persister = plum.PicklePersister(tmppath)
+
+        process = test_utils.DummyProcessWithOutput()
+        persister.save_checkpoint(process)
+        pid = process.pid
+        del process
+
+        subscriber = ProcessLaunchSubscriber(
+            self.connector,
+            exchange_name=self.exchange_name,
+            task_queue_name=self.queue_name,
+            testing_mode=True,
+            persister=persister)
         try:
-            persister = plum.PicklePersister(tmppath)
-
-            process = test_utils.DummyProcessWithOutput()
-            persister.save_checkpoint(process)
-            pid = process.pid
-            del process
-
-            subscriber = ProcessLaunchSubscriber(
-                self.connector,
-                exchange_name=self.exchange_name,
-                task_queue_name=self.queue_name,
-                testing_mode=True,
-                persister=persister)
-
             future = self.publisher.continue_process(pid)
-            self.assertTrue(plum.run_until_complete(future))
+            result = plum.run_until_complete(future)
+            self.assertEqual(result, test_utils.DummyProcessWithOutput.EXPECTED_OUTPUTS)
         finally:
+            subscriber.close()
             shutil.rmtree(tmppath)
 
     def test_launch_many(self):
@@ -81,6 +90,28 @@ class TestTaskControllerAndRunner(TestCaseWithLoop):
         results = plum.run_until_complete(plum.gather(*launch_futures))
         for result in results:
             self.assertIsInstance(result, uuid.UUID)
+
+    def test_execute_action(self):
+        """ Test the process execute action """
+        # self.subscriber.close()
+        tmppath = tempfile.mkdtemp()
+        persister = plum.PicklePersister(tmppath)
+        subscriber = ProcessLaunchSubscriber(
+            self.connector,
+            exchange_name=self.exchange_name,
+            task_queue_name=self.queue_name,
+            testing_mode=True,
+            persister=persister)
+
+        try:
+            action = launch.ExecuteProcessAction(test_utils.DummyProcessWithOutput)
+            action.execute(self.publisher)
+            result = plum.run_until_complete(action)
+            self.assertEqual(result, test_utils.DummyProcessWithOutput.EXPECTED_OUTPUTS)
+        finally:
+            subscriber.close()
+            shutil.rmtree(tmppath)
+
 
 
             # def test_launch(self):

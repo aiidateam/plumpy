@@ -3,7 +3,7 @@ from functools import partial
 
 from .exceptions import CancelledError
 
-__all__ = ['Future', 'gather', 'copy_future', 'InvalidStateError']
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError']
 
 
 class InvalidStateError(BaseException):
