@@ -519,6 +519,14 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
                 self.loop(), subject, body, self.uuid, sender_id
             )
 
+    def get_status_info(self, out_status_info):
+        out_status_info.update({
+            BundleKeys.CREATION_TIME: self.creation_time,
+            'process_string': str(self),
+            'state': self.state,
+            'state_info': str(self._state)
+        })
+
     # region callbacks
     def call_soon(self, callback, *args, **kwargs):
         """
