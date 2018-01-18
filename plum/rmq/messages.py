@@ -53,13 +53,12 @@ class RpcMessage(Message):
     def __init__(self, recipient_id, body):
         self.recipient_id = recipient_id
         self.body = body
-        self.correlation_id = None
+        self.correlation_id = str(uuid.uuid4())
         self.future = plum.Future()
         self._publisher = None
 
     def send(self, publisher):
         self._publisher = publisher
-        self.correlation_id = str(uuid.uuid4())
         routing_key = "rpc.{}".format(self.recipient_id)
         publisher.publish_msg(self.body, routing_key, self.correlation_id)
         return self.future
@@ -69,7 +68,7 @@ class RpcMessage(Message):
 
     def on_delivery_failed(self, publisher, reason):
         self.future.set_exception(
-            RuntimeError("Message could not be delivered: {}".format(reason)))
+            plum.DeliveryFailed("Message could not be delivered ({})".format(reason)))
 
     def on_response(self, done_future):
         plum.copy_future(done_future, self.future)
@@ -214,6 +213,7 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
 
         self._queued_messages = []
         self._awaiting_response = {}
+        self._returned_messages = set()
 
         self._reset_channel()
         connector.add_connection_listener(self)
@@ -333,19 +333,19 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
             self._on_response, no_ack=True, queue=self._reply_queue_name)
 
     def _on_channel_return(self, channel, method, props, body):
-        try:
-            message = self._sent_messages.pop(method.delivery_tag)
-        except ValueError:
-            pass
-        else:
-            message.on_delivery_failed(self, "Channel returned the message")
+        self._returned_messages.add(props.correlation_id)
+        # After this we will get a delivery ack so there we deal with the failure
 
     def _on_delivery_confirmed(self, frame):
         delivery_tag = frame.method.delivery_tag
 
         for tag, message in self._sent_messages.items():
             if tag <= delivery_tag:
-                message.on_delivered(self)
+                try:
+                    self._returned_messages.remove(message.correlation_id)
+                    message.on_delivery_failed(self, "Channel returned the message")
+                except KeyError:
+                    message.on_delivered(self)
                 self._sent_messages.pop(tag)
             else:
                 break

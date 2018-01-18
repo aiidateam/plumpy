@@ -3,10 +3,14 @@ from future.utils import with_metaclass
 
 from . import futures
 
-__all__ = ['Communicator', 'RemoteException', 'Receiver']
+__all__ = ['Communicator', 'RemoteException', 'Receiver', 'DeliveryFailed']
 
 
 class RemoteException(BaseException):
+    pass
+
+
+class DeliveryFailed(BaseException):
     pass
 
 
