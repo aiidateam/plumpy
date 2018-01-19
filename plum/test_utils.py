@@ -1,76 +1,65 @@
+import collections
 from collections import namedtuple
 
-import apricotpy
-from plum.process import Process
+import plum
 from plum.process_listener import ProcessListener
-from plum.utils import override
-from plum.wait_ons import Checkpoint, Barrier
+from . import process
+from . import persisters
+from . import utils
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
 
-def create_snapshot(proc):
-    b = apricotpy.Bundle()
-    proc.save_instance_state(b)
-    return Snapshot(proc.state, b, proc.outputs.copy())
-
-
-class DummyProcess(Process):
+class DummyProcess(process.Process):
     """
     Process with no inputs or ouputs and does nothing when ran.
     """
 
-    @override
+    @utils.override
     def _run(self):
         pass
 
 
-class DummyProcessWithOutput(Process):
+class DummyProcessWithOutput(process.Process):
+    EXPECTED_OUTPUTS = {'default': 5}
+
     @classmethod
     def define(cls, spec):
         super(DummyProcessWithOutput, cls).define(spec)
-
         spec.dynamic_input()
         spec.dynamic_output()
 
     def _run(self, **kwargs):
         self.out("default", 5)
+        return self.outputs
 
 
-class KeyboardInterruptProc(Process):
-    @override
+class KeyboardInterruptProc(process.Process):
+    @utils.override
     def _run(self):
         raise KeyboardInterrupt()
 
 
-class ProcessWithCheckpoint(Process):
-    @override
+class ProcessWithCheckpoint(process.Process):
+    @utils.override
     def _run(self):
-        return self.loop().create(Checkpoint), self.finish
+        return process.Continue(self.last_step)
 
-    def finish(self):
+    def last_step(self):
         pass
 
 
-class WaitForSignalProcess(Process):
-    BARRIER = 'barrier'
-
-    @override
+class WaitForSignalProcess(process.Process):
+    @utils.override
     def _run(self):
-        return self.loop().create(Barrier), self.finish
+        return process.Wait(self.last_step)
 
-    def finish(self):
+    def last_step(self):
         pass
-
-    def continue_(self):
-        """
-        Can only be called when in the WAITING state
-        """
-        self.get_waiting_on().open()
 
 
 class EventsTesterMixin(object):
-    EVENTS = ["create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate"]
+    EVENTS = ("create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate")
 
     called_events = []
 
@@ -79,146 +68,145 @@ class EventsTesterMixin(object):
         assert event in cls.EVENTS, "Unknown event '{}'".format(event)
         cls.called_events.append(event)
 
-    def __init__(self, inputs=None, pid=None, logger=None):
-        assert isinstance(self, Process), \
+    def __init__(self, *args, **kwargs):
+        assert isinstance(self, process.Process), \
             "Mixin has to be used with a type derived from a Process"
-        super(EventsTesterMixin, self).__init__(inputs, pid, logger)
+        super(EventsTesterMixin, self).__init__(*args, **kwargs)
         self.__class__.called_events = []
 
-    @override
+    @utils.override
     def on_create(self):
         super(EventsTesterMixin, self).on_create()
         self.called('create')
 
-    @override
+    @utils.override
     def on_run(self):
         super(EventsTesterMixin, self).on_run()
         self.called('run')
 
-    @override
+    @utils.override
     def _on_output_emitted(self, output_port, value, dynamic):
         super(EventsTesterMixin, self)._on_output_emitted(
             output_port, value, dynamic)
         self.called('emitted')
 
-    @override
+    @utils.override
     def on_wait(self, wait_on):
         super(EventsTesterMixin, self).on_wait(wait_on)
         self.called('wait')
 
-    @override
+    @utils.override
     def on_resume(self):
         super(EventsTesterMixin, self).on_resume()
         self.called('resume')
 
-    @override
-    def on_finish(self):
-        super(EventsTesterMixin, self).on_finish()
+    @utils.override
+    def on_finish(self, result):
+        super(EventsTesterMixin, self).on_finish(result)
         self.called('finish')
 
-    @override
+    @utils.override
     def on_stop(self):
         super(EventsTesterMixin, self).on_stop()
         self.called('stop')
 
-    @override
+    @utils.override
     def on_terminate(self):
         super(EventsTesterMixin, self).on_terminate()
         self.called('terminate')
 
 
-class ProcessEventsTester(EventsTesterMixin, Process):
+class ProcessEventsTester(EventsTesterMixin, process.Process):
     @classmethod
     def define(cls, spec):
         super(ProcessEventsTester, cls).define(spec)
         spec.dynamic_output()
 
-    @override
+    @utils.override
     def _run(self):
         self.out("test", 5)
 
 
-class TwoCheckpoint(ProcessEventsTester):
-    def __init__(self, inputs=None, pid=None, logger=None):
-        super(TwoCheckpoint, self).__init__(inputs, pid, logger)
-        self._last_checkpoint = None
+class ThreeSteps(ProcessEventsTester):
+    _last_checkpoint = None
 
-    @override
+    @utils.override
     def _run(self):
         self.out("test", 5)
-        return self.loop().create(Checkpoint), self.middle_step
+        return process.Continue(self.middle_step)
 
-    def middle_step(self, wait_on):
-        return self.loop().create(Checkpoint), self.finish
+    def middle_step(self, ):
+        return process.Continue(self.last_step)
 
-    def finish(self, wait_on):
+    def last_step(self):
         pass
 
 
 class TwoCheckpointNoFinish(ProcessEventsTester):
-    @override
+    @utils.override
     def _run(self):
         self.out("test", 5)
-        return self.loop().create(Checkpoint), self.middle_step
+        return process.Continue(self.middle_step)
 
-    def middle_step(self, wait_on):
-        return self.loop().create(Checkpoint), None
+    def middle_step(self):
+        pass
 
 
 class ExceptionProcess(ProcessEventsTester):
-    @override
+    @utils.override
     def _run(self):
         self.out("test", 5)
         raise RuntimeError("Great scott!")
 
 
-class TwoCheckpointThenException(TwoCheckpoint):
-    @override
-    def finish(self, wait_on):
+class ThreeStepsThenException(ThreeSteps):
+    @utils.override
+    def last_step(self):
         raise RuntimeError("Great scott!")
 
 
 class ProcessListenerTester(ProcessListener):
-    def __init__(self):
-        self.start = False
-        self.run = False
-        self.continue_ = False
-        self.emitted = False
-        self.finish = False
-        self.stop = False
-        self.terminate = False
+    def __init__(self, process, expected_events, done_callback):
+        process.add_process_listener(self)
+        self.expected_events = set(expected_events)
+        self._done_callback = done_callback
+        self.called = set()
 
-    @override
-    def on_process_start(self, process):
-        self.start = True
+    def on_process_created(self, process):
+        self.called.add('created')
+        self._check_done()
 
-    @override
-    def on_process_run(self, process):
-        self.run = True
+    def on_process_running(self, process):
+        self.called.add('running')
+        self._check_done()
 
-    @override
+    def on_process_waiting(self, process, data):
+        self.called.add('waiting')
+        self._check_done()
+
+    def on_process_paused(self, process):
+        self.called.add('paused')
+        self._check_done()
+
     def on_output_emitted(self, process, output_port, value, dynamic):
-        self.emitted = True
+        self.called.add('output_emitted')
+        self._check_done()
 
-    @override
-    def on_process_wait(self, process):
-        self.wait = True
+    def on_process_finished(self, process, outputs):
+        self.called.add('finished')
+        self._check_done()
 
-    @override
-    def on_process_continue(self, process, wait_on):
-        self.continue_ = True
+    def on_process_failed(self, process, exc_info):
+        self.called.add('failed')
+        self._check_done()
 
-    @override
-    def on_process_finish(self, process):
-        self.finish = True
+    def on_process_cancelled(self, process, msg):
+        self.called.add('cancelled')
+        self._check_done()
 
-    @override
-    def on_process_stop(self, process):
-        self.stop = True
-
-    @override
-    def on_process_terminate(self, process):
-        self.terminate = True
+    def _check_done(self):
+        if self.called == self.expected_events:
+            self._done_callback()
 
 
 class Saver(object):
@@ -227,9 +215,8 @@ class Saver(object):
         self.outputs = []
 
     def _save(self, p):
-        b = apricotpy.persistable.Bundle(p)
-
-        self.snapshots.append((p.state, b))
+        b = persisters.Bundle(p)
+        self.snapshots.append(b)
         self.outputs.append(p.outputs.copy())
 
 
@@ -238,42 +225,66 @@ class ProcessSaver(ProcessListener, Saver):
     Save the instance state of a process each time it is about to enter a new state
     """
 
-    def __init__(self, p):
+    def __init__(self, proc):
         ProcessListener.__init__(self)
         Saver.__init__(self)
-        p.add_process_listener(self)
+        self.process = proc
+        proc.add_process_listener(self)
+        self._future = plum.Future()
 
-    @override
-    def on_process_start(self, process):
+    def capture(self):
+        self._save(self.process)
+        if not self.process.done():
+            self.process.play()
+            self._future.add_done_callback(lambda _: self.process.loop().stop())
+            self.process.loop().start()
+
+    @utils.override
+    def on_process_running(self, process):
         self._save(process)
 
-    @override
-    def on_process_run(self, process):
+    @utils.override
+    def on_process_waiting(self, process, data):
         self._save(process)
 
-    @override
-    def on_process_wait(self, process):
+    @utils.override
+    def on_process_paused(self, process):
         self._save(process)
 
-    @override
-    def on_process_finish(self, process):
-        self._save(process)
+    # Terminal states:
 
-    @override
-    def on_process_stop(self, process):
+    @utils.override
+    def on_process_finished(self, process, outputs):
         self._save(process)
+        self._future.set_result(True)
+
+    @utils.override
+    def on_process_failed(self, process, exc_info):
+        self._save(process)
+        self._future.set_result(True)
+
+    @utils.override
+    def on_process_cancelled(self, process, msg):
+        self._save(process)
+        self._future.set_result(True)
 
 
 # All the Processes that can be used
-TEST_PROCESSES = [DummyProcess, DummyProcessWithOutput]
+TEST_PROCESSES = [
+    DummyProcess,
+    DummyProcessWithOutput,
+    ThreeSteps]
 
 TEST_WAITING_PROCESSES = [
     ProcessWithCheckpoint,
-    TwoCheckpoint,
     TwoCheckpointNoFinish,
     ExceptionProcess,
     ProcessEventsTester,
-    TwoCheckpointThenException
+    ThreeStepsThenException]
+
+TEST_EXCEPTION_PROCESSES = [
+    ExceptionProcess,
+    ThreeStepsThenException
 ]
 
 
@@ -295,24 +306,80 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     :return: True if snapshots match False otherwise
     :rtype: bool
     """
-    for i, info in zip(range(0, len(snapshots)), snapshots):
-
-        bundle = info[1]
-        loaded = bundle.unbundle(loop)
-        ps = ProcessSaver(loaded)
-        try:
-            loop.run_until_complete(loaded)
-        except BaseException:
-            pass
+    for i, bundle in zip(range(0, len(snapshots)), snapshots):
+        loaded = bundle.unbundle(loop=loop)
+        saver = ProcessSaver(loaded)
+        saver.capture()
 
         # Now check going backwards until running that the saved states match
         j = 1
         while True:
-            if j >= min(len(snapshots), len(ps.snapshots)):
+            if j >= min(len(snapshots), len(saver.snapshots)):
                 break
 
-            if snapshots[-j] != ps.snapshots[-j]:
-                return False
+            compare_dictionaries(
+                snapshots[-j], saver.snapshots[-j],
+                snapshots[-j], saver.snapshots[-j],
+                exclude={
+                    str(process.BundleKeys.LOOP_CALLBACK),
+                    str(process.BundleKeys.AWAITING),
+                    'CALLBACKS', 'DONE_CALLBACKS', 'SCHEDULED_CALLBACKS', 'PERSISTABLE_ID'
+                })
             j += 1
 
-        return True
+    return True
+
+
+def compare_dictionaries(bundle1, bundle2, dict1, dict2, exclude=None):
+    keys = set(dict1.iterkeys()) & set(dict2.iterkeys())
+    if exclude is not None:
+        keys -= exclude
+
+    for key in keys:
+        if key not in dict1:
+            raise ValueError("Key '{}' in dict 1 but not 2".format(key))
+
+        if key not in dict2:
+            raise ValueError("Key '{}' in dict 2 but not 1".format(key))
+
+        v1 = dict1[key]
+        v2 = dict2[key]
+
+        compare_value(bundle1, bundle2, v1, v2, exclude)
+
+
+def compare_value(bundle1, bundle2, v1, v2, exclude=None):
+    if isinstance(v1, collections.Mapping) and isinstance(v2, collections.Mapping):
+        compare_dictionaries(bundle1, bundle2, v1, v2, exclude)
+    elif isinstance(v1, list) and isinstance(v2, list):
+        for vv1, vv2 in zip(v1, v2):
+            compare_value(bundle1, bundle2, vv1, vv2, exclude)
+    else:
+        if v1 != v2:
+            raise ValueError(
+                "Dict values mismatch for :\n{} != {}".format(v1, v2)
+            )
+
+
+class TestPersister(persisters.Persister):
+    """
+    Test persister, just creates the bundle, noting else
+    """
+    def save_checkpoint(self, process, tag=None):
+        """ Create the checkpoint bundle """
+        persisters.Bundle(process)
+
+    def load_checkpoint(self, pid, tag=None):
+        raise NotImplementedError
+
+    def get_checkpoints(self):
+        raise NotImplementedError
+
+    def get_process_checkpoints(self, pid):
+        raise NotImplementedError
+
+    def delete_checkpoint(self, pid, tag=None):
+        raise NotImplementedError
+
+    def delete_process_checkpoints(self, pid):
+        raise NotImplementedError

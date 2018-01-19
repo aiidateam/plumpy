@@ -1,106 +1,143 @@
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta, abstractmethod
-import apricotpy
-import apricotpy.persistable
-from collections import namedtuple
+from abc import ABCMeta
 import copy
-from enum import Enum
-import inspect
 import logging
+import plum
 import time
-import sys
+import uuid
 
 from future.utils import with_metaclass
 
-import plum.stack as _stack
 from plum.process_listener import ProcessListener
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
-from plum.port import _NULL
+from . import events
+from . import futures
+from . import base
+from .base import Continue, Wait, Cancel, Stop, ProcessState, \
+    TransitionFailed, Waiting
+from . import process_comms
+from . import stack
 from . import utils
 
-__all__ = ['Process', 'ProcessState', 'get_pid_from_bundle']
+__all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
+           'get_pid_from_bundle', 'Cancel', 'Wait', 'Stop', 'Continue',
+           'TransitionFailed', 'Executor', 'Waiting']
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class ProcessState(Enum):
-    """
-    The possible states that a :class:`Process` can be in.
-    """
-    CREATED = 0
-    RUNNING = 1
-    WAITING = 2
-    STOPPED = 3
-    FAILED = 4
-
-
-Wait = namedtuple('Wait', ['on', 'callback'])
-
-
-def _should_pass_result(fn):
-    if isinstance(fn, apricotpy.persistable.Function):
-        fn = fn._fn
-
-    fn_spec = inspect.getargspec(fn)
-    is_method_with_argument = inspect.ismethod(fn) and len(fn_spec[0]) > 1
-    is_function_with_argument = inspect.isfunction(fn) and len(fn_spec[0]) > 0
-    has_args_or_kwargs = fn_spec[1] is not None or fn_spec[2] is not None
-    return is_method_with_argument or is_function_with_argument or has_args_or_kwargs
-
-
-class BundleKeys(Enum):
+class BundleKeys(object):
     """
     String keys used by the process to save its state in the state bundle.
 
-    See :func:`create_from`, :func:`save_instance_state` and :func:`load_instance_state`.
+    See :func:`save_instance_state` and :func:`load_instance_state`.
     """
-    CREATION_TIME = 'creation_time'
-    INPUTS = 'inputs'
-    OUTPUTS = 'outputs'
-    PID = 'pid'
+    CREATION_TIME = 'CREATION_TIME'
+    INPUTS = 'INPUTS'
+    OUTPUTS = 'OUTPUTS'
+    PID = 'PID'
     LOOP_CALLBACK = 'LOOP_CALLBACK'
     AWAITING = 'AWAITING'
     NEXT_STEP = 'NEXT_STEP'
     ABORT_MSG = 'ABORT_MSG'
-    PROC_STATE = 'PROC_SATE'
+    PROC_STATE = 'PROC_STATE'
     PAUSED = 'PAUSED'
-    CALLBACK_FN = 'CALLBACK_FN'
-    CALLBACK_ARGS = 'CALLBACK_ARGS'
 
 
-class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)):
+class ProcessAction(object):
+    """
+    Actions that the process can be asked to perform
+    These should be sent as the subject of a message to the process
+    """
+    PAUSE = 'pause'
+    PLAY = 'play'
+    ABORT = 'abort'
+    REPORT_STATUS = 'report_status'
+
+
+class ProcessMessage(object):
+    """
+    Messages that the process can emit, these will be the subject
+    of the message
+    """
+    STATUS_REPORT = 'status_report'
+
+
+class Running(base.Running):
+    _run_handle = None
+
+    def enter(self):
+        super(Running, self).enter()
+        self._run_handle = self.process.call_soon(self._run)
+
+    def exit(self):
+        super(Running, self).exit()
+        # Make sure the run callback doesn't get actioned if it wasn't already
+        if self._run_handle is not None:
+            self._run_handle.cancel()
+
+    def load_instance_state(self, process, saved_state):
+        super(Running, self).load_instance_state(process, saved_state)
+        if self.in_state:
+            self.process.call_soon(self._run)
+
+    def _run(self):
+        with stack.in_stack(self.process):
+            super(Running, self)._run()
+
+
+class Executor(ProcessListener):
+    _future = None
+    _loop = None
+
+    def __init__(self, interrupt_on_pause_or_wait=False):
+        self._interrupt_on_pause_or_wait = interrupt_on_pause_or_wait
+
+    def on_process_waiting(self, process, data):
+        if self._interrupt_on_pause_or_wait and not self._future.done():
+            self._future.set_result('waiting')
+
+    def on_process_paused(self, process):
+        if self._interrupt_on_pause_or_wait and not self._future.done():
+            self._future.set_result('paused')
+
+    def execute(self, process):
+        process.add_process_listener(self)
+        try:
+            loop = process.loop()
+            self._future = futures.Future()
+            futures.chain(process.future(), self._future)
+            self._future.add_done_callback(lambda _: loop.stop())
+
+            if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
+                process.play()
+
+            loop.start()
+            return self._future.result()
+        finally:
+            self._future = None
+            self._loop = None
+            process.remove_process_listener(self)
+
+
+class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plum.
-
-    Once a process is created it may be started by calling play() at which
-    point it is said to be 'playing', like a tape.  It can then be paused by
-    calling pause() which will only be acted on at the next state transition
-    OR if the process is in the WAITING state in which case it will pause
-    immediately.  It can be resumed with a call to play().
 
     A process can be in one of the following states:
 
     * CREATED
+    * STARTED
     * RUNNING
     * WAITING
+    * FINISHED
     * STOPPED
-    * FAILED
+    * DESTROYED
 
     as defined in the :class:`ProcessState` enum.
 
-    The possible transitions between states are::
-
-                              _(reenter)_
-                              |         |
-        CREATED---on_start,on_run-->RUNNING---on_finish,on_stop-->STOPPED
-                                    |     ^               |         ^
-                               on_wait on_resume,on_run   |   on_abort,on_stop
-                                    v     |               |         |
-                                    WAITING----------------     [any state]
-
-        [any state]---on_fail-->FAILED
 
     ::
 
@@ -112,6 +149,12 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
 
     # Static class stuff ######################
     _spec_type = ProcessSpec
+
+    @classmethod
+    def get_state_classes(cls):
+        states_map = super(Process, cls).get_state_classes()
+        states_map[ProcessState.RUNNING] = Running
+        return states_map
 
     @classmethod
     def spec(cls):
@@ -157,47 +200,55 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
 
         return "\n".join(desc)
 
-    def __init__(self, inputs=None, pid=None, logger=None):
+    @classmethod
+    def recreate_from(cls, saved_state, *args, **kwargs):
+        """"""
+        """
+        Recreate a process from a saved state, passing any positional and 
+        keyword arguments on to load_instance_state
+
+        :param args: The positional arguments for load_instance_state
+        :param kwargs: The keyword arguments for load_instance_state
+        :return: An instance of the object with its state loaded from the save state.
+        """
+        obj = cls.__new__(cls)
+        obj.__init__(*args, **kwargs)
+        base.call_with_super_check(obj.load_instance_state, saved_state)
+        base.call_with_super_check(obj.init)
+        return obj
+
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         """
         The signature of the constructor should not be changed by subclassing
         processes.
 
         :param inputs: A dictionary of the process inputs
         :type inputs: dict
-        :param pid: The process ID, if not a unique pid will be chosen
+        :param pid: The process ID, can be manually set, if not a unique pid
+            will be chosen
         :param logger: An optional logger for the process to use
         :type logger: :class:`logging.Logger`
+        :param loop: The event loop
+        :param communicator: The (optional) communicator
+        :type communicator: :class:`plum.Communicator`
         """
-        super(Process, self).__init__()
-
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        # Setup runtime state
-        self.__init(logger)
-
         # Input/output
-        self._check_inputs(inputs)
         self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
-        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        self._pid = pid
+        self._logger = logger
+        self._loop = loop if loop is not None else events.get_event_loop()
+        self._communicator = communicator
+
+        self._future = plum.Future()
+        self._parsed_inputs = None
         self._outputs = {}
+        self._uuid = None
+        self.__event_helper = utils.EventHelper(ProcessListener)
 
-        # Set up a process ID
-        if pid is None:
-            self._pid = self.uuid
-        else:
-            self._pid = pid
-
-        # State stuff
-        self.__CREATION_TIME = time.time()
-        self.__state = None
-        self.__next_step = None
-        self.__awaiting = None
-        self.__loop_callback = None
-        self.__paused = False
-        self.__callback_fn = None
-        self.__callback_args = None
-        self.__abort_msg = None
+        super(Process, self).__init__()
 
     @property
     def creation_time(self):
@@ -211,6 +262,10 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
     @property
     def pid(self):
         return self._pid
+
+    @property
+    def uuid(self):
+        return self._uuid
 
     @property
     def raw_inputs(self):
@@ -232,10 +287,6 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         return self._outputs
 
     @property
-    def state(self):
-        return self.__state
-
-    @property
     def logger(self):
         """
         Get the logger for this class.  Can be None.
@@ -243,60 +294,26 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         :return: The logger.
         :rtype: :class:`logging.Logger`
         """
-        if self.__logger is not None:
-            return self.__logger
+        if self._logger is not None:
+            return self._logger
         else:
             return _LOGGER
 
-    def has_finished(self):
-        """
-        Has the process finished i.e. completed running normally, without abort
-        or an exception.
+    def loop(self):
+        return self._loop
 
-        :return: True if finished, False otherwise
-        :rtype: bool
-        """
-        return self.has_terminated() and not self.has_aborted() and not self.has_failed()
-
-    def has_failed(self):
-        """
-        Has the process failed i.e. an exception was raised
-
-        :return: True if an unhandled exception was raised, False otherwise
-        :rtype: bool
-        """
-        return self.has_terminated() and self.exception() is not None
-
-    def has_terminated(self):
-        """
-        Is the process done
-
-        :return: True if the process is STOPPED or FAILED, False otherwise
-        :rtype: bool
-        """
-        return self.done()
+    def future(self):
+        return self._future
 
     def has_aborted(self):
         return self.cancelled()
-
-    def get_abort_msg(self):
-        return self.__abort_msg
-
-    def get_waiting_on(self):
-        """
-        Get the awaitable this process is waiting on, or None.
-
-        :return: The awaitable or None
-        :rtype: :class:`apricotpy.Awaitable` or None
-        """
-        return self.__awaiting
 
     def save_instance_state(self, out_state):
         """
         Ask the process to save its current instance state.
 
         :param out_state: A bundle to save the state to
-        :type out_state: :class:`apricotpy.Bundle`
+        :type out_state: :class:`plum.Bundle`
         """
         super(Process, self).save_instance_state(out_state)
         # Immutables first
@@ -306,29 +323,12 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         # Inputs/outputs
         if self.raw_inputs is not None:
             out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
-        out_state[BundleKeys.OUTPUTS] = self._outputs
-
-        # Now state stuff
-        if self.__state is None:
-            out_state[BundleKeys.PROC_STATE] = None
-        else:
-            out_state[BundleKeys.PROC_STATE] = self.__state.value
-        if self.__next_step is not None:
-            out_state[BundleKeys.NEXT_STEP] = self.__next_step.__name__
-
-        out_state[BundleKeys.AWAITING] = self.__awaiting
-        out_state[BundleKeys.LOOP_CALLBACK] = self.__loop_callback
-        out_state[BundleKeys.PAUSED] = self.__paused
-        out_state[BundleKeys.CALLBACK_FN] = self.__callback_fn
-        out_state[BundleKeys.CALLBACK_ARGS] = self.__callback_args
-        out_state[BundleKeys.ABORT_MSG] = self.__abort_msg
+        out_state[BundleKeys.OUTPUTS] = copy.deepcopy(self._outputs)
 
     @protected
     def load_instance_state(self, saved_state):
-        super(Process, self).load_instance_state(saved_state)
-
         # Set up runtime state
-        self.__init(None)
+        super(Process, self).load_instance_state(saved_state)
 
         # Inputs/outputs
         try:
@@ -336,80 +336,15 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
             self._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._raw_inputs = None
-
         self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+
         self._outputs = copy.deepcopy(saved_state[BundleKeys.OUTPUTS])
 
         # Immutable stuff
         self.__CREATION_TIME = saved_state[BundleKeys.CREATION_TIME]
         self._pid = saved_state[BundleKeys.PID]
 
-        # State stuff
-        if saved_state[BundleKeys.PROC_STATE] is None:
-            self.__state = None
-        else:
-            self.__state = ProcessState(saved_state[BundleKeys.PROC_STATE])
-        try:
-            self.__next_step = getattr(self, saved_state[BundleKeys.NEXT_STEP])
-        except KeyError:
-            self.__next_step = None
-
-        self.__awaiting = saved_state[BundleKeys.AWAITING]
-        self.__loop_callback = saved_state[BundleKeys.LOOP_CALLBACK]
-        self.__paused = saved_state[BundleKeys.PAUSED]
-        self.__callback_fn = saved_state[BundleKeys.CALLBACK_FN]
-        self.__callback_args = saved_state[BundleKeys.CALLBACK_ARGS]
-        self.__abort_msg = saved_state[BundleKeys.ABORT_MSG]
-
-    def on_loop_inserted(self, loop):
-        super(Process, self).on_loop_inserted(loop)
-        self._do(self._enter_created)
-
-    def abort(self, msg=None):
-        """
-        Abort the process.  Can optionally provide a message with
-        the abort.  This can be called from another thread.
-
-        :param msg: The abort message
-        :type msg: str
-        """
-        self.log_with_pid(logging.INFO, "aborting")
-
-        self._loop_check()
-        self.play()
-
-        if self.__loop_callback is not None:
-            self.__loop_callback.cancel()
-
-        fut = self.loop().create_future()
-        self.loop().call_soon(self._do_abort, fut, msg)
-        return fut
-
-    def _do_abort(self, fut, msg=None):
-        if not self.has_terminated():
-            self._enter_stopped(abort=True, abort_msg=msg)
-
-        fut.set_result(self.has_aborted())
-
-    def play(self):
-        if self.is_playing():
-            return
-
-        self.__paused = False
-        if self._callback_fn is not None:
-            self._schedule_callback(self._callback_fn, *self._callback_args)
-
-    def pause(self):
-        if not self.is_playing():
-            return
-
-        if self.__loop_callback is not None:
-            self.__loop_callback.cancel()
-
-        self.__paused = True
-
-    def is_playing(self):
-        return not self.__paused
+        self._update_future()
 
     def add_process_listener(self, listener):
         assert (listener != self), "Cannot listen to yourself!"
@@ -418,141 +353,84 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
     def remove_process_listener(self, listener):
         self.__event_helper.remove_listener(listener)
 
-    def listen_scope(self, listener):
-        return ListenContext(self, listener)
-
     @protected
     def set_logger(self, logger):
-        self.__logger = logger
+        self._logger = logger
 
     @protected
     def log_with_pid(self, level, msg):
         self.logger.log(level, "{}: {}".format(self.pid, msg))
 
     # region Process messages
-    # Make sure to call the superclass method if your override any of these
-    @protected
+
     def on_create(self):
-        """
-        Called when the process is created.
-        """
-        # In this case there is no message fired because no one could have
-        # registered themselves as a listener by this point in the lifecycle.
+        super(Process, self).on_create()
 
-        self.__called = True
+        # State stuff
+        self.__CREATION_TIME = time.time()
 
-    @protected
-    def on_start(self):
-        """
-        Called when this process is about to run for the first time.
+        # Input/output
+        self._check_inputs(self._raw_inputs)
+        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
+        # Set up a process ID
+        self._uuid = uuid.uuid4()
+        if self._pid is None:
+            self._pid = self._uuid
 
-        Any class overriding this method should make sure to call the super
-        method, usually at the end of the function.
-        """
-        self._fire_event(ProcessListener.on_process_start)
-        self._send_message('start')
+    @base.super_check
+    def init(self):
+        """ Any common initialisation stuff after create or load goes here """
+        if self._communicator is not None:
+            self._communicator.register_receiver(
+                process_comms.ProcessReceiver(self), identifier=str(self.pid))
 
-        self.__called = True
-
-    @protected
     def on_run(self):
-        """
-        Called when the process is about to run some code either for the first
-        time (in which case an on_start message would have been received) or
-        after something it was waiting on has finished (in which case an
-        on_continue message would have been received).
+        super(Process, self).on_run()
+        self._fire_event(ProcessListener.on_process_running)
 
-        Any class overriding this method should make sure to call the super
-        method.
-        """
-        self._fire_event(ProcessListener.on_process_run)
-        self._send_message('run')
-
-        self.__called = True
-
-    @protected
-    def on_wait(self, awaiting_uuid):
-        """
-        Called when the process is about to enter the WAITING state
-        """
-        self._fire_event(ProcessListener.on_process_wait)
-        self._send_message('wait', {'awaiting': awaiting_uuid})
-
-        self.__called = True
-
-    @protected
-    def on_resume(self):
-        self._fire_event(ProcessListener.on_process_resume)
-        self._send_message('resume')
-
-        self.__called = True
-
-    @protected
-    def on_abort(self, abort_msg):
-        """
-        Called when the process has been asked to abort itself.
-        """
-        self.__abort_msg = abort_msg
-
-        self._fire_event(ProcessListener.on_process_abort)
-        self._send_message('abort', {'msg': abort_msg})
-
-        self.__called = True
-
-    @protected
-    def on_finish(self):
-        """
-        Called when the process has finished and the outputs have passed
-        checks
-        """
-        self._check_outputs()
-        self._fire_event(ProcessListener.on_process_finish)
-        self._send_message('finish')
-
-        self.__called = True
-
-    @protected
-    def on_stop(self):
-        self._fire_event(ProcessListener.on_process_stop)
-        self._send_message('stop')
-
-        self.__called = True
-
-    @protected
-    def on_fail(self, exc_info):
-        """
-        Called if the process raised an exception.
-
-        :param exc_info: The exception information as returned by sys.exc_info()
-        """
-        self._fire_event(ProcessListener.on_process_fail)
-        self._send_message('fail')
-
-        self.__called = True
-
-    @protected
-    def on_terminate(self):
-        """
-        Called when the process reaches a terminal state.
-        """
-        self._fire_event(ProcessListener.on_process_terminate)
-        self._send_message('terminate')
-
-        self.__called = True
+    def on_output_emitting(self, output_port, value):
+        pass
 
     def on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
 
+    def on_wait(self, data):
+        super(Process, self).on_wait(data)
+        self._fire_event(ProcessListener.on_process_waiting, data)
+
+    def on_pause(self):
+        super(Process, self).on_pause()
+        self._fire_event(ProcessListener.on_process_paused)
+
+    def on_finish(self, result):
+        super(Process, self).on_finish(result)
+        self._check_outputs()
+        self.future().set_result(result)
+        self._fire_event(ProcessListener.on_process_finished, result)
+
+    def on_fail(self, exc_info):
+        super(Process, self).on_fail(exc_info)
+        self.future().set_exc_info(exc_info)
+        self._fire_event(ProcessListener.on_process_failed, exc_info)
+
+    def on_cancel(self, msg):
+        super(Process, self).on_cancel(msg)
+        self.future().cancel()
+        self._fire_event(ProcessListener.on_process_cancelled, msg)
+
     # endregion
 
-    @protected
-    def do_run(self):
-        return self._run(**(self.inputs if self.inputs is not None else {}))
+    def run(self):
+        return self._run()
+
+    def execute(self, return_on_idle=False):
+        return Executor(return_on_idle).execute(self)
 
     @protected
     def out(self, output_port, value):
+        self.on_output_emitting(output_port, value)
         dynamic = False
         # Do checks on the outputs
         try:
@@ -597,7 +475,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
         # inputs
         for name, port in self.spec().inputs.items():
             if name not in ins:
-                if port.default != _NULL:
+                if port.has_default():
                     ins[name] = port.default
                 elif port.required:
                     raise ValueError(
@@ -646,7 +524,7 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
     def encode_input_args(self, inputs):
         """
         Encode input arguments such that they may be saved in a
-        :class:`apricotpy.persistable.Bundle`
+        :class:`plum.Bundle`
 
         :param inputs: A mapping of the inputs as passed to the process
         :return: The encoded inputs
@@ -657,53 +535,70 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
     def decode_input_args(self, encoded):
         """
         Decode saved input arguments as they came from the saved instance state
-        :class:`apricotpy.persistable.Bundle`
+        :class:`plum.Bundle`
 
         :param encoded:
         :return: The decoded input args
         """
         return encoded
 
-    def __init(self, logger):
+    def message_received(self, subject, body=None, sender_id=None):
+        super(Process, self).message_received(subject, body, sender_id)
+        if subject == ProcessAction.ABORT:
+            self.abort()
+        elif subject == ProcessAction.PAUSE:
+            self.pause()
+        elif subject == ProcessAction.PLAY:
+            self.play()
+        elif subject == ProcessAction.REPORT_STATUS:
+            self._status_requested(
+                self.loop(), subject, body, self.uuid, sender_id
+            )
+
+    def get_status_info(self, out_status_info):
+        out_status_info.update({
+            BundleKeys.CREATION_TIME: self.creation_time,
+            'process_string': str(self),
+            'state': self.state,
+            'state_info': str(self._state)
+        })
+
+    # region callbacks
+    def call_soon(self, callback, *args, **kwargs):
         """
-        Common place to put all runtime state variables i.e. those that don't need
-        to be persisted.  This can be called from the constructor or
-        load_instance_state.
+        Schedule a callback to what is considered an internal process function
+        (this needn't be a method).  If it raises an exception it will cause
+        the process to fail.
         """
-        self.__logger = logger
+        handle = events.Handle(self, callback, args, kwargs)
+        self._loop.add_callback(handle._run)
+        return handle
 
-        # Events and running
-        self.__event_helper = utils.EventHelper(ProcessListener)
-
-        # Flag to make sure all the necessary event methods were called
-        self.__called = False
-
-    # region State event/transition methods
-
-    def _fire_event(self, event):
-        self.loop().call_soon(self.__event_helper.fire_event, event, self)
-
-    def _send_message(self, subject, body_=None):
-        body = {'uuid': self.uuid}
-        if body_ is not None:
-            body.update(body_)
-        self.send_message('process.{}.{}'.format(self.pid, subject), body)
-
-    def _terminate(self):
-        self._call_with_super_check(self.on_terminate)
-
-    def _call_with_super_check(self, fn, *args, **kwargs):
+    def call_soon_external(self, callback, *args, **kwargs):
         """
-        Call one of our state event methods making sure super() was called
-        by the subclassing class.
+        Schedule a callback to an external method.  If there is an
+        exception in the callback it will not cause the process to fail.
         """
-        self.__called = False
-        fn(*args, **kwargs)
-        assert self.__called, \
-            "{} was not called\n" \
-            "Hint: Did you forget to call the superclass method?".format(fn.__name__)
+        self._loop.add_callback(callback, *args, **kwargs)
+
+    def callback_failed(self, callback, exception, trace):
+        if self.state != ProcessState.FAILED:
+            self.fail(exception, trace)
 
     # endregion
+
+    # region State entry/exit events
+
+    def _fire_event(self, event, *args, **kwargs):
+        self.call_soon_external(self.__event_helper.fire_event, event, self, *args, **kwargs)
+
+    # endregion
+
+    def _send_message(self, subject, body=None, to=None):
+        body_ = {'uuid': self.uuid}
+        if body is not None:
+            body_.update(body)
+        self.send_message(subject, to=to, body=body_)
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
@@ -720,183 +615,13 @@ class Process(with_metaclass(ABCMeta, apricotpy.persistable.AwaitableLoopObject)
                     "Process {} failed because {}".format(self.get_name(), msg)
                 )
 
-    def _loop_check(self):
-        assert self.in_loop(), "The process is not in the event loop"
-
-    @abstractmethod
-    def _run(self, **kwargs):
-        pass
-
-    def _enter_created(self):
-        self.__state = ProcessState.CREATED
-        self._call_with_super_check(self.on_create)
-        self._schedule_callback(self._exec_created)
-
-    def _exec_created(self):
-        self._enter_running(self.do_run)
-
-    def _enter_running(self, next_step, result=None):
-        last_state = self.__state
-        self._set_state(ProcessState.RUNNING,
-                        [ProcessState.CREATED, ProcessState.WAITING, ProcessState.RUNNING])
-
-        if last_state is ProcessState.CREATED:
-            self._call_with_super_check(self.on_start)
-        elif last_state is ProcessState.WAITING:
-            self._call_with_super_check(self.on_resume)
-
-        self.__next_step = next_step
-        self._last_result = result
-        self._call_with_super_check(self.on_run)
-        self._schedule_callback(self._exec_running, next_step, result)
-
-    def _exec_running(self, next_step, result):
-        args = []
-        if _should_pass_result(next_step):
-            args.append(result)
-
-        # Run the next function
-        try:
-            try:
-                _stack.push(self)
-                retval = next_step(*args)
-            finally:
-                _stack.pop(self)
-
-        except BaseException:
-            self._enter_failed(sys.exc_info())
-        else:
-            if _is_wait_retval(retval):
-                awaitable, callback = retval
-                self._enter_waiting(awaitable, callback)
-            else:
-                self._enter_stopped()
-
-    def _enter_waiting(self, awaiting, next_step):
-        self.__state = ProcessState.WAITING
-        self.__awaiting = awaiting
-        self.__next_step = next_step
-        self._call_with_super_check(self.on_wait, awaiting)
-        # There's no exec_waiting() because all is has to do is wait for the
-        # thing that it's awaiting
-        awaiting.add_done_callback(apricotpy.persistable.Function(self._do, self._await_done))
-
-    def _await_done(self, awaitable):
-        self.__awaiting = None
-
-        if self.__next_step is None:
-            self._enter_stopped()
-        else:
-            self._enter_running(self.__next_step, awaitable.result())
-
-    def _enter_stopped(self, abort=False, abort_msg=None):
-        last_state = self.__state
-        if not abort and last_state not in [ProcessState.RUNNING, ProcessState.WAITING]:
-            raise RuntimeError("Cannot enter STOPPED state from {}".format(self.__state))
-
-        self._set_state(ProcessState.STOPPED)
-        if abort:
-            self._call_with_super_check(self.on_abort, abort_msg)
-        elif last_state in [ProcessState.RUNNING, ProcessState.WAITING]:
-            self._call_with_super_check(self.on_finish)
-
-        self._call_with_super_check(self.on_stop)
-        if abort:
-            self._exec_stopped(abort)
-        else:
-            self._schedule_callback(self._exec_stopped, abort)
-
-    def _exec_stopped(self, abort):
-        self._terminate()
-        if abort:
-            self.cancel()
-        else:
-            self.set_result(self.outputs)
-
-    def _enter_failed(self, exc_info):
-        self._set_state(ProcessState.FAILED)
-        try:
-            self._call_with_super_check(self.on_fail, exc_info)
-        except BaseException:
-            import traceback
-            self.log_with_pid(
-                logging.ERROR, "exception entering failed state:\n{}".format(traceback.format_exc()))
-
-        self._schedule_callback(self._exc_failed, exc_info[1])
-
-    def _exc_failed(self, exception):
-        self._terminate()
-        self.set_exception(exception)
-
-    def _set_state(self, new_state, allowed_states=None):
-        """
-        Set the state optionally checking that we are entering from an allowed state.
-
-        :param new_state: The new state
-        :param allowed_states: An optional tuple of states we are allowed to enter
-            this state from.
-        """
-        if allowed_states is not None and self.__state not in allowed_states:
-            raise RuntimeError(
-                "Cannot enter state {} from {}".format(new_state, self.__state)
-            )
-        self.__state = new_state
-
-    def _schedule_callback(self, fn, *args):
-        assert inspect.ismethod(fn) and fn.__self__ is self, \
-            "Callback has to be a member of this process"
-
-        self._callback_fn = fn
-        self._callback_args = args
-        # If not playing, then the play call will schedule the callback
-        if self.is_playing():
-            self.__loop_callback = self.loop().call_soon(self._do, fn, *args)
-
-    def _do(self, fn, *args):
-        try:
-            self.__loop_callback = None
-            self._callback_args = None
-            self._callback_fn = None
-            fn(*args)
-        except BaseException:
-            self._enter_failed(sys.exc_info())
-
-
-class ListenContext(object):
-    """
-    A context manager for listening to the Process.
-
-    A typical usage would be:
-    with ListenContext(producer, listener):
-        # Producer generates messages that the listener gets
-        pass
-    """
-
-    def __init__(self, producer, *args, **kwargs):
-        self._producer = producer
-        self._args = args
-        self._kwargs = kwargs
-
-    def __enter__(self):
-        self._producer.add_process_listener(*self._args, **self._kwargs)
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        self._producer.remove_process_listener(*self._args, **self._kwargs)
-
-
-def _is_wait_retval(retval):
-    """
-    Determine if the value provided is a valid Wait return value which consists
-    of a 2-tuple of a WaitOn and a callback function (or None) to be called
-    after the wait on is ready
-
-    :param retval: The return value from a step to check
-    :return: True if it is a valid wait object, False otherwise
-    """
-    return (isinstance(retval, tuple) and
-            len(retval) == 2 and
-            isinstance(retval[0], apricotpy.Awaitable))
+    def _update_future(self):
+        if self.state == ProcessState.FINISHED:
+            self._future.set_result(self.outputs)
+        elif self.state == ProcessState.CANCELLED:
+            self._future.cancel()
+        elif self.state == ProcessState.FAILED:
+            self._future.set_exception(self._state.exception)
 
 
 def get_pid_from_bundle(process_bundle):

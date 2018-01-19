@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 
-import apricotpy.utils
-from apricotpy import persistable
-import frozendict
 import importlib
 import inspect
 import logging
-import plum.lang
 import threading
-from plum.exceptions import ClassNotFoundException, InvalidStateError, CancelledError
+from collections import deque
+
+import frozendict
+
+import plum.lang
 from plum.settings import check_protected, check_override
 
-__all__ = ['loop_factory']
+__all__ = []
 
 protected = plum.lang.protected(check=check_protected)
 override = plum.lang.override(check=check_override)
@@ -21,11 +21,10 @@ _default_loop = None
 
 
 class EventHelper(object):
-    def __init__(self, listener_type, raise_exceptions=False):
-        assert (listener_type is not None), "Must provide valid listener type"
+    def __init__(self, listener_type):
+        assert listener_type is not None, "Must provide valid listener type"
 
         self._listener_type = listener_type
-        self._raise_exceptions = raise_exceptions
         self._listeners = set()
 
     def add_listener(self, listener):
@@ -43,25 +42,15 @@ class EventHelper(object):
         return self._listeners
 
     def fire_event(self, event_function, *args, **kwargs):
-        assert event_function is not None, "Must provide valid event method"
+        if event_function is None:
+            raise ValueError("Must provide valid event method")
 
-        # TODO: Check if the function is in the listener type
-        # We have to use a copy here because the listener may
-        # remove themselves during the message
-        for l in list(self.listeners):
+        for l in self.listeners:
             try:
                 getattr(l, event_function.__name__)(*args, **kwargs)
-            except BaseException as e:
-                import traceback
-                traceback.print_exc()
-
+            except Exception as e:
                 _LOGGER.error(
-                    "The listener '{}' produced an exception while receiving "
-                    "the message '{}':\n{}: {}".format(
-                        l, event_function.__name__, e.__class__.__name__, str(e))
-                )
-                if self._raise_exceptions:
-                    raise
+                    "Listener {} produced an exception:\n{}".format(l, e))
 
 
 class ListenContext(object):
@@ -117,33 +106,6 @@ _CANCELLED = 'CANCELLED'
 _FINISHED = 'FINISHED'
 
 
-def fullname(object):
-    """
-    Get the fully qualified name of an object.
-
-    :param object: The object to get the name from.
-    :return: The fully qualified name.
-    """
-    if inspect.isclass(object):
-        return object.__module__ + "." + object.__name__
-    else:
-        return object.__module__ + "." + object.__class__.__name__
-
-
-def load_class(classstring):
-    """
-    Load a class from a string
-    """
-    module_path, class_name = classstring.rsplit('.', 1)
-    module = importlib.import_module(module_path)
-
-    # Finally, retrieve the class
-    try:
-        return getattr(module, class_name)
-    except AttributeError:
-        raise ClassNotFoundException("Class {} not found".format(classstring))
-
-
 class AttributesFrozendict(frozendict.frozendict):
     def __init__(self, *args, **kwargs):
         super(AttributesFrozendict, self).__init__(*args, **kwargs)
@@ -174,36 +136,133 @@ class AttributesFrozendict(frozendict.frozendict):
         return self.keys()
 
 
-SimpleNamespace = apricotpy.utils.SimpleNamespace
-
-
-def load_with_classloader(bundle):
+class SimpleNamespace(object):
     """
-    Load a process from a saved instance state
-
-    :param bundle: The saved instance state bundle
-    :return: The process instance
-    :rtype: :class:`Process`
+    An attempt to emulate python 3's types.SimpleNamespace
     """
-    # Get the class using the class loader and instantiate it
-    class_name = bundle['class_name']
-    proc_class = bundle.get_class_loader().load_class(class_name)
-    return proc_class.create_from(bundle)
+
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+    def __repr__(self):
+        keys = sorted(self.__dict__)
+        items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
+        return "{}({})".format(type(self).__name__, ", ".join(items))
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
 
 
-def loop_factory(*args, **kwargs):
-    loop = persistable.BaseEventLoop()
-    return loop
+class AttributesDict(SimpleNamespace):
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __getitem__(self, item):
+        return getattr(self, item)
+
+    def __delitem__(self, item):
+        return delattr(self, item)
+
+    def setdefault(self, key, value):
+        return self.__dict__.setdefault(key, value)
+
+    def get(self, *args, **kwargs):
+        return self.__dict__.get(*args, **kwargs)
 
 
-def set_if_not_none(mapping, key, value):
+def function_name(fn):
+    try:
+        name = fn.__module__ + '.' + fn.__qualname__
+    except AttributeError:
+        if inspect.ismethod(fn):
+            cls = fn.__self__.__class__
+            name = class_name(cls) + '.' + fn.__name__
+        elif inspect.isfunction(fn):
+            name = fn.__module__ + '.' + fn.__name__
+        else:
+            raise ValueError("Must be function or method")
+
+    # Make sure we can load it
+    try:
+        load_object(name)
+    except ValueError:
+        raise ValueError("Could not create a consistent name for fn '{}'".format(fn))
+
+    return name
+
+
+def load_function(name, instance=None):
+    obj = load_object(name)
+    if inspect.ismethod(obj):
+        if instance is not None:
+            return obj.__get__(instance, instance.__class__)
+        else:
+            return obj
+    elif inspect.isfunction(obj):
+        return obj
+    else:
+        raise ValueError("Invalid function name '{}'".format(name))
+
+
+def class_name(obj, class_loader=None, verify=True):
     """
-    Set the given value in a mapping only if the value is not `None`,
-    otherwise the mapping is left untouched
+    Given a class or an instance this function will give the fully qualified name
+    e.g. 'my_module.MyClass'
 
-    :param mapping: The mapping to set the value for
-    :param key: The mapping key
-    :param value: The mapping value
+    :param obj: The object to get the name from.
+    :param class_loader: Class loader used to verify that the resulting name
+        can be loaded
+    :return: The fully qualified name.
     """
-    if value is not None:
-        mapping[key] = value
+
+    if not inspect.isclass(obj):
+        # assume it's an instance
+        obj = obj.__class__
+
+    name = obj.__module__ + '.' + obj.__name__
+
+    if verify:
+        try:
+            if class_loader is not None:
+                class_loader.load_class(name)
+            else:
+                load_object(name)
+        except ValueError:
+            raise ValueError("Could not create a consistent full name for object '{}'".format(obj))
+
+    return name
+
+
+def load_object(fullname):
+    """
+    Load a class from a string
+    """
+    obj, remainder = load_module(fullname)
+
+    # Finally, retrieve the object
+    for name in remainder:
+        try:
+            obj = getattr(obj, name)
+        except AttributeError:
+            raise ValueError("Could not load object corresponding to '{}'".format(fullname))
+
+    return obj
+
+
+def load_module(fullname):
+    parts = fullname.split('.')
+
+    # Try to find the module, working our way from the back
+    mod = None
+    remainder = deque()
+    for i in range(len(parts)):
+        try:
+            mod = importlib.import_module('.'.join(parts))
+            break
+        except ImportError:
+            remainder.appendleft(parts.pop())
+
+    if mod is None:
+        raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
+
+    return mod, remainder

@@ -1,6 +1,6 @@
 import unittest
 from plum.process import ProcessSpec
-from .util import TestCase
+from .utils import TestCase
 
 
 class StrSubtype(str):

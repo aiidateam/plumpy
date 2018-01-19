@@ -1,12 +1,11 @@
-from test.util import TestCase
-from plum import Process, loop_factory
-import plum.stack as stack
+from test.utils import TestCaseWithLoop
+import plum
 
 
-class StackTest(Process):
+class StackTest(plum.Process):
     def _run(self):
-        assert len(stack.stack()) == 1
-        assert stack.top() is self
+        assert len(plum.stack.stack()) == 1
+        assert plum.stack.top() is self
 
     def total_ancestors(self):
         try:
@@ -15,7 +14,13 @@ class StackTest(Process):
             return 0
 
 
-class TestStack(TestCase):
+class TestStack(TestCaseWithLoop):
     def test_simple(self):
-        loop = loop_factory()
-        loop.run_until_complete(loop.create(StackTest))
+        st = StackTest().execute()
+
+    def test_stack_push_pop(self):
+        p = plum.Process()
+        with plum.stack.in_stack(p):
+            self.assertIs(p, plum.stack.top())
+
+        self.assertTrue(plum.stack.is_empty())

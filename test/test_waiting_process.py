@@ -1,59 +1,41 @@
-import apricotpy
 import plum
-from plum import loop_factory
 from plum import Process, ProcessState
-from plum.test_utils import TwoCheckpoint, \
+from plum.test_utils import ThreeSteps, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plum.test_utils import check_process_against_snapshots
-from plum.utils import override
 from plum.test_utils import ProcessSaver
-from plum.wait_ons import run_until
-from .util import TestCase
+from . import utils
 
 
-class TestWaitingProcess(TestCase):
-    def setUp(self):
-        super(TestWaitingProcess, self).setUp()
-
-        self.loop = loop_factory()
-
+class TestWaitingProcess(utils.TestCaseWithLoop):
     def test_instance_state(self):
-        proc = ~self.loop.create_inserted(TwoCheckpoint)
+        proc = ThreeSteps()
+        proc.play()
         wl = ProcessSaver(proc)
-        self.loop.run_until_complete(proc)
+        proc.execute()
 
-        for snapshot, outputs in zip(wl.snapshots, wl.outputs):
-            state, bundle = snapshot
+        for bundle, outputs in zip(wl.snapshots, wl.outputs):
             self.assertEqual(outputs, bundle[plum.process.BundleKeys.OUTPUTS])
 
     def test_saving_each_step(self):
         for proc_class in TEST_WAITING_PROCESSES:
-            proc = self.loop.create(proc_class)
+            proc = proc_class()
             saver = ProcessSaver(proc)
-            try:
-                self.loop.run_until_complete(proc)
-            except BaseException:
-                pass
+            saver.capture()
 
             self.assertTrue(check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
 
     def test_abort(self):
-        p = self.loop.create(WaitForSignalProcess)
-
-        # Wait until it is waiting
-        run_until(p, ProcessState.WAITING, self.loop)
-
-        # Abort it
-        p.abort()
-
-        # Wait until it's completely finished
-        run_until(p, ProcessState.STOPPED, self.loop)
-        self.assertTrue(p.has_aborted())
+        p = WaitForSignalProcess()
+        p.play()
+        p.execute(True)
+        p.cancel()
+        self.assertTrue(p.cancelled())
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
-        new_bundle = apricotpy.Bundle()
+        new_bundle = plum.Bundle()
         proc.save_instance_state(new_bundle)
         self.assertEqual(snapshot.bundle, new_bundle,
                          "Bundle mismatch with process class {}\n"

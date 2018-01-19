@@ -1,11 +1,6 @@
-
-
-from .control import *
+from .communicator import *
 from .launch import *
-from .status import *
+from .pubsub import *
 
-__all__ = (
-    control.__all__ +
-    launch.__all__ +
-    status.__all__
-)
+__all__ = (launch.__all__ +
+           pubsub.__all__ + communicator.__all__)

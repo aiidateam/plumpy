@@ -7,7 +7,6 @@ Subpackages
 .. toctree::
 
     plum.engine
-    plum.persistence
 
 Submodules
 ----------

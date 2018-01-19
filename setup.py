@@ -2,18 +2,22 @@
 
 from setuptools import setup
 
+__author__ = "Martin Uhrin"
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__version__ = "0.9.1"
-__contributors__ = "Martin Uhrin"
+__contributors__ = "Sebastiaan Huber"
+
+about = {}
+with open('plum/version.py') as f:
+    exec (f.read(), about)
 
 setup(
     name="plumpy",
-    version=__version__,
+    version=about['__version__'],
     description='A python workflow library',
     long_description=open('README.md').read(),
     url='https://github.com/aiidateam/plumpy.git',
     author='Martin Uhrin',
-    author_email='Martin Uhrin <martin.uhrin@epfl.ch>',
+    author_email='martin.uhrin@gmail.com',
     license=__license__,
     classifiers=[
         'License :: OSI Approved :: MIT License',
@@ -29,13 +33,13 @@ setup(
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
     install_requires=[
-        'apricotpy', 'frozendict', 'portalocker'
+        'frozendict', 'portalocker', 'pyyaml', 'six', 'tornado'
     ],
     extras_require={
         'rmq': ['pika'],
         ':python_version<"3.4"': ['enum34'],
-        ':python_version<"3.2"': ['futures'],
+        ':python_version<"3.2"': ['futures', 'backports.tempfile']
     },
-    packages=['plum', 'plum.persistence'],
+    packages=['plum'],
     test_suite='test'
 )
