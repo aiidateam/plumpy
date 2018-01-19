@@ -131,7 +131,9 @@ class RmqTaskSubscriber(messages.BaseConnectionWithExchange):
             except KeyboardInterrupt:
                 raise
             except Exception as e:
-                self._task_finished(props, method, utils.exception_response(e))
+                import traceback
+                response = '{}\n{}'.format(e, traceback.format_exc())
+                self._task_finished(props, method, utils.exception_response(response))
                 handled = True
 
         if not handled:
