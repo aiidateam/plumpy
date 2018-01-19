@@ -19,6 +19,7 @@ git merge $relbranch
 git branch -d $relbranch
 
 git push origin master
+git push origin $tag
 
 rm -r build
 rm -r plumpy.egg-info
