@@ -108,6 +108,13 @@ class TestTaskActions(TestCaseWithLoop):
         result = plum.run_until_complete(action, self.loop)
         self.assertIsNotNone(result)
 
+    def test_launch_nowait(self):
+        # Launch, and don't wait, just get the pid
+        action = plum.LaunchProcessAction(plum.test_utils.DummyProcess, nowait=True)
+        action.execute(self.communicator)
+        result = plum.run_until_complete(action, self.loop)
+        self.assertIsInstance(result, uuid.UUID)
+
     def test_execute_action(self):
         """ Test the process execute action """
         action = plum.ExecuteProcessAction(test_utils.DummyProcessWithOutput)
