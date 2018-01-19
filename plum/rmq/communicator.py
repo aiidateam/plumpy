@@ -7,6 +7,7 @@ import yaml
 import plum
 from plum.rmq.messages import RpcMessage
 from . import defaults
+from . import launch
 from . import messages
 from . import pubsub
 from . import utils
@@ -74,6 +75,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
         self._reset_channel()
 
+        self._connector = connector
         connector.add_connection_listener(self)
         if connector.is_connected:
             self._open_channel(connector.connection())
@@ -90,6 +92,13 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
     def on_connection_opened(self, connector, connection):
         self._open_channel(connection)
+
+    def close(self):
+        self._connector.remove_connection_listener(self)
+        if self._channel is not None:
+            self._connector.close_channel(self._channel)
+        self._channel = None
+        self._connector = None
 
     # region RMQ methods
     def _reset_channel(self):
@@ -194,16 +203,58 @@ class RmqCommunicator(plum.Communicator):
     def __init__(self, connector,
                  exchange_name=defaults.CONTROL_EXCHANGE,
                  encoder=yaml.dump,
-                 decoder=yaml.load):
-        self._publisher = RmqPublisher(connector, exchange_name, encoder=encoder, decoder=decoder)
-        self._subscriber = RmqSubscriber(connector, exchange_name, encoder=encoder, decoder=decoder)
+                 decoder=yaml.load,
+                 testing_mode=False,
+                 task_queue=defaults.TASK_QUEUE):
+        self._publisher = RmqPublisher(
+            connector,
+            exchange_name=exchange_name,
+            encoder=encoder,
+            decoder=decoder)
+        self._subscriber = RmqSubscriber(
+            connector,
+            exchange_name,
+            encoder=encoder,
+            decoder=decoder)
+        self._task_publisher = launch.RmqTaskPublisher(
+            connector,
+            exchange_name=exchange_name,
+            task_queue_name=task_queue,
+            encoder=encoder,
+            decoder=decoder,
+            testing_mode=testing_mode
+        )
+        self._task_subscriber = launch.RmqTaskSubscriber(
+            connector,
+            exchange_name=exchange_name,
+            task_queue_name=task_queue,
+            encoder=encoder,
+            decoder=decoder,
+            testing_mode=testing_mode,
+        )
+
+    def close(self):
+        self._publisher.close()
+        self._subscriber.close()
+        self._task_publisher.close()
+        self._task_subscriber.close()
 
     def initialised_future(self):
-        return plum.gather(self._publisher.initialised_future(),
-                           self._subscriber.initialised_future())
+        return plum.gather(
+            self._publisher.initialised_future(),
+            self._subscriber.initialised_future(),
+            self._task_publisher.initialised_future(),
+            self._task_subscriber.initialised_future()
+        )
 
     def register_receiver(self, receiver, identifier=None):
         return self._subscriber.register_receiver(receiver, identifier)
+
+    def add_task_receiver(self, task_receiver):
+        self._task_subscriber.add_task_receiver(task_receiver)
+
+    def remove_task_receiver(self, task_receiver):
+        self._task_subscriber.remove_task_receiver(task_receiver)
 
     def rpc_send(self, recipient_id, msg):
         """
@@ -217,3 +268,6 @@ class RmqCommunicator(plum.Communicator):
 
     def broadcast_msg(self, msg, reply_to=None, correlation_id=None):
         return self._publisher.broadcast_send(msg, reply_to, correlation_id)
+
+    def task_send(self, msg):
+        return self._task_publisher.task_send(msg)

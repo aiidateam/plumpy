@@ -216,6 +216,7 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
         self._returned_messages = set()
 
         self._reset_channel()
+        self._connector = connector
         connector.add_connection_listener(self)
         if connector.is_connected:
             connector.open_channel(self.on_channel_open)
@@ -255,6 +256,13 @@ class BasePublisherWithReplyQueue(pubsub.ConnectionListener, Publisher):
 
     def on_connection_opened(self, connector, connection):
         connector.open_channel(self.on_channel_open)
+
+    def close(self):
+        self._connector.remove_connection_listener(self)
+        if self.get_channel() is not None:
+            self._connector.close_channel(self.get_channel())
+        self._channel = None
+        self._connector = None
 
     def get_reply_queue_name(self):
         return self._reply_queue_name

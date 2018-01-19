@@ -18,10 +18,13 @@ class TestProcessReceiver(TestCaseWithLoop):
         super(TestProcessReceiver, self).setUp()
 
         self.connector = rmq.RmqConnector('amqp://guest:guest@localhost:5672/', loop=self.loop)
-        self.exchange_name = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
+        exchange_name = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
 
         self.communicator = rmq.RmqCommunicator(
-            self.connector, exchange_name=self.exchange_name)
+            self.connector,
+            exchange_name=exchange_name,
+            testing_mode=True
+        )
 
         self.connector.connect()
         # Run the loop until until both are ready
