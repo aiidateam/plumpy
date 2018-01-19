@@ -1,4 +1,4 @@
-from unittest import TestCase
+from .utils import TestCase
 from plum.port import ValueSpec
 
 

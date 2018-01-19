@@ -1,10 +1,10 @@
 from abc import ABCMeta
 
+from future.utils import with_metaclass
 
-class ProcessListener(object):
-    __metaclass__ = ABCMeta
 
-    def on_process_start(self, process):
+class ProcessListener(with_metaclass(ABCMeta, object)):
+    def on_process_created(self, process):
         """
         Called when the process has been started
 
@@ -13,7 +13,7 @@ class ProcessListener(object):
         """
         pass
 
-    def on_process_run(self, process):
+    def on_process_running(self, process):
         """
         Called when the process is about to enter the RUNNING state
 
@@ -22,7 +22,7 @@ class ProcessListener(object):
         """
         pass
 
-    def on_process_wait(self, process):
+    def on_process_waiting(self, process, data):
         """
         Called when the process is about to enter the WAITING state
 
@@ -31,7 +31,7 @@ class ProcessListener(object):
         """
         pass
 
-    def on_process_resume(self, process):
+    def on_process_paused(self, process):
         """
         Called when the process is about to re-enter the RUNNING state
 
@@ -54,7 +54,17 @@ class ProcessListener(object):
         """
         pass
 
-    def on_process_finish(self, process):
+    def on_process_finished(self, process, outputs):
+        """
+        Called when the process has been aborted
+
+        :param process: The process
+        :type process: :class:`plum.process.Process`
+        :param outputs: The process outputs
+        """
+        pass
+
+    def on_process_failed(self, process, exc_info):
         """
         Called when the process has finished running successfully
 
@@ -63,18 +73,9 @@ class ProcessListener(object):
         """
         pass
 
-    def on_process_stop(self, process):
+    def on_process_cancelled(self, process, msg):
         """
         Called when the process is about to enter the STOPPED state
-
-        :param process: The process
-        :type process: :class:`plum.process.Process`
-        """
-        pass
-
-    def on_process_fail(self, process):
-        """
-        Called when the process is about to enter the FAILED state
 
         :param process: The process
         :type process: :class:`plum.process.Process`

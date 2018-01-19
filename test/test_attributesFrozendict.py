@@ -1,5 +1,5 @@
-from unittest import TestCase
-from plum.util import AttributesFrozendict
+from .utils import TestCase
+from plum.utils import AttributesFrozendict
 
 
 class TestAttributesFrozendict(TestCase):

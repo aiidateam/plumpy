@@ -1,170 +1,160 @@
 # -*- coding: utf-8 -*-
 
+from abc import ABCMeta
+import copy
+import logging
+import plum
+import time
 import uuid
-from enum import Enum
-from abc import ABCMeta, abstractmethod
-from collections import namedtuple
-import threading
-import sys
-import traceback
 
-import plum.error as error
-from plum.wait import Interrupted
-from plum.persistence.bundle import Bundle
+from future.utils import with_metaclass
+
 from plum.process_listener import ProcessListener
-from plum.process_monitor import MONITOR
 from plum.process_spec import ProcessSpec
-from plum.util import protected
-import plum.util as util
-from plum.wait import WaitOn
-from plum._base import LOGGER
+from plum.utils import protected
+from . import events
+from . import futures
+from . import base
+from .base import Continue, Wait, Cancel, Stop, ProcessState, \
+    TransitionFailed, Waiting
+from . import process_comms
+from . import stack
+from . import utils
+
+__all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
+           'get_pid_from_bundle', 'Cancel', 'Wait', 'Stop', 'Continue',
+           'TransitionFailed', 'Executor', 'Waiting']
+
+_LOGGER = logging.getLogger(__name__)
 
 
-class ProcessState(Enum):
+class BundleKeys(object):
     """
-    The possible states that a :class:`Process` can be in.
+    String keys used by the process to save its state in the state bundle.
+
+    See :func:`save_instance_state` and :func:`load_instance_state`.
     """
-    CREATED = 0
-    RUNNING = 1
-    WAITING = 2
-    STOPPED = 3
-    FAILED = 4
+    CREATION_TIME = 'CREATION_TIME'
+    INPUTS = 'INPUTS'
+    OUTPUTS = 'OUTPUTS'
+    PID = 'PID'
+    LOOP_CALLBACK = 'LOOP_CALLBACK'
+    AWAITING = 'AWAITING'
+    NEXT_STEP = 'NEXT_STEP'
+    ABORT_MSG = 'ABORT_MSG'
+    PROC_STATE = 'PROC_STATE'
+    PAUSED = 'PAUSED'
 
 
-Wait = namedtuple('Wait', ['on', 'callback'])
+class ProcessAction(object):
+    """
+    Actions that the process can be asked to perform
+    These should be sent as the subject of a message to the process
+    """
+    PAUSE = 'pause'
+    PLAY = 'play'
+    ABORT = 'abort'
+    REPORT_STATUS = 'report_status'
 
 
-class _Unlock(object):
-    def __init__(self, lock):
-        """
-        :param lock: :class:`threading.Lock`
-        """
-        self._lock = lock
-
-    def __enter__(self):
-        self._lock.release()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._lock.acquire()
+class ProcessMessage(object):
+    """
+    Messages that the process can emit, these will be the subject
+    of the message
+    """
+    STATUS_REPORT = 'status_report'
 
 
-class Process(object):
+class Running(base.Running):
+    _run_handle = None
+
+    def enter(self):
+        super(Running, self).enter()
+        self._run_handle = self.process.call_soon(self._run)
+
+    def exit(self):
+        super(Running, self).exit()
+        # Make sure the run callback doesn't get actioned if it wasn't already
+        if self._run_handle is not None:
+            self._run_handle.cancel()
+
+    def load_instance_state(self, process, saved_state):
+        super(Running, self).load_instance_state(process, saved_state)
+        if self.in_state:
+            self.process.call_soon(self._run)
+
+    def _run(self):
+        with stack.in_stack(self.process):
+            super(Running, self)._run()
+
+
+class Executor(ProcessListener):
+    _future = None
+    _loop = None
+
+    def __init__(self, interrupt_on_pause_or_wait=False):
+        self._interrupt_on_pause_or_wait = interrupt_on_pause_or_wait
+
+    def on_process_waiting(self, process, data):
+        if self._interrupt_on_pause_or_wait and not self._future.done():
+            self._future.set_result('waiting')
+
+    def on_process_paused(self, process):
+        if self._interrupt_on_pause_or_wait and not self._future.done():
+            self._future.set_result('paused')
+
+    def execute(self, process):
+        process.add_process_listener(self)
+        try:
+            loop = process.loop()
+            self._future = futures.Future()
+            futures.chain(process.future(), self._future)
+            self._future.add_done_callback(lambda _: loop.stop())
+
+            if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
+                process.play()
+
+            loop.start()
+            return self._future.result()
+        finally:
+            self._future = None
+            self._loop = None
+            process.remove_process_listener(self)
+
+
+class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plum.
-
-    Once a process is created it may be started by calling play() at which
-    point it is said to be 'playing', like a tape.  It can then be paused by
-    calling pause() which will only be acted on at the next state transition
-    OR if the process is in the WAITING state in which case it will pause
-    immediately.  It can be resumed with a call to play().
 
     A process can be in one of the following states:
 
     * CREATED
+    * STARTED
     * RUNNING
     * WAITING
+    * FINISHED
     * STOPPED
-    * FAILED
+    * DESTROYED
 
     as defined in the :class:`ProcessState` enum.
 
-    The possible transitions between states are::
-
-        CREATED---on_start,on_run-->RUNNING---on_finish,on_stop-->STOPPED
-                                    |     ^               |         ^
-                               on_wait on_resume,on_run   |   on_abort,on_stop
-                                    v     |               |         |
-                                    WAITING----------------     [any state]
-
-        [any state]---on_fail-->FAILED
 
     ::
 
     When a Process enters a state is always gets a corresponding message, e.g.
     on entering RUNNING it will receive the on_run message.  These are
-    always called immediately after that state is entered.
-
+    always called immediately after that state is entered but before being
+    executed.
     """
-    __metaclass__ = ABCMeta
 
     # Static class stuff ######################
     _spec_type = ProcessSpec
 
-    class BundleKeys(Enum):
-        """
-        String keys used by the process to save its state in the state bundle.
-
-        See :func:`create_from`, :func:`save_instance_state` and :func:`load_instance_state`.
-        """
-        CLASS_NAME = 'class_name'
-        INPUTS = 'inputs'
-        OUTPUTS = 'outputs'
-        PID = 'pid'
-        WAITING_ON = 'waiting_on'
-        WAIT_ON_CALLBACK = 'wait_on_callback'
-        STATE = 'state'
-        FINISHED = 'finished'
-        ABORTED = 'aborted'
-        ABORT_MSG = 'abort_msg'
-        EXCEPTION = 'exception'
-        NEXT_TRANSITION = 'next_transition'
-
-    @staticmethod
-    def _is_wait_retval(retval):
-        """
-        Determine if the value provided is a valid Wait retval which consists
-        of a 2-tuple of a WaitOn and a callback function (or None) to be called
-        after the wait on is ready
-
-        :param retval: The return value from a step to check
-        :return: True if it is a valid wait object, False otherwise
-        """
-        return (isinstance(retval, tuple) and
-                len(retval) == 2 and
-                isinstance(retval[0], WaitOn))
-
     @classmethod
-    def new(cls, inputs=None, pid=None, logger=None):
-        """
-        Create a new instance of this Process class with the given inputs and
-        pid.
-
-        :param inputs: The inputs for the newly created :class:`Process`
-            instance.  Any mapping type is valid
-        :param pid: The process id given to the new process.
-        :param logger: The logger for this process to use, can be None.
-        :type logger: :class:`logging.Logger`
-        :return: An instance of this :class:`Process`.
-        """
-        proc = Process.__new__(cls, inputs, pid, logger)
-        proc.__create_guard = True
-        proc.__init__(inputs, pid, logger)
-        proc._perform_create()
-        return proc
-
-    @staticmethod
-    def load(bundle, logger=None):
-        """
-        Create a process from a saved instance state.
-
-        :param bundle: The saved state
-        :type bundle: :class:`plum.persistence.bundle.Bundle`
-        :param logger: The logger for this process to use
-        :return: An instance of this process with its state loaded from the save state.
-        :rtype: :class:`Process`
-        """
-        # Get the class using the class loader and instantiate it
-        class_name = bundle[Process.BundleKeys.CLASS_NAME.value]
-        proc_class = bundle.get_class_loader().load_class(class_name)
-
-        inputs = bundle.get(Process.BundleKeys.INPUTS.value, None)
-        pid = bundle[Process.BundleKeys.PID.value]
-
-        proc = Process.__new__(proc_class, inputs, pid, logger)
-        proc.__create_guard = True
-        proc.__init__(inputs, pid, logger)
-        proc._perform_create(bundle)
-        return proc
+    def get_state_classes(cls):
+        states_map = super(Process, cls).get_state_classes()
+        states_map[ProcessState.RUNNING] = Running
+        return states_map
 
     @classmethod
     def spec(cls):
@@ -185,6 +175,10 @@ class Process(object):
         return cls.__name__
 
     @classmethod
+    def define(cls, spec):
+        cls.__called = True
+
+    @classmethod
     def get_description(cls):
         """
         Get a human readable description of what this :class:`Process` does.
@@ -200,86 +194,78 @@ class Process(object):
 
         spec_desc = cls.spec().get_description()
         if spec_desc:
-            desc.append("Specifications")
-            desc.append("==============")
+            desc.append("Specification")
+            desc.append("=============")
             desc.append(spec_desc)
 
         return "\n".join(desc)
 
     @classmethod
-    def run(cls, **kwargs):
-        p = cls.new(inputs=kwargs)
-        p.play()
-        return p.outputs
+    def recreate_from(cls, saved_state, *args, **kwargs):
+        """"""
+        """
+        Recreate a process from a saved state, passing any positional and 
+        keyword arguments on to load_instance_state
 
-    @classmethod
-    def define(cls, spec):
-        cls.__called = True
-
-    @staticmethod
-    def __new__(cls, inputs, pid, logger=None):
-        obj = super(Process, cls).__new__(cls)
-        obj.__create_guard = False
+        :param args: The positional arguments for load_instance_state
+        :param kwargs: The keyword arguments for load_instance_state
+        :return: An instance of the object with its state loaded from the save state.
+        """
+        obj = cls.__new__(cls)
+        obj.__init__(*args, **kwargs)
+        base.call_with_super_check(obj.load_instance_state, saved_state)
+        base.call_with_super_check(obj.init)
         return obj
 
-    def __init__(self, inputs, pid, logger=None):
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         """
         The signature of the constructor should not be changed by subclassing
         processes.
 
         :param inputs: A dictionary of the process inputs
         :type inputs: dict
-        :param pid: The process ID, if not a unique pid will be chosen
+        :param pid: The process ID, can be manually set, if not a unique pid
+            will be chosen
         :param logger: An optional logger for the process to use
         :type logger: :class:`logging.Logger`
+        :param loop: The event loop
+        :param communicator: The (optional) communicator
+        :type communicator: :class:`plum.Communicator`
         """
-        assert self.__create_guard, \
-            "You can only create this class using either .new() or .load() and " \
-            "not by directly instantiating."
-
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
         # Input/output
-        self._check_inputs(inputs)
-        self._raw_inputs = None if inputs is None else util.AttributesFrozendict(inputs)
-        self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
-        self._outputs = {}
-
-        # Set up a process ID
-        if pid is None:
-            pid = uuid.uuid1()
+        self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
         self._pid = pid
-
         self._logger = logger
+        self._loop = loop if loop is not None else events.get_event_loop()
+        self._communicator = communicator
 
-        # State stuff
-        self._state = None
-        self._finished = False
-        self._exception = None
-        self._wait = None
-        self._next_transition = None
-        self._aborted = False
-        self._abort_msg = None
+        self._future = plum.Future()
+        self._parsed_inputs = None
+        self._outputs = {}
+        self._uuid = None
+        self.__event_helper = utils.EventHelper(ProcessListener)
 
-        # RUNTIME STATE ##
-        # Stuff below here doesn't need to be saved in the instance state
-        # Reads/writes of variables with 'protect' suffix should be guarded by
-        # the state lock
-        self.__pausing_protect = False
-        self.__aborting_protect = False
-        self.__playing = False
-        self.__state_lock = threading.Lock()
+        super(Process, self).__init__()
 
-        # Events and running
-        self.__event_helper = util.EventHelper(ProcessListener)
-
-        # Flag to make sure all the necessary event methods were called
-        self.__called = False
+    @property
+    def creation_time(self):
+        """
+        The creation time of this Process as returned by time.time() when instantiated
+        :return: The creation time
+        :rtype: float
+        """
+        return self.__CREATION_TIME
 
     @property
     def pid(self):
         return self._pid
+
+    @property
+    def uuid(self):
+        return self._uuid
 
     @property
     def raw_inputs(self):
@@ -301,10 +287,6 @@ class Process(object):
         return self._outputs
 
     @property
-    def state(self):
-        return self._state
-
-    @property
     def logger(self):
         """
         Get the logger for this class.  Can be None.
@@ -312,178 +294,60 @@ class Process(object):
         :return: The logger.
         :rtype: :class:`logging.Logger`
         """
-        return self._logger
+        if self._logger is not None:
+            return self._logger
+        else:
+            return _LOGGER
 
-    def is_playing(self):
-        """
-        Is the process currently playing.
+    def loop(self):
+        return self._loop
 
-        :return: True if playing, False otherwise
-        :rtype: bool
-        """
-        return self.__playing
-
-    def has_finished(self):
-        """
-        Has the process finished i.e. completed running normally, without abort
-        or an exception.
-
-        :return: True if finished, False otherwise
-        :rtype: bool
-        """
-        return self._finished
-
-    def has_failed(self):
-        """
-        Has the process failed i.e. an exception was raised
-
-        :return: True if an unhandled exception was raised, False otherwise
-        :rtype: bool
-        """
-        return self._exception is not None
-
-    def has_terminated(self):
-        """
-        Has the process terminated
-
-        :return: True if has_finished() or has_failed(), False otherwise
-        :rtype: bool
-        """
-        return self.has_finished() or self.has_failed()
+    def future(self):
+        return self._future
 
     def has_aborted(self):
-        return self._aborted
+        return self.cancelled()
 
-    def get_waiting_on(self):
+    def save_instance_state(self, out_state):
         """
-        Get the WaitOn this process is waiting on, or None.
+        Ask the process to save its current instance state.
 
-        :return: The WaitOn or None
-        :rtype: :class:`plum.wait.WaitOn`
+        :param out_state: A bundle to save the state to
+        :type out_state: :class:`plum.Bundle`
         """
-        try:
-            return self._wait.on
-        except AttributeError:
-            return None
+        super(Process, self).save_instance_state(out_state)
+        # Immutables first
+        out_state[BundleKeys.CREATION_TIME] = self.creation_time
+        out_state[BundleKeys.PID] = self.pid
 
-    def get_exception(self):
-        return self._exception
-
-    def get_abort_msg(self):
-        return self._abort_msg
-
-    def save_instance_state(self, bundle):
-        """
-        As the process to save its current instance state.
-
-        :param bundle: A bundle to save the state to
-        :type bundle: :class:`plum.persistence.Bundle`
-        """
-        bundle[self.BundleKeys.CLASS_NAME.value] = util.fullname(self)
-        bundle[self.BundleKeys.STATE.value] = self.state
-        bundle[self.BundleKeys.PID.value] = self.pid
-        bundle[self.BundleKeys.FINISHED.value] = self._finished
-        bundle[self.BundleKeys.ABORTED.value] = self._aborted
-        bundle.set_if_not_none(self.BundleKeys.EXCEPTION.value, self._exception)
-        if self._next_transition is not None:
-            bundle[self.BundleKeys.NEXT_TRANSITION.value] = \
-                self._next_transition.__name__
-
-        bundle.set_if_not_none(self.BundleKeys.ABORT_MSG.value, self._abort_msg)
-
-        # Save inputs and outputs
-        bundle.set_if_not_none(self.BundleKeys.INPUTS.value, self.raw_inputs)
-        bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
-
-        if self._wait is not None:
-            bundle[self.BundleKeys.WAITING_ON.value] = self.save_wait_on_state()
-            bundle[self.BundleKeys.WAIT_ON_CALLBACK.value] = \
-                self._wait.callback.__name__
-
-    # region Wait on stuff
-    @protected
-    def save_wait_on_state(self):
-        """
-        Create a saved instance state for the WaitOn the process is currently
-        waiting for.  If the wait on is :class:`plum.wait.Unsavable` then
-        the process should override this and save some information that allows
-        it to recreate it.
-
-        :return: The saved instance state of the wait on
-        :rtype: :class:`plum.persistence.bundle.Bundle`
-        """
-        b = Bundle()
-        self.get_waiting_on().save_instance_state(b)
-        return b
+        # Inputs/outputs
+        if self.raw_inputs is not None:
+            out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
+        out_state[BundleKeys.OUTPUTS] = copy.deepcopy(self._outputs)
 
     @protected
-    def create_wait_on(self, bundle):
-        return WaitOn.create_from(bundle)
+    def load_instance_state(self, saved_state):
+        # Set up runtime state
+        super(Process, self).load_instance_state(saved_state)
 
-    # endregion
-
-    def start(self):
-        return self.play()
-
-    def play(self):
-        """
-        Play the process.
-        """
-        assert not self.__playing, \
-            "Cannot execute a process twice simultaneously"
-
+        # Inputs/outputs
         try:
-            try:
-                MONITOR.register_process(self)
-                with self.__state_lock:
-                    self._call_with_super_check(self.on_playing)
+            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS])
+            self._raw_inputs = utils.AttributesFrozendict(decoded)
+        except KeyError:
+            self._raw_inputs = None
+        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
-                # Keep going until we run out of tasks
-                fn = self._next()
-                while fn is not None:
-                    with self.__state_lock:
-                        self._next_transition = None
-                        fn()
-                    fn = self._next()
+        self._outputs = copy.deepcopy(saved_state[BundleKeys.OUTPUTS])
 
-            except BaseException as e:
-                exc_type, value, tb = sys.exc_info()
-                self._perform_fail_noraise(e)
-                return
-        finally:
-            try:
-                MONITOR.deregister_process(self)
-                self._call_with_super_check(self.on_done_playing)
-            except BaseException as e:
-                if self.state != ProcessState.FAILED:
-                    exc_type, value, tb = sys.exc_info()
-                    self._perform_fail_noraise(e)
+        # Immutable stuff
+        self.__CREATION_TIME = saved_state[BundleKeys.CREATION_TIME]
+        self._pid = saved_state[BundleKeys.PID]
 
-        return self._outputs
-
-    def pause(self):
-        """
-        Pause an playing process.  This can be called from another thread.
-        """
-        with self.__state_lock:
-            self.__pausing_protect = True
-            self._interrupt()
-
-    def abort(self, msg=None):
-        """
-        Abort a playing process.  Can optionally provide a message with
-        the abort.  This can be called from another thread.
-
-        :param msg: The abort message
-        :type msg: str
-        """
-        with self.__state_lock:
-            self.__aborting_protect = True
-            self._abort_msg = msg
-            self._interrupt()
+        self._update_future()
 
     def add_process_listener(self, listener):
-        assert (listener != self)
+        assert (listener != self), "Cannot listen to yourself!"
         self.__event_helper.add_listener(listener)
 
     def remove_process_listener(self, listener):
@@ -493,134 +357,80 @@ class Process(object):
     def set_logger(self, logger):
         self._logger = logger
 
+    @protected
+    def log_with_pid(self, level, msg):
+        self.logger.log(level, "{}: {}".format(self.pid, msg))
+
     # region Process messages
-    # Make sure to call the superclass method if your override any of these
-    @protected
-    def on_playing(self):
-        self.__playing = True
-        self.__pausing_protect = False
-        self.__aborting_protect = False
 
-        self.__called = True
+    def on_create(self):
+        super(Process, self).on_create()
 
-    @protected
-    def on_done_playing(self):
-        self.__playing = False
+        # State stuff
+        self.__CREATION_TIME = time.time()
 
-        self.__called = True
+        # Input/output
+        self._check_inputs(self._raw_inputs)
+        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
-    @protected
-    def on_create(self, bundle):
-        """
-        Called when the process is created.  If a checkpoint is supplied the
-        process should reinstate its state at the time the checkpoint was taken
-        and if the checkpoint has a wait_on the process will continue from the
-        corresponding callback function.
+        # Set up a process ID
+        self._uuid = uuid.uuid4()
+        if self._pid is None:
+            self._pid = self._uuid
 
-        :param bundle: The saved instance state this process is being loaded from
-        """
-        # In this case there is no message fired because no one could have
-        # registered themselves as a listener by this point in the lifecycle.
-        # In this case there is no message fired because no one could have
-        # registered themselves as a listener by this point in the lifecycle.
-        if bundle is not None:
-            self.load_instance_state(bundle)
+    @base.super_check
+    def init(self):
+        """ Any common initialisation stuff after create or load goes here """
+        if self._communicator is not None:
+            self._communicator.register_receiver(
+                process_comms.ProcessReceiver(self), identifier=str(self.pid))
 
-        self.__called = True
-
-    @protected
-    def on_start(self):
-        """
-        Called when this process is about to run for the first time.
-
-
-        Any class overriding this method should make sure to call the super
-        method, usually at the end of the function.
-        """
-        self.__event_helper.fire_event(ProcessListener.on_process_start, self)
-        self.__called = True
-
-    @protected
     def on_run(self):
-        """
-        Called when the process is about to run some code either for the first
-        time (in which case an on_start message would have been received) or
-        after something it was waiting on has finished (in which case an
-        on_continue message would have been received).
+        super(Process, self).on_run()
+        self._fire_event(ProcessListener.on_process_running)
 
-        Any class overriding this method should make sure to call the super
-        method, usually at the end of the function.
-
-        """
-        self._wait = None
-        self.__event_helper.fire_event(ProcessListener.on_process_run, self)
-        self.__called = True
-
-    @protected
-    def on_wait(self):
-        self.__event_helper.fire_event(ProcessListener.on_process_wait, self)
-        self.__called = True
-
-    @protected
-    def on_resume(self):
-        self.__event_helper.fire_event(ProcessListener.on_process_resume, self)
-        self.__called = True
-
-    @protected
-    def on_abort(self):
-        """
-        Called when the process has been asked to abort itself.
-        """
-        self._aborted = True
-        self.__called = True
-
-    @protected
-    def on_finish(self):
-        """
-        Called when the process has finished and the outputs have passed
-        checks
-        """
-        self._check_outputs()
-        self._finished = True
-        self.__event_helper.fire_event(ProcessListener.on_process_finish, self)
-        self.__called = True
-
-    @protected
-    def on_stop(self):
-        self.__event_helper.fire_event(ProcessListener.on_process_stop, self)
-        # There will be no more messages so remove the listeners.  Otherwise we
-        # may continue to hold references to them and stop them being garbage
-        # collected
-        self.__event_helper.remove_all_listeners()
-        self.__called = True
-
-    @protected
-    def on_fail(self):
-        """
-        Called if the process raised an exception.
-        """
-        self.__event_helper.fire_event(ProcessListener.on_process_fail, self)
-        # There will be no more messages so remove the listeners.  Otherwise we
-        # may continue to hold references to them and stop them being garbage
-        # collected
-        self.__event_helper.remove_all_listeners()
-        self.__called = True
+    def on_output_emitting(self, output_port, value):
+        pass
 
     def on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
 
+    def on_wait(self, data):
+        super(Process, self).on_wait(data)
+        self._fire_event(ProcessListener.on_process_waiting, data)
+
+    def on_pause(self):
+        super(Process, self).on_pause()
+        self._fire_event(ProcessListener.on_process_paused)
+
+    def on_finish(self, result):
+        super(Process, self).on_finish(result)
+        self._check_outputs()
+        self.future().set_result(result)
+        self._fire_event(ProcessListener.on_process_finished, result)
+
+    def on_fail(self, exc_info):
+        super(Process, self).on_fail(exc_info)
+        self.future().set_exc_info(exc_info)
+        self._fire_event(ProcessListener.on_process_failed, exc_info)
+
+    def on_cancel(self, msg):
+        super(Process, self).on_cancel(msg)
+        self.future().cancel()
+        self._fire_event(ProcessListener.on_process_cancelled, msg)
+
     # endregion
 
-    @protected
-    def do_run(self):
-        try:
-            return self.fast_forward()
-        except error.FastForwardError:
-            return self._run(**(self.inputs if self.inputs is not None else {}))
+    def run(self):
+        return self._run()
+
+    def execute(self, return_on_idle=False):
+        return Executor(return_on_idle).execute(self)
 
     @protected
     def out(self, output_port, value):
+        self.on_output_emitting(output_port, value)
         dynamic = False
         # Do checks on the outputs
         try:
@@ -636,8 +446,7 @@ class Process(object):
                     "and does not have a dynamic output port in spec.".
                         format(output_port))
 
-            if port.valid_type is not None and \
-                    not isinstance(value, port.valid_type):
+            if port.valid_type is not None and not isinstance(value, port.valid_type):
                 raise TypeError(
                     "Process returned output '{}' of wrong type."
                     "Expected '{}', got '{}'".
@@ -646,88 +455,6 @@ class Process(object):
         self._outputs[output_port] = value
         self.on_output_emitted(output_port, value, dynamic)
 
-    @protected
-    def fast_forward(self):
-        if not self.spec().is_deterministic():
-            raise error.FastForwardError("Cannot fast-forward a process that "
-                                         "is not deterministic")
-
-        # kp = knowledge_provider.get_global_provider()
-        kp = None
-        if kp is None:
-            raise error.FastForwardError("Cannot fast-forward because a global"
-                                         "knowledge provider is not available")
-
-        # Try and find out if anyone else has had the same inputs
-        try:
-            pids = kp.get_pids_from_classname(util.fullname(self))
-        except ValueError:
-            pass
-        else:
-            for pid in pids:
-                try:
-                    if kp.get_inputs(pid) == self.inputs:
-                        for name, value in kp.get_outputs(pid).iteritems():
-                            self.out(name, value)
-                        return
-                except ValueError:
-                    pass
-
-        raise error.FastForwardError("Cannot fast forward")
-
-    @protected
-    def load_instance_state(self, bundle):
-        self._state = bundle[self.BundleKeys.STATE.value]
-        self._finished = bundle[self.BundleKeys.FINISHED.value]
-        self._aborted = bundle[self.BundleKeys.ABORTED.value]
-        self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict_deepcopy()
-
-        try:
-            self._exception = bundle[self.BundleKeys.EXCEPTION.value]
-        except KeyError:
-            pass
-
-        try:
-            self._next_transition = getattr(self, bundle[self.BundleKeys.NEXT_TRANSITION.value])
-        except KeyError:
-            pass
-
-        try:
-            self._abort_msg = bundle[self.BundleKeys.ABORT_MSG.value]
-        except KeyError:
-            pass
-
-        try:
-            wait_on = self.create_wait_on(bundle[self.BundleKeys.WAITING_ON.value])
-            callback = self._get_wait_on_callback_fn(bundle)
-            self._set_wait(wait_on, callback)
-        except KeyError:
-            pass  # There's no wait_on
-
-    def _get_wait_on_callback_fn(self, bundle):
-        """
-        Get the callback function that should be called when the wait on has
-        finished from the saved bundle.
-
-        :param bundle: The bundle to get the function from
-        :return: The function or None if it is not stored in the bundle
-        """
-        callback = None
-        try:
-            name = bundle[self.BundleKeys.WAIT_ON_CALLBACK.value]
-        except KeyError:
-            pass
-        else:
-            try:
-                callback = getattr(self, name)
-            except AttributeError:
-                raise ValueError(
-                    "This process does not have a function with "
-                    "the name '{}' as expected from the wait on".
-                        format(name))
-        return callback
-
-    # Inputs ##################################################################
     @protected
     def create_input_args(self, inputs):
         """
@@ -746,9 +473,9 @@ class Process(object):
             ins = dict(inputs)
         # Go through the spec filling in any default and checking for required
         # inputs
-        for name, port in self.spec().inputs.iteritems():
+        for name, port in self.spec().inputs.items():
             if name not in ins:
-                if port.default:
+                if port.has_default():
                     ins[name] = port.default
                 elif port.required:
                     raise ValueError(
@@ -757,182 +484,85 @@ class Process(object):
 
         return ins
 
-    # region State transition methods
-    def _next(self):
+    @protected
+    def encode_input_args(self, inputs):
         """
-        Method to get the next method to run as part of the Process lifecycle.
+        Encode input arguments such that they may be saved in a
+        :class:`plum.Bundle`
 
-        :return: A callable that only takes the self process as argument.
-          May be None if the process should not continue.
+        :param inputs: A mapping of the inputs as passed to the process
+        :return: The encoded inputs
         """
-        with self.__state_lock:
-            if self.has_terminated():
-                return None
-            elif self.__pausing_protect:
-                return None
-            elif self.__aborting_protect:
-                return self._perform_abort
-            else:
-                return self._next_transition
+        return inputs
 
-    def _perform_create(self, bundle=None):
+    @protected
+    def decode_input_args(self, encoded):
         """
+        Decode saved input arguments as they came from the saved instance state
+        :class:`plum.Bundle`
 
-        :param pid: The process ID to use, can be None in which case one will
-            be generated
-        :param inputs: The process inputs
-        :type inputs: dict
-        :param bundle: An optional saved state to recreate from
-        :type bundle: `class`:plum.persistence.bundle.Bundle`
+        :param encoded:
+        :return: The decoded input args
         """
-        self._state = ProcessState.CREATED
-        self._call_with_super_check(self.on_create, bundle)
-        self._next_transition = self._perform_start
+        return encoded
 
-    def _perform_start(self):
+    def message_received(self, subject, body=None, sender_id=None):
+        super(Process, self).message_received(subject, body, sender_id)
+        if subject == ProcessAction.ABORT:
+            self.abort()
+        elif subject == ProcessAction.PAUSE:
+            self.pause()
+        elif subject == ProcessAction.PLAY:
+            self.play()
+        elif subject == ProcessAction.REPORT_STATUS:
+            self._status_requested(
+                self.loop(), subject, body, self.uuid, sender_id
+            )
+
+    def get_status_info(self, out_status_info):
+        out_status_info.update({
+            BundleKeys.CREATION_TIME: self.creation_time,
+            'process_string': str(self),
+            'state': self.state,
+            'state_info': str(self._state)
+        })
+
+    # region callbacks
+    def call_soon(self, callback, *args, **kwargs):
         """
-        Perform the state transition from CREATED -> RUNNING.
-        Messages issued:
-         - on_start
-         - on_run
+        Schedule a callback to what is considered an internal process function
+        (this needn't be a method).  If it raises an exception it will cause
+        the process to fail.
         """
-        assert self.state is ProcessState.CREATED
+        handle = events.Handle(self, callback, args, kwargs)
+        self._loop.add_callback(handle._run)
+        return handle
 
-        self._call_with_super_check(self.on_start)
-        self._to_running()
-
-        # Run the thing
-        with _Unlock(self.__state_lock):
-            self._return_value = self.do_run()
-        # Figure out what to do next
-        if self._is_wait_retval(self._return_value):
-            self._set_wait(self._return_value[0], self._return_value[1])
-            self._next_transition = self._perform_wait
-        else:
-            self._next_transition = self._perform_finish
-
-    def _perform_wait(self):
+    def call_soon_external(self, callback, *args, **kwargs):
         """
-        Messages issued (if not already waiting):
-         - on_wait
+        Schedule a callback to an external method.  If there is an
+        exception in the callback it will not cause the process to fail.
         """
-        # This could get called when the process was already in the waiting
-        # state just because it could be resuming from being paused or from
-        # a saved state
-        if self.state is not ProcessState.WAITING:
-            assert self.state is ProcessState.RUNNING
+        self._loop.add_callback(callback, *args, **kwargs)
 
-            self._state = ProcessState.WAITING
-            self._call_with_super_check(self.on_wait)
-
-        try:
-            with _Unlock(self.__state_lock):
-                self._wait.on.wait()
-            if self._wait.callback is None:
-                self._next_transition = self._perform_finish
-            else:
-                self._next_transition = self._perform_resume
-        except Interrupted:
-            self._next_transition = self._perform_wait
-
-    def _perform_resume(self):
-        """
-        Messages issued:
-         - on_resume
-         - on_run
-        """
-        assert self.state is ProcessState.WAITING
-
-        self._call_with_super_check(self.on_resume)
-
-        w = self._wait
-        self._wait = None
-        self._to_running()
-        with _Unlock(self.__state_lock):
-            self._return_value = w.callback(w.on)
-
-        # Figure out what to do next
-        if self._is_wait_retval(self._return_value):
-            self._set_wait(self._return_value[0], self._return_value[1])
-            self._next_transition = self._perform_wait
-        else:
-            self._next_transition = self._perform_finish
-
-    def _perform_finish(self):
-        """
-        Messages issued:
-         - on_finish
-         - on_stop
-        """
-        assert self.state is ProcessState.RUNNING
-
-        self._call_with_super_check(self.on_finish)
-        self._to_stopped()
-
-    def _perform_abort(self):
-        """
-        Messages issued:
-         - on_abort
-        """
-        self._call_with_super_check(self.on_abort)
-
-        self._to_stopped()
-        self.__aborting_protect = False
-
-    def _perform_fail_noraise(self, exception):
-        """
-        Messages issued:
-         - on_fail
-
-        This messages tries not to let any further exceptions bubble up.
-
-        :param exception: The exception that caused the failure
-        :type exception: :class:`BaseException`
-        """
-        self._state = ProcessState.FAILED
-        self._exception = exception
-        self._next_transition = None
-        try:
-            self.__called = False
-            self.on_fail()
-        except BaseException:
-            exc = traceback.format_exc()
-            self.logger.warning(
-                "There was an exception raised when calling {} "
-                "to inform the process that an exception had been "
-                "raised during execution:\n{}".format(self.on_fail.__name__, exc))
-        else:
-            if not self.__called:
-                self.logger.error(
-                    "on_fail was not called\n"
-                    "Hint: Did you forget to call the superclass method?")
-
-    def _to_running(self):
-        self._state = ProcessState.RUNNING
-        self._call_with_super_check(self.on_run)
-
-    def _to_stopped(self):
-        self._state = ProcessState.STOPPED
-        self._call_with_super_check(self.on_stop)
-        self._next_transition = None
-
-    def _set_wait(self, wait_on, callback):
-        self._wait = Wait(wait_on, callback)
-
-    def _interrupt(self):
-        try:
-            self._wait.on.interrupt()
-        except AttributeError:
-            pass
-
-    def _call_with_super_check(self, fn, *args, **kwargs):
-        self.__called = False
-        fn(*args, **kwargs)
-        assert self.__called, \
-            "{} was not called\n" \
-            "Hint: Did you forget to call the superclass method?".format(fn.__name__)
+    def callback_failed(self, callback, exception, trace):
+        if self.state != ProcessState.FAILED:
+            self.fail(exception, trace)
 
     # endregion
+
+    # region State entry/exit events
+
+    def _fire_event(self, event, *args, **kwargs):
+        self.call_soon_external(self.__event_helper.fire_event, event, self, *args, **kwargs)
+
+    # endregion
+
+    def _send_message(self, subject, body=None, to=None):
+        body_ = {'uuid': self.uuid}
+        if body is not None:
+            body_.update(body)
+        self.send_message(subject, to=to, body=body_)
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
@@ -942,50 +572,21 @@ class Process(object):
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
-        for name, port in self.spec().outputs.iteritems():
+        for name, port in self.spec().outputs.items():
             valid, msg = port.validate(self._outputs.get(name, None))
             if not valid:
-                raise RuntimeError("Process {} failed because {}".
-                                   format(self.get_name(), msg))
+                raise RuntimeError(
+                    "Process {} failed because {}".format(self.get_name(), msg)
+                )
 
-    @abstractmethod
-    def _run(self, **kwargs):
-        pass
+    def _update_future(self):
+        if self.state == ProcessState.FINISHED:
+            self._future.set_result(self.outputs)
+        elif self.state == ProcessState.CANCELLED:
+            self._future.cancel()
+        elif self.state == ProcessState.FAILED:
+            self._future.set_exception(self._state.exception)
 
 
-class FunctionProcess(Process):
-    # These will be replaced by build
-    _output_name = None
-    _func_args = None
-    _func = None
-
-    @classmethod
-    def build(cls, func, output_name="value"):
-        import inspect
-
-        args, varargs, keywords, defaults = inspect.getargspec(func)
-
-        def _define(cls, spec):
-            for i in range(len(args)):
-                default = None
-                if defaults and len(defaults) - len(args) + i >= 0:
-                    default = defaults[i]
-                spec.input(args[i], default=default)
-
-            spec.output(output_name)
-
-        return type(func.__name__, (FunctionProcess,),
-                    {Process.define.__name__: classmethod(_define),
-                     '_func': func,
-                     '_func_args': args,
-                     '_output_name': output_name})
-
-    def __init__(self):
-        super(FunctionProcess, self).__init__()
-
-    def _run(self, **kwargs):
-        args = []
-        for arg in self._func_args:
-            args.append(kwargs.pop(arg))
-
-        self.out(self._output_name, self._func(*args))
+def get_pid_from_bundle(process_bundle):
+    return process_bundle[BundleKeys.PID]

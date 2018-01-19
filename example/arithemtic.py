@@ -34,8 +34,8 @@ class PrintProcess(Process):
 class TestDynamicOutput(Workflow):
     @classmethod
     def define(cls, spec):
-        spec.process(DynamicOutputProcess)
-        spec.process(PrintProcess)
+        spec.object(DynamicOutputProcess)
+        spec.object(PrintProcess)
 
         spec.link('DynamicOutputProcess:dynamic',
                   'PrintProcess:value')
@@ -72,8 +72,8 @@ class MulAdd(Workflow):
     def define(cls, spec):
         super(MulAdd, cls).define(spec)
 
-        spec.process(Mul)
-        spec.process(Add)
+        spec.object(Mul)
+        spec.object(Add)
         spec.exposed_inputs("Add")
         spec.input('c', default=0)
         spec.exposed_outputs("Mul")
@@ -89,8 +89,8 @@ AddFun = FunctionProcess.build(add)
 class MulAddWithFun(Workflow):
     @classmethod
     def define(cls, spec):
-        spec.process(Mul)
-        spec.process(AddFun)
+        spec.object(Mul)
+        spec.object(AddFun)
         spec.exposed_inputs("add")
         spec.input('c', default=0)
         spec.output('value')
@@ -105,5 +105,5 @@ if __name__ == '__main__':
     print(mul_add.run_and_block({'a': 2, 'b': 3, 'c': 4}))
 
     mul_add(a=2, b=3, c=4)
-    TestDynamicOutput.new().play()
+    TestDynamicOutput.launch()
 

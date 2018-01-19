@@ -2,14 +2,20 @@
 
 from abc import ABCMeta
 import collections
+import logging
+
+from future.utils import with_metaclass
+
+_LOGGER = logging.getLogger(__name__)
+
+_NULL = ()
 
 
-class ValueSpec(object):
+class ValueSpec(with_metaclass(ABCMeta, object)):
     """
     Specifications relating to a general input/output value including
     properties like whether it is required, valid types, the help string, etc.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, valid_type=None, help=None, required=True,
                  validator=None):
@@ -55,20 +61,20 @@ class ValueSpec(object):
     def validate(self, value):
         if value is None:
             if self._required:
-                return False, "required value was not provided for '{}'".\
+                return False, "required value was not provided for '{}'". \
                     format(self.name)
         else:
             if self._valid_type is not None and \
                     not isinstance(value, self._valid_type):
                 msg = "value '{}' is not of the right type. " \
                       "Got '{}', expected '{}'".format(
-                            self.name, type(value), self._valid_type)
+                    self.name, type(value), self._valid_type)
                 return False, msg
 
         if self._validator is not None:
             result = self._validator(value)
             if isinstance(result, collections.Sequence):
-                assert (len(result) == 2)
+                assert (len(result) == 2), "Invalid validator return type"
                 return result
             elif result is False:
                 return False, "Value failed validation"
@@ -77,18 +83,22 @@ class ValueSpec(object):
 
 
 class Attribute(ValueSpec):
-    def __init__(self, name, valid_type=None, help=None, default=None, required=False):
+    def __init__(self, name, valid_type=None, help=None, default=_NULL, required=False):
         super(Attribute, self).__init__(name, valid_type=valid_type,
                                         help=help, required=required)
         self._default = default
 
+    def has_default(self):
+        return self._default is not _NULL
+
     @property
     def default(self):
+        if not self.has_default():
+            raise RuntimeError("No default")
         return self._default
 
 
-class Port(ValueSpec):
-    __metaclass__ = ABCMeta
+class Port(with_metaclass(ABCMeta, ValueSpec)):
     pass
 
 
@@ -96,13 +106,30 @@ class InputPort(Port):
     """
     A simple input port for a value being received by a workflow.
     """
-    def __init__(self, name, valid_type=None, help=None, default=None,
+
+    @staticmethod
+    def required_override(required, default):
+        """
+        If a default is specified an input should no longer be marked
+        as required. Otherwise the input should always be marked explicitly
+        to be not required even if a default is specified.
+        """
+        if default is _NULL:
+            return required
+        else:
+            return False
+
+    def __init__(self, name, valid_type=None, help=None, default=_NULL,
                  required=True, validator=None):
         super(InputPort, self).__init__(
-            name, valid_type=valid_type, help=help, required=required,
+            name, valid_type=valid_type, help=help, required=InputPort.required_override(required, default),
             validator=validator)
 
-        if default is not None:
+        if required is not InputPort.required_override(required, default):
+            _LOGGER.info("the required attribute for the input port '{}' was overridden "
+                         "because a default was specified".format(name))
+
+        if default is not _NULL:
             default_valid, msg = self.validate(default)
             if not default_valid:
                 raise ValueError("Invalid default value: {}".format(msg))
@@ -116,8 +143,13 @@ class InputPort(Port):
 
         return "->" + ",".join(desc)
 
+    def has_default(self):
+        return self._default is not _NULL
+
     @property
     def default(self):
+        if not self.has_default():
+            raise RuntimeError("No default")
         return self._default
 
 
@@ -127,12 +159,13 @@ class InputGroupPort(InputPort):
     then each value is checked to meet the validation criteria rather than
     the whole input itself.
     """
-    def __init__(self, name, valid_type=None, help=None, default=None,
+
+    def __init__(self, name, valid_type=None, help=None, default=_NULL,
                  required=False):
         # We have to set _valid_inner_type before calling the super constructor
         # because it will call validate on the default value (if supplied)
         # which in turn needs this value to be set.
-        if default is not None and not isinstance(default, collections.Mapping):
+        if default is not _NULL and not isinstance(default, collections.Mapping):
             raise ValueError("Input group default must be of type Mapping")
         self._valid_inner_type = valid_type
 
@@ -151,10 +184,10 @@ class InputGroupPort(InputPort):
 
         if value is not None and self._valid_inner_type is not None:
             # Check that all the members of the dictionary are of the right type
-            for k, v in value.iteritems():
+            for k, v in value.items():
                 if not isinstance(v, self._valid_inner_type):
-                    return False, "Group port value {} is not of the right type".format(
-                        k)
+                    return False, "Group port value {} is not of the right type. Should be of type {}, but is {}.".format(
+                        k, self._valid_inner_type, type(v))
 
         return True, None
 
@@ -168,13 +201,12 @@ class DynamicInputPort(InputPort):
 
     def __init__(self, valid_type=None, help_=None):
         super(DynamicInputPort, self).__init__(
-            self.NAME, valid_type=valid_type, help=help_, default=None,
-            required=False)
+            self.NAME, valid_type=valid_type, help=help_, required=False)
 
 
 class OutputPort(Port):
-    def __init__(self, name, valid_type=None, required=True):
-        super(OutputPort, self).__init__(name, valid_type)
+    def __init__(self, name, valid_type=None, required=True, help=None):
+        super(OutputPort, self).__init__(name, valid_type, help=help)
         self._required = required
 
     @property
