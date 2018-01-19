@@ -17,7 +17,7 @@ setup(
     long_description=open('README.md').read(),
     url='https://github.com/aiidateam/plumpy.git',
     author='Martin Uhrin',
-    author_email='Martin Uhrin <martin.uhrin@epfl.ch>',
+    author_email='martin.uhrin@gmail.com',
     license=__license__,
     classifiers=[
         'License :: OSI Approved :: MIT License',
