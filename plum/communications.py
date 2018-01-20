@@ -6,15 +6,15 @@ from . import futures
 __all__ = ['Communicator', 'RemoteException', 'Receiver', 'DeliveryFailed', 'TaskRejected']
 
 
-class RemoteException(BaseException):
+class RemoteException(Exception):
     pass
 
 
-class DeliveryFailed(BaseException):
+class DeliveryFailed(Exception):
     pass
 
 
-class TaskRejected(BaseException):
+class TaskRejected(Exception):
     pass
 
 

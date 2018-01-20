@@ -1,5 +1,6 @@
 import collections
 from functools import partial
+from builtins import str
 
 import pika
 import yaml
@@ -85,7 +86,7 @@ class RmqSubscriber(pubsub.ConnectionListener):
 
     def register_receiver(self, receiver, identifier=None):
         if identifier is not None:
-            if not isinstance(identifier, basestring):
+            if not isinstance(identifier, str):
                 raise TypeError("Identifier must be a unicode or string")
             self._specific_receivers[identifier] = receiver
         self._all_receivers.append(receiver)

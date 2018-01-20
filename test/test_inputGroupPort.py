@@ -1,4 +1,4 @@
-from past.builtins import basestring 
+from builtins import str
 
 from .utils import TestCase
 from plum.port import InputGroupPort
@@ -18,8 +18,8 @@ class TestInputGroupPort(TestCase):
         self.assertTrue(p.validate(None)[0])
         self.assertTrue(p.validate({})[0])
 
-        p = InputGroupPort("test", valid_type=basestring)
+        p = InputGroupPort("test", valid_type=str)
         self.assertTrue(p.validate({'a': 'value'})[0])
 
-        p = InputGroupPort("test", required=True, valid_type=(basestring, int))
+        p = InputGroupPort("test", required=True, valid_type=(str, int))
         self.assertTrue(p.validate({'a': 'value', 'b': 3}))

@@ -20,11 +20,11 @@ class EventResponse(Enum):
     DELAYED = 1
 
 
-class StateMachineError(BaseException):
+class StateMachineError(Exception):
     pass
 
 
-class InvalidStateError(BaseException):
+class InvalidStateError(Exception):
     """The operation is not allowed in this state."""
 
 
@@ -34,7 +34,7 @@ class EventError(StateMachineError):
         self.event = evt
 
 
-class TransitionFailed(BaseException):
+class TransitionFailed(Exception):
     def __init__(self, initial_state, final_state=None, traceback_str=None):
         self.initial_state = initial_state
         self.final_state = final_state

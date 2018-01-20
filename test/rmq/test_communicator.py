@@ -44,6 +44,7 @@ class TestCommunicator(TestCaseWithLoop):
         super(TestCommunicator, self).tearDown()
 
     def test_rpc_send(self):
+        """ Testing making an RPC message and receiving a response """
         MSG = {'test': 5}
         RESPONSE = 'response'
         messages_received = plum.Future()
