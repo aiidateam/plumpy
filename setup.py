@@ -36,7 +36,6 @@ setup(
         'frozendict',
         'portalocker',
         'pyyaml',
-        'six',
         'tornado',
         'future'
     ],

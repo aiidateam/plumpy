@@ -1,12 +1,11 @@
 import collections
+from future.utils import with_metaclass, raise_
 from enum import Enum
 import functools
 import inspect
 import logging
 import os
-import six
 import sys
-import traceback
 from .utils import call_with_super_check, super_check
 
 __all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed', 'EventResponse']
@@ -154,8 +153,7 @@ class StateMachineMeta(type):
         return inst
 
 
-@six.add_metaclass(StateMachineMeta)
-class StateMachine(object):
+class StateMachine(with_metaclass(StateMachineMeta, object)):
     STATES = None
     STATES_MAP = None
     sealed = False
@@ -285,7 +283,7 @@ class StateMachine(object):
         :param exception: The transition failed exception
         :type exception: :class:`Exception`
         """
-        six.reraise(type(exception), exception, trace)
+        raise_(type(exception), exception, trace)
 
     def get_debug(self):
         return self._debug

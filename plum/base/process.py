@@ -436,10 +436,8 @@ class Cancelled(State):
 class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
     pass
 
-import six
 
-@six.add_metaclass(ProcessStateMachineMeta)
-class ProcessStateMachine(state_machine.StateMachine):
+class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta, state_machine.StateMachine)):
     """
                   ___
                  |   v
