@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-from tornado import ioloop
 import logging
 
 from .communications import *
@@ -18,8 +17,6 @@ __all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
            utils.__all__ + futures.__all__ + mixins.__all__ + ['stack'] +
            persisters.__all__ + communications.__all__ + process_comms.__all__ +
            version.__all__)
-
-PersistableEventLoop = ioloop
 
 
 # Do this se we don't get the "No handlers could be found..." warnings that will be produced

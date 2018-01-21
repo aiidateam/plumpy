@@ -44,6 +44,7 @@ class TestCommunicator(TestCaseWithLoop):
         super(TestCommunicator, self).tearDown()
 
     def test_rpc_send(self):
+        """ Testing making an RPC message and receiving a response """
         MSG = {'test': 5}
         RESPONSE = 'response'
         messages_received = plum.Future()
@@ -107,6 +108,13 @@ class TestTaskActions(TestCaseWithLoop):
         action.execute(self.communicator)
         result = plum.run_until_complete(action, self.loop)
         self.assertIsNotNone(result)
+
+    def test_launch_nowait(self):
+        # Launch, and don't wait, just get the pid
+        action = plum.LaunchProcessAction(plum.test_utils.DummyProcess, nowait=True)
+        action.execute(self.communicator)
+        result = plum.run_until_complete(action, self.loop)
+        self.assertIsInstance(result, uuid.UUID)
 
     def test_execute_action(self):
         """ Test the process execute action """

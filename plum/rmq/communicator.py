@@ -1,5 +1,5 @@
-import collections
 from functools import partial
+from past.builtins import basestring
 
 import pika
 import yaml

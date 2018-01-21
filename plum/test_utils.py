@@ -331,7 +331,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
 
 
 def compare_dictionaries(bundle1, bundle2, dict1, dict2, exclude=None):
-    keys = set(dict1.iterkeys()) & set(dict2.iterkeys())
+    keys = set(dict1.keys()) & set(dict2.keys())
     if exclude is not None:
         keys -= exclude
 

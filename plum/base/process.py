@@ -1,12 +1,10 @@
 import abc
+from builtins import str
 from enum import Enum
-import six
+from future.utils import with_metaclass, raise_
 import sys
 import traceback
 import yaml
-
-# TODO: Remove this later
-import plum.utils
 
 try:
     import tblib
@@ -154,7 +152,7 @@ class Created(State):
         return True
 
 
-class CancelInterruption(BaseException):
+class CancelInterruption(Exception):
     pass
 
 
@@ -225,7 +223,7 @@ class Running(State):
                 finally:
                     self._running = False
             except CancelInterruption as e:
-                command = Cancel(e.message)
+                command = Cancel(str(e))
             except BaseException:
                 self.process.fail(*sys.exc_info()[1:])
                 return
@@ -418,7 +416,7 @@ class Cancelled(State):
         """
         :param process: The associated process
         :param msg: Optional cancellation message
-        :type msg: basestring
+        :type msg: str
         """
         super(Cancelled, self).__init__(process)
         self.msg = msg
@@ -439,8 +437,7 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
     pass
 
 
-@six.add_metaclass(ProcessStateMachineMeta)
-class ProcessStateMachine(state_machine.StateMachine):
+class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta, state_machine.StateMachine)):
     """
                   ___
                  |   v
@@ -539,7 +536,7 @@ class ProcessStateMachine(state_machine.StateMachine):
     def transition_failed(self, initial_state, final_state, exception, trace):
         # If we are creating, then reraise instead of failing.
         if final_state == ProcessState.CREATED:
-            six.reraise(type(exception), exception, trace)
+            raise_(type(exception), exception, trace)
         else:
             self.fail(exception, trace)
 
@@ -636,7 +633,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         Wait for something
         :param done_callback: A function to call when done waiting
         :param msg: The waiting message
-        :type msg: basestring
+        :type msg: str
         :param data: Optional information about what to wait for
          """
         self.transition_to(ProcessState.WAITING, done_callback, msg, data)
@@ -670,7 +667,7 @@ class ProcessStateMachine(state_machine.StateMachine):
         """
         Cancel the process
         :param msg: An optional cancellation message
-        :type msg: basestring
+        :type msg: str
         """
         return self._state.cancel(msg)
 
