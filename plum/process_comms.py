@@ -25,7 +25,7 @@ CANCEL_MSG = {INTENT_KEY: Intent.CANCEL}
 STATUS_MSG = {INTENT_KEY: Intent.STATUS}
 
 
-class ProcessReceiver(communications.Receiver):
+class ProcessReceiver(object):
     """
     Responsible for receiving messages and translating them to actions
     on the process.
@@ -37,7 +37,7 @@ class ProcessReceiver(communications.Receiver):
         """
         self._process = process
 
-    def on_rpc_receive(self, msg):
+    def __call__(self, msg):
         intent = msg['intent']
         if intent == Intent.PLAY:
             return self._process.play()
@@ -51,9 +51,6 @@ class ProcessReceiver(communications.Receiver):
             return status_info
         else:
             raise RuntimeError("Unknown intent")
-
-    def on_broadcast_receive(self, msg):
-        pass
 
 
 class ProcessAction(communications.Action):
@@ -199,7 +196,7 @@ class ExecuteProcessAction(communications.Action):
             continue_action.execute(publisher)
 
 
-class ProcessLauncher(communications.TaskReceiver):
+class ProcessLauncher(object):
     """
     Takes incoming task messages and uses them to launch processes.
 
@@ -232,7 +229,7 @@ class ProcessLauncher(communications.TaskReceiver):
         self._unbundle_args = unbunble_args
         self._unbundle_kwargs = unbunble_kwargs if unbunble_kwargs is not None else {}
 
-    def on_task_received(self, task):
+    def __call__(self, task):
         """
         Receive a task.
         :param task: The task message

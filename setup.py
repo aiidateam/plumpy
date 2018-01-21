@@ -37,7 +37,8 @@ setup(
         'portalocker',
         'pyyaml',
         'tornado',
-        'future'
+        'future',
+        'kiwi[rmq]'
     ],
     extras_require={
         'rmq': ['pika'],
