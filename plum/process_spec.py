@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from collections import defaultdict
+from six import iteritems
 from plum.port import InputPort, InputGroupPort, OutputPort, \
     DynamicOutputPort, DynamicInputPort, PortNamespace
 
@@ -254,7 +255,7 @@ class ProcessSpec(object):
 
         exposed_inputs_list = self._exposed_inputs[namespace][process_class]
 
-        for name, port in process_class.spec().inputs.iteritems():
+        for name, port in iteritems(process_class.spec().inputs):
 
             if name.startswith('_') or name == 'dynamic':
                 continue

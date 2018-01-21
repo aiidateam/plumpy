@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
+from six import iteritems
 import collections
 import logging
 
@@ -266,7 +267,7 @@ class PortNamespace(collections.MutableMapping, Port):
         if inputs is None and self.required:
             return False, "required value was not provided for '{}'".format(self.name)
 
-        for name, port in self._ports.iteritems():
+        for name, port in iteritems(self._ports):
             valid, message = port.validate(inputs.get(name, None))
 
             if not valid:

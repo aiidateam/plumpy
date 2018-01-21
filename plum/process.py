@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
+from six import iteritems
 import copy
 import logging
 import plum
@@ -514,7 +515,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
                 except KeyError:
                     raise ValueError('this process does not contain the "{}" input namespace'.format(namespace))
 
-            for name, port in port_namespace.ports.iteritems():
+            for name, port in iteritems(port_namespace.ports):
                 if name in inputs and name in exposed_inputs_list:
                     exposed_inputs[name] = inputs[name]
 
