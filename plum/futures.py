@@ -1,5 +1,4 @@
 import kiwi
-import kiwi.futures
 from functools import partial
 
 
@@ -7,8 +6,7 @@ __all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'Can
 
 
 InvalidStateError = kiwi.InvalidStateError
-# TODO: Change this to just kiwi.CancelledError when possible (i.e. next release)
-CancelledError = kiwi.futures.CancelledError
+CancelledError = kiwi.CancelledError
 
 
 # class Future(tornado.concurrent.Future):
