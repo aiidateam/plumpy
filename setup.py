@@ -38,7 +38,7 @@ setup(
         'pyyaml',
         'tornado',
         'future',
-        'kiwi[rmq]'
+        'kiwipy[rmq]'
     ],
     extras_require={
         'rmq': ['pika'],
