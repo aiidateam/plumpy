@@ -1,6 +1,6 @@
 import plum
+from past.builtins import basestring
 from plum import Process, ProcessState
-
 from plum.test_utils import check_process_against_snapshots
 from plum import test_utils
 from plum.test_utils import ProcessListenerTester
