@@ -183,6 +183,7 @@ class ExecuteProcessAction(communications.Action):
         self._launch_action.execute(publisher)
 
     def _on_launch_done(self, publisher, launch_future):
+        # The result of the launch future is the PID of the process
         if launch_future.cancelled():
             self.cancel()
         elif launch_future.exception() is not None:
@@ -190,7 +191,11 @@ class ExecuteProcessAction(communications.Action):
         else:
             # Action the continue task
             continue_action = ContinueProcessAction(launch_future.result(), play=True, nowait=self._nowait)
-            futures.chain(continue_action, self)
+            if self._nowait:
+                continue_action.add_done_callback(
+                    lambda x: self.set_result(launch_future.result()))
+            else:
+                futures.chain(continue_action, self)
             continue_action.execute(publisher)
 
 

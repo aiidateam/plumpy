@@ -123,6 +123,13 @@ class TestTaskActions(TestCaseWithLoop):
         result = plum.run_until_complete(action)
         self.assertEqual(result, test_utils.DummyProcessWithOutput.EXPECTED_OUTPUTS)
 
+    def test_execute_action_nowait(self):
+        """ Test the process execute action """
+        action = plum.ExecuteProcessAction(test_utils.DummyProcessWithOutput, nowait=True)
+        action.execute(self.communicator)
+        result = plum.run_until_complete(action)
+        self.assertIsInstance(result, uuid.UUID)
+
     def test_launch_many(self):
         """Test launching multiple processes"""
         num_to_launch = 10
