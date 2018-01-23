@@ -246,9 +246,6 @@ class ProcessSpec(object):
 
         for name, port in iteritems(process_class.spec().inputs):
 
-            if name.startswith('_') or name == 'dynamic':
-                continue
-
             if include is not None:
                 if name not in include:
                     continue

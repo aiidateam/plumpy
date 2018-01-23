@@ -651,6 +651,75 @@ class TestNestedNamespacedExposedProcess(utils.TestCaseWithLoop):
             self.ParentProcess(inputs={'e': 4})
 
 
+class TestExposeProcessDynamicInput(utils.TestCaseWithLoop):
+    """
+    If a Process exposes the inputs of a sub Process that has dynamic input enabled
+    then the input validation should correctly allow for this. Vice versa additional
+    inputs in the absence of dynamic input should fail at input validation.
+    """
+
+    def setUp(self):
+        super(TestExposeProcessDynamicInput, self).setUp()
+
+        class SimpleNonDynamicProcess(NewLoopProcess):
+            @classmethod
+            def define(cls, spec):
+                super(SimpleNonDynamicProcess, cls).define(spec)
+                spec.input('a', valid_type=int, required=True)
+                spec.input('b', valid_type=int, required=True)
+
+        class ExposeNonDynamicProcess(NewLoopProcess):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeNonDynamicProcess, cls).define(spec)
+                spec.expose_inputs(SimpleNonDynamicProcess, namespace='simple')
+                spec.input('c', valid_type=int, required=True)
+
+        class SimpleDynamicProcess(NewLoopProcess):
+            @classmethod
+            def define(cls, spec):
+                super(SimpleDynamicProcess, cls).define(spec)
+                spec.input('a', valid_type=int, required=True)
+                spec.input('b', valid_type=int, required=True)
+                spec.dynamic_input()
+
+        class ExposeDynamicProcess(NewLoopProcess):
+            @classmethod
+            def define(cls, spec):
+                super(ExposeDynamicProcess, cls).define(spec)
+                spec.expose_inputs(SimpleDynamicProcess, namespace='simple')
+                spec.input('c', valid_type=int, required=True)
+
+        self.SimpleNonDynamicProcess = SimpleNonDynamicProcess
+        self.ExposeNonDynamicProcess = ExposeNonDynamicProcess
+        self.SimpleDynamicProcess = SimpleDynamicProcess
+        self.ExposeDynamicProcess = ExposeDynamicProcess
+
+    def test_expose_non_dynamic_input_valid(self):
+        """
+        When exposing process without dynamic input, any implicit inputs should
+        already be not accepted by the input validation at the exposing process level
+        """
+        SimpleNonDynamicProcess = self.SimpleNonDynamicProcess
+        ExposeNonDynamicProcess = self.ExposeNonDynamicProcess
+
+        ExposeNonDynamicProcess(inputs={'c': 1, 'simple': {'a': 3, 'b': 4}}).execute()
+
+        with self.assertRaises(ValueError):
+            ExposeNonDynamicProcess(inputs={'c': 1, 'simple': {'a': 3, 'b': 4, 'tortoise': 'shell'}}).execute()
+
+    def test_expose_dynamic_input_valid(self):
+        """
+        When exposing process with dynamic input, any implicit inputs should
+        be accepted by input validation of the the exposing process
+        """
+        SimpleDynamicProcess = self.SimpleDynamicProcess
+        ExposeDynamicProcess = self.ExposeDynamicProcess
+
+        ExposeDynamicProcess(inputs={'c': 1, 'simple': {'a': 3, 'b': 4}}).execute()
+        ExposeDynamicProcess(inputs={'c': 1, 'simple': {'a': 3, 'b': 4, 'tortoise': 'shell'}}).execute()
+
+
 class TestExcludeExposeProcess(utils.TestCaseWithLoop):
 
     def setUp(self):
