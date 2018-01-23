@@ -38,10 +38,10 @@ setup(
         'pyyaml',
         'tornado',
         'future',
-        'kiwipy[rmq]'
+        'kiwipy'
     ],
     extras_require={
-        'rmq': ['pika'],
+        'rmq': ['kiwipy[rmq]'],
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['backports.tempfile']
     },
