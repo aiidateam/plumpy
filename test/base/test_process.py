@@ -17,7 +17,7 @@ def execute(proc):
         return proc.result()
 
 
-class TestProc(ProcessStateMachine):
+class SimpleProc(ProcessStateMachine):
     def do_run(self):
         while self.state in [ProcessState.CREATED, ProcessState.PAUSED, ProcessState.RUNNING]:
             if self.state in [ProcessState.CREATED, ProcessState.PAUSED]:
@@ -31,7 +31,7 @@ class TestProc(ProcessStateMachine):
 
 class TestProcess(unittest.TestCase):
     def test_basic(self):
-        class MyProc(TestProc):
+        class MyProc(SimpleProc):
             def run(self):
                 return True
 
@@ -39,7 +39,7 @@ class TestProcess(unittest.TestCase):
         self.assertTrue(result)
 
     def test_continue(self):
-        class MyProc(TestProc):
+        class MyProc(SimpleProc):
             def run(self):
                 return Continue(self.step2)
 
@@ -51,7 +51,7 @@ class TestProcess(unittest.TestCase):
         self.assertTrue(result)
 
     def test_waiting(self):
-        class MyProc(TestProc):
+        class MyProc(SimpleProc):
             def run(self):
                 return Wait(self.step2, msg='Waiting for the end of time')
 
@@ -74,7 +74,7 @@ class TestProcess(unittest.TestCase):
         self.assertTrue(self._attributes_match(created1, created2))
 
     def test_fail(self):
-        class FailProc(TestProc):
+        class FailProc(SimpleProc):
             def run(self):
                 raise RuntimeError("You're on yer own pal")
 

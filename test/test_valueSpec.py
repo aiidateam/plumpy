@@ -1,8 +1,9 @@
-from .utils import TestCase
 from plum.port import ValueSpec
 
+from . import utils
 
-class TestValueSpec(TestCase):
+
+class TestValueSpec(utils.TestCase):
     def test_required(self):
         s = ValueSpec("required_value", required=True)
 

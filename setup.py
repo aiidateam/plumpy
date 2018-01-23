@@ -15,7 +15,7 @@ setup(
     version=about['__version__'],
     description='A python workflow library',
     long_description=open('README.md').read(),
-    url='https://github.com/aiidateam/plumpy.git',
+    url='https://github.com/muhrin/plumpy.git',
     author='Martin Uhrin',
     author_email='martin.uhrin@gmail.com',
     license=__license__,
@@ -41,7 +41,6 @@ setup(
         'kiwipy[rmq]'
     ],
     extras_require={
-        'rmq': ['pika'],
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['backports.tempfile']
     },

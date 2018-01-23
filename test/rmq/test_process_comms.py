@@ -42,7 +42,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         proc.play()
         # Send a pause message
         future = self.communicator.rpc_send(proc.pid, plum.PAUSE_MSG)
-        plum.run_until_complete(future)
+        self.communicator.await_response(future)
 
         self.assertEqual(proc.state, plum.ProcessState.PAUSED)
 
@@ -50,7 +50,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a play message
         future = self.communicator.rpc_send(proc.pid, plum.PLAY_MSG)
-        plum.run_until_complete(future)
+        self.communicator.await_response(future)
 
         self.assertEqual(proc.state, plum.ProcessState.WAITING)
 
@@ -58,7 +58,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a cancel message
         future = self.communicator.rpc_send(proc.pid, plum.CANCEL_MSG)
-        plum.run_until_complete(future)
+        self.communicator.await_response(future)
 
         self.assertEqual(proc.state, plum.ProcessState.CANCELLED)
 
@@ -66,7 +66,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a status message
         future = self.communicator.rpc_send(proc.pid, plum.STATUS_MSG)
-        status = plum.run_until_complete(future)
+        status = self.communicator.await_response(future)
 
         self.assertIsNotNone(status)
 
@@ -76,7 +76,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a pause message
         action = plum.PauseAction(proc.pid)
         action.execute(self.communicator)
-        plum.run_until_complete(action)
+        self.communicator.await_response(action)
 
         self.assertEqual(proc.state, plum.ProcessState.PAUSED)
 
@@ -85,7 +85,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a play message
         action = plum.PlayAction(proc.pid)
         action.execute(self.communicator)
-        plum.run_until_complete(action)
+        self.communicator.await_response(action)
 
         self.assertEqual(proc.state, plum.ProcessState.WAITING)
 
@@ -94,7 +94,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a cancel message
         action = plum.CancelAction(proc.pid)
         action.execute(self.communicator)
-        plum.run_until_complete(action)
+        self.communicator.await_response(action)
 
         self.assertEqual(proc.state, plum.ProcessState.CANCELLED)
 
@@ -103,5 +103,5 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a status message
         action = plum.StatusAction(proc.pid)
         action.execute(self.communicator)
-        status = plum.run_until_complete(action)
+        status = self.communicator.await_response(action)
         self.assertIsNotNone(status)
