@@ -25,7 +25,7 @@ CANCEL_MSG = {INTENT_KEY: Intent.CANCEL}
 STATUS_MSG = {INTENT_KEY: Intent.STATUS}
 
 
-class ProcessReceiver(communications.Receiver):
+class ProcessReceiver(object):
     """
     Responsible for receiving messages and translating them to actions
     on the process.
@@ -37,7 +37,7 @@ class ProcessReceiver(communications.Receiver):
         """
         self._process = process
 
-    def on_rpc_receive(self, msg):
+    def __call__(self, msg):
         intent = msg['intent']
         if intent == Intent.PLAY:
             return self._process.play()
@@ -51,9 +51,6 @@ class ProcessReceiver(communications.Receiver):
             return status_info
         else:
             raise RuntimeError("Unknown intent")
-
-    def on_broadcast_receive(self, msg):
-        pass
 
 
 class ProcessAction(communications.Action):
@@ -183,6 +180,7 @@ class ExecuteProcessAction(communications.Action):
         self._launch_action.execute(publisher)
 
     def _on_launch_done(self, publisher, launch_future):
+        # The result of the launch future is the PID of the process
         if launch_future.cancelled():
             self.cancel()
         elif launch_future.exception() is not None:
@@ -190,11 +188,15 @@ class ExecuteProcessAction(communications.Action):
         else:
             # Action the continue task
             continue_action = ContinueProcessAction(launch_future.result(), play=True, nowait=self._nowait)
-            futures.chain(continue_action, self)
+            if self._nowait:
+                continue_action.add_done_callback(
+                    lambda x: self.set_result(launch_future.result()))
+            else:
+                futures.chain(continue_action, self)
             continue_action.execute(publisher)
 
 
-class ProcessLauncher(communications.TaskReceiver):
+class ProcessLauncher(object):
     """
     Takes incoming task messages and uses them to launch processes.
 
@@ -227,7 +229,7 @@ class ProcessLauncher(communications.TaskReceiver):
         self._unbundle_args = unbunble_args
         self._unbundle_kwargs = unbunble_kwargs if unbunble_kwargs is not None else {}
 
-    def on_task_received(self, task):
+    def __call__(self, task):
         """
         Receive a task.
         :param task: The task message

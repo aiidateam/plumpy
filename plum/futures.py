@@ -1,42 +1,44 @@
-import tornado.concurrent
+import kiwi
 from functools import partial
 
-from .exceptions import CancelledError
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError']
-
-
-class InvalidStateError(BaseException):
-    pass
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
 
 
-class Future(tornado.concurrent.Future):
-    _cancelled = False
+InvalidStateError = kiwi.InvalidStateError
+CancelledError = kiwi.CancelledError
 
-    def set_result(self, result):
-        if self.done():
-            raise InvalidStateError('Future already done')
-        super(Future, self).set_result(result)
 
-    def cancel(self):
-        if self.done():
-            return False
+# class Future(tornado.concurrent.Future):
+#     _cancelled = False
+#
+#     def set_result(self, result):
+#         if self.done():
+#             raise InvalidStateError('Future already done')
+#         super(Future, self).set_result(result)
+#
+#     def cancel(self):
+#         if self.done():
+#             return False
+#
+#         self._cancelled = True
+#         # Get the callbacks scheduled
+#         self._set_done()
+#         return True
+#
+#     def cancelled(self):
+#         return self._cancelled
+#
+#     def result(self):
+#         if self.cancelled():
+#             raise CancelledError
+#         if not self.done():
+#             raise InvalidStateError("Not done yet so no result")
+#
+#         return super(Future, self).result(timeout=0.)
 
-        self._cancelled = True
-        # Get the callbacks scheduled
-        self._set_done()
-        return True
 
-    def cancelled(self):
-        return self._cancelled
-
-    def result(self):
-        if self.cancelled():
-            raise CancelledError
-        if not self.done():
-            raise InvalidStateError("Not done yet so no result")
-
-        return super(Future, self).result(timeout=0.)
+Future = kiwi.Future
 
 
 def copy_future(source, target):

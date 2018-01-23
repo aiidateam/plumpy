@@ -3,16 +3,16 @@ import uuid
 
 from plum import rmq
 import plum.rmq
-import plum.rmq.launch
 import plum.test_utils
-from test.test_rmq import _HAS_PIKA
 from test.utils import TestCaseWithLoop
 
-if _HAS_PIKA:
-    import pika.exceptions
+try:
+    import pika
+except ImportError:
+    pika = None
 
 
-@unittest.skipIf(not _HAS_PIKA, "Requires pika library and RabbitMQ")
+@unittest.skipIf(pika, "Requires pika library and RabbitMQ")
 class TestProcessReceiver(TestCaseWithLoop):
     def setUp(self):
         super(TestProcessReceiver, self).setUp()

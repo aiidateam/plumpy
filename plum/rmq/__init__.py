@@ -1,6 +1,4 @@
-from .communicator import *
-from .launch import *
-from .pubsub import *
+import kiwi.rmq
 
-__all__ = (launch.__all__ +
-           pubsub.__all__ + communicator.__all__)
+RmqCommunicator = kiwi.rmq.RmqCommunicator
+RmqConnector = kiwi.rmq.RmqConnector
