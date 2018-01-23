@@ -23,8 +23,8 @@ class ProcessSpec(object):
     INPUT_GROUP_PORT_TYPE = InputGroupPort
 
     def __init__(self):
-        self._inputs = PortNamespace()
-        self._outputs = PortNamespace()
+        self._input_ports = PortNamespace()
+        self._output_ports = PortNamespace()
         self._exposed_inputs = defaultdict(lambda: defaultdict(list))
         self._validator = None
         self._sealed = False
@@ -78,19 +78,19 @@ class ProcessSpec(object):
         :return: The inputs
         :rtype: dict
         """
-        return self._inputs
+        return self._input_ports
 
     def get_input(self, name):
         try:
-            return self._inputs[name]
+            return self._input_ports[name]
         except KeyError:
             raise ValueError("Unknown input '{}'".format(name))
 
     def get_dynamic_input(self):
-        return self._inputs.get(DynamicInputPort.NAME, None)
+        return self._input_ports.get(DynamicInputPort.NAME, None)
 
     def has_input(self, name):
-        return name in self._inputs
+        return name in self._input_ports
 
     def input(self, name, **kwargs):
         """
@@ -122,31 +122,31 @@ class ProcessSpec(object):
             raise RuntimeError("Cannot add an input after spec is sealed")
         if not isinstance(port, InputPort):
             raise TypeError("Input port must be an instance of InputPort")
-        if name in self._inputs:
+        if name in self._input_ports:
             LOGGER.info("Overwriting existing input '{}'.".format(name))
 
-        self._inputs[name] = port
+        self._input_ports[name] = port
 
     def remove_input(self, name):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
-        self._inputs.pop(name)
+        self._input_ports.pop(name)
 
     # endregion
 
     # region Outputs
     @property
     def outputs(self):
-        return self._outputs
+        return self._output_ports
 
     def get_output(self, name):
-        return self._outputs[name]
+        return self._output_ports[name]
 
     def get_dynamic_output(self):
-        return self._outputs.get(DynamicOutputPort.NAME, None)
+        return self._output_ports.get(DynamicOutputPort.NAME, None)
 
     def has_output(self, name):
-        return name in self._outputs
+        return name in self._output_ports
 
     def has_dynamic_output(self):
         return self.has_output(DynamicOutputPort.NAME)
@@ -162,10 +162,10 @@ class ProcessSpec(object):
             raise RuntimeError("Cannot add an output after spec is sealed")
         if not isinstance(port, OutputPort):
             raise TypeError("Output port must be an instance of OutputPort")
-        if name in self._outputs:
+        if name in self._output_ports:
             LOGGER.info("Overwriting existing output '{}'.".format(name))
 
-        self._outputs[name] = port
+        self._output_ports[name] = port
 
     def dynamic_output(self, **kwargs):
         self.output_port(
@@ -180,7 +180,7 @@ class ProcessSpec(object):
     def remove_output(self, name):
         if self.sealed:
             raise RuntimeError("Cannot remove an input after spec is sealed")
-        self._outputs.pop(name)
+        self._output_ports.pop(name)
 
     # end region
 
@@ -210,29 +210,18 @@ class ProcessSpec(object):
             optional error message
         :rtype: tuple(bool, str or None)
         """
-        if inputs is None:
-            inputs = {}
+        is_valid = True
+        message = None
 
-        # Check the inputs meet the requirements
-        if not self.has_dynamic_input():
-            unexpected = set(inputs.keys()) - set(self.inputs.keys())
-            if unexpected:
-                return False, \
-                       "Unexpected inputs found: '{}'.  If you want to allow " \
-                       "dynamic inputs add dynamic_input() to the spec " \
-                       "definition.".format(unexpected)
+        is_valid, message = self._input_ports.validate(inputs)
 
-        for name, port in self.inputs.items():
-            valid, msg = port.validate(inputs.get(name, None))
-            if not valid:
-                return False, msg
+        if not is_valid:
+            return is_valid, message
 
         if self._validator is not None:
-            valid, msg = self._validator(self, inputs)
-            if not valid:
-                return False, msg
+            is_valid, message = self._validator(self, inputs)
 
-        return True, None
+        return is_valid, message
 
     def expose_inputs(self, process_class, namespace=None, exclude=(), include=None):
         """
@@ -248,10 +237,10 @@ class ProcessSpec(object):
             raise ValueError('exclude and include are mutually exclusive')
 
         if namespace:
-            self._inputs[namespace] = PortNamespace(namespace)
-            port_namespace = self._inputs[namespace]
+            self._input_ports[namespace] = PortNamespace(namespace)
+            port_namespace = self._input_ports[namespace]
         else:
-            port_namespace = self._inputs
+            port_namespace = self._input_ports
 
         exposed_inputs_list = self._exposed_inputs[namespace][process_class]
 

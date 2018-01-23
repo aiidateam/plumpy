@@ -239,6 +239,12 @@ class PortNamespace(collections.MutableMapping, Port):
         )
         self._ports = {}
 
+    def has_port(self, name):
+        return name in self._ports
+
+    def has_dynamic_port(self):
+        return self.has_port(DynamicInputPort.NAME) or self.has_port(DynamicOutputPort.NAME)
+
     @property
     def ports(self):
         return self._ports
@@ -258,19 +264,33 @@ class PortNamespace(collections.MutableMapping, Port):
     def __setitem__(self, key, value):
         self._ports[key] = value
 
-    def validate(self, inputs):
+    def validate(self, inputs=None):
         """
         Validate the namespace port itself and subsequently all the ports it contains
 
         :param inputs: a arbitrarily nested dictionary of parsed inputs
         """
-        if inputs is None and self.required:
-            return False, "required value was not provided for '{}'".format(self.name)
+        is_valid = True
+        message = None
 
-        for name, port in iteritems(self._ports):
-            valid, message = port.validate(inputs.get(name, None))
+        if inputs is None:
+            inputs = {}
 
-            if not valid:
-                return False, message
+        # Check the inputs meet the requirements
+        if not self.has_dynamic_port():
+            unexpected = set(inputs.keys()) - set(self._ports.keys())
+            if unexpected:
+                return False, \
+                       "Unexpected inputs found: '{}'.  If you want to allow " \
+                       "dynamic inputs add dynamic_input() to the spec " \
+                       "definition.".format(unexpected)
 
-        return True, None
+        for name, port in self._ports.items():
+            is_valid, message = port.validate(inputs.get(name, None))
+            if not is_valid:
+                return is_valid, message
+
+        if self._validator is not None:
+            is_valid, message = self._validator(self, inputs)
+
+        return is_valid, message
