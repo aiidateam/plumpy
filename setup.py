@@ -15,7 +15,7 @@ setup(
     version=about['__version__'],
     description='A python workflow library',
     long_description=open('README.md').read(),
-    url='https://github.com/aiidateam/plumpy.git',
+    url='https://github.com/muhrin/plumpy.git',
     author='Martin Uhrin',
     author_email='martin.uhrin@gmail.com',
     license=__license__,
