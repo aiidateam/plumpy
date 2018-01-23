@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta
-from six import iteritems
 import collections
 import logging
-
+from abc import ABCMeta
+from six import iteritems
 from future.utils import with_metaclass
 
-_LOGGER = logging.getLogger(__name__)
 
+_LOGGER = logging.getLogger(__name__)
 _NULL = ()
 
 
@@ -18,8 +17,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
     properties like whether it is required, valid types, the help string, etc.
     """
 
-    def __init__(self, name, valid_type=None, help=None, required=True,
-                 validator=None):
+    def __init__(self, name, valid_type=None, help=None, required=True, validator=None):
         self._name = name
         self._valid_type = valid_type
         self._help = help
@@ -85,8 +83,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
 
 class Attribute(ValueSpec):
     def __init__(self, name, valid_type=None, help=None, default=_NULL, required=False):
-        super(Attribute, self).__init__(name, valid_type=valid_type,
-                                        help=help, required=required)
+        super(Attribute, self).__init__(name, valid_type=valid_type, help=help, required=required)
         self._default = default
 
     def has_default(self):
@@ -193,38 +190,10 @@ class InputGroupPort(InputPort):
         return True, None
 
 
-class DynamicInputPort(InputPort):
-    """
-    A dynamic output port represents the fact that a Process can emit outputs
-    that weren't defined beforehand
-    """
-    NAME = "dynamic"
-
-    def __init__(self, valid_type=None, help_=None):
-        super(DynamicInputPort, self).__init__(
-            self.NAME, valid_type=valid_type, help=help_, required=False)
-
-
 class OutputPort(Port):
     def __init__(self, name, valid_type=None, required=True, help=None):
         super(OutputPort, self).__init__(name, valid_type, help=help)
         self._required = required
-
-    @property
-    def required(self):
-        return self._required
-
-
-class DynamicOutputPort(OutputPort):
-    """
-    A dynamic output port represents the fact that a Process can emit outputs
-    that weren't defined beforehand
-    """
-    NAME = "dynamic"
-
-    def __init__(self, valid_type=None):
-        super(DynamicOutputPort, self).__init__(
-            self.NAME, valid_type=valid_type, required=False)
 
 
 class PortNamespace(collections.MutableMapping, Port):
@@ -238,12 +207,14 @@ class PortNamespace(collections.MutableMapping, Port):
             name=namespace, help=help, required=required, validator=validator, valid_type=valid_type
         )
         self._ports = {}
+        self._dynamic = False
 
-    def has_port(self, name):
-        return name in self._ports
+    @property
+    def is_dynamic(self):
+        return self._dynamic
 
-    def has_dynamic_port(self):
-        return self.has_port(DynamicInputPort.NAME) or self.has_port(DynamicOutputPort.NAME)
+    def set_dynamic(self, dynamic):
+        self._dynamic = dynamic
 
     @property
     def ports(self):
@@ -264,33 +235,44 @@ class PortNamespace(collections.MutableMapping, Port):
     def __setitem__(self, key, value):
         self._ports[key] = value
 
-    def validate(self, inputs=None):
+    def validate(self, port_values=None):
         """
         Validate the namespace port itself and subsequently all the ports it contains
 
-        :param inputs: a arbitrarily nested dictionary of parsed inputs
+        :param ports: an arbitrarily nested dictionary of parsed port values
         """
         is_valid = True
         message = None
 
-        if inputs is None:
-            inputs = {}
+        if port_values is None:
+            ports = {}
+        else:
+            ports = dict(port_values)
 
-        # Check the inputs meet the requirements
-        if not self.has_dynamic_port():
-            unexpected = set(inputs.keys()) - set(self._ports.keys())
-            if unexpected:
-                return False, \
-                       "Unexpected inputs found: '{}'.  If you want to allow " \
-                       "dynamic inputs add dynamic_input() to the spec " \
-                       "definition.".format(unexpected)
-
-        for name, port in self._ports.items():
-            is_valid, message = port.validate(inputs.get(name, None))
+        # Validate the validator first as it most likely will rely on the port values
+        if self._validator is not None:
+            is_valid, message = self._validator(self, ports)
             if not is_valid:
                 return is_valid, message
 
-        if self._validator is not None:
-            is_valid, message = self._validator(self, inputs)
+        # Validate each port individually, popping its name if found in input dictionary
+        for name, port in self._ports.items():
+            is_valid, message = port.validate(ports.pop(name, None))
+            if not is_valid:
+                return is_valid, message
+
+        # If any ports remain, we better support dynamic ports
+        if ports and not self.is_dynamic:
+            is_valid = False
+            message = 'Unexpected ports {}, for a non dynamic namespace'.format(ports)
+
+        # If any ports remain and we have a valid_type, make sure they match the type
+        if ports and self._valid_type is not None:
+            valid_type = self._valid_type
+            for port_name, port_value in ports.items():
+                if not isinstance(port_value, valid_type):
+                    is_valid = False
+                    message = 'Invalid type {} for dynamic port value: expected {}'.format(
+                        type(port_value), valid_type)
 
         return is_valid, message

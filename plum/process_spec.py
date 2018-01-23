@@ -2,8 +2,7 @@
 import logging
 from collections import defaultdict
 from six import iteritems
-from plum.port import InputPort, InputGroupPort, OutputPort, \
-    DynamicOutputPort, DynamicInputPort, PortNamespace
+from plum.port import InputPort, InputGroupPort, OutputPort, PortNamespace
 
 LOGGER = logging.getLogger(__name__)
 
@@ -19,7 +18,6 @@ class ProcessSpec(object):
     Every Process class has one of these.
     """
     INPUT_PORT_TYPE = InputPort
-    DYNAMIC_INPUT_PORT_TYPE = DynamicInputPort
     INPUT_GROUP_PORT_TYPE = InputGroupPort
 
     def __init__(self):
@@ -86,9 +84,6 @@ class ProcessSpec(object):
         except KeyError:
             raise ValueError("Unknown input '{}'".format(name))
 
-    def get_dynamic_input(self):
-        return self._input_ports.get(DynamicInputPort.NAME, None)
-
     def has_input(self, name):
         return name in self._input_ports
 
@@ -102,17 +97,10 @@ class ProcessSpec(object):
         self.input_port(name, self.INPUT_PORT_TYPE(name, **kwargs))
 
     def dynamic_input(self, **kwargs):
-        self.input_port(self.DYNAMIC_INPUT_PORT_TYPE.NAME,
-                        self.DYNAMIC_INPUT_PORT_TYPE(**kwargs))
+        self._input_ports.set_dynamic(True)
 
     def no_dynamic_input(self):
-        try:
-            self.remove_input(DynamicInputPort.NAME)
-        except KeyError:
-            pass
-
-    def has_dynamic_input(self):
-        return self.has_input(DynamicInputPort.NAME)
+        self._input_ports.set_dynamic(False)
 
     def input_group(self, name, **kwargs):
         self.input_port(name, self.INPUT_GROUP_PORT_TYPE(name, **kwargs))
@@ -142,14 +130,8 @@ class ProcessSpec(object):
     def get_output(self, name):
         return self._output_ports[name]
 
-    def get_dynamic_output(self):
-        return self._output_ports.get(DynamicOutputPort.NAME, None)
-
     def has_output(self, name):
         return name in self._output_ports
-
-    def has_dynamic_output(self):
-        return self.has_output(DynamicOutputPort.NAME)
 
     def output(self, name, **kwargs):
         self.output_port(name, OutputPort(name, **kwargs))
@@ -167,15 +149,17 @@ class ProcessSpec(object):
 
         self._output_ports[name] = port
 
-    def dynamic_output(self, **kwargs):
-        self.output_port(
-            DynamicOutputPort.NAME, DynamicOutputPort(**kwargs))
+    def has_dynamic_output(self):
+        return self._output_ports.is_dynamic
+
+    def dynamic_output(self, valid_type=None):
+        self._output_ports.set_dynamic(True)
+
+        if valid_type:
+            self._output_ports._valid_type = valid_type
 
     def no_dynamic_output(self):
-        try:
-            self.remove_output(DynamicOutputPort.NAME)
-        except KeyError:
-            pass
+        self._output_ports.set_dynamic(False)
 
     def remove_output(self, name):
         if self.sealed:
@@ -197,7 +181,8 @@ class ProcessSpec(object):
         :return: valid or not, error string|None
         :rtype: tuple(bool, str|None)
         """
-        self._validator = fn
+        # TODO: proper setter
+        self._input_ports._validator = fn
 
     def validate(self, inputs=None):
         """
@@ -206,8 +191,7 @@ class ProcessSpec(object):
 
         :param inputs: The inputs dictionary
         :type inputs: dict
-        :return: A tuple indicating if the input is valid or not and an
-            optional error message
+        :return: A tuple indicating if the input is valid or not and an optional error message
         :rtype: tuple(bool, str or None)
         """
         is_valid = True
@@ -215,11 +199,22 @@ class ProcessSpec(object):
 
         is_valid, message = self._input_ports.validate(inputs)
 
-        if not is_valid:
-            return is_valid, message
+        return is_valid, message
 
-        if self._validator is not None:
-            is_valid, message = self._validator(self, inputs)
+    def validate_outputs(self, outputs=None):
+        """
+        This will validate a dictionary of inputs to make sure they are valid
+        according to this specification.
+
+        :param inputs: The inputs dictionary
+        :type inputs: dict
+        :return: A tuple indicating if the input is valid or not and an optional error message
+        :rtype: tuple(bool, str or None)
+        """
+        is_valid = True
+        message = None
+
+        is_valid, message = self._output_ports.validate(outputs)
 
         return is_valid, message
 
@@ -244,7 +239,13 @@ class ProcessSpec(object):
 
         exposed_inputs_list = self._exposed_inputs[namespace][process_class]
 
-        for name, port in iteritems(process_class.spec().inputs):
+        input_ports = process_class.spec().inputs
+
+        # If the inputs namespace of process class' spec is dynamic, inherit it
+        if input_ports.is_dynamic:
+            port_namespace.set_dynamic(True)
+
+        for name, port in iteritems(input_ports):
 
             if include is not None:
                 if name not in include:

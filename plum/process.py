@@ -432,26 +432,18 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     @protected
     def out(self, output_port, value):
         self.on_output_emitting(output_port, value)
-        dynamic = False
-        # Do checks on the outputs
-        try:
-            # Check types (if known)
-            port = self.spec().get_output(output_port)
-        except KeyError:
-            if self.spec().has_dynamic_output():
-                dynamic = True
-                port = self.spec().get_dynamic_output()
-            else:
-                raise TypeError(
-                    "Process trying to output on unknown output port {}, "
-                    "and does not have a dynamic output port in spec.".
-                        format(output_port))
 
-            if port.valid_type is not None and not isinstance(value, port.valid_type):
-                raise TypeError(
-                    "Process returned output '{}' of wrong type."
-                    "Expected '{}', got '{}'".
-                        format(output_port, port.valid_type, type(value)))
+        is_valid, message = self.spec().validate_outputs({output_port: value})
+
+        if not is_valid:
+            raise TypeError(message)
+
+        # The output was accepted by the output PortNamespace which means that if it
+        # doesn't have it explicitly, it was dynamically accepted
+        if self.spec().has_output(output_port):
+            dynamic = False
+        else:
+            dynamic = True
 
         self._outputs[output_port] = value
         self.on_output_emitted(output_port, value, dynamic)
@@ -472,8 +464,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             ins = {}
         else:
             ins = dict(inputs)
-        # Go through the spec filling in any default and checking for required
-        # inputs
+
+        # Go through the spec filling in any default and checking for required inputs
         for name, port in self.spec().inputs.items():
             if name not in ins:
                 if port.has_default():
