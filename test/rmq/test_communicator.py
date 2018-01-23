@@ -3,7 +3,7 @@ import tempfile
 import unittest
 import uuid
 
-from plum import rmq
+from kiwipy import rmq
 import plum.rmq
 import plum.test_utils
 from test.utils import TestCaseWithLoop

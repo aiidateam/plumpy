@@ -1,4 +1,4 @@
-import kiwi.rmq
+import kiwipy.rmq
 
-RmqCommunicator = kiwi.rmq.RmqCommunicator
-RmqConnector = kiwi.rmq.RmqConnector
+RmqCommunicator = kiwipy.rmq.RmqCommunicator
+RmqConnector = kiwipy.rmq.RmqConnector

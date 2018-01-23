@@ -1,12 +1,12 @@
-import kiwi
+import kiwipy
 from functools import partial
 
 
 __all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
 
 
-InvalidStateError = kiwi.InvalidStateError
-CancelledError = kiwi.CancelledError
+InvalidStateError = kiwipy.InvalidStateError
+CancelledError = kiwipy.CancelledError
 
 
 # class Future(tornado.concurrent.Future):
@@ -38,7 +38,7 @@ CancelledError = kiwi.CancelledError
 #         return super(Future, self).result(timeout=0.)
 
 
-Future = kiwi.Future
+Future = kiwipy.Future
 
 
 def copy_future(source, target):

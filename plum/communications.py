@@ -1,15 +1,15 @@
 import abc
-import kiwi
+import kiwipy
 from future.utils import with_metaclass
 
 from . import futures
 
 __all__ = ['Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected']
 
-RemoteException = kiwi.RemoteException
-DeliveryFailed = kiwi.DeliveryFailed
-TaskRejected = kiwi.TaskRejected
-Communicator = kiwi.Communicator
+RemoteException = kiwipy.RemoteException
+DeliveryFailed = kiwipy.DeliveryFailed
+TaskRejected = kiwipy.TaskRejected
+Communicator = kiwipy.Communicator
 
 
 class Action(futures.Future):
