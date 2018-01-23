@@ -4,6 +4,7 @@ from plum.test_utils import ThreeSteps, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plum.test_utils import check_process_against_snapshots
 from plum.test_utils import ProcessSaver
+
 from . import utils
 
 
