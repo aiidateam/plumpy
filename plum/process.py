@@ -382,7 +382,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     def init(self):
         """ Any common initialisation stuff after create or load goes here """
         if self._communicator is not None:
-            self._communicator.register_receiver(
+            self._communicator.add_rpc_subscriber(
                 process_comms.ProcessReceiver(self), identifier=str(self.pid))
 
     def on_run(self):

@@ -1,6 +1,7 @@
 from abc import ABCMeta
 
 from future.utils import with_metaclass
+from builtins import str
 
 
 class ProcessListener(with_metaclass(ABCMeta, object)):
@@ -47,7 +48,7 @@ class ProcessListener(with_metaclass(ABCMeta, object)):
         :param process: The process
         :type process: :class:`plum.process.Process`
         :param output_port: The output port that the value was outputted on
-        :type output_port: basestring
+        :type output_port: str
         :param value: The value that was outputted
         :param dynamic: True if the port is dynamic, False otherwise
         :type dynamic: bool

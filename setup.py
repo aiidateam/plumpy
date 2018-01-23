@@ -33,12 +33,17 @@ setup(
     # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
     # for a useful dicussion
     install_requires=[
-        'frozendict', 'portalocker', 'pyyaml', 'six', 'tornado'
+        'frozendict',
+        'portalocker',
+        'pyyaml',
+        'tornado',
+        'future',
+        'kiwipy[rmq]'
     ],
     extras_require={
         'rmq': ['pika'],
         ':python_version<"3.4"': ['enum34'],
-        ':python_version<"3.2"': ['futures', 'backports.tempfile']
+        ':python_version<"3.2"': ['backports.tempfile']
     },
     packages=['plum'],
     test_suite='test'

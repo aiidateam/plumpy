@@ -25,7 +25,7 @@ CANCEL_MSG = {INTENT_KEY: Intent.CANCEL}
 STATUS_MSG = {INTENT_KEY: Intent.STATUS}
 
 
-class ProcessReceiver(communications.Receiver):
+class ProcessReceiver(object):
     """
     Responsible for receiving messages and translating them to actions
     on the process.
@@ -37,7 +37,7 @@ class ProcessReceiver(communications.Receiver):
         """
         self._process = process
 
-    def on_rpc_receive(self, msg):
+    def __call__(self, msg):
         intent = msg['intent']
         if intent == Intent.PLAY:
             return self._process.play()
@@ -51,9 +51,6 @@ class ProcessReceiver(communications.Receiver):
             return status_info
         else:
             raise RuntimeError("Unknown intent")
-
-    def on_broadcast_receive(self, msg):
-        pass
 
 
 class ProcessAction(communications.Action):
@@ -100,6 +97,7 @@ PERSIST_KEY = 'persist'
 PROCESS_CLASS_KEY = 'process_class'
 ARGS_KEY = 'args'
 KWARGS_KEY = 'kwargs'
+NOWAIT_KEY = 'nowait'
 # Continue
 PID_KEY = 'pid'
 TAG_KEY = 'tag'
@@ -109,12 +107,13 @@ CONTINUE_TASK = 'continue'
 
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, play=True,
-                       persist=False):
+                       persist=False, nowait=True):
     msg_body = {
         TASK_KEY: LAUNCH_TASK,
         PROCESS_CLASS_KEY: utils.class_name(process_class),
         PLAY_KEY: play,
         PERSIST_KEY: persist,
+        NOWAIT_KEY: nowait,
     }
     if init_args:
         msg_body[ARGS_KEY] = init_args
@@ -123,11 +122,12 @@ def create_launch_body(process_class, init_args=None, init_kwargs=None, play=Tru
     return msg_body
 
 
-def create_continue_body(pid, tag=None, play=True):
+def create_continue_body(pid, tag=None, play=True, nowait=False):
     msg_body = {
         TASK_KEY: CONTINUE_TASK,
         PID_KEY: pid,
         PLAY_KEY: play,
+        NOWAIT_KEY: nowait,
     }
     if tag is not None:
         msg_body[TAG_KEY] = tag
@@ -165,10 +165,11 @@ class ContinueProcessAction(TaskAction):
 
 
 class ExecuteProcessAction(communications.Action):
-    def __init__(self, process_class, init_args=None, init_kwargs=None):
+    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False):
         super(ExecuteProcessAction, self).__init__()
         self._launch_action = LaunchProcessAction(
             process_class, init_args, init_kwargs, play=False, persist=True)
+        self._nowait = nowait
 
     def get_launch_future(self):
         return self._launch_action
@@ -179,18 +180,23 @@ class ExecuteProcessAction(communications.Action):
         self._launch_action.execute(publisher)
 
     def _on_launch_done(self, publisher, launch_future):
+        # The result of the launch future is the PID of the process
         if launch_future.cancelled():
             self.cancel()
         elif launch_future.exception() is not None:
             self.set_exception(launch_future.exception())
         else:
             # Action the continue task
-            continue_action = ContinueProcessAction(launch_future.result(), play=True)
-            futures.chain(continue_action, self)
+            continue_action = ContinueProcessAction(launch_future.result(), play=True, nowait=self._nowait)
+            if self._nowait:
+                continue_action.add_done_callback(
+                    lambda x: self.set_result(launch_future.result()))
+            else:
+                futures.chain(continue_action, self)
             continue_action.execute(publisher)
 
 
-class ProcessLauncher(communications.TaskReceiver):
+class ProcessLauncher(object):
     """
     Takes incoming task messages and uses them to launch processes.
 
@@ -200,13 +206,15 @@ class ProcessLauncher(communications.TaskReceiver):
         'task': [LAUNCH_TASK]
         'process_class': [Process class to launch]
         'args': [tuple of positional args for process constructor]
-        'kwargs': [dict of keyword args for process constructor]
+        'kwargs': [dict of keyword args for process constructor].
+        'nowait': True or False
     }
 
     For continue
     {
         'task': [CONTINUE_TASK]
         'pid': [Process ID]
+        'nowait': True or False
     }
     """
 
@@ -221,7 +229,7 @@ class ProcessLauncher(communications.TaskReceiver):
         self._unbundle_args = unbunble_args
         self._unbundle_kwargs = unbunble_kwargs if unbunble_kwargs is not None else {}
 
-    def on_task_received(self, task):
+    def __call__(self, task):
         """
         Receive a task.
         :param task: The task message
@@ -246,7 +254,11 @@ class ProcessLauncher(communications.TaskReceiver):
             self._persister.save_checkpoint(proc)
         if task[PLAY_KEY]:
             proc.play()
-        return proc.pid
+
+        if task[NOWAIT_KEY]:
+            return proc.pid
+        else:
+            return proc.future()
 
     def _continue(self, task):
         if not self._persister:
@@ -256,4 +268,7 @@ class ProcessLauncher(communications.TaskReceiver):
         saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
         proc = saved_state.unbundle(*self._unbundle_args, **self._unbundle_kwargs)
         proc.play()
-        return proc.future()
+        if task[NOWAIT_KEY]:
+            return True
+        else:
+            return proc.future()
