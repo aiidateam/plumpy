@@ -3,7 +3,7 @@ from past.builtins import basestring
 from plum import Process, ProcessState
 from plum.test_utils import check_process_against_snapshots
 from plum import test_utils
-from plum.test_utils import ProcessListenerTester
+from plum.test_utils import ProcessListenerTester, NewLoopProcess
 from plum import process
 
 from . import utils
@@ -455,15 +455,12 @@ class TestExposeProcess(utils.TestCaseWithLoop):
     def setUp(self):
         super(TestExposeProcess, self).setUp()
 
-        class SimpleProcess(Process):
+        class SimpleProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(SimpleProcess, cls).define(spec)
                 spec.input('a', valid_type=int, required=True)
                 spec.input('b', valid_type=int, required=True)
-
-            def _run(self, **kwargs):
-                pass
 
         self.SimpleProcess = SimpleProcess
 
@@ -474,7 +471,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         """
         SimpleProcess = self.SimpleProcess
 
-        class ExposeProcess(Process):
+        class ExposeProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(ExposeProcess, cls).define(spec)
@@ -482,27 +479,20 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 spec.expose_inputs(SimpleProcess, namespace='beta')
 
             def _run(self, **kwargs):
-                assert 'a' in self.inputs
-                assert 'b' in self.inputs
-                assert 'a' in self.inputs.beta
-                assert 'b' in self.inputs.beta
                 assert self.inputs['a'] == 1
                 assert self.inputs['b'] == 2
                 assert self.inputs.beta['a'] == 3
                 assert self.inputs.beta['b'] == 4
-                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess), loop=self.loop)
-                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='beta'), loop=self.loop)
+                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess)).execute()
+                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='beta')).execute()
 
-        proc = ExposeProcess(inputs={'a': 1, 'b': 2, 'beta': {'a': 3, 'b': 4}}, loop=self.loop)
-        proc.play()
-        proc.execute()
+        ExposeProcess(inputs={'a': 1, 'b': 2, 'beta': {'a': 3, 'b': 4}}).execute()
 
     def test_expose_duplicate_namespaced(self):
         """
         As long as separate namespaces are used, the same Process should be
         able to be exposed more than once
         """
-        loop = self.loop
         SimpleProcess = self.SimpleProcess
 
         class ExposeProcess(Process):
@@ -513,20 +503,14 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 spec.expose_inputs(SimpleProcess, namespace='beta')
 
             def _run(self, **kwargs):
-                assert 'a' in self.inputs.alef
-                assert 'b' in self.inputs.alef
-                assert 'a' in self.inputs.beta
-                assert 'b' in self.inputs.beta
                 assert self.inputs.alef['a'] == 1
                 assert self.inputs.alef['b'] == 2
                 assert self.inputs.beta['a'] == 3
                 assert self.inputs.beta['b'] == 4
-                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='alef'))
-                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='beta'))
+                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='alef')).execute()
+                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='beta')).execute()
 
-        proc = ExposeProcess(inputs={'alef': {'a': 1, 'b': 2}, 'beta': {'a': 3, 'b': 4}})
-        proc.play()
-        proc.execute()
+        ExposeProcess(inputs={'alef': {'a': 1, 'b': 2}, 'beta': {'a': 3, 'b': 4}}).execute()
 
     def test_expose_pass_same_dictionary(self):
         """
@@ -543,21 +527,15 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 spec.expose_inputs(SimpleProcess, namespace='beta')
 
             def _run(self, **kwargs):
-                assert 'a' in self.inputs.alef
-                assert 'b' in self.inputs.alef
-                assert 'a' in self.inputs.beta
-                assert 'b' in self.inputs.beta
                 assert self.inputs.alef['a'] == 1
                 assert self.inputs.alef['b'] == 2
                 assert self.inputs.beta['a'] == 1
                 assert self.inputs.beta['b'] == 2
-                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='alef'))
-                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='beta'))
+                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='alef')).execute()
+                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess, namespace='beta')).execute()
 
         inputs = {'a': 1, 'b': 2}
-        proc = ExposeProcess(inputs={'alef': inputs, 'beta': inputs})
-        proc.play()
-        proc.execute()
+        ExposeProcess(inputs={'alef': inputs, 'beta': inputs}).execute()
 
 
 class TestNestedUnnamespacedExposedProcess(utils.TestCaseWithLoop):
@@ -572,9 +550,6 @@ class TestNestedUnnamespacedExposedProcess(utils.TestCaseWithLoop):
                 spec.input('a', valid_type=int, required=True)
                 spec.input('b', valid_type=int, default=0)
 
-            def _run(self, **kwargs):
-                pass
-
         class SubProcess(Process):
             @classmethod
             def define(cls, spec):
@@ -583,9 +558,6 @@ class TestNestedUnnamespacedExposedProcess(utils.TestCaseWithLoop):
                 spec.input('c', valid_type=int, required=True)
                 spec.input('d', valid_type=int, default=0)
 
-            def _run(self, **kwargs):
-                BaseProcess(inputs=self.exposed_inputs(BaseProcess))
-
         class ParentProcess(Process):
             @classmethod
             def define(cls, spec):
@@ -593,11 +565,6 @@ class TestNestedUnnamespacedExposedProcess(utils.TestCaseWithLoop):
                 spec.expose_inputs(SubProcess)
                 spec.input('e', valid_type=int, required=True)
                 spec.input('f', valid_type=int, default=0)
-
-            def _run(self, **kwargs):
-                proc = SubProcess(inputs=self.exposed_inputs(SubProcess))
-                proc.play()
-                proc.execute()
 
         self.BaseProcess = BaseProcess
         self.SubProcess = SubProcess
@@ -642,17 +609,14 @@ class TestNestedNamespacedExposedProcess(utils.TestCaseWithLoop):
     def setUp(self):
         super(TestNestedNamespacedExposedProcess, self).setUp()
 
-        class BaseProcess(Process):
+        class BaseProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(BaseProcess, cls).define(spec)
                 spec.input('a', valid_type=int, required=True)
                 spec.input('b', valid_type=int, default=0)
 
-            def _run(self, **kwargs):
-                pass
-
-        class SubProcess(Process):
+        class SubProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(SubProcess, cls).define(spec)
@@ -660,21 +624,13 @@ class TestNestedNamespacedExposedProcess(utils.TestCaseWithLoop):
                 spec.input('c', valid_type=int, required=True)
                 spec.input('d', valid_type=int, default=0)
 
-            def _run(self, **kwargs):
-                BaseProcess(inputs=self.exposed_inputs(BaseProcess, namespace='base'))
-
-        class ParentProcess(Process):
+        class ParentProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(ParentProcess, cls).define(spec)
                 spec.expose_inputs(SubProcess, namespace='sub')
                 spec.input('e', valid_type=int, required=True)
                 spec.input('f', valid_type=int, default=0)
-
-            def _run(self, **kwargs):
-                proc = SubProcess(inputs=self.exposed_inputs(SubProcess, namespace='sub'))
-                proc.play()
-                proc.execute()
 
         self.BaseProcess = BaseProcess
         self.SubProcess = SubProcess
@@ -707,9 +663,6 @@ class TestExcludeExposeProcess(utils.TestCaseWithLoop):
                 spec.input('a', valid_type=int, required=True)
                 spec.input('b', valid_type=int, required=False)
 
-            def _run(self, **kwargs):
-                pass
-
         self.SimpleProcess = SimpleProcess
 
     def test_exclude_valid(self):
@@ -722,12 +675,7 @@ class TestExcludeExposeProcess(utils.TestCaseWithLoop):
                 spec.expose_inputs(SimpleProcess, exclude=('b',))
                 spec.input('c', valid_type=int, required=True)
 
-            def _run(self, **kwargs):
-                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess))
-
-        proc = ExposeProcess(inputs={'a': 1, 'c': 3})
-        proc.play()
-        proc.execute()
+        ExposeProcess(inputs={'a': 1, 'c': 3})
 
     def test_exclude_invalid(self):
         SimpleProcess = self.SimpleProcess
@@ -738,13 +686,8 @@ class TestExcludeExposeProcess(utils.TestCaseWithLoop):
                 super(ExposeProcess, cls).define(spec)
                 spec.expose_inputs(SimpleProcess, exclude=('a',))
 
-            def _run(self, **kwargs):
-                SimpleProcess(inputs=self.exposed_inputs(SimpleProcess))
-
         with self.assertRaises(ValueError):
-            proc = ExposeProcess(inputs={'b': 2, 'c': 3})
-            proc.play()
-            proc.execute()
+            ExposeProcess(inputs={'b': 2, 'c': 3})
 
     def test_exclude_same_input_in_parent(self):
         SimpleProcess = self.SimpleProcess
@@ -757,13 +700,11 @@ class TestExcludeExposeProcess(utils.TestCaseWithLoop):
                 spec.input('a', valid_type=basestring)
 
             def _run(self, **kwargs):
-                inputs = self.exposed_inputs(SimpleProcess, agglomerate=False)
+                inputs = self.exposed_inputs(SimpleProcess)
                 inputs['a'] = 1
-                SimpleProcess(inputs=inputs)
+                proc = SimpleProcess(inputs=inputs)
 
-        proc = ExposeProcess(inputs={'a': '1', 'b': 2})
-        proc.play()
-        proc.execute()
+        ExposeProcess(inputs={'a': '1', 'b': 2})
 
 
 class TestIncludeExposeProcess(utils.TestCaseWithLoop):
@@ -777,9 +718,6 @@ class TestIncludeExposeProcess(utils.TestCaseWithLoop):
                 super(SimpleProcess, cls).define(spec)
                 spec.input('a', valid_type=int, required=True)
                 spec.input('b', valid_type=int, required=False)
-
-            def _run(self, **kwargs):
-                pass
 
         self.SimpleProcess = SimpleProcess
 
@@ -822,7 +760,7 @@ class TestUnionInputsExposeProcess(utils.TestCaseWithLoop):
     def setUp(self):
         super(TestUnionInputsExposeProcess, self).setUp()
 
-        class SubOneProcess(Process):
+        class SubOneProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(SubOneProcess, cls).define(spec)
@@ -833,7 +771,7 @@ class TestUnionInputsExposeProcess(utils.TestCaseWithLoop):
                 assert self.inputs['common'] == 1
                 assert self.inputs['sub_one'] == 2
 
-        class SubTwoProcess(Process):
+        class SubTwoProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(SubTwoProcess, cls).define(spec)
@@ -844,7 +782,7 @@ class TestUnionInputsExposeProcess(utils.TestCaseWithLoop):
                 assert self.inputs['common'] == 1
                 assert self.inputs['sub_two'] == 3
 
-        class ExposeProcess(Process):
+        class ExposeProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(ExposeProcess, cls).define(spec)
@@ -852,23 +790,19 @@ class TestUnionInputsExposeProcess(utils.TestCaseWithLoop):
                 spec.expose_inputs(SubTwoProcess)
 
             def _run(self, **kwargs):
-                SubOneProcess(inputs=self.exposed_inputs(SubOneProcess))
-                SubTwoProcess(inputs=self.exposed_inputs(SubTwoProcess))
+                SubOneProcess(inputs=self.exposed_inputs(SubOneProcess)).execute()
+                SubTwoProcess(inputs=self.exposed_inputs(SubTwoProcess)).execute()
 
         self.SubOneProcess = SubOneProcess
         self.SubTwoProcess = SubTwoProcess
         self.ExposeProcess = ExposeProcess
 
     def test_inputs_union_valid(self):
-        proc = self.ExposeProcess(inputs={'common': 1, 'sub_one': 2, 'sub_two': 3})
-        proc.play()
-        proc.execute()
+        self.ExposeProcess(inputs={'common': 1, 'sub_one': 2, 'sub_two': 3}).execute()
 
     def test_inputs_union_invalid(self):
         with self.assertRaises(ValueError):
-            proc = self.ExposeProcess(inputs={'sub_one': 2, 'sub_two': 3})
-            proc.play()
-            proc.execute()
+            self.ExposeProcess(inputs={'sub_one': 2, 'sub_two': 3}).execute()
 
 
 class TestAgglomerateExposeProcess(utils.TestCaseWithLoop):
@@ -888,7 +822,7 @@ class TestAgglomerateExposeProcess(utils.TestCaseWithLoop):
     def setUp(self):
         super(TestAgglomerateExposeProcess, self).setUp()
 
-        class SubProcess(Process):
+        class SubProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(SubProcess, cls).define(spec)
@@ -896,10 +830,7 @@ class TestAgglomerateExposeProcess(utils.TestCaseWithLoop):
                 spec.input('specific_a', valid_type=int, required=True)
                 spec.input('specific_b', valid_type=int, required=True)
 
-            def _run(self, **kwargs):
-                pass
-
-        class ExposeProcess(Process):
+        class ExposeProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(ExposeProcess, cls).define(spec)
@@ -908,8 +839,8 @@ class TestAgglomerateExposeProcess(utils.TestCaseWithLoop):
                 spec.expose_inputs(SubProcess, namespace='sub_b', exclude=('common',))
 
             def _run(self, **kwargs):
-                SubProcess(inputs=self.exposed_inputs(SubProcess, namespace='sub_a'))
-                SubProcess(inputs=self.exposed_inputs(SubProcess, namespace='sub_b'))
+                SubProcess(inputs=self.exposed_inputs(SubProcess, namespace='sub_a')).execute()
+                SubProcess(inputs=self.exposed_inputs(SubProcess, namespace='sub_b')).execute()
 
         self.SubProcess = SubProcess
         self.ExposeProcess = ExposeProcess
@@ -926,9 +857,7 @@ class TestAgglomerateExposeProcess(utils.TestCaseWithLoop):
                 'specific_b': 5
             }
         }
-        proc = self.ExposeProcess(inputs=inputs)
-        proc.play()
-        proc.execute()
+        self.ExposeProcess(inputs=inputs).execute()
 
     def test_inputs_union_invalid(self):
         inputs = {
@@ -942,9 +871,7 @@ class TestAgglomerateExposeProcess(utils.TestCaseWithLoop):
             }
         }
         with self.assertRaises(ValueError):
-            proc = self.ExposeProcess(inputs=inputs)
-            proc.play()
-            proc.execute()
+            self.ExposeProcess(inputs=inputs).execute()
 
 
 class TestNonAgglomerateExposeProcess(utils.TestCaseWithLoop):
@@ -958,7 +885,7 @@ class TestNonAgglomerateExposeProcess(utils.TestCaseWithLoop):
     def setUp(self):
         super(TestNonAgglomerateExposeProcess, self).setUp()
 
-        class SubProcess(Process):
+        class SubProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(SubProcess, cls).define(spec)
@@ -969,7 +896,7 @@ class TestNonAgglomerateExposeProcess(utils.TestCaseWithLoop):
             def _run(self, **kwargs):
                 assert 'common' not in self.inputs
 
-        class ExposeProcess(Process):
+        class ExposeProcess(NewLoopProcess):
             @classmethod
             def define(cls, spec):
                 super(ExposeProcess, cls).define(spec)
@@ -977,7 +904,7 @@ class TestNonAgglomerateExposeProcess(utils.TestCaseWithLoop):
                 spec.input('common', valid_type=int, required=True)
 
             def _run(self, **kwargs):
-                proc = SubProcess(inputs=self.exposed_inputs(SubProcess, namespace='sub', agglomerate=False))
+                SubProcess(inputs=self.exposed_inputs(SubProcess, namespace='sub', agglomerate=False)).execute()
 
         self.SubProcess = SubProcess
         self.ExposeProcess = ExposeProcess
@@ -990,6 +917,4 @@ class TestNonAgglomerateExposeProcess(utils.TestCaseWithLoop):
                 'specific_b': 3
             },
         }
-        proc = self.ExposeProcess(inputs=inputs)
-        proc.play()
-        proc.execute()
+        self.ExposeProcess(inputs=inputs).execute()

@@ -58,6 +58,16 @@ class WaitForSignalProcess(process.Process):
         pass
 
 
+class NewLoopProcess(process.Process):
+
+    def __init__(self, *args, **kwargs):
+        kwargs['loop'] = plum.new_event_loop()
+        super(NewLoopProcess, self).__init__(*args, **kwargs)
+
+    def _run(self, **kwargs):
+        pass
+
+
 class EventsTesterMixin(object):
     EVENTS = ("create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate")
 
