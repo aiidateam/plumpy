@@ -156,20 +156,20 @@ class ProcessSpec(object):
     def dynamic_input(self, valid_type=None):
         """
         Make the input port namespace dynamic and optional set a valid_type for the inputs
+
+        :param valid_type: a single or tuple of valid input types
         """
         self.inputs.set_dynamic(True)
-
-        if valid_type:
-            self.inputs.set_valid_type(valid_type)
+        self.inputs.set_valid_type(valid_type)
 
     def dynamic_output(self, valid_type=None):
         """
         Make the output port namespace dynamic and optional set a valid_type for the outputs
+
+        :param valid_type: a single or tuple of valid output types
         """
         self.outputs.set_dynamic(True)
-
-        if valid_type:
-            self.outputs.set_valid_type(valid_type)
+        self.outputs.set_valid_type(valid_type)
 
     def no_dynamic_input(self):
         """

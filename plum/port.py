@@ -283,39 +283,39 @@ class PortNamespace(collections.MutableMapping, Port):
 
     def validate(self, port_values=None):
         """
-        Validate the namespace port itself and subsequently all the ports it contains
+        Validate the namespace port itself and subsequently all the port_values it contains
 
-        :param ports: an arbitrarily nested dictionary of parsed port values
+        :param port_values: an arbitrarily nested dictionary of parsed port values
         """
         is_valid = True
         message = None
 
         if port_values is None:
-            ports = {}
+            port_values = {}
         else:
-            ports = dict(port_values)
+            port_values = dict(port_values)
 
         # Validate the validator first as it most likely will rely on the port values
         if self._validator is not None:
-            is_valid, message = self._validator(self, ports)
+            is_valid, message = self._validator(self, port_values)
             if not is_valid:
                 return is_valid, message
 
         # Validate each port individually, popping its name if found in input dictionary
         for name, port in self._ports.items():
-            is_valid, message = port.validate(ports.pop(name, None))
+            is_valid, message = port.validate(port_values.pop(name, None))
             if not is_valid:
                 return is_valid, message
 
-        # If any ports remain, we better support dynamic ports
-        if ports and not self.is_dynamic:
+        # If any port_values remain, we better support dynamic ports
+        if port_values and not self.is_dynamic:
             is_valid = False
-            message = 'Unexpected ports {}, for a non dynamic namespace'.format(ports)
+            message = 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
 
-        # If any ports remain and we have a valid_type, make sure they match the type
-        if ports and self._valid_type is not None:
+        # If any port_values remain and we have a valid_type, make sure they match the type
+        if port_values and self._valid_type is not None:
             valid_type = self._valid_type
-            for port_name, port_value in ports.items():
+            for port_name, port_value in port_values.items():
                 if not isinstance(port_value, valid_type):
                     is_valid = False
                     message = 'Invalid type {} for dynamic port value: expected {}'.format(
