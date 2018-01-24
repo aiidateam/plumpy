@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import json
 import collections
 import logging
 from abc import ABCMeta
@@ -24,17 +24,24 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         self._validator = validator
 
     def __str__(self):
-        return self.get_description()
+        return '; '.join(self.get_description())
 
     def get_description(self):
-        desc = ["{}".format(self.name)]
+        """
+        Return a description of the ValueSpec, which will be a list of strings with
+        information about the attributes that have been defined
+
+        :returns: list of strings
+        """
+        description = ['name: {}'.format(self.name)]
         if self.valid_type:
-            desc.append("valid type(s): {}".format(self.valid_type))
-        if self.help:
-            desc.append("help: {}".format(self.help))
+            description.append('valid type(s): {}'.format(self.valid_type))
         if self.required:
-            desc.append("required: {}".format(self.required))
-        return ", ".join(desc)
+            description.append('required: {}'.format(self.required))
+        if self.help:
+            description.append('help: {}'.format(self.help))
+
+        return description
 
     @property
     def name(self):
@@ -117,21 +124,28 @@ class InputPort(Port):
 
         self._default = default
 
-    def __str__(self):
-        desc = [super(InputPort, self).__str__()]
-        if self.default:
-            desc.append(str(self.default))
-
-        return "->" + ",".join(desc)
-
     def has_default(self):
         return self._default is not _NULL
 
     @property
     def default(self):
         if not self.has_default():
-            raise RuntimeError("No default")
+            raise RuntimeError('No default')
         return self._default
+
+    def get_description(self):
+        """
+        Return a description of the ValueSpec, which will be a list of strings with
+        information about the attributes that have been defined
+
+        :returns: list of strings
+        """
+        description = super(InputPort, self).get_description()
+
+        if self.has_default():
+            description.append('default: {}'.format(self.default))
+
+        return description
 
 
 class OutputPort(Port):
@@ -155,6 +169,9 @@ class PortNamespace(collections.MutableMapping, Port):
         self._default = default
         self._dynamic = dynamic
 
+    def __str__(self):
+        return json.dumps(self.get_description(), sort_keys=True, indent=4)
+
     @property
     def is_dynamic(self):
         return self._dynamic
@@ -170,6 +187,23 @@ class PortNamespace(collections.MutableMapping, Port):
 
     def has_default(self):
         return self._default is not _NULL
+
+    def get_description(self):
+        """
+        Return a dictionary with a description of the ports this namespace contains
+        Nested PortNamespaces will be properly recursed and Ports will print their properties in a list
+
+        :returns: a dictionary of descriptions of the Ports contained within this PortNamespace
+        """
+        description = {}
+
+        for name, port in self._ports.items():
+            if isinstance(port, PortNamespace):
+                description[name] = port.get_description()
+            else:
+                description[name] = port.get_description()
+
+        return description
 
     @property
     def ports(self):
