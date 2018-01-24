@@ -147,13 +147,13 @@ class PortNamespace(collections.MutableMapping, Port):
     """
     NAMESPACE_SEPARATOR = '.'
 
-    def __init__(self, namespace=None, help=None, required=True, validator=None, valid_type=None):
+    def __init__(self, name=None, help=None, required=True, validator=None, valid_type=None, default=_NULL, dynamic=False):
         super(PortNamespace, self).__init__(
-            name=namespace, help=help, required=required, validator=validator, valid_type=valid_type
+            name=name, help=help, required=required, validator=validator, valid_type=valid_type
         )
         self._ports = {}
-        self._default = _NULL
-        self._dynamic = False
+        self._default = default
+        self._dynamic = dynamic
 
     @property
     def is_dynamic(self):
@@ -227,20 +227,28 @@ class PortNamespace(collections.MutableMapping, Port):
         else:
             return port
 
-    def add_port_namespace(self, name):
+    def add_port_namespace(self, name, **kwargs):
         """
-        Add a port namespace
+        Add a port namespace. If the name is nested, the sub spaces will be created
+        iteratively, but the keyword arguments will only be used for the final
+        port namespace. All intermediate namespaces will take the constructor default.
 
         :param name: key or namespace under which to store the port
+        :param kwargs: keyword arguments for the PortNamespace constructor
         """
         namespace = name.split(self.NAMESPACE_SEPARATOR)
         port_name = namespace.pop(0)
 
         if port_name not in self:
-            self[port_name] = PortNamespace(port_name)
+
+            # If there is still a namespace, we haven't reached terminal port, so we use constructor defaults
+            if namespace:
+                self[port_name] = PortNamespace(port_name)
+            else:
+                self[port_name] = PortNamespace(port_name, **kwargs)
 
         if namespace:
-            self[port_name].add_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace))
+            self[port_name].add_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace), **kwargs)
 
     def validate(self, port_values=None):
         """

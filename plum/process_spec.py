@@ -137,6 +137,28 @@ class ProcessSpec(object):
         """
         self.create_port(self.outputs, self.OUTPUT_PORT_TYPE, name, **kwargs)
 
+    def input_namespace(self, name, **kwargs):
+        """
+        Create a new PortNamespace in the input port namespace. The keyword arguments will be
+        passed to the PortNamespace constructor. Any intermediate port namespaces that need to
+        be created for a nested namespace, will take constructor defaults
+
+        :param name: namespace of the new port namespace
+        :param kwargs: keyword arguments for the PortNamespace constructor
+        """
+        self.inputs.add_port_namespace(name, **kwargs)
+
+    def output_namespace(self, name, **kwargs):
+        """
+        Create a new PortNamespace in the output port namespace. The keyword arguments will be
+        passed to the PortNamespace constructor. Any intermediate port namespaces that need to
+        be created for a nested namespace, will take constructor defaults
+
+        :param name: namespace of the new port namespace
+        :param kwargs: keyword arguments for the PortNamespace constructor
+        """
+        self.outputs.add_port_namespace(name, **kwargs)
+
     def has_input(self, name):
         """
         Return whether the input port namespace contains a port with the given name

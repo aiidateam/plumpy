@@ -81,3 +81,12 @@ class TestPortNamespace(TestCase):
 
         self.assertEqual(port_namespace.name, 'bang')
         self.assertTrue(isinstance(port_namespace, PortNamespace))
+
+        self.port_namespace.add_port_namespace('test.space', dynamic=True, valid_type=(int))
+
+        # Constructor keyword arguments should only be applied to terminal namespace
+        self.assertEqual(self.port_namespace['test'].is_dynamic, False)
+        self.assertEqual(self.port_namespace['test']['space'].is_dynamic, True)
+
+        self.assertEqual(self.port_namespace['test'].valid_type, None)
+        self.assertEqual(self.port_namespace['test']['space'].valid_type, (int))
