@@ -134,45 +134,6 @@ class InputPort(Port):
         return self._default
 
 
-class InputGroupPort(InputPort):
-    """
-    An input group, this corresponds to a mapping where if validation is used
-    then each value is checked to meet the validation criteria rather than
-    the whole input itself.
-    """
-
-    def __init__(self, name, valid_type=None, help=None, default=_NULL,
-                 required=False):
-        # We have to set _valid_inner_type before calling the super constructor
-        # because it will call validate on the default value (if supplied)
-        # which in turn needs this value to be set.
-        if default is not _NULL and not isinstance(default, collections.Mapping):
-            raise ValueError("Input group default must be of type Mapping")
-        self._valid_inner_type = valid_type
-
-        super(InputGroupPort, self).__init__(
-            name, valid_type=dict, help=help, default=default,
-            required=required)
-
-    @property
-    def default(self):
-        return self._default
-
-    def validate(self, value):
-        valid, msg = super(InputGroupPort, self).validate(value)
-        if not valid:
-            return False, msg
-
-        if value is not None and self._valid_inner_type is not None:
-            # Check that all the members of the dictionary are of the right type
-            for k, v in value.items():
-                if not isinstance(v, self._valid_inner_type):
-                    return False, "Group port value {} is not of the right type. Should be of type {}, but is {}.".format(
-                        k, self._valid_inner_type, type(v))
-
-        return True, None
-
-
 class OutputPort(Port):
     def __init__(self, name, valid_type=None, required=True, help=None):
         super(OutputPort, self).__init__(name, valid_type, help=help)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from collections import defaultdict
-from plum.port import Port, PortNamespace, InputPort, OutputPort, InputGroupPort
+from plum.port import Port, PortNamespace, InputPort, OutputPort
 
 
 class ProcessSpec(object):
@@ -279,24 +279,3 @@ class ProcessSpec(object):
 
             port_namespace[name] = port
             exposed_inputs_list.append(name)
-
-
-    def input_group(self, name, namespace=None, **kwargs):
-        """
-        Define a Process input group port
-
-        :param name: name of the input group port to create
-        :param namespace: optional namespace to place the input group port in
-        :param kwargs: options for the input group port
-        """
-        if self.namespace_separator in name:
-            raise ValueError("the character '{}' is reserved for namespaces and cannot be used for input names"
-                .format(self.namespace_separator))
-
-        if namespace is not None:
-            port_namespace = self.create_input_port_namespace(namespace)
-        else:
-            port_namespace = self._input_ports
-
-        port = InputGroupPort(name, **kwargs)
-        self.add_port(name, port_namespace, port)
