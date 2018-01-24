@@ -503,7 +503,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             else:
                 inputs = self.inputs[namespace]
                 try:
-                    port_namespace = self.spec().get_input(namespace)
+                    port_namespace = self.spec().inputs[namespace]
                 except KeyError:
                     raise ValueError('this process does not contain the "{}" input namespace'.format(namespace))
 
@@ -595,7 +595,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
-        valid, msg = self.spec().validate(inputs)
+        valid, msg = self.spec().validate_inputs(inputs)
         if not valid:
             raise ValueError(msg)
 

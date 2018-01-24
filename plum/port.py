@@ -3,7 +3,6 @@
 import collections
 import logging
 from abc import ABCMeta
-from six import iteritems
 from future.utils import with_metaclass
 
 
@@ -102,7 +101,7 @@ class Port(with_metaclass(ABCMeta, ValueSpec)):
 
 class InputPort(Port):
     """
-    A simple input port for a value being received by a workflow.
+    A simple input port for a value being received by a process
     """
 
     @staticmethod
@@ -117,8 +116,7 @@ class InputPort(Port):
         else:
             return False
 
-    def __init__(self, name, valid_type=None, help=None, default=_NULL,
-                 required=True, validator=None):
+    def __init__(self, name, valid_type=None, help=None, default=_NULL, required=True, validator=None):
         super(InputPort, self).__init__(
             name, valid_type=valid_type, help=help, required=InputPort.required_override(required, default),
             validator=validator)
@@ -201,6 +199,7 @@ class PortNamespace(collections.MutableMapping, Port):
     A container for Ports. Effectively it maintains a dictionary whose members are
     either a Port or yet another PortNamespace. This allows for the nesting of ports
     """
+    NAMESPACE_SEPARATOR = '.'
 
     def __init__(self, namespace=None, help=None, required=True, validator=None, valid_type=None):
         super(PortNamespace, self).__init__(
@@ -215,6 +214,12 @@ class PortNamespace(collections.MutableMapping, Port):
 
     def set_dynamic(self, dynamic):
         self._dynamic = dynamic
+
+    def set_validator(self, validator):
+        self._validator = validator
+
+    def set_valid_type(self, valid_type):
+        self._valid_type = valid_type
 
     @property
     def ports(self):
@@ -232,8 +237,60 @@ class PortNamespace(collections.MutableMapping, Port):
     def __getitem__(self, key):
         return self._ports[key]
 
-    def __setitem__(self, key, value):
-        self._ports[key] = value
+    def __setitem__(self, key, port):
+        if not isinstance(port, Port):
+            raise ValueError('port needs to be an instance of Port')
+        self._ports[key] = port
+
+    def add_port(self, port, name):
+        """
+        Add a port, optionally within a (nested) namespace
+
+        :param port: the port to add
+        :param name: key or namespace under which to store the port
+        """
+        namespace = name.split(self.NAMESPACE_SEPARATOR)
+        port_name = namespace.pop(0)
+
+        if port_name not in self:
+            self[port_name] = PortNamespace(port_name)
+
+        if namespace:
+            self[port_name].add_port(port, self.NAMESPACE_SEPARATOR.join(namespace))
+        else:
+            self[port_name] = port
+
+    def get_port(self, name):
+        """
+        Retrieve a port, optionally within a (nested) namespace
+
+        :param name: key or namespace of the port to retrieve
+        :returns: Port
+        """
+        namespace = name.split(self.NAMESPACE_SEPARATOR)
+        port_name = namespace.pop(0)
+
+        port = self[port_name]
+
+        if namespace:
+            return port.get_port(self.NAMESPACE_SEPARATOR.join(namespace))
+        else:
+            return port
+
+    def add_port_namespace(self, name):
+        """
+        Add a port namespace
+
+        :param name: key or namespace under which to store the port
+        """
+        namespace = name.split(self.NAMESPACE_SEPARATOR)
+        port_name = namespace.pop(0)
+
+        if port_name not in self:
+            self[port_name] = PortNamespace(port_name)
+
+        if namespace:
+            self[port_name].add_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace))
 
     def validate(self, port_values=None):
         """

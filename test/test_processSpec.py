@@ -8,8 +8,20 @@ class StrSubtype(str):
 
 
 class TestProcessSpec(TestCase):
+
     def setUp(self):
         self.spec = ProcessSpec()
+
+    def test_get_port_namespace_base(self):
+        """
+        Get the root, inputs and outputs port namespaces of the ProcessSpec
+        """
+        ports = self.spec.ports
+        input_ports = self.spec.inputs
+        output_ports = self.spec.outputs
+
+        self.assertTrue(input_ports.name, self.spec.NAME_INPUTS_PORT_NAMESPACE)
+        self.assertTrue(output_ports.name, self.spec.NAME_OUTPUTS_PORT_NAMESPACE)
 
     def test_dynamic_output(self):
         self.spec.dynamic_output(valid_type=str)
@@ -37,15 +49,15 @@ class TestProcessSpec(TestCase):
         self.assertEquals(spec.get_description(), "")
 
         # Adding an input should create some description
-        spec.input("test")
+        spec.input('test')
         desc = spec.get_description()
-        self.assertNotEqual(desc, "")
+        self.assertNotEqual(desc, '')
 
         # Similar with adding output
         spec = ProcessSpec()
-        spec.output("test")
+        spec.output('test')
         desc = spec.get_description()
-        self.assertNotEqual(desc, "")
+        self.assertNotEqual(desc, '')
 
     def test_validate(self):
         """
@@ -55,20 +67,20 @@ class TestProcessSpec(TestCase):
             if ('a' in inputs) ^ ('b' in inputs):
                 return True, None
             else:
-                return False, "Must have a OR b in inputs"
+                return False, 'Must have a OR b in inputs'
 
-        self.spec.input("a", required=False)
-        self.spec.input("b", required=False)
-        self.spec.validator(is_valid)
+        self.spec.input('a', required=False)
+        self.spec.input('b', required=False)
+        self.spec.inputs_validator(is_valid)
 
-        valid, msg = self.spec.validate(inputs={})
+        valid, msg = self.spec.validate_inputs(inputs={})
         self.assertFalse(valid, msg)
 
-        valid, msg = self.spec.validate(inputs={'a': 'a', 'b': 'b'})
+        valid, msg = self.spec.validate_inputs(inputs={'a': 'a', 'b': 'b'})
         self.assertFalse(valid, msg)
 
-        valid, msg = self.spec.validate(inputs={'a': 'a'})
+        valid, msg = self.spec.validate_inputs(inputs={'a': 'a'})
         self.assertTrue(valid, msg)
 
-        valid, msg = self.spec.validate(inputs={'b': 'b'})
+        valid, msg = self.spec.validate_inputs(inputs={'b': 'b'})
         self.assertTrue(valid, msg)
