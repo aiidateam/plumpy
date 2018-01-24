@@ -235,6 +235,7 @@ class PortNamespace(collections.MutableMapping, Port):
 
         :param name: key or namespace under which to store the port
         :param kwargs: keyword arguments for the PortNamespace constructor
+        :returns: the last created PortNamespace
         """
         namespace = name.split(self.NAMESPACE_SEPARATOR)
         port_name = namespace.pop(0)
@@ -249,6 +250,8 @@ class PortNamespace(collections.MutableMapping, Port):
 
         if namespace:
             self[port_name].add_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace), **kwargs)
+
+        return self.get_port(name)
 
     def validate(self, port_values=None):
         """

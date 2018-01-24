@@ -90,3 +90,8 @@ class TestPortNamespace(TestCase):
 
         self.assertEqual(self.port_namespace['test'].valid_type, None)
         self.assertEqual(self.port_namespace['test']['space'].valid_type, (int))
+
+
+        # The add_port_namespace method should return the last created namespace
+        port_namespace_bang = self.port_namespace.add_port_namespace('some.tortoise.bang')
+        self.assertEqual(port_namespace_bang, self.port_namespace.get_port('some.tortoise.bang'))
