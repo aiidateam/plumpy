@@ -191,6 +191,7 @@ class PortNamespace(collections.MutableMapping, Port):
             name=namespace, help=help, required=required, validator=validator, valid_type=valid_type
         )
         self._ports = {}
+        self._default = _NULL
         self._dynamic = False
 
     @property
@@ -205,6 +206,9 @@ class PortNamespace(collections.MutableMapping, Port):
 
     def set_valid_type(self, valid_type):
         self._valid_type = valid_type
+
+    def has_default(self):
+        return self._default is not _NULL
 
     @property
     def ports(self):
