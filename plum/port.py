@@ -80,21 +80,6 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         return True, None
 
 
-class Attribute(ValueSpec):
-    def __init__(self, name, valid_type=None, help=None, default=_NULL, required=False):
-        super(Attribute, self).__init__(name, valid_type=valid_type, help=help, required=required)
-        self._default = default
-
-    def has_default(self):
-        return self._default is not _NULL
-
-    @property
-    def default(self):
-        if not self.has_default():
-            raise RuntimeError("No default")
-        return self._default
-
-
 class Port(with_metaclass(ABCMeta, ValueSpec)):
     pass
 
