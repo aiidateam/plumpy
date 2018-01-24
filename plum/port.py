@@ -263,24 +263,24 @@ class PortNamespace(collections.MutableMapping, Port):
 
     def add_port_namespace(self, name, **kwargs):
         """
-        Add a port namespace. If the name is nested, the sub spaces will be created
-        iteratively, but the keyword arguments will only be used for the final
-        port namespace. All intermediate namespaces will take the constructor default.
+        Add a port namespace. If the name is nested, the sub spaces will be created recursively, if they do not already
+        exist, but the keyword arguments will only be used for the terminal port namespace. All intermediate namespaces
+        will take the constructor default. If any of the levels in the namespace are occupied by a non PortNamespace,
+        a ValueError will be raised, because non namespace ports cannot be overwritten
 
         :param name: key or namespace under which to store the port
         :param kwargs: keyword arguments for the PortNamespace constructor
         :returns: the last created PortNamespace
+        :raises ValueError: if one of the sub namespaces already contains a port that is not a PortNamespace
         """
         namespace = name.split(self.NAMESPACE_SEPARATOR)
         port_name = namespace.pop(0)
 
-        if port_name in self and isinstance(self[port_name], Port):
-            raise ValueError("cannot create the namespace '{}' in '{}' as it already contains a Port"
-                .format(port_name, self.name))
+        if port_name in self and not isinstance(self[port_name], PortNamespace):
+            raise ValueError("namespace '{}' in '{}' already contains a terminal Port".format(port_name, self.name))
 
         if port_name not in self:
 
-            # If there is still a namespace, we haven't reached terminal port, so we use constructor defaults
             if namespace:
                 self[port_name] = PortNamespace(port_name)
             else:

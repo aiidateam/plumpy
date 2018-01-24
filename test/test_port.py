@@ -106,3 +106,22 @@ class TestPortNamespace(TestCase):
         # Cannot override an existing Port with a PortNamespace
         with self.assertRaises(ValueError):
             self.port_namespace.add_port_namespace('name.space.base')
+
+        self.port_namespace.add_port_namespace('name.space')
+
+    def test_add_port_namespace_does_not_override_intermediate_namespaces(self):
+        """
+        Test that add_port_namespace does not override any nested PortNamespaces
+        """
+        port_namespace_original = self.port_namespace.add_port_namespace('name.space', dynamic=True, valid_type=int)
+        self.assertEqual(port_namespace_original.is_dynamic, True)
+        self.assertEqual(port_namespace_original.valid_type, int)
+
+        # Creating a deeper namespace within the original namespace should not override attributes of original namespace
+        port_namespace_deeper = self.port_namespace.add_port_namespace('name.space.base')
+        self.assertEqual(port_namespace_original.is_dynamic, True)
+        self.assertEqual(port_namespace_original.valid_type, int)
+
+        # The deeper namespace should have the PortNamespace constructor defaults
+        self.assertEqual(port_namespace_deeper.is_dynamic, False)
+        self.assertEqual(port_namespace_deeper.valid_type, None)
