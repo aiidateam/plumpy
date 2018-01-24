@@ -1,10 +1,8 @@
 import plum
-from plum import Process, ProcessState
+import kiwipy
 
-from plum.test_utils import check_process_against_snapshots
+from plum.process import *
 from plum import test_utils
-from plum.test_utils import ProcessListenerTester
-from plum import process
 
 from . import utils
 
@@ -188,11 +186,10 @@ class TestProcess(utils.TestCaseWithLoop):
         proc = test_utils.DummyProcessWithOutput()
         b = plum.Bundle(proc)
 
-        self.assertIsNone(b.get(process.BundleKeys.INPUTS, None))
-        self.assertEqual(len(b[process.BundleKeys.OUTPUTS]), 0)
+        self.assertIsNone(b.get(BundleKeys.INPUTS, None))
+        self.assertEqual(len(b[BundleKeys.OUTPUTS]), 0)
 
     def test_instance_state(self):
-        BundleKeys = process.BundleKeys
         proc = test_utils.DummyProcessWithOutput()
 
         saver = test_utils.ProcessSaver(proc)
@@ -216,7 +213,8 @@ class TestProcess(utils.TestCaseWithLoop):
             saver.capture()
             self.assertEqual(proc.state, ProcessState.FINISHED)
             self.assertTrue(
-                check_process_against_snapshots(self.loop, proc_class, saver.snapshots)
+                test_utils.check_process_against_snapshots(
+                    self.loop, proc_class, saver.snapshots)
             )
 
     def test_saving_each_step_interleaved(self):
@@ -226,7 +224,8 @@ class TestProcess(utils.TestCaseWithLoop):
             saver.capture()
 
             self.assertTrue(
-                check_process_against_snapshots(self.loop, ProcClass, saver.snapshots)
+                test_utils.check_process_against_snapshots(
+                    self.loop, ProcClass, saver.snapshots)
             )
 
     def test_logging(self):
@@ -405,7 +404,7 @@ class TestProcessEvents(utils.TestCaseWithLoop):
         super(TestProcessEvents, self).tearDown()
 
     def test_basic_events(self):
-        events_tester = ProcessListenerTester(
+        events_tester = test_utils.ProcessListenerTester(
             self.proc, ('running', 'output_emitted', 'finished'),
             self.loop.stop)
         self.proc.play()
@@ -414,7 +413,7 @@ class TestProcessEvents(utils.TestCaseWithLoop):
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_cancelled(self):
-        events_tester = ProcessListenerTester(self.proc, ('cancelled',), self.loop.stop)
+        events_tester = test_utils.ProcessListenerTester(self.proc, ('cancelled',), self.loop.stop)
         self.proc.cancel()
         utils.run_loop_with_timeout(self.loop)
 
@@ -423,7 +422,7 @@ class TestProcessEvents(utils.TestCaseWithLoop):
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_failed(self):
-        events_tester = ProcessListenerTester(self.proc, ('failed',), self.loop.stop)
+        events_tester = test_utils.ProcessListenerTester(self.proc, ('failed',), self.loop.stop)
         self.proc.fail(RuntimeError('See ya later suckers'))
         utils.run_loop_with_timeout(self.loop)
 
@@ -432,12 +431,33 @@ class TestProcessEvents(utils.TestCaseWithLoop):
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_paused(self):
-        events_tester = ProcessListenerTester(self.proc, ('paused',), self.loop.stop)
+        events_tester = test_utils.ProcessListenerTester(self.proc, ('paused',), self.loop.stop)
         self.proc.pause()
         utils.run_loop_with_timeout(self.loop)
 
         # Do the checks
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
+
+    def test_broadcast(self):
+        communicator = kiwipy.LocalCommunicator()
+
+        messages = []
+
+        def on_broadcast_receive(**msg):
+            messages.append(msg)
+
+        communicator.add_broadcast_subscriber(on_broadcast_receive)
+        proc = test_utils.DummyProcess(communicator=communicator)
+        proc.execute()
+
+        expected_subjects = []
+        for i, state in enumerate(test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
+            from_state = test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
+            expected_subjects.append(
+                "state_changed.{}.{}".format(from_state, state.value))
+
+        for i, message in enumerate(messages):
+            self.assertEqual(message['subject'], expected_subjects[i])
 
 
 class _RestartProcess(test_utils.WaitForSignalProcess):

@@ -15,6 +15,11 @@ class DummyProcess(process.Process):
     Process with no inputs or ouputs and does nothing when ran.
     """
 
+    EXPECTED_STATE_SEQUENCE = [
+        process.ProcessState.CREATED,
+        process.ProcessState.RUNNING,
+        process.ProcessState.FINISHED]
+
     @utils.override
     def _run(self):
         pass

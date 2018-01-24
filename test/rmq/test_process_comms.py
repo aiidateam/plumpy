@@ -5,6 +5,7 @@ from kiwipy import rmq
 import plum.rmq
 import plum.test_utils
 from test.utils import TestCaseWithLoop
+from plum import test_utils
 
 try:
     import pika
@@ -12,7 +13,7 @@ except ImportError:
     pika = None
 
 
-@unittest.skipIf(pika, "Requires pika library and RabbitMQ")
+@unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
 class TestProcessReceiver(TestCaseWithLoop):
     def setUp(self):
         super(TestProcessReceiver, self).setUp()
@@ -23,7 +24,8 @@ class TestProcessReceiver(TestCaseWithLoop):
         self.communicator = rmq.RmqCommunicator(
             self.connector,
             exchange_name=exchange_name,
-            testing_mode=True
+            testing_mode=True,
+            blocking_mode=False,
         )
 
         self.connector.connect()
@@ -105,3 +107,22 @@ class TestProcessReceiver(TestCaseWithLoop):
         action.execute(self.communicator)
         status = self.communicator.await_response(action)
         self.assertIsNotNone(status)
+
+    def test_broadcast(self):
+        messages = []
+
+        def on_broadcast_receive(**msg):
+            messages.append(msg)
+
+        self.communicator.add_broadcast_subscriber(on_broadcast_receive)
+        proc = test_utils.DummyProcess(communicator=self.communicator)
+        proc.execute()
+
+        expected_subjects = []
+        for i, state in enumerate(test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
+            from_state = test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
+            expected_subjects.append(
+                "state_changed.{}.{}".format(from_state, state.value))
+
+        for i, message in enumerate(messages):
+            self.assertEqual(message['subject'], expected_subjects[i])
