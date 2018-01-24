@@ -95,3 +95,14 @@ class TestPortNamespace(TestCase):
         # The add_port_namespace method should return the last created namespace
         port_namespace_bang = self.port_namespace.add_port_namespace('some.tortoise.bang')
         self.assertEqual(port_namespace_bang, self.port_namespace.get_port('some.tortoise.bang'))
+
+    def test_port_namespace_add_port_namespace_override(self):
+        """
+        Test that add_port_namespace cannot override already existing Ports
+        """
+        port = InputPort(self.BASE_PORT_NAME, valid_type=int, default=10)
+        self.port_namespace.add_port(port, 'name.space.base')
+
+        # Cannot override an existing Port with a PortNamespace
+        with self.assertRaises(ValueError):
+            self.port_namespace.add_port_namespace('name.space.base')

@@ -274,6 +274,10 @@ class PortNamespace(collections.MutableMapping, Port):
         namespace = name.split(self.NAMESPACE_SEPARATOR)
         port_name = namespace.pop(0)
 
+        if port_name in self and isinstance(self[port_name], Port):
+            raise ValueError("cannot create the namespace '{}' in '{}' as it already contains a Port"
+                .format(port_name, self.name))
+
         if port_name not in self:
 
             # If there is still a namespace, we haven't reached terminal port, so we use constructor defaults
