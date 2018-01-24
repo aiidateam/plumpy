@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
 from collections import defaultdict
 from plum.port import Port, PortNamespace, InputPort, OutputPort
@@ -32,6 +33,9 @@ class ProcessSpec(object):
         self._ports.add_port_namespace(self.NAME_INPUTS_PORT_NAMESPACE)
         self._ports.add_port_namespace(self.NAME_OUTPUTS_PORT_NAMESPACE)
 
+    def __str__(self):
+        return json.dumps(self.get_description(), sort_keys=True, indent=4)
+
     @property
     def namespace_separator(self):
         return self.PORT_NAMESPACE_TYPE.NAMESPACE_SEPARATOR
@@ -58,27 +62,18 @@ class ProcessSpec(object):
 
     def get_description(self):
         """
-        Get a text description of this process specification
+        Get a description of this process specification
 
-        :return: A text description
-        :rtype: str
+        :return: a list with dictionaries of descriptions of input and output ports if defined
         """
         description = []
         if self.inputs:
-            description.append("Inputs")
-            description.append("======")
-            description.append("".join([p.get_description() for k, p in
-                                 sorted(self.inputs.items(),
-                                        key=lambda x: x[0])]))
+            description.append({'inputs': self.inputs.get_description()})
 
         if self.outputs:
-            description.append("Outputs")
-            description.append("=======")
-            description.append("".join([p.get_description() for k, p in
-                                 sorted(self.outputs.items(),
-                                        key=lambda x: x[0])]))
+            description.append({'outputs': self.outputs.get_description()})
 
-        return "\n".join(description)
+        return description
 
     @property
     def ports(self):

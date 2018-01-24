@@ -46,18 +46,18 @@ class TestProcessSpec(TestCase):
     def test_get_description(self):
         spec = ProcessSpec()
         # Initially there is no description
-        self.assertEquals(spec.get_description(), "")
+        self.assertEquals(spec.get_description(), [])
 
         # Adding an input should create some description
         spec.input('test')
-        desc = spec.get_description()
-        self.assertNotEqual(desc, '')
+        description = spec.get_description()
+        self.assertNotEqual(description, [])
 
         # Similar with adding output
         spec = ProcessSpec()
         spec.output('test')
-        desc = spec.get_description()
-        self.assertNotEqual(desc, '')
+        description = spec.get_description()
+        self.assertNotEqual(description, [])
 
     def test_validate(self):
         """
