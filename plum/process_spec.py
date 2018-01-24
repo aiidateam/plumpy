@@ -16,11 +16,13 @@ class ProcessSpec(object):
     """
     NAME_INPUTS_PORT_NAMESPACE = 'inputs'
     NAME_OUTPUTS_PORT_NAMESPACE = 'outputs'
+    PORT_NAMESPACE_TYPE = PortNamespace
     INPUT_PORT_TYPE = InputPort
     OUTPUT_PORT_TYPE = OutputPort
 
+
     def __init__(self):
-        self._ports = PortNamespace()
+        self._ports = self.PORT_NAMESPACE_TYPE()
         self._exposed_inputs = defaultdict(lambda: defaultdict(list))
         self._validator = None
         self._sealed = False
@@ -29,6 +31,10 @@ class ProcessSpec(object):
         # Create the input and output port namespace
         self._ports.add_port_namespace(self.NAME_INPUTS_PORT_NAMESPACE)
         self._ports.add_port_namespace(self.NAME_OUTPUTS_PORT_NAMESPACE)
+
+    @property
+    def namespace_separator(self):
+        return self.PORT_NAMESPACE_TYPE.NAMESPACE_SEPARATOR
 
     @property
     def logger(self):
@@ -108,10 +114,10 @@ class ProcessSpec(object):
         if self.sealed:
             raise RuntimeError('Cannot add an output port after the spec has been sealed')
 
-        namespace = name.split(PortNamespace.NAMESPACE_SEPARATOR)
+        namespace = name.split(self.namespace_separator)
         port_name = namespace[-1]
         port = port_class(port_name, **kwargs)
-        port_namespace.add_port(port, PortNamespace.NAMESPACE_SEPARATOR.join(namespace))
+        port_namespace.add_port(port, self.namespace_separator.join(namespace))
 
     def input(self, name, **kwargs):
         """
@@ -249,7 +255,7 @@ class ProcessSpec(object):
             raise ValueError('exclude and include are mutually exclusive')
 
         if namespace:
-            self.inputs[namespace] = PortNamespace(namespace)
+            self.inputs[namespace] = self.PORT_NAMESPACE_TYPE(namespace)
             port_namespace = self.inputs[namespace]
         else:
             port_namespace = self.inputs
@@ -283,9 +289,9 @@ class ProcessSpec(object):
         :param namespace: optional namespace to place the input group port in
         :param kwargs: options for the input group port
         """
-        if self.NAMESPACE_SEPARATOR in name:
+        if self.namespace_separator in name:
             raise ValueError("the character '{}' is reserved for namespaces and cannot be used for input names"
-                .format(self.NAMESPACE_SEPARATOR))
+                .format(self.namespace_separator))
 
         if namespace is not None:
             port_namespace = self.create_input_port_namespace(namespace)
