@@ -508,6 +508,8 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta, state_machine.
     # region State entry/exit events
 
     def on_entering(self, state):
+        super(ProcessStateMachine, self).on_entering(state)
+
         state_label = state.LABEL
         if state_label == ProcessState.CREATED:
             call_with_super_check(self.on_create)
@@ -525,6 +527,8 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta, state_machine.
             call_with_super_check(self.on_fail, state.get_exc_info())
 
     def on_exiting(self):
+        super(ProcessStateMachine, self).on_exiting()
+
         state = self.state
         if state == ProcessState.PAUSED:
             call_with_super_check(self.on_exit_paused)

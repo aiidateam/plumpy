@@ -129,7 +129,7 @@ class State(object):
     @super_check
     def enter(self):
         """ Entering the state """
-        self.state_machine.on_entering(self)
+        call_with_super_check(self.state_machine.on_entering, self)
 
     @super_check
     def exit(self):
@@ -138,7 +138,7 @@ class State(object):
             raise InvalidStateError(
                 "Cannot exit a terminal state {}".format(self.LABEL)
             )
-        self.state_machine.on_exiting()
+        call_with_super_check(self.state_machine.on_exiting)
 
     def transition_to(self, state, *args, **kwargs):
         """ A convenience method to transition to a new state from this state """
@@ -222,6 +222,7 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
             return None
         return self._state.LABEL
 
+    @super_check
     def on_entering(self, state):
         """
         We are just about the enter the state with the given label
@@ -229,6 +230,7 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
         """
         pass
 
+    @super_check
     def on_exiting(self):
         """ We're just about the exit the state in self._state"""
         pass
