@@ -12,7 +12,7 @@ Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
 class DummyProcess(process.Process):
     """
-    Process with no inputs or ouputs and does nothing when ran.
+    Process with no inputs or outputs and does nothing when ran.
     """
 
     EXPECTED_STATE_SEQUENCE = [
