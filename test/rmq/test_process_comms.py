@@ -25,13 +25,9 @@ class TestProcessReceiver(TestCaseWithLoop):
             self.connector,
             exchange_name=exchange_name,
             testing_mode=True,
-            blocking_mode=False,
         )
 
         self.connector.connect()
-        # Run the loop until until both are ready
-
-        # plum.run_until_complete(self.communicator.initialised_future())
 
     def tearDown(self):
         # Close the connector before calling super because it will
@@ -74,7 +70,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a pause message
         action = plum.PauseAction(proc.pid)
         action.execute(self.communicator)
-        self.communicator.await_response(action)
+        self.communicator.await(action)
 
         self.assertEqual(proc.state, plum.ProcessState.PAUSED)
 
@@ -83,7 +79,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a play message
         action = plum.PlayAction(proc.pid)
         action.execute(self.communicator)
-        self.communicator.await_response(action)
+        self.communicator.await(action)
 
         self.assertEqual(proc.state, plum.ProcessState.WAITING)
 
@@ -92,7 +88,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a cancel message
         action = plum.CancelAction(proc.pid)
         action.execute(self.communicator)
-        self.communicator.await_response(action)
+        self.communicator.await(action)
 
         self.assertEqual(proc.state, plum.ProcessState.CANCELLED)
 
@@ -101,7 +97,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a status message
         action = plum.StatusAction(proc.pid)
         action.execute(self.communicator)
-        status = self.communicator.await_response(action)
+        status = self.communicator.await(action)
         self.assertIsNotNone(status)
 
     def test_broadcast(self):
