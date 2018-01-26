@@ -226,70 +226,27 @@ class PortNamespace(collections.MutableMapping, Port):
 
         return description
 
-    def add_port(self, port, name):
+    def get_port(self, name=None):
         """
-        Add a port, optionally within a (nested) namespace
+        Retrieve a (nested) port namespace within this port namespace. Nested port namespaces
+        that do not exist will be created
 
-        :param port: the port to add
-        :param name: key or namespace under which to store the port
-        """
-        namespace = name.split(self.NAMESPACE_SEPARATOR)
-        port_name = namespace.pop(0)
-
-        if port_name not in self:
-            self[port_name] = PortNamespace(port_name)
-
-        if namespace:
-            self[port_name].add_port(port, self.NAMESPACE_SEPARATOR.join(namespace))
-        else:
-            self[port_name] = port
-
-    def get_port(self, name):
-        """
-        Retrieve a port, optionally within a (nested) namespace
-
-        :param name: key or namespace of the port to retrieve
+        :param name: namespace of the port to retrieve, if None returns self
         :returns: Port
         """
+        if name is None:
+            return self
+
         namespace = name.split(self.NAMESPACE_SEPARATOR)
         port_name = namespace.pop(0)
-
-        port = self[port_name]
-
-        if namespace:
-            return port.get_port(self.NAMESPACE_SEPARATOR.join(namespace))
-        else:
-            return port
-
-    def add_port_namespace(self, name, **kwargs):
-        """
-        Add a port namespace. If the name is nested, the sub spaces will be created recursively, if they do not already
-        exist, but the keyword arguments will only be used for the terminal port namespace. All intermediate namespaces
-        will take the constructor default. If any of the levels in the namespace are occupied by a non PortNamespace,
-        a ValueError will be raised, because non namespace ports cannot be overwritten
-
-        :param name: key or namespace under which to store the port
-        :param kwargs: keyword arguments for the PortNamespace constructor
-        :returns: the last created PortNamespace
-        :raises ValueError: if one of the sub namespaces already contains a port that is not a PortNamespace
-        """
-        namespace = name.split(self.NAMESPACE_SEPARATOR)
-        port_name = namespace.pop(0)
-
-        if port_name in self and not isinstance(self[port_name], PortNamespace):
-            raise ValueError("namespace '{}' in '{}' already contains a terminal Port".format(port_name, self.name))
 
         if port_name not in self:
-
-            if namespace:
-                self[port_name] = PortNamespace(port_name)
-            else:
-                self[port_name] = PortNamespace(port_name, **kwargs)
+            self[port_name] = self.__class__(port_name)
 
         if namespace:
-            self[port_name].add_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace), **kwargs)
-
-        return self.get_port(name)
+            return self[port_name].get_port(self.NAMESPACE_SEPARATOR.join(namespace))
+        else:
+            return self[port_name]
 
     def validate(self, port_values=None):
         """

@@ -30,8 +30,8 @@ class ProcessSpec(object):
         self._logger = logging.getLogger(__name__)
 
         # Create the input and output port namespace
-        self._ports.add_port_namespace(self.NAME_INPUTS_PORT_NAMESPACE)
-        self._ports.add_port_namespace(self.NAME_OUTPUTS_PORT_NAMESPACE)
+        self._ports.get_port(self.NAME_INPUTS_PORT_NAMESPACE)
+        self._ports.get_port(self.NAME_OUTPUTS_PORT_NAMESPACE)
 
     def __str__(self):
         return json.dumps(self.get_description(), sort_keys=True, indent=4)
@@ -110,9 +110,15 @@ class ProcessSpec(object):
             raise RuntimeError('Cannot add an output port after the spec has been sealed')
 
         namespace = name.split(self.namespace_separator)
-        port_name = namespace[-1]
-        port = port_class(port_name, **kwargs)
-        port_namespace.add_port(port, self.namespace_separator.join(namespace))
+        port_name = namespace.pop(0)
+
+        if namespace:
+            namespace = self.namespace_separator.join(namespace)
+        else:
+            namespace = None
+
+        port_namespace = port_namespace.get_port(namespace)
+        port_namespace[port_name] = port_class(port_name, **kwargs)
 
     def input(self, name, **kwargs):
         """
@@ -141,7 +147,7 @@ class ProcessSpec(object):
         :param name: namespace of the new port namespace
         :param kwargs: keyword arguments for the PortNamespace constructor
         """
-        self.inputs.add_port_namespace(name, **kwargs)
+        self.create_port(self.inputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
 
     def output_namespace(self, name, **kwargs):
         """
@@ -152,7 +158,7 @@ class ProcessSpec(object):
         :param name: namespace of the new port namespace
         :param kwargs: keyword arguments for the PortNamespace constructor
         """
-        self.outputs.add_port_namespace(name, **kwargs)
+        self.create_port(self.outputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
 
     def has_input(self, name):
         """
