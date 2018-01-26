@@ -22,7 +22,7 @@ from . import stack
 from . import utils
 
 __all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
-           'get_pid_from_bundle', 'Cancel', 'Wait', 'Stop', 'Continue',
+           'Cancel', 'Wait', 'Stop', 'Continue', 'BundleKeys',
            'TransitionFailed', 'Executor', 'Waiting']
 
 _LOGGER = logging.getLogger(__name__)
@@ -385,6 +385,15 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             self._communicator.add_rpc_subscriber(
                 process_comms.ProcessReceiver(self), identifier=str(self.pid))
 
+    def on_entered(self, from_state):
+        if self._communicator:
+            from_label = from_state.value if from_state is not None else None
+            self._communicator.broadcast_send(
+                body=None,
+                sender=self.pid,
+                subject="state_changed.{}.{}".format(from_label, self.state.value)
+            )
+
     def on_run(self):
         super(Process, self).on_run()
         self._fire_event(ProcessListener.on_process_running)
@@ -421,6 +430,11 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self._fire_event(ProcessListener.on_process_cancelled, msg)
 
     # endregion
+
+    def transition_to(self, new_state, *args, **kwargs):
+        initial_state = self.state
+        super(Process, self).transition_to(new_state, *args, **kwargs)
+        self.on_entered(initial_state)
 
     def run(self):
         return self._run()
@@ -506,19 +520,6 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         """
         return encoded
 
-    def message_received(self, subject, body=None, sender_id=None):
-        super(Process, self).message_received(subject, body, sender_id)
-        if subject == ProcessAction.ABORT:
-            self.abort()
-        elif subject == ProcessAction.PAUSE:
-            self.pause()
-        elif subject == ProcessAction.PLAY:
-            self.play()
-        elif subject == ProcessAction.REPORT_STATUS:
-            self._status_requested(
-                self.loop(), subject, body, self.uuid, sender_id
-            )
-
     def get_status_info(self, out_status_info):
         out_status_info.update({
             BundleKeys.CREATION_TIME: self.creation_time,
@@ -586,7 +587,3 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             self._future.cancel()
         elif self.state == ProcessState.FAILED:
             self._future.set_exception(self._state.exception)
-
-
-def get_pid_from_bundle(process_bundle):
-    return process_bundle[BundleKeys.PID]
