@@ -37,10 +37,6 @@ class TestTaskActions(TestCaseWithLoop):
         # Add a launch task receiver
         self.communicator.add_task_subscriber(plum.ProcessLauncher(self.loop, persister=self.persister))
 
-        self.connector.connect()
-        # Run the loop until until ready
-        plum.run_until_complete(self.communicator.initialised_future())
-
     def tearDown(self):
         # Close the connector before calling super because it will
         # close the loop
