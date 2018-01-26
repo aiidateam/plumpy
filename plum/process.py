@@ -187,19 +187,15 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         :return: The description.
         :rtype: str
         """
-        desc = []
+        description = []
         if cls.__doc__:
-            desc.append("Description")
-            desc.append("===========")
-            desc.append(cls.__doc__)
+            description.append({'description': cls.__doc__.strip()})
 
-        spec_desc = cls.spec().get_description()
-        if spec_desc:
-            desc.append("Specification")
-            desc.append("=============")
-            desc.append(spec_desc)
+        spec_description = cls.spec().get_description()
+        if spec_description:
+            description.append({'spec': spec_description})
 
-        return "\n".join(desc)
+        return description
 
     @classmethod
     def recreate_from(cls, saved_state, *args, **kwargs):

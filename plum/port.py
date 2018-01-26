@@ -172,6 +172,27 @@ class PortNamespace(collections.MutableMapping, Port):
     def __str__(self):
         return json.dumps(self.get_description(), sort_keys=True, indent=4)
 
+    def __iter__(self):
+        return self._ports.__iter__()
+
+    def __len__(self):
+        return len(self._ports)
+
+    def __delitem__(self, key):
+        del self._ports[key]
+
+    def __getitem__(self, key):
+        return self._ports[key]
+
+    def __setitem__(self, key, port):
+        if not isinstance(port, Port):
+            raise ValueError('port needs to be an instance of Port')
+        self._ports[key] = port
+
+    @property
+    def ports(self):
+        return self._ports
+
     @property
     def is_dynamic(self):
         return self._dynamic
@@ -204,27 +225,6 @@ class PortNamespace(collections.MutableMapping, Port):
                 description[name] = port.get_description()
 
         return description
-
-    @property
-    def ports(self):
-        return self._ports
-
-    def __iter__(self):
-        return self._ports.__iter__()
-
-    def __len__(self):
-        return len(self._ports)
-
-    def __delitem__(self, key):
-        del self._ports[key]
-
-    def __getitem__(self, key):
-        return self._ports[key]
-
-    def __setitem__(self, key, port):
-        if not isinstance(port, Port):
-            raise ValueError('port needs to be an instance of Port')
-        self._ports[key] = port
 
     def add_port(self, port, name):
         """

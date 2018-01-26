@@ -174,12 +174,12 @@ class TestProcess(utils.TestCaseWithLoop):
         # least
         for proc_class in test_utils.TEST_PROCESSES:
             desc = proc_class.get_description()
-            self.assertIsInstance(desc, str)
+            self.assertIsInstance(desc, list)
 
         # Dummy process should at least use the docstring as part of the
         # description and so it shouldn't be empty
         desc = test_utils.DummyProcess.get_description()
-        self.assertNotEqual(desc, "")
+        self.assertNotEqual(desc, [])
 
     def test_created_bundle(self):
         """
