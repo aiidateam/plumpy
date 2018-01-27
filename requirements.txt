@@ -5,7 +5,7 @@ certifi==2018.1.18
 enum34==1.1.6; python_version < '3.4'
 frozendict==1.2
 future==0.16.0
-kiwipy==0.1.0.dev12
+-e git+https://github.com/muhrin/kiwipy.git@75021e20e0e612102398fd0a36d68f6b1bad358d#egg=kiwipy
 pika==0.11.2
 portalocker==1.1.0
 PyYAML==3.12
