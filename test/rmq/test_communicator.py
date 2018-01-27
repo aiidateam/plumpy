@@ -37,10 +37,6 @@ class TestTaskActions(TestCaseWithLoop):
         # Add a launch task receiver
         self.communicator.add_task_subscriber(plum.ProcessLauncher(self.loop, persister=self.persister))
 
-        self.connector.connect()
-        # Run the loop until until ready
-        plum.run_until_complete(self.communicator.initialised_future())
-
     def tearDown(self):
         # Close the connector before calling super because it will
         # close the loop
@@ -52,28 +48,28 @@ class TestTaskActions(TestCaseWithLoop):
         # Add a launch task receiver
         action = plum.LaunchProcessAction(plum.test_utils.DummyProcess)
         action.execute(self.communicator)
-        result = self.communicator.await_response(action)
+        result = self.communicator.await(action)
         self.assertIsNotNone(result)
 
     def test_launch_nowait(self):
         # Launch, and don't wait, just get the pid
         action = plum.LaunchProcessAction(plum.test_utils.DummyProcess, nowait=True)
         action.execute(self.communicator)
-        result = self.communicator.await_response(action)
+        result = self.communicator.await(action)
         self.assertIsInstance(result, uuid.UUID)
 
     def test_execute_action(self):
         """ Test the process execute action """
         action = plum.ExecuteProcessAction(test_utils.DummyProcessWithOutput)
         action.execute(self.communicator)
-        result = self.communicator.await_response(action)
+        result = self.communicator.await(action)
         self.assertEqual(result, test_utils.DummyProcessWithOutput.EXPECTED_OUTPUTS)
 
     def test_execute_action_nowait(self):
         """ Test the process execute action """
         action = plum.ExecuteProcessAction(test_utils.DummyProcessWithOutput, nowait=True)
         action.execute(self.communicator)
-        result = self.communicator.await_response(action)
+        result = self.communicator.await(action)
         self.assertIsInstance(result, uuid.UUID)
 
     def test_launch_many(self):
@@ -86,7 +82,7 @@ class TestTaskActions(TestCaseWithLoop):
             action.execute(self.communicator)
             launch_futures.append(action)
 
-        results = self.communicator.await_response(plum.gather(*launch_futures))
+        results = self.communicator.await(plum.gather(*launch_futures))
         for result in results:
             self.assertIsInstance(result, uuid.UUID)
 
@@ -98,5 +94,5 @@ class TestTaskActions(TestCaseWithLoop):
 
         action = plum.ContinueProcessAction(pid)
         action.execute(self.communicator)
-        result = self.communicator.await_response(action)
+        result = self.communicator.await(action)
         self.assertEqual(result, test_utils.DummyProcessWithOutput.EXPECTED_OUTPUTS)
