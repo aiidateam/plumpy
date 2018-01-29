@@ -3,6 +3,7 @@ import json
 import collections
 import logging
 from abc import ABCMeta
+from copy import deepcopy
 from future.utils import with_metaclass
 
 
@@ -39,7 +40,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         if self.required:
             description.append('required: {}'.format(self.required))
         if self.help:
-            description.append('help: {}'.format(self.help))
+            description.append('help: {}'.format(self.help.strip()))
 
         return description
 
@@ -263,6 +264,38 @@ class PortNamespace(collections.MutableMapping, Port):
             return self[port_name].get_port(self.NAMESPACE_SEPARATOR.join(namespace))
         else:
             return self[port_name]
+
+    def absorb(self, port_namespace, exclude=(), include=None):
+        """
+        Absorb another PortNamespace instance into oneself, including all its attributes and ports.
+        Attributes of self will be overwritten with those of the port namespace that is to be absorbed.
+        The same goes for the ports, meaning that any ports with a key that already exists in self will
+        be overwritten. The attributes and ports of the port namespace that is to be absorbed are deep copied.
+        The exclude and include tuples can be used to exclude or include certain ports. Both are mutually exclusive.
+
+        :param port_namespace: instance of PortNamespace that is to be absorbed into self
+        :param exclude: list or tuple of input keys to exclude from being exposed
+        :param include: list or tuple of input keys to include as exposed inputs
+        """
+        if not isinstance(port_namespace, PortNamespace):
+            raise ValueError('port_namespace has to be an instance of PortNamespace')
+
+        absorb_attrs = deepcopy(port_namespace.__dict__)
+        absorb_ports = absorb_attrs.pop('_ports', {})
+
+        # Override all attributes except for the ports collection
+        self.__dict__.update(absorb_attrs)
+
+        for name, port in absorb_ports.items():
+
+            if include is not None:
+                if name not in include:
+                    continue
+            else:
+                if name in exclude:
+                    continue
+
+            self[name] = port
 
     def validate(self, port_values=None):
         """

@@ -266,32 +266,25 @@ class ProcessSpec(object):
 
     def expose_inputs(self, process_class, namespace=None, exclude=(), include=None):
         """
-        This method allows one to automatically add the inputs from another
-        Process to this ProcessSpec. The optional namespace argument can be
-        used to group the exposed inputs in a separated PortNamespace
+        This method allows one to automatically add the inputs from another Process to this ProcessSpec.
+        The optional namespace argument can be used to group the exposed inputs in a separated PortNamespace.
+        Specific input ports from the exposed process can be excluded or included, but they are mutually exclusive
+        and only one can be specified at a time.
 
         :param process_class: the Process class whose inputs to expose
         :param namespace: a namespace in which to place the exposed inputs
         :param exclude: list or tuple of input keys to exclude from being exposed
+        :param include: list or tuple of input keys to include as exposed inputs
         """
         if exclude and include is not None:
             raise ValueError('exclude and include are mutually exclusive')
 
-        if namespace:
-            self.inputs[namespace] = self.PORT_NAMESPACE_TYPE(namespace)
-            port_namespace = self.inputs[namespace]
-        else:
-            port_namespace = self.inputs
+        port_namespace = self.inputs.get_port(namespace)
+        port_namespace.absorb(process_class.spec().inputs, exclude, include)
 
         exposed_inputs_list = self._exposed_inputs[namespace][process_class]
 
-        input_ports = process_class.spec().inputs
-
-        # If the inputs namespace of process class' spec is dynamic, inherit it
-        if input_ports.is_dynamic:
-            port_namespace.set_dynamic(True)
-
-        for name, port in input_ports.items():
+        for name, port in process_class.spec().inputs.items():
 
             if include is not None:
                 if name not in include:
@@ -300,5 +293,4 @@ class ProcessSpec(object):
                 if name in exclude:
                     continue
 
-            port_namespace[name] = port
             exposed_inputs_list.append(name)
