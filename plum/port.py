@@ -127,6 +127,9 @@ class InputPort(Port):
     def has_default(self):
         return self._default is not _NULL
 
+    def set_default(self, default):
+        self._default = default
+
     @property
     def default(self):
         if not self.has_default():
@@ -194,8 +197,15 @@ class PortNamespace(collections.MutableMapping, Port):
         return self._ports
 
     @property
+    def default(self):
+        return self._default
+
+    @property
     def is_dynamic(self):
         return self._dynamic
+
+    def set_default(self, default):
+        self._default = default
 
     def set_dynamic(self, dynamic):
         self._dynamic = dynamic
@@ -216,7 +226,13 @@ class PortNamespace(collections.MutableMapping, Port):
 
         :returns: a dictionary of descriptions of the Ports contained within this PortNamespace
         """
-        description = {}
+        description = {
+            '_attrs': {
+                'valid_type': str(self.valid_type),
+                'is_dynamic': self.is_dynamic,
+                'default': self.default,
+            }
+        }
 
         for name, port in self._ports.items():
             if isinstance(port, PortNamespace):
