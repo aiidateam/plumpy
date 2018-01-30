@@ -1,5 +1,6 @@
 import plum
 import kiwipy
+import unittest
 from past.builtins import basestring
 from plum import Process, ProcessState
 from plum.test_utils import check_process_against_snapshots
@@ -937,6 +938,7 @@ class TestAgglomerateExposeProcess(utils.TestCaseWithLoop):
         self.SubProcess = SubProcess
         self.ExposeProcess = ExposeProcess
 
+    @unittest.skip('Skip until agglomerate has been implemented')
     def test_inputs_union_valid(self):
         inputs = {
             'common': 1,
@@ -964,7 +966,6 @@ class TestAgglomerateExposeProcess(utils.TestCaseWithLoop):
         }
         with self.assertRaises(ValueError):
             self.ExposeProcess(inputs=inputs).execute()
-
 
 class TestNonAgglomerateExposeProcess(utils.TestCaseWithLoop):
     """
@@ -1001,6 +1002,7 @@ class TestNonAgglomerateExposeProcess(utils.TestCaseWithLoop):
         self.SubProcess = SubProcess
         self.ExposeProcess = ExposeProcess
 
+    @unittest.skip('Skip until agglomerate has been implemented')
     def test_valid_input_non_agglomerate(self):
         inputs = {
             'common': 1,

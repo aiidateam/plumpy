@@ -24,7 +24,6 @@ class ProcessSpec(object):
 
     def __init__(self):
         self._ports = self.PORT_NAMESPACE_TYPE()
-        self._exposed_inputs = defaultdict(lambda: defaultdict(list))
         self._validator = None
         self._sealed = False
         self._logger = logging.getLogger(__name__)
@@ -282,15 +281,20 @@ class ProcessSpec(object):
         port_namespace = self.inputs.get_port(namespace)
         port_namespace.absorb(process_class.spec().inputs, exclude, include)
 
-        exposed_inputs_list = self._exposed_inputs[namespace][process_class]
+    def exposed_inputs(self, inputs, process_class, namespace=None):
+        """
+        Return a dictionary of inputs that were exposed for a given Process class under an optional namespace.
+        The exposed inputs dictionary will effectively be obtained by projecting the inputs dictionary on the
+        input port namespace of the process class
 
-        for name, port in process_class.spec().inputs.items():
+        :param inputs: the dictionary of validated inputs passed to the Process
+        :param process_class: process class whose inputs to try and retrieve
+        :param namespace: optional sub PortNamespace in which to look for the inputs
+        """
+        if namespace is not None:
+            inputs = inputs[namespace]
 
-            if include is not None:
-                if name not in include:
-                    continue
-            else:
-                if name in exclude:
-                    continue
+        port_namespace = process_class.spec().inputs
+        project_inputs = port_namespace.project(inputs)
 
-            exposed_inputs_list.append(name)
+        return project_inputs

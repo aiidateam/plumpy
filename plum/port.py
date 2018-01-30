@@ -297,6 +297,26 @@ class PortNamespace(collections.MutableMapping, Port):
 
             self[name] = port
 
+    def project(self, port_values):
+        """
+        Project a (nested) dictionary of port values onto the port dictionary of this PortNamespace. That is
+        to say, return those keys of the dictionary that are shared by this PortNamespace. If a matching key
+        corresponds to another PortNamespace, this method will be called recursively, passing the sub dictionary
+        belonging to that port name.
+
+        :param port_values: a dictionary where keys are port names and values are actual input values
+        """
+        result = {}
+
+        for name, value in port_values.items():
+            if name in self.ports:
+                if isinstance(value, PortNamespace):
+                    result[name] = self[name].project(value)
+                else:
+                    result[name] = value
+
+        return result
+
     def validate(self, port_values=None):
         """
         Validate the namespace port itself and subsequently all the port_values it contains

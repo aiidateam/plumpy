@@ -141,3 +141,83 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
         with self.assertRaises(ValueError):
             ExcludeProcess.spec()
+
+    def test_exposed_inputs_unnamespaced(self):
+        """
+        Test that exposed_inputs works as expected. We expose ExposeProcess, excluding 'c' but it is not namespace
+        and the WrappingProcess also defines an input 'c'. As a result, since there is no expose rule memory, the
+        excluded input 'c' will be returned by the exposed_inputs call
+        """
+        BaseProcess = self.BaseProcess
+        ExposeProcess = self.ExposeProcess
+
+        class WrappingProcess(NewLoopProcess):
+            @classmethod
+            def define(cls, spec):
+                super(WrappingProcess, cls).define(spec)
+                spec.expose_inputs(ExposeProcess, exclude=('c',))
+                spec.input('c', valid_type=int, default=3)
+                spec.input('e', valid_type=int, default=4)
+
+        inputs = {
+            'c': 1,
+            'e': 3,
+            'd': 2,
+            'base': {
+                'name' : {
+                    'space': {
+                        'a': 'h',
+                        'b': 'i',
+                    }
+                }
+            }
+        }
+
+        process = WrappingProcess(inputs=inputs)
+        exposed_inputs = process.exposed_inputs(ExposeProcess)
+
+        self.assertTrue('base' in exposed_inputs)
+        self.assertTrue('d' in exposed_inputs)
+        self.assertTrue('c' in exposed_inputs)
+        self.assertTrue('e' not in exposed_inputs)
+
+    def test_exposed_inputs_namespaced(self):
+        """
+        Test that exposed_inputs works as expected. In this example, the exposed inputs of ExposeProcess are properly
+        namespaces, which means that this time, the excluded 'c' input during the expose call, will not show up in
+        the inputs returned by exposed_inputs
+        """
+        BaseProcess = self.BaseProcess
+        ExposeProcess = self.ExposeProcess
+
+        class WrappingProcess(NewLoopProcess):
+            @classmethod
+            def define(cls, spec):
+                super(WrappingProcess, cls).define(spec)
+                spec.expose_inputs(ExposeProcess, namespace='wrap', exclude=('c',))
+                spec.input('c', valid_type=int, default=3)
+                spec.input('e', valid_type=int, default=4)
+
+        inputs = {
+            'c': 1,
+            'e': 3,
+            'wrap': {
+                'd': 2,
+                'base': {
+                    'name' : {
+                        'space': {
+                            'a': 'h',
+                            'b': 'i',
+                        }
+                    }
+                }
+            }
+        }
+
+        process = WrappingProcess(inputs=inputs)
+        exposed_inputs = process.exposed_inputs(ExposeProcess, namespace='wrap')
+
+        self.assertTrue('base' in exposed_inputs)
+        self.assertTrue('d' in exposed_inputs)
+        self.assertTrue('c' not in exposed_inputs)
+        self.assertTrue('e' not in exposed_inputs)
