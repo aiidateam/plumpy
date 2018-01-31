@@ -5,7 +5,7 @@ certifi==2018.1.18
 enum34==1.1.6; python_version < '3.4'
 frozendict==1.2
 future==0.16.0
--e git+git@github.com:muhrin/kiwipy.git@c343040f5ca622d73a7f7f3c3384f7de2b073187#egg=kiwipy
+-e git+https://github.com/muhrin/kiwipy.git@c343040f5ca622d73a7f7f3c3384f7de2b073187#egg=kiwipy
 pika==0.11.2
 pkg-resources==0.0.0
 plumpy==0.10.0.dev5
