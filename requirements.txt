@@ -7,7 +7,6 @@ frozendict==1.2
 future==0.16.0
 -e git+https://github.com/muhrin/kiwipy.git@c343040f5ca622d73a7f7f3c3384f7de2b073187#egg=kiwipy
 pika==0.11.2
-pkg-resources==0.0.0
 plumpy==0.10.0.dev5
 portalocker==1.1.0
 PyYAML==3.12
