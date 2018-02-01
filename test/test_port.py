@@ -32,7 +32,7 @@ class TestPortNamespace(TestCase):
         self.assertEqual(self.port_namespace.name, self.BASE_PORT_NAMESPACE_NAME)
         self.assertEqual(len(self.port_namespace), 0)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             self.port_namespace['key'] = 5
 
         with self.assertRaises(KeyError):

@@ -212,7 +212,7 @@ class PortNamespace(collections.MutableMapping, Port):
 
     def __setitem__(self, key, port):
         if not isinstance(port, Port):
-            raise ValueError('port needs to be an instance of Port')
+            raise TypeError('port needs to be an instance of Port')
         self._ports[key] = port
 
     @property
