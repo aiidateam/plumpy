@@ -372,9 +372,6 @@ class PortNamespace(collections.MutableMapping, Port):
 
         :param port_values: an arbitrarily nested dictionary of parsed port values
         """
-        is_valid = True
-        message = None
-
         if port_values is None:
             port_values = {}
         else:
@@ -394,16 +391,14 @@ class PortNamespace(collections.MutableMapping, Port):
 
         # If any port_values remain, we better support dynamic ports
         if port_values and not self.dynamic:
-            is_valid = False
-            message = 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
+           return False, 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
 
         # If any port_values remain and we have a valid_type, make sure they match the type
         if port_values and self._valid_type is not None:
             valid_type = self._valid_type
             for port_name, port_value in port_values.items():
                 if not isinstance(port_value, valid_type):
-                    is_valid = False
-                    message = 'Invalid type {} for dynamic port value: expected {}'.format(
+                    return False, 'Invalid type {} for dynamic port value: expected {}'.format(
                         type(port_value), valid_type)
 
-        return is_valid, message
+        return True, None
