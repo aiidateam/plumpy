@@ -181,8 +181,8 @@ class ProcessSpec(object):
 
         :param valid_type: a single or tuple of valid input types
         """
-        self.inputs.set_dynamic(True)
-        self.inputs.set_valid_type(valid_type)
+        self.inputs.dynamic = True
+        self.inputs.valid_type = valid_type
 
     def dynamic_output(self, valid_type=None):
         """
@@ -190,32 +190,32 @@ class ProcessSpec(object):
 
         :param valid_type: a single or tuple of valid output types
         """
-        self.outputs.set_dynamic(True)
-        self.outputs.set_valid_type(valid_type)
+        self.outputs.dynamic = True
+        self.outputs.valid_type = valid_type
 
     def no_dynamic_input(self):
         """
         Remove the dynamic property from the inputs port namespace
         """
-        self.inputs.set_dynamic(False)
+        self.inputs.dynamic = False
 
     def no_dynamic_output(self):
         """
         Remove the dynamic property from the outputs port namespace
         """
-        self.outputs.set_dynamic(False)
+        self.outputs.dynamic = False
 
     def has_dynamic_input(self):
         """
         Return whether the input port namespace is dynamic
         """
-        return self.inputs.is_dynamic
+        return self.inputs.dynamic
 
     def has_dynamic_output(self):
         """
         Return whether the output port namespace is dynamic
         """
-        return self.outputs.is_dynamic
+        return self.outputs.dynamic
 
     def inputs_validator(self, validator):
         """
@@ -228,7 +228,7 @@ class ProcessSpec(object):
         :return: valid or not, error string|None
         :rtype: tuple(bool, str|None)
         """
-        self.inputs.set_validator(validator)
+        self.inputs.validator = validator
 
     def outputs_validator(self, validator):
         """
@@ -241,7 +241,7 @@ class ProcessSpec(object):
         :return: valid or not, error string|None
         :rtype: tuple(bool, str|None)
         """
-        self.outputs.set_validator(validator)
+        self.outputs.validator = validator
 
     def validate_inputs(self, inputs=None):
         """

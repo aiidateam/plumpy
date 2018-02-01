@@ -50,21 +50,41 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
     def name(self):
         return self._name
 
+    @name.setter
+    def name(self, name):
+        self._name = name
+
     @property
     def valid_type(self):
         return self._valid_type
+
+    @valid_type.setter
+    def valid_type(self, valid_type):
+        self._valid_type = valid_type
 
     @property
     def help(self):
         return self._help
 
+    @help.setter
+    def help(self, help):
+        self._help = help
+
     @property
     def required(self):
         return self._required
 
+    @required.setter
+    def required(self, required):
+        self._required = required
+
     @property
     def validator(self):
         return self._validator
+
+    @validator.setter
+    def validator(self, validator):
+        self._validator = validator
 
     def validate(self, value):
         if value is None:
@@ -130,14 +150,15 @@ class InputPort(Port):
     def has_default(self):
         return self._default is not _NULL
 
-    def set_default(self, default):
-        self._default = default
-
     @property
     def default(self):
         if not self.has_default():
             raise RuntimeError('No default')
         return self._default
+
+    @default.setter
+    def default(self, default):
+        self._default = default
 
     def get_description(self):
         """
@@ -198,28 +219,24 @@ class PortNamespace(collections.MutableMapping, Port):
     def ports(self):
         return self._ports
 
+    def has_default(self):
+        return self._default is not _NULL
+
     @property
     def default(self):
         return self._default
 
-    @property
-    def is_dynamic(self):
-        return self._dynamic
-
-    def set_default(self, default):
+    @default.setter
+    def default(self, default):
         self._default = default
 
-    def set_dynamic(self, dynamic):
+    @property
+    def dynamic(self):
+        return self._dynamic
+
+    @dynamic.setter
+    def dynamic(self, dynamic):
         self._dynamic = dynamic
-
-    def set_validator(self, validator):
-        self._validator = validator
-
-    def set_valid_type(self, valid_type):
-        self._valid_type = valid_type
-
-    def has_default(self):
-        return self._default is not _NULL
 
     def get_description(self):
         """
@@ -230,9 +247,9 @@ class PortNamespace(collections.MutableMapping, Port):
         """
         description = {
             '_attrs': {
-                'valid_type': str(self.valid_type),
-                'is_dynamic': self.is_dynamic,
                 'default': self.default,
+                'dynamic': self.dynamic,
+                'valid_type': str(self.valid_type),
             }
         }
 
@@ -342,7 +359,7 @@ class PortNamespace(collections.MutableMapping, Port):
                 return is_valid, message
 
         # If any port_values remain, we better support dynamic ports
-        if port_values and not self.is_dynamic:
+        if port_values and not self.dynamic:
             is_valid = False
             message = 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
 

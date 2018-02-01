@@ -63,7 +63,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         self.assertEquals(exposed_inputs['b'].default, 'b')
 
         # Change the default of base process port and verify they don't change the exposed port
-        self.BaseProcess.spec().inputs['a'].set_default('c')
+        self.BaseProcess.spec().inputs['a'].default = 'c'
         self.assertEquals(self.BaseProcess.spec().inputs['a'].default, 'c')
         self.assertEquals(exposed_inputs['a'].default, 'a')
 
@@ -79,7 +79,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         self.assertEquals(inputs.valid_type, int)
 
         # Now change the valid type of the BaseProcess inputs and verify it does not affect ExposeProcess
-        self.BaseProcess.spec().inputs.set_valid_type(float)
+        self.BaseProcess.spec().inputs.valid_type = float
 
         self.assertEquals(self.BaseProcess.spec().inputs.valid_type, float)
         self.assertEquals(exposed_inputs.valid_type, str)
