@@ -12,6 +12,8 @@ try:
 except ImportError:
     pika = None
 
+AWAIT_TIMEOUT = 1.
+
 
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
 class TestProcessReceiver(TestCaseWithLoop):
@@ -70,7 +72,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a pause message
         action = plum.PauseAction(proc.pid)
         action.execute(self.communicator)
-        self.communicator.await(action)
+        self.communicator.await(action, timeout=AWAIT_TIMEOUT)
 
         self.assertEqual(proc.state, plum.ProcessState.PAUSED)
 
@@ -79,7 +81,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a play message
         action = plum.PlayAction(proc.pid)
         action.execute(self.communicator)
-        self.communicator.await(action)
+        self.communicator.await(action, timeout=AWAIT_TIMEOUT)
 
         self.assertEqual(proc.state, plum.ProcessState.WAITING)
 
@@ -88,7 +90,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a cancel message
         action = plum.CancelAction(proc.pid)
         action.execute(self.communicator)
-        self.communicator.await(action)
+        self.communicator.await(action, timeout=AWAIT_TIMEOUT)
 
         self.assertEqual(proc.state, plum.ProcessState.CANCELLED)
 
@@ -97,7 +99,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         # Send a status message
         action = plum.StatusAction(proc.pid)
         action.execute(self.communicator)
-        status = self.communicator.await(action)
+        status = self.communicator.await(action, timeout=AWAIT_TIMEOUT)
         self.assertIsNotNone(status)
 
     def test_broadcast(self):
