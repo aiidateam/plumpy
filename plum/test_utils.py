@@ -241,8 +241,7 @@ class ProcessSaver(ProcessListener, Saver):
         self._save(self.process)
         if not self.process.done():
             self.process.play()
-            self._future.add_done_callback(lambda _: self.process.loop().stop())
-            self.process.loop().start()
+            self.process.loop().run_sync(lambda: self._future)
 
     @utils.override
     def on_process_running(self, process):
@@ -370,6 +369,7 @@ class TestPersister(persisters.Persister):
     """
     Test persister, just creates the bundle, noting else
     """
+
     def save_checkpoint(self, process, tag=None):
         """ Create the checkpoint bundle """
         persisters.Bundle(process)

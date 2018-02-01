@@ -109,13 +109,11 @@ class Executor(ProcessListener):
             loop = process.loop()
             self._future = futures.Future()
             futures.chain(process.future(), self._future)
-            self._future.add_done_callback(lambda _: loop.stop())
 
             if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
                 process.play()
 
-            loop.start()
-            return self._future.result()
+            return loop.run_sync(lambda: self._future)
         finally:
             self._future = None
             self._loop = None

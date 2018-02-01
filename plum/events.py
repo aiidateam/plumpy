@@ -21,12 +21,7 @@ def run_until_complete(future, loop=None):
     if loop is None:
         loop = get_event_loop()
 
-    def _stop(future):
-        loop.stop()
-
-    future.add_done_callback(_stop)
-    loop.start()
-    return future.result()
+    return loop.run_sync(lambda: future)
 
 
 def _get_function_source(func):
