@@ -1,8 +1,12 @@
 import plum
 import kiwipy
-
-from plum.process import *
+import unittest
+from past.builtins import basestring
+from plum import Process, ProcessState
+from plum.test_utils import check_process_against_snapshots
 from plum import test_utils
+from plum.test_utils import ProcessListenerTester, NewLoopProcess
+from plum import process
 
 from . import utils
 
@@ -62,8 +66,7 @@ class TestProcess(utils.TestCaseWithLoop):
             @classmethod
             def define(cls, spec):
                 super(WithDynamic, cls).define(spec)
-
-                spec.dynamic_input()
+                spec.inputs.dynamic = True
 
             def _run(self, **kwargs):
                 pass
@@ -171,12 +174,12 @@ class TestProcess(utils.TestCaseWithLoop):
         # least
         for proc_class in test_utils.TEST_PROCESSES:
             desc = proc_class.get_description()
-            self.assertIsInstance(desc, str)
+            self.assertIsInstance(desc, list)
 
         # Dummy process should at least use the docstring as part of the
         # description and so it shouldn't be empty
         desc = test_utils.DummyProcess.get_description()
-        self.assertNotEqual(desc, "")
+        self.assertNotEqual(desc, [])
 
     def test_created_bundle(self):
         """
@@ -186,8 +189,8 @@ class TestProcess(utils.TestCaseWithLoop):
         proc = test_utils.DummyProcessWithOutput()
         b = plum.Bundle(proc)
 
-        self.assertIsNone(b.get(BundleKeys.INPUTS, None))
-        self.assertEqual(len(b[BundleKeys.OUTPUTS]), 0)
+        self.assertIsNone(b.get(process.BundleKeys.INPUTS, None))
+        self.assertEqual(len(b[process.BundleKeys.OUTPUTS]), 0)
 
     def test_instance_state(self):
         proc = test_utils.DummyProcessWithOutput()
@@ -198,12 +201,12 @@ class TestProcess(utils.TestCaseWithLoop):
 
         for bundle, outputs in zip(saver.snapshots, saver.outputs):
             # Check that it is a copy
-            self.assertIsNot(outputs, bundle[BundleKeys.OUTPUTS])
+            self.assertIsNot(outputs, bundle[process.BundleKeys.OUTPUTS])
             # Check the contents are the same
-            self.assertEqual(outputs, bundle[BundleKeys.OUTPUTS])
+            self.assertEqual(outputs, bundle[process.BundleKeys.OUTPUTS])
 
         self.assertIsNot(
-            proc.outputs, saver.snapshots[-1][BundleKeys.OUTPUTS]
+            proc.outputs, saver.snapshots[-1][process.BundleKeys.OUTPUTS]
         )
 
     def test_saving_each_step(self):
@@ -464,7 +467,7 @@ class _RestartProcess(test_utils.WaitForSignalProcess):
     @classmethod
     def define(cls, spec):
         super(_RestartProcess, cls).define(spec)
-        spec.dynamic_output()
+        spec.outputs.dynamic = True
 
     def last_step(self):
         self.out("finished", True)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
+from six import iteritems
 import copy
 import logging
 import plum
@@ -184,19 +185,15 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         :return: The description.
         :rtype: str
         """
-        desc = []
+        description = []
         if cls.__doc__:
-            desc.append("Description")
-            desc.append("===========")
-            desc.append(cls.__doc__)
+            description.append({'description': cls.__doc__.strip()})
 
-        spec_desc = cls.spec().get_description()
-        if spec_desc:
-            desc.append("Specification")
-            desc.append("=============")
-            desc.append(spec_desc)
+        spec_description = cls.spec().get_description()
+        if spec_description:
+            description.append({'spec': spec_description})
 
-        return "\n".join(desc)
+        return description
 
     @classmethod
     def recreate_from(cls, saved_state, *args, **kwargs):
@@ -443,26 +440,18 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     @protected
     def out(self, output_port, value):
         self.on_output_emitting(output_port, value)
-        dynamic = False
-        # Do checks on the outputs
-        try:
-            # Check types (if known)
-            port = self.spec().get_output(output_port)
-        except KeyError:
-            if self.spec().has_dynamic_output():
-                dynamic = True
-                port = self.spec().get_dynamic_output()
-            else:
-                raise TypeError(
-                    "Process trying to output on unknown output port {}, "
-                    "and does not have a dynamic output port in spec.".
-                        format(output_port))
 
-            if port.valid_type is not None and not isinstance(value, port.valid_type):
-                raise TypeError(
-                    "Process returned output '{}' of wrong type."
-                    "Expected '{}', got '{}'".
-                        format(output_port, port.valid_type, type(value)))
+        is_valid, message = self.spec().validate_outputs({output_port: value})
+
+        if not is_valid:
+            raise TypeError(message)
+
+        # The output was accepted by the output PortNamespace which means that if it
+        # doesn't have it explicitly, it was dynamically accepted
+        if self.spec().has_output(output_port):
+            dynamic = False
+        else:
+            dynamic = True
 
         self._outputs[output_port] = value
         self.on_output_emitted(output_port, value, dynamic)
@@ -483,8 +472,8 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             ins = {}
         else:
             ins = dict(inputs)
-        # Go through the spec filling in any default and checking for required
-        # inputs
+
+        # Go through the spec filling in any default and checking for required inputs
         for name, port in self.spec().inputs.items():
             if name not in ins:
                 if port.has_default():
@@ -495,6 +484,16 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
                     )
 
         return ins
+
+    def exposed_inputs(self, process_class, namespace=None):
+        """
+        Gather a dictionary of the inputs that were exposed for a given Process
+        class under an optional namespace.
+
+        :param process_class: Process class whose inputs to try and retrieve
+        :param namespace: PortNamespace in which to look for the inputs
+        """
+        return self.spec().exposed_inputs(self.inputs, process_class, namespace)
 
     @protected
     def encode_input_args(self, inputs):
@@ -565,7 +564,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
-        valid, msg = self.spec().validate(inputs)
+        valid, msg = self.spec().validate_inputs(inputs)
         if not valid:
             raise ValueError(msg)
 

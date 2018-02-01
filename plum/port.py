@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-
-from abc import ABCMeta
+import json
 import collections
 import logging
-
+from abc import ABCMeta
+from copy import deepcopy
 from future.utils import with_metaclass
+from six import string_types
 
 _LOGGER = logging.getLogger(__name__)
-
 _NULL = ()
 
 
@@ -17,8 +17,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
     properties like whether it is required, valid types, the help string, etc.
     """
 
-    def __init__(self, name, valid_type=None, help=None, required=True,
-                 validator=None):
+    def __init__(self, name, valid_type=None, help=None, required=True, validator=None):
         self._name = name
         self._valid_type = valid_type
         self._help = help
@@ -26,17 +25,26 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         self._validator = validator
 
     def __str__(self):
-        return self.get_description()
+        return '; '.join(self.get_description())
 
     def get_description(self):
-        desc = ["{}".format(self.name)]
+        """
+        Return a description of the ValueSpec, which will be a dictionary of its attributes
+
+        :returns: a dictionary of the stringified ValueSpec attributes
+        """
+        description = {
+            'name': '{}'.format(self.name)
+        }
+
         if self.valid_type:
-            desc.append("valid type(s): {}".format(self.valid_type))
-        if self.help:
-            desc.append("help: {}".format(self.help))
+            description['valid_type'] = '{}'.format(self.valid_type)
         if self.required:
-            desc.append("required: {}".format(self.required))
-        return ", ".join(desc)
+            description['required'] = '{}'.format(self.required)
+        if self.help:
+            description['help'] = '{}'.format(self.help.strip())
+
+        return description
 
     @property
     def name(self):
@@ -46,17 +54,33 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
     def valid_type(self):
         return self._valid_type
 
+    @valid_type.setter
+    def valid_type(self, valid_type):
+        self._valid_type = valid_type
+
     @property
     def help(self):
         return self._help
+
+    @help.setter
+    def help(self, help):
+        self._help = help
 
     @property
     def required(self):
         return self._required
 
+    @required.setter
+    def required(self, required):
+        self._required = required
+
     @property
     def validator(self):
         return self._validator
+
+    @validator.setter
+    def validator(self, validator):
+        self._validator = validator
 
     def validate(self, value):
         if value is None:
@@ -82,29 +106,13 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         return True, None
 
 
-class Attribute(ValueSpec):
-    def __init__(self, name, valid_type=None, help=None, default=_NULL, required=False):
-        super(Attribute, self).__init__(name, valid_type=valid_type,
-                                        help=help, required=required)
-        self._default = default
-
-    def has_default(self):
-        return self._default is not _NULL
-
-    @property
-    def default(self):
-        if not self.has_default():
-            raise RuntimeError("No default")
-        return self._default
-
-
 class Port(with_metaclass(ABCMeta, ValueSpec)):
     pass
 
 
 class InputPort(Port):
     """
-    A simple input port for a value being received by a workflow.
+    A simple input port for a value being received by a process
     """
 
     @staticmethod
@@ -119,8 +127,7 @@ class InputPort(Port):
         else:
             return False
 
-    def __init__(self, name, valid_type=None, help=None, default=_NULL,
-                 required=True, validator=None):
+    def __init__(self, name, valid_type=None, help=None, default=_NULL, required=True, validator=None):
         super(InputPort, self).__init__(
             name, valid_type=valid_type, help=help, required=InputPort.required_override(required, default),
             validator=validator)
@@ -136,72 +143,31 @@ class InputPort(Port):
 
         self._default = default
 
-    def __str__(self):
-        desc = [super(InputPort, self).__str__()]
-        if self.default:
-            desc.append(str(self.default))
-
-        return "->" + ",".join(desc)
-
     def has_default(self):
         return self._default is not _NULL
 
     @property
     def default(self):
         if not self.has_default():
-            raise RuntimeError("No default")
+            raise RuntimeError('No default')
         return self._default
 
+    @default.setter
+    def default(self, default):
+        self._default = default
 
-class InputGroupPort(InputPort):
-    """
-    An input group, this corresponds to a mapping where if validation is used
-    then each value is checked to meet the validation criteria rather than
-    the whole input itself.
-    """
+    def get_description(self):
+        """
+        Return a description of the InputPort, which will be a dictionary of its attributes
 
-    def __init__(self, name, valid_type=None, help=None, default=_NULL,
-                 required=False):
-        # We have to set _valid_inner_type before calling the super constructor
-        # because it will call validate on the default value (if supplied)
-        # which in turn needs this value to be set.
-        if default is not _NULL and not isinstance(default, collections.Mapping):
-            raise ValueError("Input group default must be of type Mapping")
-        self._valid_inner_type = valid_type
+        :returns: a dictionary of the stringified InputPort attributes
+        """
+        description = super(InputPort, self).get_description()
 
-        super(InputGroupPort, self).__init__(
-            name, valid_type=dict, help=help, default=default,
-            required=required)
+        if self.has_default():
+            description['default'] = '{}'.format(self.default)
 
-    @property
-    def default(self):
-        return self._default
-
-    def validate(self, value):
-        valid, msg = super(InputGroupPort, self).validate(value)
-        if not valid:
-            return False, msg
-
-        if value is not None and self._valid_inner_type is not None:
-            # Check that all the members of the dictionary are of the right type
-            for k, v in value.items():
-                if not isinstance(v, self._valid_inner_type):
-                    return False, "Group port value {} is not of the right type. Should be of type {}, but is {}.".format(
-                        k, self._valid_inner_type, type(v))
-
-        return True, None
-
-
-class DynamicInputPort(InputPort):
-    """
-    A dynamic output port represents the fact that a Process can emit outputs
-    that weren't defined beforehand
-    """
-    NAME = "dynamic"
-
-    def __init__(self, valid_type=None, help_=None):
-        super(DynamicInputPort, self).__init__(
-            self.NAME, valid_type=valid_type, help=help_, required=False)
+        return description
 
 
 class OutputPort(Port):
@@ -209,18 +175,235 @@ class OutputPort(Port):
         super(OutputPort, self).__init__(name, valid_type, help=help)
         self._required = required
 
+
+class PortNamespace(collections.MutableMapping, Port):
+    """
+    A container for Ports. Effectively it maintains a dictionary whose members are
+    either a Port or yet another PortNamespace. This allows for the nesting of ports
+    """
+    NAMESPACE_SEPARATOR = '.'
+
+    def __init__(self, name=None, help=None, required=True, validator=None, valid_type=None, default=_NULL, dynamic=False):
+        super(PortNamespace, self).__init__(
+            name=name, help=help, required=required, validator=validator, valid_type=valid_type
+        )
+        self._ports = {}
+        self._default = default
+        self._dynamic = dynamic
+
+    def __str__(self):
+        return json.dumps(self.get_description(), sort_keys=True, indent=4)
+
+    def __iter__(self):
+        return self._ports.__iter__()
+
+    def __len__(self):
+        return len(self._ports)
+
+    def __delitem__(self, key):
+        del self._ports[key]
+
+    def __getitem__(self, key):
+        return self._ports[key]
+
+    def __setitem__(self, key, port):
+        if not isinstance(port, Port):
+            raise TypeError('port needs to be an instance of Port')
+        self._ports[key] = port
+
     @property
-    def required(self):
-        return self._required
+    def ports(self):
+        return self._ports
 
+    def has_default(self):
+        return self._default is not _NULL
 
-class DynamicOutputPort(OutputPort):
-    """
-    A dynamic output port represents the fact that a Process can emit outputs
-    that weren't defined beforehand
-    """
-    NAME = "dynamic"
+    @property
+    def default(self):
+        return self._default
 
-    def __init__(self, valid_type=None):
-        super(DynamicOutputPort, self).__init__(
-            self.NAME, valid_type=valid_type, required=False)
+    @default.setter
+    def default(self, default):
+        self._default = default
+
+    @property
+    def dynamic(self):
+        return self._dynamic
+
+    @dynamic.setter
+    def dynamic(self, dynamic):
+        self._dynamic = dynamic
+
+    @property
+    def valid_type(self):
+        return self._valid_type
+
+    @valid_type.setter
+    def valid_type(self, valid_type):
+        self.dynamic = True
+        self._valid_type = valid_type
+
+    def get_description(self):
+        """
+        Return a dictionary with a description of the ports this namespace contains
+        Nested PortNamespaces will be properly recursed and Ports will print their properties in a list
+
+        :returns: a dictionary of descriptions of the Ports contained within this PortNamespace
+        """
+        description = {
+            '_attrs': {
+                'default': self.default,
+                'dynamic': self.dynamic,
+                'valid_type': str(self.valid_type),
+            }
+        }
+
+        for name, port in self._ports.items():
+            description[name] = port.get_description()
+
+        return description
+
+    def get_port(self, name):
+        """
+        Retrieve a (namespaced) port from this PortNamespace. If any of the sub namespaces of the terminal
+        port itself cannot be found, a ValueError will be raised
+
+        :param name: name (potentially namespaced) of the port to retrieve
+        :returns: Port
+        :raises: ValueError if port or namespace does not exist
+        """
+        if not isinstance(name, string_types):
+            raise ValueError('name has to be a string type, not {}'.format(type(name)))
+
+        if not name:
+            raise ValueError('name cannot be an empty string')
+
+        namespace = name.split(self.NAMESPACE_SEPARATOR)
+        port_name = namespace.pop(0)
+
+        if port_name not in self:
+            raise ValueError("port '{}' does not exist in port namespace '{}'".format(port_name, self.name))
+
+        if namespace:
+            return self[port_name].get_port(self.NAMESPACE_SEPARATOR.join(namespace))
+        else:
+            return self[port_name]
+
+    def create_port_namespace(self, name):
+        """
+        Create and return a new PortNamespace in this PortNamespace. If the name is namespaced, the sub PortNamespaces
+        will be created recursively, except if one of the namespaces is already occupied at any level by
+        a Port in which case a ValueError will be thrown
+
+        :param name: name (potentially namespaced) of the port to create and return
+        :returns: PortNamespace
+        :raises: ValueError if any sub namespace is occupied by a non-PortNamespace port
+        """
+        if not isinstance(name, string_types):
+            raise ValueError('name has to be a string type, not {}'.format(type(name)))
+
+        if not name:
+            raise ValueError('name cannot be an empty string')
+
+        namespace = name.split(self.NAMESPACE_SEPARATOR)
+        port_name = namespace.pop(0)
+
+        if port_name in self and not isinstance(self[port_name], PortNamespace):
+            raise ValueError("the name '{}' in '{}' already contains a Port".format(port_name, self.name))
+
+        if port_name not in self:
+            self[port_name] = self.__class__(port_name)
+
+        if namespace:
+            return self[port_name].create_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace))
+        else:
+            return self[port_name]
+
+    def absorb(self, port_namespace, exclude=(), include=None):
+        """
+        Absorb another PortNamespace instance into oneself, including all its attributes and ports.
+        Attributes of self will be overwritten with those of the port namespace that is to be absorbed.
+        The same goes for the ports, meaning that any ports with a key that already exists in self will
+        be overwritten. The attributes and ports of the port namespace that is to be absorbed are deep copied.
+        The exclude and include tuples can be used to exclude or include certain ports. Both are mutually exclusive.
+
+        :param port_namespace: instance of PortNamespace that is to be absorbed into self
+        :param exclude: list or tuple of input keys to exclude from being exposed
+        :param include: list or tuple of input keys to include as exposed inputs
+        """
+        if not isinstance(port_namespace, PortNamespace):
+            raise ValueError('port_namespace has to be an instance of PortNamespace')
+
+        absorb_attrs = deepcopy(port_namespace.__dict__)
+        absorb_ports = absorb_attrs.pop('_ports', {})
+
+        # Override all attributes except for the ports collection
+        self.__dict__.update(absorb_attrs)
+
+        for name, port in absorb_ports.items():
+
+            if include is not None:
+                if name not in include:
+                    continue
+            else:
+                if name in exclude:
+                    continue
+
+            self[name] = port
+
+    def project(self, port_values):
+        """
+        Project a (nested) dictionary of port values onto the port dictionary of this PortNamespace. That is
+        to say, return those keys of the dictionary that are shared by this PortNamespace. If a matching key
+        corresponds to another PortNamespace, this method will be called recursively, passing the sub dictionary
+        belonging to that port name.
+
+        :param port_values: a dictionary where keys are port names and values are actual input values
+        """
+        result = {}
+
+        for name, value in port_values.items():
+            if name in self.ports:
+                if isinstance(value, PortNamespace):
+                    result[name] = self[name].project(value)
+                else:
+                    result[name] = value
+
+        return result
+
+    def validate(self, port_values=None):
+        """
+        Validate the namespace port itself and subsequently all the port_values it contains
+
+        :param port_values: an arbitrarily nested dictionary of parsed port values
+        """
+        if port_values is None:
+            port_values = {}
+        else:
+            port_values = dict(port_values)
+
+        # Validate the validator first as it most likely will rely on the port values
+        if self._validator is not None:
+            is_valid, message = self._validator(self, port_values)
+            if not is_valid:
+                return is_valid, message
+
+        # Validate each port individually, popping its name if found in input dictionary
+        for name, port in self._ports.items():
+            is_valid, message = port.validate(port_values.pop(name, None))
+            if not is_valid:
+                return is_valid, message
+
+        # If any port_values remain, we better support dynamic ports
+        if port_values and not self.dynamic:
+           return False, 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
+
+        # If any port_values remain and we have a valid_type, make sure they match the type
+        if port_values and self._valid_type is not None:
+            valid_type = self._valid_type
+            for port_name, port_value in port_values.items():
+                if not isinstance(port_value, valid_type):
+                    return False, 'Invalid type {} for dynamic port value: expected {}'.format(
+                        type(port_value), valid_type)
+
+        return True, None
