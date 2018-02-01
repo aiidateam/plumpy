@@ -50,10 +50,6 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
     def name(self):
         return self._name
 
-    @name.setter
-    def name(self, name):
-        self._name = name
-
     @property
     def valid_type(self):
         return self._valid_type
