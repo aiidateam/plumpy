@@ -14,7 +14,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 super(BaseProcess, cls).define(spec)
                 spec.input('a', valid_type=str, default='a')
                 spec.input('b', valid_type=str, default='b')
-                spec.dynamic_input(valid_type=str)
+                spec.inputs.dynamic = True
+                spec.inputs.valid_type = str
 
         class ExposeProcess(NewLoopProcess):
             @classmethod
@@ -23,7 +24,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 spec.expose_inputs(BaseProcess, namespace='base.name.space')
                 spec.input('c', valid_type=int, default=1)
                 spec.input('d', valid_type=int, default=2)
-                spec.dynamic_input(valid_type=int)
+                spec.inputs.dynamic = True
+                spec.inputs.valid_type = int
 
         self.BaseProcess = BaseProcess
         self.ExposeProcess = ExposeProcess

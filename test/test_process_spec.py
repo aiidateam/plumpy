@@ -24,21 +24,19 @@ class TestProcessSpec(TestCase):
         self.assertTrue(output_ports.name, self.spec.NAME_OUTPUTS_PORT_NAMESPACE)
 
     def test_dynamic_output(self):
-        self.spec.dynamic_output(valid_type=str)
+        self.spec.outputs.dynamic = True
+        self.spec.outputs.valid_type = str
         self.assertTrue(self.spec.validate_outputs({'dummy': 'foo'})[0])
         self.assertTrue(self.spec.validate_outputs({'dummy': StrSubtype('bar')})[0])
         self.assertFalse(self.spec.validate_outputs({'dummy': 5})[0])
 
         # Remove dynamic output
-        self.spec.no_dynamic_output()
-        self.assertFalse(self.spec.has_dynamic_output())
-
-        # Should be able to remove again
-        self.spec.no_dynamic_output()
-        self.assertFalse(self.spec.has_dynamic_output())
+        self.spec.outputs.dynamic = False
+        self.spec.outputs.valid_type = None
 
         # Now add and check behaviour
-        self.spec.dynamic_output(valid_type=str)
+        self.spec.outputs.dynamic = True
+        self.spec.outputs.valid_type = str
         self.assertTrue(self.spec.validate_outputs({'dummy': 'foo'})[0])
         self.assertTrue(self.spec.validate_outputs({'dummy': StrSubtype('bar')})[0])
         self.assertFalse(self.spec.validate_outputs({'dummy': 5})[0])
@@ -71,7 +69,7 @@ class TestProcessSpec(TestCase):
 
         self.spec.input('a', required=False)
         self.spec.input('b', required=False)
-        self.spec.inputs_validator(is_valid)
+        self.spec.inputs.validator = is_valid
 
         valid, msg = self.spec.validate_inputs(inputs={})
         self.assertFalse(valid, msg)

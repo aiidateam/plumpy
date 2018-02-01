@@ -66,8 +66,7 @@ class TestProcess(utils.TestCaseWithLoop):
             @classmethod
             def define(cls, spec):
                 super(WithDynamic, cls).define(spec)
-
-                spec.dynamic_input()
+                spec.inputs.dynamic = True
 
             def _run(self, **kwargs):
                 pass
@@ -468,7 +467,7 @@ class _RestartProcess(test_utils.WaitForSignalProcess):
     @classmethod
     def define(cls, spec):
         super(_RestartProcess, cls).define(spec)
-        spec.dynamic_output()
+        spec.outputs.dynamic = True
 
     def last_step(self):
         self.out("finished", True)
