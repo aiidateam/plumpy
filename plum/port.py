@@ -234,6 +234,15 @@ class PortNamespace(collections.MutableMapping, Port):
     def dynamic(self, dynamic):
         self._dynamic = dynamic
 
+    @property
+    def valid_type(self):
+        return self._valid_type
+
+    @valid_type.setter
+    def valid_type(self, valid_type):
+        self.dynamic = True
+        self._valid_type = valid_type
+
     def get_description(self):
         """
         Return a dictionary with a description of the ports this namespace contains

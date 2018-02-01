@@ -38,6 +38,18 @@ class TestPortNamespace(TestCase):
         with self.assertRaises(KeyError):
             self.port_namespace['non_existent']
 
+    def test_port_namespace_dynamic(self):
+        """
+        Setting a valid type for a PortNamespace should automatically make it dynamic
+        """
+        self.assertFalse(self.port_namespace.dynamic)
+
+        self.port_namespace.valid_type = (str, int)
+
+        self.assertTrue(self.port_namespace.dynamic)
+        self.assertEqual(self.port_namespace.valid_type, (str, int))
+
+
     def test_port_namespace_get_port(self):
         """
         Test get_port of PortNamespace will retrieve nested PortNamespaces and Ports as long
