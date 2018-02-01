@@ -63,14 +63,12 @@ class ProcessSpec(object):
         """
         Get a description of this process specification
 
-        :return: a list with dictionaries of descriptions of input and output ports if defined
+        :return: a dictionary with the descriptions of the input and output port namespaces
         """
-        description = []
-        if self.inputs:
-            description.append({'inputs': self.inputs.get_description()})
-
-        if self.outputs:
-            description.append({'outputs': self.outputs.get_description()})
+        description = {
+            'inputs': self.inputs.get_description(),
+            'outputs': self.outputs.get_description()
+        }
 
         return description
 
