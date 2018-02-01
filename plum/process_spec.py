@@ -96,7 +96,7 @@ class ProcessSpec(object):
         """
         return self._ports[self.NAME_OUTPUTS_PORT_NAMESPACE]
 
-    def create_port(self, port_namespace, port_class, name, **kwargs):
+    def _create_port(self, port_namespace, port_class, name, **kwargs):
         """
         Create a new Port of a given class and name in a given PortNamespace
 
@@ -124,7 +124,7 @@ class ProcessSpec(object):
         :param name: name of the input port to create
         :param kwargs: options for the input port
         """
-        self.create_port(self.inputs, self.INPUT_PORT_TYPE, name, **kwargs)
+        self._create_port(self.inputs, self.INPUT_PORT_TYPE, name, **kwargs)
 
     def output(self, name, **kwargs):
         """
@@ -133,7 +133,7 @@ class ProcessSpec(object):
         :param name: name of the output port to create
         :param kwargs: options for the output port
         """
-        self.create_port(self.outputs, self.OUTPUT_PORT_TYPE, name, **kwargs)
+        self._create_port(self.outputs, self.OUTPUT_PORT_TYPE, name, **kwargs)
 
     def input_namespace(self, name, **kwargs):
         """
@@ -144,7 +144,7 @@ class ProcessSpec(object):
         :param name: namespace of the new port namespace
         :param kwargs: keyword arguments for the PortNamespace constructor
         """
-        self.create_port(self.inputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
+        self._create_port(self.inputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
 
     def output_namespace(self, name, **kwargs):
         """
@@ -155,7 +155,7 @@ class ProcessSpec(object):
         :param name: namespace of the new port namespace
         :param kwargs: keyword arguments for the PortNamespace constructor
         """
-        self.create_port(self.outputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
+        self._create_port(self.outputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
 
     def has_input(self, name):
         """
