@@ -29,18 +29,20 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
 
     def get_description(self):
         """
-        Return a description of the ValueSpec, which will be a list of strings with
-        information about the attributes that have been defined
+        Return a description of the ValueSpec, which will be a dictionary of its attributes
 
-        :returns: list of strings
+        :returns: a dictionary of the stringified ValueSpec attributes
         """
-        description = ['name: {}'.format(self.name)]
+        description = {
+            'name': '{}'.format(self.name)
+        }
+
         if self.valid_type:
-            description.append('valid type(s): {}'.format(self.valid_type))
+            description['valid_type'] = '{}'.format(self.valid_type)
         if self.required:
-            description.append('required: {}'.format(self.required))
+            description['required'] = '{}'.format(self.required)
         if self.help:
-            description.append('help: {}'.format(self.help.strip()))
+            description['help'] = '{}'.format(self.help.strip())
 
         return description
 
@@ -139,15 +141,14 @@ class InputPort(Port):
 
     def get_description(self):
         """
-        Return a description of the ValueSpec, which will be a list of strings with
-        information about the attributes that have been defined
+        Return a description of the InputPort, which will be a dictionary of its attributes
 
-        :returns: list of strings
+        :returns: a dictionary of the stringified InputPort attributes
         """
         description = super(InputPort, self).get_description()
 
         if self.has_default():
-            description.append('default: {}'.format(self.default))
+            description['default'] = '{}'.format(self.default)
 
         return description
 
@@ -236,10 +237,7 @@ class PortNamespace(collections.MutableMapping, Port):
         }
 
         for name, port in self._ports.items():
-            if isinstance(port, PortNamespace):
-                description[name] = port.get_description()
-            else:
-                description[name] = port.get_description()
+            description[name] = port.get_description()
 
         return description
 
