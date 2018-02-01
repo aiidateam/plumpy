@@ -31,8 +31,8 @@ class DummyProcessWithOutput(process.Process):
     @classmethod
     def define(cls, spec):
         super(DummyProcessWithOutput, cls).define(spec)
-        spec.dynamic_input()
-        spec.dynamic_output()
+        spec.inputs.dynamic = True
+        spec.outputs.dynamic = True
 
     def _run(self, **kwargs):
         self.out("default", 5)
@@ -60,6 +60,16 @@ class WaitForSignalProcess(process.Process):
         return process.Wait(self.last_step)
 
     def last_step(self):
+        pass
+
+
+class NewLoopProcess(process.Process):
+
+    def __init__(self, *args, **kwargs):
+        kwargs['loop'] = plum.new_event_loop()
+        super(NewLoopProcess, self).__init__(*args, **kwargs)
+
+    def _run(self, **kwargs):
         pass
 
 
@@ -125,7 +135,7 @@ class ProcessEventsTester(EventsTesterMixin, process.Process):
     @classmethod
     def define(cls, spec):
         super(ProcessEventsTester, cls).define(spec)
-        spec.dynamic_output()
+        spec.outputs.dynamic = True
 
     @utils.override
     def _run(self):
