@@ -5,7 +5,7 @@ import logging
 from abc import ABCMeta
 from copy import deepcopy
 from future.utils import with_metaclass
-
+from six import string_types
 
 _LOGGER = logging.getLogger(__name__)
 _NULL = ()
@@ -258,25 +258,59 @@ class PortNamespace(collections.MutableMapping, Port):
 
         return description
 
-    def get_port(self, name=None):
+    def get_port(self, name):
         """
-        Retrieve a (nested) port namespace within this port namespace. Nested port namespaces
-        that do not exist will be created
+        Retrieve a (namespaced) port from this PortNamespace. If any of the sub namespaces of the terminal
+        port itself cannot be found, a ValueError will be raised
 
-        :param name: namespace of the port to retrieve, if None returns self
+        :param name: name (potentially namespaced) of the port to retrieve
         :returns: Port
+        :raises: ValueError if port or namespace does not exist
         """
-        if name is None:
-            return self
+        if not isinstance(name, string_types):
+            raise ValueError('name has to be a string type, not {}'.format(type(name)))
+
+        if not name:
+            raise ValueError('name cannot be an empty string')
 
         namespace = name.split(self.NAMESPACE_SEPARATOR)
         port_name = namespace.pop(0)
 
         if port_name not in self:
-            self[port_name] = self.__class__(port_name)
+            raise ValueError("port '{}' does not exist in port namespace '{}'".format(port_name, self.name))
 
         if namespace:
             return self[port_name].get_port(self.NAMESPACE_SEPARATOR.join(namespace))
+        else:
+            return self[port_name]
+
+    def create_port_namespace(self, name):
+        """
+        Create and return a new PortNamespace in this PortNamespace. If the name is namespaced, the sub PortNamespaces
+        will be created recursively, except if one of the namespaces is already occupied at any level by
+        a Port in which case a ValueError will be thrown
+
+        :param name: name (potentially namespaced) of the port to create and return
+        :returns: PortNamespace
+        :raises: ValueError if any sub namespace is occupied by a non-PortNamespace port
+        """
+        if not isinstance(name, string_types):
+            raise ValueError('name has to be a string type, not {}'.format(type(name)))
+
+        if not name:
+            raise ValueError('name cannot be an empty string')
+
+        namespace = name.split(self.NAMESPACE_SEPARATOR)
+        port_name = namespace.pop(0)
+
+        if port_name in self and not isinstance(self[port_name], PortNamespace):
+            raise ValueError("the name '{}' in '{}' already contains a Port".format(port_name, self.name))
+
+        if port_name not in self:
+            self[port_name] = self.__class__(port_name)
+
+        if namespace:
+            return self[port_name].create_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace))
         else:
             return self[port_name]
 

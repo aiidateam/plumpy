@@ -29,8 +29,8 @@ class ProcessSpec(object):
         self._logger = logging.getLogger(__name__)
 
         # Create the input and output port namespace
-        self._ports.get_port(self.NAME_INPUTS_PORT_NAMESPACE)
-        self._ports.get_port(self.NAME_OUTPUTS_PORT_NAMESPACE)
+        self._ports.create_port_namespace(self.NAME_INPUTS_PORT_NAMESPACE)
+        self._ports.create_port_namespace(self.NAME_OUTPUTS_PORT_NAMESPACE)
 
     def __str__(self):
         return json.dumps(self.get_description(), sort_keys=True, indent=4)
@@ -113,10 +113,8 @@ class ProcessSpec(object):
 
         if namespace:
             namespace = self.namespace_separator.join(namespace)
-        else:
-            namespace = None
+            port_namespace = port_namespace.create_port_namespace(namespace)
 
-        port_namespace = port_namespace.get_port(namespace)
         port_namespace[port_name] = port_class(port_name, **kwargs)
 
     def input(self, name, **kwargs):
@@ -278,7 +276,11 @@ class ProcessSpec(object):
         if exclude and include is not None:
             raise ValueError('exclude and include are mutually exclusive')
 
-        port_namespace = self.inputs.get_port(namespace)
+        if namespace is None:
+            port_namespace = self.inputs
+        else:
+            port_namespace = self.inputs.create_port_namespace(namespace)
+
         port_namespace.absorb(process_class.spec().inputs, exclude, include)
 
     def exposed_inputs(self, inputs, process_class, namespace=None):

@@ -40,37 +40,50 @@ class TestPortNamespace(TestCase):
 
     def test_port_namespace_get_port(self):
         """
-        Test get_port of PortNamespace will create nested namespaces as needed
+        Test get_port of PortNamespace will retrieve nested PortNamespaces and Ports as long
+        as they and all intermediate nested PortNamespaces exist
         """
-        port_namespace = self.port_namespace.get_port()
-        self.assertEqual(port_namespace, self.port_namespace)
+        with self.assertRaises(TypeError):
+            port_namespace = self.port_namespace.get_port()
 
-        port_namespace = self.port_namespace.get_port('sub')
-        self.assertEqual(port_namespace.name, 'sub')
-        self.assertTrue(isinstance(port_namespace, PortNamespace))
+        with self.assertRaises(ValueError):
+            port_namespace = self.port_namespace.get_port(5)
 
-        port_namespace = self.port_namespace.get_port('sub.name.space')
-        self.assertEqual(port_namespace.name, 'space')
-        self.assertTrue(isinstance(port_namespace, PortNamespace))
+        with self.assertRaises(ValueError):
+            port_namespace = self.port_namespace.get_port('sub')
 
-    def test_port_namespace_get_port_namespaced_port(self):
-        """
-        Test get_port of PortNamespace will properly retrieve a namespaces Port
-        """
-        # Store a Port instance in BASE_PORT_NAME
-        port_namespace = self.port_namespace.get_port()
-        port_namespace[self.BASE_PORT_NAME] = self.port
+        port_namespace_sub = self.port_namespace.create_port_namespace('sub')
+        self.assertEqual(self.port_namespace.get_port('sub'), port_namespace_sub)
 
-        # Retrieve port from BASE_PORT_NAME using get_port() and check it is the same
-        port = self.port_namespace.get_port(self.BASE_PORT_NAME)
-        self.assertTrue(isinstance(port, InputPort))
-        self.assertEqual(port.name, self.BASE_PORT_NAME)
+        with self.assertRaises(ValueError):
+            port_namespace = self.port_namespace.get_port('sub.name.space')
 
-        # Store a Port instance in some namespace
-        port_namespace = self.port_namespace.get_port('sub.name.space')
-        port_namespace[self.BASE_PORT_NAME] = self.port
+        port_namespace_sub = self.port_namespace.create_port_namespace('sub.name.space')
+        self.assertEqual(self.port_namespace.get_port('sub.name.space'), port_namespace_sub)
 
-        # Retrieve port from the namespace using get_port() and check it is the same
+        # Add Port into subnamespace and try to get it in one go from top level port namespace
+        port_namespace_sub[self.BASE_PORT_NAME] = self.port
         port = self.port_namespace.get_port('sub.name.space.' + self.BASE_PORT_NAME)
-        self.assertTrue(isinstance(port, InputPort))
-        self.assertEqual(port.name, self.BASE_PORT_NAME)
+        self.assertEqual(port, self.port)
+
+    def test_port_namespace_create_port_namespace(self):
+        """
+        Test the create_port_namespace function of the PortNamespace class
+        """
+        with self.assertRaises(TypeError):
+            port_namespace = self.port_namespace.create_port_namespace()
+
+        with self.assertRaises(ValueError):
+            port_namespace = self.port_namespace.create_port_namespace(5)
+
+        port_namespace_sub = self.port_namespace.create_port_namespace('sub')
+        port_namespace_sub = self.port_namespace.create_port_namespace('some.nested.sub.space')
+
+        # Existing intermediate nested spaces should be no problem
+        port_namespace_sub = self.port_namespace.create_port_namespace('sub.nested.space')
+
+        # Overriding Port is not possible though
+        port_namespace_sub[self.BASE_PORT_NAME] = self.port
+
+        with self.assertRaises(ValueError):
+            self.port_namespace.create_port_namespace('sub.nested.space.' + self.BASE_PORT_NAME + '.further')
