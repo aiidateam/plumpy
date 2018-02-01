@@ -27,7 +27,7 @@ class TestProcessReceiver(TestCaseWithLoop):
             testing_mode=True,
         )
 
-        self.connector.connect()
+        self.communicator.init()
 
     def tearDown(self):
         # Close the connector before calling super because it will
