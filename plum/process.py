@@ -451,10 +451,10 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         :return: an AttributesFrozenDict with the inputs, complemented with port default values
         :raises: ValueError if no input was specified for a required port without a default value
         """
-        result = {}
-
         if inputs is None:
             inputs = {}
+        else:
+            inputs = dict(inputs)
 
         # Go through the spec filling in any default and checking for required inputs
         for name, port in port_namespace.items():
@@ -468,11 +468,11 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
                 port_value = inputs[name]
 
             if isinstance(port, PortNamespace):
-                result[name] = self.create_input_args(port, port_value)
+                inputs[name] = self.create_input_args(port, port_value)
             else:
-                result[name] = port_value
+                inputs[name] = port_value
 
-        return utils.AttributesFrozendict(result)
+        return utils.AttributesFrozendict(inputs)
 
     def exposed_inputs(self, process_class, namespace=None):
         """

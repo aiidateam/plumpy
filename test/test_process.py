@@ -443,6 +443,33 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
         self.assertTrue(isinstance(input_value, int))
         self.assertEquals(input_value, 5)
 
+    def test_namespaced_process_dynamic(self):
+        """
+        Test that the input creation for processes with a dynamic nested port namespace is properly handled
+        """
+        namespace = 'name.space'
+
+        class DummyDynamicProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(DummyDynamicProcess, cls).define(spec)
+                spec.input_namespace(namespace)
+                spec.inputs['name']['space'].dynamic = True
+                spec.inputs['name']['space'].valid_type = int
+
+        original_inputs = [1, 2, 3, 4]
+
+        inputs = {'name': {'space': {str(l): l for l in original_inputs}}}
+        p = DummyDynamicProcess(inputs=inputs)
+
+        for label, value in p.inputs['name']['space'].items():
+            self.assertTrue(label in inputs['name']['space'])
+            self.assertEqual(int(label), value)
+            original_inputs.remove(value)
+
+        # Make sure there are no other inputs
+        self.assertFalse(original_inputs)
 
 class TestProcessEvents(utils.TestCaseWithLoop):
     def setUp(self):
