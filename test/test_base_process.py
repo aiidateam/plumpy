@@ -1,8 +1,6 @@
 import unittest
-import plum
-from plum import base
-from plum.base import process
-from plum.base import ProcessStateMachine, ProcessState, Wait, Continue
+from plum import base, base_process
+from plum.base_process import ProcessStateMachine, ProcessState, Wait, Continue
 
 
 def execute(proc):
@@ -95,7 +93,7 @@ class TestProcess(unittest.TestCase):
                 self.after_cancel = True
 
         proc = Proc()
-        with self.assertRaises(process.CancelledError):
+        with self.assertRaises(base_process.CancelledError):
             execute(proc)
         self.assertFalse(proc.after_cancel)
         self.assertEqual(proc.state, ProcessState.CANCELLED)

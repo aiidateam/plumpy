@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
-from six import iteritems
 import copy
 import logging
 import plum
@@ -16,13 +15,15 @@ from plum.utils import protected
 from . import events
 from . import futures
 from . import base
-from .base import Continue, Wait, Cancel, Stop, ProcessState, \
-    TransitionFailed, Waiting
+from . import base_process
+from .base_process import Continue, Wait, Cancel, Stop, ProcessState, \
+    Waiting
+from .base import TransitionFailed
 from . import process_comms
 from . import stack
 from . import utils
 
-__all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
+__all__ = ['Process', 'ProcessState',
            'Cancel', 'Wait', 'Stop', 'Continue', 'BundleKeys',
            'TransitionFailed', 'Executor', 'Waiting']
 
@@ -47,26 +48,7 @@ class BundleKeys(object):
     PAUSED = 'PAUSED'
 
 
-class ProcessAction(object):
-    """
-    Actions that the process can be asked to perform
-    These should be sent as the subject of a message to the process
-    """
-    PAUSE = 'pause'
-    PLAY = 'play'
-    ABORT = 'abort'
-    REPORT_STATUS = 'report_status'
-
-
-class ProcessMessage(object):
-    """
-    Messages that the process can emit, these will be the subject
-    of the message
-    """
-    STATUS_REPORT = 'status_report'
-
-
-class Running(base.Running):
+class Running(base_process.Running):
     _run_handle = None
 
     def enter(self):
@@ -121,7 +103,7 @@ class Executor(ProcessListener):
             process.remove_process_listener(self)
 
 
-class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
+class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plum.
 
@@ -183,15 +165,16 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         Get a human readable description of what this :class:`Process` does.
 
         :return: The description.
-        :rtype: str
+        :rtype: dict
         """
-        description = []
+        description = {}
+
         if cls.__doc__:
-            description.append({'description': cls.__doc__.strip()})
+            description['description'] = cls.__doc__.strip()
 
         spec_description = cls.spec().get_description()
         if spec_description:
-            description.append({'spec': spec_description})
+            description['spec'] = spec_description
 
         return description
 
@@ -555,12 +538,6 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self.call_soon_external(self.__event_helper.fire_event, event, self, *args, **kwargs)
 
     # endregion
-
-    def _send_message(self, subject, body=None, to=None):
-        body_ = {'uuid': self.uuid}
-        if body is not None:
-            body_.update(body)
-        self.send_message(subject, to=to, body=body_)
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements

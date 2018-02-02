@@ -13,9 +13,11 @@ try:
 except ImportError:
     _HAS_TBLIB = False
 
-from . import state_machine
-from .state_machine import InvalidStateError, event
-from .utils import super_check, call_with_super_check
+from plum.base import state_machine
+from plum.base.state_machine import InvalidStateError, event
+from plum.base import super_check, call_with_super_check
+
+from . import futures
 
 __all__ = ['ProcessStateMachine', 'ProcessState',
            'Created', 'Running', 'Waiting', 'Paused', 'Finished', 'Failed',
@@ -170,6 +172,7 @@ class Running(State):
     KWARGS = 'kwargs'
     _command = None
     _running = False
+    _interruption = None
 
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Running, self).__init__(process)
@@ -198,9 +201,11 @@ class Running(State):
 
     def pause(self):
         if self._running:
-            if self._command is None:
-                self._command = Pause()
-            return state_machine.EventResponse.DELAYED
+            if self._interruption is not None:
+                self._interruption.cancel()
+            self._interruption = futures.Future()
+            self._command = Pause()
+            return self._interruption
         else:
             self.transition_to(ProcessState.PAUSED, self)
             return True
@@ -231,7 +236,7 @@ class Running(State):
                 if not isinstance(result, Command):
                     result = Stop(result)
 
-                if self._command is not None:
+                if self._interruption is not None:
                     # Overwrite with the command we got while running
                     command = self._command
                     self._command = result
