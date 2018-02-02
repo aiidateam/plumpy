@@ -107,7 +107,7 @@ class ProcessSpec(object):
             raise RuntimeError('Cannot add an output port after the spec has been sealed')
 
         namespace = name.split(self.namespace_separator)
-        port_name = namespace.pop(0)
+        port_name = namespace.pop()
 
         if namespace:
             namespace = self.namespace_separator.join(namespace)
