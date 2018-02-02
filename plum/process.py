@@ -183,15 +183,16 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         Get a human readable description of what this :class:`Process` does.
 
         :return: The description.
-        :rtype: str
+        :rtype: dict
         """
-        description = []
+        description = {}
+
         if cls.__doc__:
-            description.append({'description': cls.__doc__.strip()})
+            description['description'] = cls.__doc__.strip()
 
         spec_description = cls.spec().get_description()
         if spec_description:
-            description.append({'spec': spec_description})
+            description['spec'] = spec_description
 
         return description
 
