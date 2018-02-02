@@ -170,16 +170,35 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertEqual(proc.state, ProcessState.FAILED)
 
     def test_get_description(self):
-        # Not all that much we can test for, but check if it's a string at
-        # least
+        class ProcWithoutSpec(Process):
+            pass
+
+        class ProcWithSpec(Process):
+            """ Process with a spec and a docstring """
+
+            @classmethod
+            def define(cls, spec):
+                super(ProcWithSpec, cls).define(spec)
+                spec.input('a', default=1)
+
         for proc_class in test_utils.TEST_PROCESSES:
             desc = proc_class.get_description()
-            self.assertIsInstance(desc, list)
+            self.assertIsInstance(desc, dict)
 
-        # Dummy process should at least use the docstring as part of the
-        # description and so it shouldn't be empty
-        desc = test_utils.DummyProcess.get_description()
-        self.assertNotEqual(desc, [])
+
+        desc_with_spec = ProcWithSpec.get_description()
+        desc_without_spec = ProcWithoutSpec.get_description()
+
+        self.assertIsInstance(desc_without_spec, dict)
+        self.assertTrue('spec' in desc_without_spec)
+        self.assertTrue('description' not in desc_without_spec)
+        self.assertIsInstance(desc_with_spec['spec'], dict)
+
+        self.assertIsInstance(desc_with_spec, dict)
+        self.assertTrue('spec' in desc_with_spec)
+        self.assertTrue('description' in desc_with_spec)
+        self.assertIsInstance(desc_with_spec['spec'], dict)
+        self.assertIsInstance(desc_with_spec['description'], basestring)
 
     def test_created_bundle(self):
         """
