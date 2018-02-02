@@ -181,6 +181,126 @@ class TestProcess(utils.TestCaseWithLoop):
         desc = test_utils.DummyProcess.get_description()
         self.assertNotEqual(desc, [])
 
+    def test_logging(self):
+        class LoggerTester(Process):
+            def _run(self, **kwargs):
+                self.logger.info("Test")
+
+        # TODO: Test giving a custom logger to see if it gets used
+        proc = LoggerTester()
+        proc.execute()
+
+    def test_cancel(self):
+        proc = test_utils.DummyProcess(loop=self.loop)
+
+        proc.cancel('Farewell!')
+        self.assertTrue(proc.cancelled())
+        self.assertEqual(proc.cancelled_msg(), 'Farewell!')
+        self.assertEqual(proc.state, ProcessState.CANCELLED)
+
+    def test_wait_continue(self):
+        proc = test_utils.WaitForSignalProcess()
+        # Wait - Execute the process and wait until it is waiting
+        proc.execute(True)
+        proc.resume()
+        proc.execute(True)
+
+        # Check it's done
+        self.assertTrue(proc.done())
+        self.assertEqual(proc.state, ProcessState.FINISHED)
+
+    def test_exc_info(self):
+        proc = test_utils.ExceptionProcess()
+        try:
+            proc.execute()
+        except RuntimeError as e:
+            self.assertEqual(proc.exception(), e)
+
+    def test_run_done(self):
+        proc = test_utils.DummyProcess()
+        proc.execute()
+        self.assertTrue(proc.done())
+
+    def test_wait_pause_play_resume(self):
+        """
+        Test that if you pause a process that and its awaitable finishes that it
+        completes correctly when played again.
+        """
+        proc = test_utils.WaitForSignalProcess()
+
+        # Wait - Run the process and wait until it is waiting
+        proc.execute(True)
+
+        proc.pause()
+        self.assertEqual(proc.state, ProcessState.PAUSED)
+        proc.play()
+        self.assertEqual(proc.state, ProcessState.WAITING)
+        proc.resume()
+
+        # Run
+        proc.execute(True)
+
+        # Check it's done
+        self.assertTrue(proc.done())
+        self.assertEqual(proc.state, ProcessState.FINISHED)
+
+    def test_cancel_in_run(self):
+        class CancelProcess(Process):
+            after_cancel = False
+
+            def _run(self, **kwargs):
+                self.cancel()
+                self.after_cancel = True
+
+        proc = CancelProcess()
+        with self.assertRaises(plum.CancelledError):
+            proc.execute()
+
+        self.assertFalse(proc.after_cancel)
+        self.assertEqual(proc.state, ProcessState.CANCELLED)
+
+    def test_run_multiple(self):
+        # Create and play some processes
+        procs = []
+        for proc_class in test_utils.TEST_PROCESSES + test_utils.TEST_EXCEPTION_PROCESSES:
+            proc = proc_class(loop=self.loop)
+            proc.play()
+            procs.append(proc)
+
+        # Check that they all run
+        gathered = plum.gather(*[proc.future() for proc in procs])
+        plum.run_until_complete(gathered, self.loop)
+
+
+class SavePauseProc(Process):
+    steps_ran = []
+
+    def run(self):
+        self.pause()
+        self.steps_ran.append(self.run.__name__)
+        return process.Continue(self.step2)
+
+    def step2(self):
+        self.steps_ran.append(self.step2.__name__)
+
+
+class TestProcessSaving(utils.TestCaseWithLoop):
+    def test_running_save_instance_state(self):
+        proc = SavePauseProc()
+        proc.execute(True)
+        bundle = plum.Bundle(proc)
+        self.assertListEqual([SavePauseProc.run.__name__], proc.steps_ran)
+        proc.execute(True)
+        self.assertListEqual(
+            [SavePauseProc.run.__name__, SavePauseProc.step2.__name__],
+            proc.steps_ran)
+
+        proc_unbundled = bundle.unbundle()
+        proc_unbundled.execute(True)
+        proc_unbundled.execute(True)
+
+        self.assertEqual([SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
+
     def test_created_bundle(self):
         """
         Check that the bundle after just creating a process is as we expect
@@ -231,41 +351,6 @@ class TestProcess(utils.TestCaseWithLoop):
                     self.loop, ProcClass, saver.snapshots)
             )
 
-    def test_logging(self):
-        class LoggerTester(Process):
-            def _run(self, **kwargs):
-                self.logger.info("Test")
-
-        # TODO: Test giving a custom logger to see if it gets used
-        proc = LoggerTester()
-        proc.execute()
-
-    def test_cancel(self):
-        proc = test_utils.DummyProcess(loop=self.loop)
-
-        proc.cancel('Farewell!')
-        self.assertTrue(proc.cancelled())
-        self.assertEqual(proc.cancelled_msg(), 'Farewell!')
-        self.assertEqual(proc.state, ProcessState.CANCELLED)
-
-    def test_wait_continue(self):
-        proc = test_utils.WaitForSignalProcess()
-        # Wait - Execute the process and wait until it is waiting
-        proc.execute(True)
-        proc.resume()
-        proc.execute(True)
-
-        # Check it's done
-        self.assertTrue(proc.done())
-        self.assertEqual(proc.state, ProcessState.FINISHED)
-
-    def test_exc_info(self):
-        proc = test_utils.ExceptionProcess()
-        try:
-            proc.execute()
-        except RuntimeError as e:
-            self.assertEqual(proc.exception(), e)
-
     def test_restart(self):
         proc = _RestartProcess()
         proc.execute(True)
@@ -281,34 +366,6 @@ class TestProcess(utils.TestCaseWithLoop):
         proc.resume()
         result = proc.execute(True)
         self.assertEqual(proc.outputs, {'finished': True})
-
-    def test_run_done(self):
-        proc = test_utils.DummyProcess()
-        proc.execute()
-        self.assertTrue(proc.done())
-
-    def test_wait_pause_play_resume(self):
-        """
-        Test that if you pause a process that and its awaitable finishes that it
-        completes correctly when played again.
-        """
-        proc = test_utils.WaitForSignalProcess()
-
-        # Wait - Run the process and wait until it is waiting
-        proc.execute(True)
-
-        proc.pause()
-        self.assertEqual(proc.state, ProcessState.PAUSED)
-        proc.play()
-        self.assertEqual(proc.state, ProcessState.WAITING)
-        proc.resume()
-
-        # Run
-        proc.execute(True)
-
-        # Check it's done
-        self.assertTrue(proc.done())
-        self.assertEqual(proc.state, ProcessState.FINISHED)
 
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
@@ -332,33 +389,6 @@ class TestProcess(utils.TestCaseWithLoop):
         # Check results match
         self.assertEqual(result, result2)
 
-    def test_cancel_in_run(self):
-        class CancelProcess(Process):
-            after_cancel = False
-
-            def _run(self, **kwargs):
-                self.cancel()
-                self.after_cancel = True
-
-        proc = CancelProcess()
-        with self.assertRaises(plum.CancelledError):
-            proc.execute()
-
-        self.assertFalse(proc.after_cancel)
-        self.assertEqual(proc.state, ProcessState.CANCELLED)
-
-    def test_run_multiple(self):
-        # Create and play some processes
-        procs = []
-        for proc_class in test_utils.TEST_PROCESSES + test_utils.TEST_EXCEPTION_PROCESSES:
-            proc = proc_class(loop=self.loop)
-            proc.play()
-            procs.append(proc)
-
-        # Check that they all run
-        gathered = plum.gather(*[proc.future() for proc in procs])
-        plum.run_until_complete(gathered, self.loop)
-
     def test_recreate_from(self):
         proc = test_utils.DummyProcess()
         p2 = self._assert_same(proc)
@@ -379,23 +409,6 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertEqual(p1.state, p2.state)
         if p1.state == ProcessState.FINISHED:
             self.assertEqual(p1.result(), p2.result())
-
-    def _check_process_against_snapshot(self, snapshot, proc):
-        self.assertEqual(snapshot.state, proc.state)
-
-        new_bundle = plum.Bundle()
-        proc.save_instance_state(new_bundle)
-        self.assertEqual(snapshot.bundle, new_bundle,
-                         "Bundle mismatch with process class {}\n"
-                         "Snapshot:\n{}\n"
-                         "Loaded:\n{}".format(
-                             proc.__class__, snapshot.bundle, new_bundle))
-
-        self.assertEqual(snapshot.outputs, proc.outputs,
-                         "Outputs mismatch with process class {}\n"
-                         "Snapshot:\n{}\n"
-                         "Loaded:\n{}".format(
-                             proc.__class__, snapshot.outputs, proc.outputs))
 
 
 class TestProcessEvents(utils.TestCaseWithLoop):

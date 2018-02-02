@@ -110,7 +110,7 @@ class TestProcessReceiver(TestCaseWithLoop):
             messages.append(msg)
 
         self.communicator.add_broadcast_subscriber(on_broadcast_receive)
-        proc = test_utils.DummyProcess(communicator=self.communicator)
+        proc = test_utils.DummyProcess(loop=self.loop, communicator=self.communicator)
         proc.execute()
 
         expected_subjects = []
