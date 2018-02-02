@@ -1,4 +1,5 @@
 import unittest
+from plum.port import PortNamespace, InputPort
 from plum.process import ProcessSpec
 from .utils import TestCase
 
@@ -54,6 +55,22 @@ class TestProcessSpec(TestCase):
         spec.output('test')
         description = spec.get_description()
         self.assertNotEqual(description, {})
+
+    def test_input_namespaced(self):
+        """
+        Test the creation of a namespaced input port
+        """
+        self.spec.input('some.name.space.a', valid_type=int)
+
+        self.assertTrue('some' in self.spec.inputs)
+        self.assertTrue('name' in self.spec.inputs['some'])
+        self.assertTrue('space' in self.spec.inputs['some']['name'])
+        self.assertTrue('a' in self.spec.inputs['some']['name']['space'])
+
+        self.assertTrue(isinstance(self.spec.inputs.get_port('some'), PortNamespace))
+        self.assertTrue(isinstance(self.spec.inputs.get_port('some.name'), PortNamespace))
+        self.assertTrue(isinstance(self.spec.inputs.get_port('some.name.space'), PortNamespace))
+        self.assertTrue(isinstance(self.spec.inputs.get_port('some.name.space.a'), InputPort))
 
     def test_validate(self):
         """
