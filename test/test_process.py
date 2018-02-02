@@ -3,10 +3,9 @@ import kiwipy
 import unittest
 from past.builtins import basestring
 from plum import Process, ProcessState
-from plum.test_utils import check_process_against_snapshots
 from plum import test_utils
-from plum.test_utils import ProcessListenerTester, NewLoopProcess
 from plum import process
+from plum.utils import AttributesFrozendict
 
 from . import utils
 
@@ -415,6 +414,34 @@ class TestProcess(utils.TestCaseWithLoop):
                          "Snapshot:\n{}\n"
                          "Loaded:\n{}".format(
                              proc.__class__, snapshot.outputs, proc.outputs))
+
+
+class TestProcessNamespace(utils.TestCaseWithLoop):
+
+    def test_namespaced_process(self):
+        """
+        Test that inputs in nested namespaces are properly validated and the returned
+        Process inputs data structure consists of nested AttributesFrozenDict instances
+        """
+        class NameSpacedProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(NameSpacedProcess, cls).define(spec)
+                spec.input('some.name.space.a', valid_type=int)
+
+        proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})
+
+        # Test that the namespaced inputs are AttributesFrozendict
+        self.assertIsInstance(proc.inputs, AttributesFrozendict)
+        self.assertIsInstance(proc.inputs.some, AttributesFrozendict)
+        self.assertIsInstance(proc.inputs.some.name, AttributesFrozendict)
+        self.assertIsInstance(proc.inputs.some.name.space, AttributesFrozendict)
+
+        # Test that the input node is in the inputs of the process
+        input_value = proc.inputs.some.name.space.a
+        self.assertTrue(isinstance(input_value, int))
+        self.assertEquals(input_value, 5)
 
 
 class TestProcessEvents(utils.TestCaseWithLoop):
