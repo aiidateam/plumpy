@@ -25,7 +25,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         self._validator = validator
 
     def __str__(self):
-        return '; '.join(self.get_description())
+        return json.dumps(self.get_description())
 
     def get_description(self):
         """

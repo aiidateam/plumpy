@@ -314,7 +314,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             self._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._raw_inputs = None
-        self._parsed_inputs = self.create_input_args(self.spec().inputs, self.raw_inputs)
+
+        raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
+        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
 
         self._outputs = copy.deepcopy(saved_state[BundleKeys.OUTPUTS])
 
@@ -349,7 +351,8 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
         # Input/output
         self._check_inputs(self._raw_inputs)
-        self._parsed_inputs = self.create_input_args(self.spec().inputs, self.raw_inputs)
+        raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
+        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
 
         # Set up a process ID
         self._uuid = uuid.uuid4()
@@ -447,16 +450,10 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         default is defined
 
         :param port_namespace: the port namespace against which to compare the inputs dictionary
-        :param inputs: the dictioanry with supplied inputs
+        :param inputs: the dictionary with supplied inputs
         :return: an AttributesFrozenDict with the inputs, complemented with port default values
         :raises: ValueError if no input was specified for a required port without a default value
         """
-        if inputs is None:
-            inputs = {}
-        else:
-            inputs = dict(inputs)
-
-        # Go through the spec filling in any default and checking for required inputs
         for name, port in port_namespace.items():
 
             if name not in inputs:
@@ -464,6 +461,8 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
                     port_value = port.default
                 elif port.required:
                     raise ValueError('Value not supplied for required inputs port {}'.format(name))
+                else:
+                    continue
             else:
                 port_value = inputs[name]
 

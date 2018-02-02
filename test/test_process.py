@@ -443,6 +443,30 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
         self.assertTrue(isinstance(input_value, int))
         self.assertEquals(input_value, 5)
 
+    def test_namespaced_process_inputs(self):
+        """
+        Test the parsed inputs for a process with namespace only contains expected dictionaries
+        """
+        class NameSpacedProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(NameSpacedProcess, cls).define(spec)
+                spec.input('some.name.space.a', valid_type=int)
+                spec.input('test', valid_type=int, default=6)
+                spec.input('label', valid_type=basestring, required=False)
+                spec.input('description', valid_type=basestring, required=False)
+                spec.input('store_provenance', valid_type=bool, default=True)
+
+        proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})
+
+        self.assertEqual(proc.inputs.test, 6)
+        self.assertEqual(proc.inputs.store_provenance, True)
+        self.assertEqual(proc.inputs.some.name.space.a, 5)
+
+        self.assertTrue('label' not in proc.inputs)
+        self.assertTrue('description' not in proc.inputs)
+
     def test_namespaced_process_dynamic(self):
         """
         Test that the input creation for processes with a dynamic nested port namespace is properly handled
