@@ -34,7 +34,8 @@ class TestProcessReceiver(TestCaseWithLoop):
     def tearDown(self):
         # Close the connector before calling super because it will
         # close the loop
-        self.connector.close()
+        self.communicator.disconnect()
+        self.connector.disconnect()
         super(TestProcessReceiver, self).tearDown()
 
     def test_pause(self):

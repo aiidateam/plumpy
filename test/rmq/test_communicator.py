@@ -45,7 +45,7 @@ class TestTaskActions(TestCaseWithLoop):
     def tearDown(self):
         # Close the connector before calling super because it will
         # close the loop
-        self.connector.close()
+        self.connector.disconnect()
         super(TestTaskActions, self).tearDown()
         shutil.rmtree(self._tmppath)
 
