@@ -183,7 +183,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         Get a human readable description of what this :class:`Process` does.
 
         :return: The description.
-        :rtype: dictionary
+        :rtype: dict
         """
         description = {}
 
