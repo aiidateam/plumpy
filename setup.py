@@ -45,6 +45,6 @@ setup(
         ':python_version<"3.2"': ['backports.tempfile'],
         'dev': ['pytest', 'ipython', 'twine']
     },
-    packages=['plum', 'plum/base'],
+    packages=['plum', 'plum/base', 'plum/rmq'],
     test_suite='test'
 )
