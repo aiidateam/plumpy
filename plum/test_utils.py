@@ -335,8 +335,6 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
                 snapshots[-j], saver.snapshots[-j],
                 snapshots[-j], saver.snapshots[-j],
                 exclude={
-                    str(process.BundleKeys.LOOP_CALLBACK),
-                    str(process.BundleKeys.AWAITING),
                     'CALLBACKS', 'DONE_CALLBACKS', 'SCHEDULED_CALLBACKS', 'PERSISTABLE_ID'
                 })
             j += 1

@@ -18,6 +18,9 @@ from plum.base.state_machine import InvalidStateError, event
 from plum.base import super_check, call_with_super_check
 
 from . import futures
+from . import persisters
+from plum.persisters import auto_persist
+from . import utils
 
 __all__ = ['ProcessStateMachine', 'ProcessState',
            'Created', 'Running', 'Waiting', 'Paused', 'Finished', 'Failed',
@@ -39,10 +42,13 @@ class CancelledError(BaseException):
 
 
 # region Commands
-class Command(object):
+
+
+class Command(persisters.Savable):
     pass
 
 
+@auto_persist('msg')
 class Cancel(Command):
     def __init__(self, msg=None):
         self.msg = msg
@@ -52,6 +58,7 @@ class Pause(Command):
     pass
 
 
+@auto_persist('msg', 'data')
 class Wait(Command):
     def __init__(self, continue_fn=None, msg=None, data=None):
         self.continue_fn = continue_fn
@@ -59,16 +66,31 @@ class Wait(Command):
         self.data = data
 
 
+@auto_persist('result')
 class Stop(Command):
     def __init__(self, result):
         self.result = result
 
 
+@auto_persist('args', 'kwargs')
 class Continue(Command):
+    CONTINUE_FN = 'continue_fn'
+
     def __init__(self, continue_fn, *args, **kwargs):
         self.continue_fn = continue_fn
         self.args = args
         self.kwargs = kwargs
+
+    def save_instance_state(self, out_state):
+        super(Continue, self).save_instance_state(out_state)
+        out_state[self.CONTINUE_FN] = self.continue_fn.__name__
+
+    def load_instance_state(self, saved_state, process):
+        super(Continue, self).load_instance_state(saved_state)
+        try:
+            self.continue_fn = utils.load_function(saved_state[self.CONTINUE_FN])
+        except ValueError:
+            self.continue_fn = getattr(process, saved_state[self.CONTINUE_FN])
 
 
 # endregion
@@ -89,23 +111,15 @@ class ProcessState(Enum):
     CANCELLED = 'cancelled'
 
 
-KEY_STATE = 'state'
-KEY_IN_STATE = 'in_state'
-
-
-class State(state_machine.State):
+@auto_persist('in_state')
+class State(state_machine.State, persisters.Savable):
     @property
     def process(self):
         return self.state_machine
 
-    def save_instance_state(self, out_state):
-        out_state[KEY_STATE] = self.LABEL
-        out_state[KEY_IN_STATE] = self.in_state
-
-    @super_check
-    def load_instance_state(self, process, saved_state):
+    def load_instance_state(self, saved_state, process):
+        super(State, self).load_instance_state(saved_state)
         self.state_machine = process
-        self.in_state = saved_state[KEY_IN_STATE]
 
     def play(self):
         return state_machine.EventResponse.IGNORED
@@ -115,6 +129,7 @@ class State(state_machine.State):
         return True
 
 
+@auto_persist('args', 'kwargs')
 class Created(State):
     LABEL = ProcessState.CREATED
     ALLOWED = {ProcessState.PAUSED,
@@ -123,8 +138,6 @@ class Created(State):
                ProcessState.FAILED}
 
     RUN_FN = 'run_fn'
-    ARGS = 'args'
-    KWARGS = 'kwargs'
 
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Created, self).__init__(process)
@@ -136,14 +149,10 @@ class Created(State):
     def save_instance_state(self, out_state):
         super(Created, self).save_instance_state(out_state)
         out_state[self.RUN_FN] = self.run_fn.__name__
-        out_state[self.ARGS] = self.args
-        out_state[self.KWARGS] = self.kwargs
 
-    def load_instance_state(self, process, saved_state):
-        super(Created, self).load_instance_state(process, saved_state)
+    def load_instance_state(self, saved_state, process):
+        super(Created, self).load_instance_state(saved_state, process)
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
-        self.args = saved_state[self.ARGS]
-        self.kwargs = saved_state[self.KWARGS]
 
     def pause(self):
         self.transition_to(ProcessState.PAUSED, self)
@@ -158,6 +167,7 @@ class CancelInterruption(Exception):
     pass
 
 
+@auto_persist('args', 'kwargs')
 class Running(State):
     LABEL = ProcessState.RUNNING
     ALLOWED = {ProcessState.RUNNING,
@@ -168,8 +178,8 @@ class Running(State):
                ProcessState.FAILED}
 
     RUN_FN = 'run_fn'
-    ARGS = 'args'
-    KWARGS = 'kwargs'
+    COMMAND = 'command'
+
     _command = None
     _running = False
     _interruption = None
@@ -184,14 +194,14 @@ class Running(State):
     def save_instance_state(self, out_state):
         super(Running, self).save_instance_state(out_state)
         out_state[self.RUN_FN] = self.run_fn.__name__
-        out_state[self.ARGS] = self.args
-        out_state[self.KWARGS] = self.kwargs
+        if self._command is not None:
+            out_state[self.COMMAND] = self._command.save()
 
-    def load_instance_state(self, process, saved_state):
-        super(Running, self).load_instance_state(process, saved_state)
+    def load_instance_state(self, saved_state, process):
+        super(Running, self).load_instance_state(saved_state, process)
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
-        self.args = saved_state[self.ARGS]
-        self.kwargs = saved_state[self.KWARGS]
+        if self.COMMAND in saved_state:
+            self._command = persisters.Savable.load(saved_state[self.COMMAND], self.process)
 
     def cancel(self, message=None):
         if self._running:
@@ -237,7 +247,8 @@ class Running(State):
                     result = Stop(result)
 
                 if self._interruption is not None:
-                    # Overwrite with the command we got while running
+                    # Use the command from the interruption and save the
+                    # new one for later
                     command = self._command
                     self._command = result
                 else:
@@ -260,6 +271,7 @@ class Running(State):
             raise ValueError("Unrecognised command")
 
 
+@auto_persist('msg', 'data')
 class Waiting(State):
     LABEL = ProcessState.WAITING
     ALLOWED = {ProcessState.RUNNING,
@@ -269,8 +281,6 @@ class Waiting(State):
                ProcessState.FAILED}
 
     DONE_CALLBACK = 'DONE_CALLBACK'
-    MSG = 'MSG'
-    DATA = 'DATA'
 
     def __str__(self):
         state_info = super(Waiting, self).__str__()
@@ -288,16 +298,12 @@ class Waiting(State):
         super(Waiting, self).save_instance_state(out_state)
         if self.done_callback is not None:
             out_state[self.DONE_CALLBACK] = self.done_callback.__name__
-        out_state[self.MSG] = self.msg
-        out_state[self.DATA] = self.data
 
-    def load_instance_state(self, process, saved_state):
-        super(Waiting, self).load_instance_state(process, saved_state)
+    def load_instance_state(self, saved_state, process):
+        super(Waiting, self).load_instance_state(saved_state, process)
         callback_name = saved_state.get(self.DONE_CALLBACK, None)
         if callback_name is not None:
             self.done_callback = getattr(self.process, callback_name)
-        self.msg = saved_state[self.MSG]
-        self.data = saved_state[self.DATA]
 
     def pause(self):
         self.transition_to(ProcessState.PAUSED, self)
@@ -330,12 +336,10 @@ class Paused(State):
 
     def save_instance_state(self, out_state):
         super(Paused, self).save_instance_state(out_state)
-        next_state_state = {}
-        self.paused_state.save_instance_state(next_state_state)
-        out_state[self.PAUSED_STATE] = next_state_state
+        out_state[self.PAUSED_STATE] = self.paused_state.save()
 
-    def load_instance_state(self, process, saved_state):
-        super(Paused, self).load_instance_state(process, saved_state)
+    def load_instance_state(self, saved_state, process):
+        super(Paused, self).load_instance_state(saved_state, process)
         self.paused_state = process.create_state(saved_state[self.PAUSED_STATE])
 
     def play(self):
@@ -375,8 +379,8 @@ class Failed(State):
         if self.traceback is not None:
             out_state[self.TRACEBACK] = "".join(traceback.format_tb(self.traceback))
 
-    def load_instance_state(self, process, saved_state):
-        super(Failed, self).load_instance_state(process, saved_state)
+    def load_instance_state(self, saved_state, process):
+        super(Failed, self).load_instance_state(saved_state, process)
         self.exception = yaml.load(saved_state[self.EXC_VALUE])
         if _HAS_TBLIB:
             try:
@@ -395,27 +399,18 @@ class Failed(State):
         return type(self.exception), self.exception, self.traceback
 
 
+@auto_persist('result')
 class Finished(State):
     LABEL = ProcessState.FINISHED
-
-    RESULT = 'RESULT'
 
     def __init__(self, process, result):
         super(Finished, self).__init__(process)
         self.result = result
 
-    def save_instance_state(self, out_state):
-        super(Finished, self).save_instance_state(out_state)
-        out_state[self.RESULT] = self.result
 
-    def load_instance_state(self, process, saved_state):
-        super(Finished, self).load_instance_state(process, saved_state)
-        self.result = saved_state[self.RESULT]
-
-
+@auto_persist('msg')
 class Cancelled(State):
     LABEL = ProcessState.CANCELLED
-    MSG = 'MSG'
 
     def __init__(self, process, msg):
         """
@@ -426,14 +421,6 @@ class Cancelled(State):
         super(Cancelled, self).__init__(process)
         self.msg = msg
 
-    def save_instance_state(self, out_state):
-        super(Cancelled, self).save_instance_state(out_state)
-        out_state[self.MSG] = self.msg
-
-    def load_instance_state(self, process, saved_state):
-        super(Cancelled, self).load_instance_state(process, saved_state)
-        self.msg = saved_state[self.MSG]
-
 
 # endregion
 
@@ -442,7 +429,9 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
     pass
 
 
-class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta, state_machine.StateMachine)):
+class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
+                                         state_machine.StateMachine,
+                                         persisters.Savable)):
     """
                   ___
                  |   v
@@ -598,13 +587,13 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta, state_machine.
     def save_state(self, out_state):
         return call_with_super_check(self.save_instance_state, out_state)
 
-    @super_check
     def save_instance_state(self, out_state):
-        self._state.save_instance_state(out_state)
+        super(ProcessStateMachine, self).save_instance_state(out_state)
+        out_state['_state'] = self._state.save()
 
-    @super_check
     def load_instance_state(self, saved_state):
-        self._state = self.create_state(saved_state)
+        super(ProcessStateMachine, self).load_instance_state(saved_state)
+        self._state = self.create_state(saved_state['_state'])
 
     def result(self):
         """
@@ -690,9 +679,4 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta, state_machine.
         :type saved_state: :class:`Bundle`
         :return: An instance of the object with its state loaded from the save state.
         """
-        # Get the class using the class loader and instantiate it
-        state_label = ProcessState(saved_state[KEY_STATE])
-        state_class = self._ensure_state_class(state_label)
-        state = state_class.__new__(state_class)
-        call_with_super_check(state.load_instance_state, self, saved_state)
-        return state
+        return persisters.Savable.load(saved_state, self)

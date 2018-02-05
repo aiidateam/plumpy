@@ -1,17 +1,21 @@
 from abc import ABCMeta, abstractmethod
-from collections import namedtuple
+import collections
+import copy
 import errno
 import fnmatch
+import inspect
 import os
 import pickle
 from future.utils import with_metaclass
 
 from . import class_loader
 from . import utils
+from . import base
+from .base import super_check
 
-__all__ = ['Bundle', 'Persister', 'PicklePersister']
+__all__ = ['Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable']
 
-PersistedCheckpoint = namedtuple('PersistedCheckpoint', ['pid', 'tag'])
+PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
 
 class Bundle(dict):
@@ -28,7 +32,8 @@ class Bundle(dict):
         if cl is not None:
             self.set_class_loader(cl)
         self['CLASS_NAME'] = utils.class_name(persistable, self._class_loader)
-        persistable.save_state(self)
+        self.update(persistable.save())
+        # persistable.save_state(self)
 
     def set_class_loader(self, cl):
         self._class_loader = cl
@@ -115,7 +120,7 @@ class Persister(with_metaclass(ABCMeta, object)):
         pass
 
 
-PersistedPickle = namedtuple('PersistedPickle', ['checkpoint', 'bundle'])
+PersistedPickle = collections.namedtuple('PersistedPickle', ['checkpoint', 'bundle'])
 _PICKLE_SUFFIX = 'pickle'
 
 
@@ -271,3 +276,105 @@ class PicklePersister(Persister):
         """
         for checkpoint in self.get_process_checkpoints(pid):
             self.delete_checkpoint(checkpoint.pid, checkpoint.tag)
+
+
+def auto_persist(*members):
+    def wrapped(savable):
+        if savable._auto_persist is None:
+            savable._auto_persist = set()
+        else:
+            savable._auto_persist = set(savable._auto_persist)
+        savable.auto_persist(*members)
+        return savable
+
+    return wrapped
+
+
+class Savable(object):
+    CLASS_NAME = 'class_name'
+    META = '!!meta'
+    METHOD = 'm'
+    SAVABLE = 'S'
+    _auto_persist = None
+    _persist_configured = False
+
+    @staticmethod
+    def load(saved_state, *args, **kwargs):
+        return Savable.load_with_classloader(
+            saved_state, class_loader.ClassLoader(), *args, **kwargs)
+
+    @staticmethod
+    def load_with_classloader(saved_state, class_loader_, *args, **kwargs):
+        try:
+            load_cls = class_loader_.load_class(saved_state[Savable.CLASS_NAME])
+        except KeyError:
+            raise ValueError("Class name not found in saved state")
+        else:
+            return load_cls.recreate_from(saved_state, *args, **kwargs)
+
+    @classmethod
+    def auto_persist(cls, *members):
+        if cls._auto_persist is None:
+            cls._auto_persist = set()
+        cls._auto_persist.update(members)
+
+    @classmethod
+    def persist(cls):
+        pass
+
+    @classmethod
+    def recreate_from(cls, saved_state, *args, **kwargs):
+        obj = cls.__new__(cls)
+        base.call_with_super_check(obj.load_instance_state, saved_state, *args, **kwargs)
+        return obj
+
+    @super_check
+    def load_instance_state(self, saved_state, *args, **kwargs):
+        self.load_members(self._auto_persist, saved_state)
+
+    @super_check
+    def save_instance_state(self, out_state):
+        self._ensure_persist_configured()
+        out_state[self.META] = {}
+        out_state[self.CLASS_NAME] = utils.class_name(self)
+        self.save_members(self._auto_persist, out_state)
+
+    def save(self):
+        out_state = {}
+        base.call_with_super_check(self.save_instance_state, out_state)
+        return out_state
+
+    def save_members(self, members, out_state):
+        self._ensure_persist_configured()
+        for member in members:
+            value = getattr(self, member)
+            if inspect.ismethod(value):
+                if value.__self__ is not self:
+                    raise TypeError("Cannot persist methods of other classes")
+                out_state[self.META] = 'method'
+                value = value.__name__
+            elif isinstance(value, Savable):
+                value = value.save()
+            else:
+                value = copy.deepcopy(value)
+            out_state[member] = value
+
+    def load_members(self, members, saved_state):
+        for member in members:
+            setattr(self, member, self._get_value(saved_state, member))
+
+    def _ensure_persist_configured(self):
+        if not self._persist_configured:
+            self.persist()
+            self._persist_configured = True
+
+    def _get_value(self, saved_state, name):
+        value = saved_state[name]
+        if name in saved_state[self.META]:
+            typ = saved_state[self.META][name]
+            if typ == self.METHOD:
+                value = getattr(self, value)
+            elif type == self.SAVABLE:
+                value = Savable.load(value)
+
+        return value

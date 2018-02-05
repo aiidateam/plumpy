@@ -185,7 +185,6 @@ class TestProcess(utils.TestCaseWithLoop):
             desc = proc_class.get_description()
             self.assertIsInstance(desc, dict)
 
-
         desc_with_spec = ProcWithSpec.get_description()
         desc_without_spec = ProcWithoutSpec.get_description()
 
@@ -292,7 +291,11 @@ class TestProcess(utils.TestCaseWithLoop):
 
 
 class SavePauseProc(Process):
-    steps_ran = []
+    steps_ran = None
+
+    def init(self):
+        super(SavePauseProc, self).init()
+        self.steps_ran = []
 
     def run(self):
         self.pause()
@@ -315,21 +318,23 @@ class TestProcessSaving(utils.TestCaseWithLoop):
             proc.steps_ran)
 
         proc_unbundled = bundle.unbundle()
-        proc_unbundled.execute(True)
-        proc_unbundled.execute(True)
+        self.assertEqual(0, len(proc_unbundled.steps_ran))
+        proc_unbundled.execute()
 
         self.assertEqual([SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
 
     def test_created_bundle(self):
         """
         Check that the bundle after just creating a process is as we expect
-        :return:
         """
-        proc = test_utils.DummyProcessWithOutput()
-        b = plum.Bundle(proc)
+        proc1 = test_utils.DummyProcessWithOutput()
+        bundle1 = plum.Bundle(proc1)
 
-        self.assertIsNone(b.get(process.BundleKeys.INPUTS, None))
-        self.assertEqual(len(b[process.BundleKeys.OUTPUTS]), 0)
+        proc2 = bundle1.unbundle()
+        bundle2 = plum.Bundle(proc2)
+
+        self.assertEqual(proc1.pid, proc2.pid)
+        self.assertDictEqual(bundle1, bundle2)
 
     def test_instance_state(self):
         proc = test_utils.DummyProcessWithOutput()
@@ -340,13 +345,11 @@ class TestProcessSaving(utils.TestCaseWithLoop):
 
         for bundle, outputs in zip(saver.snapshots, saver.outputs):
             # Check that it is a copy
-            self.assertIsNot(outputs, bundle[process.BundleKeys.OUTPUTS])
+            self.assertIsNot(outputs, bundle['_outputs'])
             # Check the contents are the same
-            self.assertEqual(outputs, bundle[process.BundleKeys.OUTPUTS])
+            self.assertDictEqual(outputs, bundle['_outputs'])
 
-        self.assertIsNot(
-            proc.outputs, saver.snapshots[-1][process.BundleKeys.OUTPUTS]
-        )
+        self.assertIsNot(proc.outputs, saver.snapshots[-1]['_outputs'])
 
     def test_saving_each_step(self):
         for proc_class in test_utils.TEST_PROCESSES:

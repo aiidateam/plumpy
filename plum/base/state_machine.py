@@ -105,8 +105,6 @@ class State(object):
     # from this one
     ALLOWED = set()
 
-    in_state = False
-
     @classmethod
     def is_terminal(cls):
         return not cls.ALLOWED
@@ -117,6 +115,7 @@ class State(object):
         :type state_machine: :class:`StateMachine`
         """
         self.state_machine = state_machine
+        self.in_state = False
 
     def __str__(self):
         return str(self.LABEL)

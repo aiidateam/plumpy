@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
-import copy
 import logging
 import plum
 import time
@@ -19,6 +18,7 @@ from . import base_process
 from .base_process import Continue, Wait, Cancel, Stop, ProcessState, \
     Waiting
 from .base import TransitionFailed
+from . import persisters
 from . import process_comms
 from . import stack
 from . import utils
@@ -36,16 +36,7 @@ class BundleKeys(object):
 
     See :func:`save_instance_state` and :func:`load_instance_state`.
     """
-    CREATION_TIME = 'CREATION_TIME'
     INPUTS = 'INPUTS'
-    OUTPUTS = 'OUTPUTS'
-    PID = 'PID'
-    LOOP_CALLBACK = 'LOOP_CALLBACK'
-    AWAITING = 'AWAITING'
-    NEXT_STEP = 'NEXT_STEP'
-    ABORT_MSG = 'ABORT_MSG'
-    PROC_STATE = 'PROC_STATE'
-    PAUSED = 'PAUSED'
 
 
 class Running(base_process.Running):
@@ -103,6 +94,7 @@ class Executor(ProcessListener):
             process.remove_process_listener(self)
 
 
+@persisters.auto_persist('_pid', '_outputs', '_CREATION_TIME')
 class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plum.
@@ -225,6 +217,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self._outputs = {}
         self._uuid = None
         self.__event_helper = utils.EventHelper(ProcessListener)
+        self._CREATION_TIME = None
 
         super(Process, self).__init__()
 
@@ -235,7 +228,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         :return: The creation time
         :rtype: float
         """
-        return self.__CREATION_TIME
+        return self._CREATION_TIME
 
     @property
     def pid(self):
@@ -294,14 +287,10 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         :type out_state: :class:`plum.Bundle`
         """
         super(Process, self).save_instance_state(out_state)
-        # Immutables first
-        out_state[BundleKeys.CREATION_TIME] = self.creation_time
-        out_state[BundleKeys.PID] = self.pid
 
         # Inputs/outputs
         if self.raw_inputs is not None:
             out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
-        out_state[BundleKeys.OUTPUTS] = copy.deepcopy(self._outputs)
 
     @protected
     def load_instance_state(self, saved_state):
@@ -315,12 +304,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         except KeyError:
             self._raw_inputs = None
         self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
-
-        self._outputs = copy.deepcopy(saved_state[BundleKeys.OUTPUTS])
-
-        # Immutable stuff
-        self.__CREATION_TIME = saved_state[BundleKeys.CREATION_TIME]
-        self._pid = saved_state[BundleKeys.PID]
 
         self._update_future()
 
@@ -345,7 +328,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         super(Process, self).on_create()
 
         # State stuff
-        self.__CREATION_TIME = time.time()
+        self._CREATION_TIME = time.time()
 
         # Input/output
         self._check_inputs(self._raw_inputs)
@@ -502,7 +485,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
     def get_status_info(self, out_status_info):
         out_status_info.update({
-            BundleKeys.CREATION_TIME: self.creation_time,
+            'ctime': self.creation_time,
             'process_string': str(self),
             'state': self.state,
             'state_info': str(self._state)
