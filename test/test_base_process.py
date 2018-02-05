@@ -1,8 +1,7 @@
 import unittest
 import plum
-from plum import base
-from plum.base import process
-from plum.base import ProcessStateMachine, ProcessState, Wait, Continue
+from plum import base, base_process
+from plum.base_process import ProcessStateMachine, ProcessState, Wait, Continue
 
 
 def execute(proc):
@@ -61,17 +60,20 @@ class TestProcess(unittest.TestCase):
         p = MyProc()
         p.do_run()
         self.assertEqual(p.state, ProcessState.WAITING)
-        d = {}
-        p.save_state(d)
         p.resume()
 
-    @unittest.skip("Until we have a way to know which attributes should be persisted, skip")
     def test_state_saving_created(self):
-        created1 = process.Created(None, _dummy_fn, 'hello', some_kw='goodbye')
-        saved_state = {}
-        created1.save_instance_state(saved_state)
-        created2 = load_state(process.Created, None, saved_state)
-        self.assertTrue(self._attributes_match(created1, created2))
+        class FauxProc(object):
+            def dummy_fn(self):
+                pass
+
+        proc = FauxProc()
+        created1 = base_process.Created(proc, proc.dummy_fn, 'hello', some_kw='goodbye')
+        saved_state = created1.save()
+        created2 = plum.Savable.load(saved_state, proc)
+        saved_state2 = created2.save()
+        self.assertDictEqual(saved_state, saved_state2)
+        self._attributes_match(created1, created2)
 
     def test_fail(self):
         class FailProc(SimpleProc):
@@ -95,21 +97,10 @@ class TestProcess(unittest.TestCase):
                 self.after_cancel = True
 
         proc = Proc()
-        with self.assertRaises(process.CancelledError):
+        with self.assertRaises(base_process.CancelledError):
             execute(proc)
         self.assertFalse(proc.after_cancel)
         self.assertEqual(proc.state, ProcessState.CANCELLED)
 
     def _attributes_match(self, a, b):
         self.assertDictEqual(a.__dict__, b.__dict__)
-
-
-def load_state(state_class, process, saved_state):
-    state = state_class.__new__(state_class)
-    base.call_with_super_check(state.load_instance_state, process, saved_state)
-
-    return state
-
-
-def _dummy_fn():
-    pass

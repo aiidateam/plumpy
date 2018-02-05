@@ -16,7 +16,7 @@ class TestWaitingProcess(utils.TestCaseWithLoop):
         proc.execute()
 
         for bundle, outputs in zip(wl.snapshots, wl.outputs):
-            self.assertEqual(outputs, bundle[plum.process.BundleKeys.OUTPUTS])
+            self.assertEqual(outputs, bundle['_outputs'])
 
     def test_saving_each_step(self):
         for proc_class in TEST_WAITING_PROCESSES:

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
-import copy
 import logging
 import plum
 import time
@@ -9,19 +8,22 @@ import uuid
 
 from future.utils import with_metaclass
 
+from plum.port import PortNamespace
 from plum.process_listener import ProcessListener
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
 from . import events
 from . import futures
 from . import base
-from .base import Continue, Wait, Cancel, Stop, ProcessState, \
-    TransitionFailed, Waiting
+from . import base_process
+from .base_process import Continue, Wait, Cancel, Stop, ProcessState, Waiting
+from .base import TransitionFailed
+from . import persisters
 from . import process_comms
 from . import stack
 from . import utils
 
-__all__ = ['Process', 'ProcessAction', 'ProcessMessage', 'ProcessState',
+__all__ = ['Process', 'ProcessState',
            'Cancel', 'Wait', 'Stop', 'Continue', 'BundleKeys',
            'TransitionFailed', 'Executor', 'Waiting']
 
@@ -34,38 +36,10 @@ class BundleKeys(object):
 
     See :func:`save_instance_state` and :func:`load_instance_state`.
     """
-    CREATION_TIME = 'CREATION_TIME'
     INPUTS = 'INPUTS'
-    OUTPUTS = 'OUTPUTS'
-    PID = 'PID'
-    LOOP_CALLBACK = 'LOOP_CALLBACK'
-    AWAITING = 'AWAITING'
-    NEXT_STEP = 'NEXT_STEP'
-    ABORT_MSG = 'ABORT_MSG'
-    PROC_STATE = 'PROC_STATE'
-    PAUSED = 'PAUSED'
 
 
-class ProcessAction(object):
-    """
-    Actions that the process can be asked to perform
-    These should be sent as the subject of a message to the process
-    """
-    PAUSE = 'pause'
-    PLAY = 'play'
-    ABORT = 'abort'
-    REPORT_STATUS = 'report_status'
-
-
-class ProcessMessage(object):
-    """
-    Messages that the process can emit, these will be the subject
-    of the message
-    """
-    STATUS_REPORT = 'status_report'
-
-
-class Running(base.Running):
+class Running(base_process.Running):
     _run_handle = None
 
     def enter(self):
@@ -109,20 +83,19 @@ class Executor(ProcessListener):
             loop = process.loop()
             self._future = futures.Future()
             futures.chain(process.future(), self._future)
-            self._future.add_done_callback(lambda _: loop.stop())
 
             if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
                 process.play()
 
-            loop.start()
-            return self._future.result()
+            return loop.run_sync(lambda: self._future)
         finally:
             self._future = None
             self._loop = None
             process.remove_process_listener(self)
 
 
-class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
+@persisters.auto_persist('_pid', '_outputs', '_CREATION_TIME')
+class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plum.
 
@@ -184,21 +157,18 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         Get a human readable description of what this :class:`Process` does.
 
         :return: The description.
-        :rtype: str
+        :rtype: dict
         """
-        desc = []
+        description = {}
+
         if cls.__doc__:
-            desc.append("Description")
-            desc.append("===========")
-            desc.append(cls.__doc__)
+            description['description'] = cls.__doc__.strip()
 
-        spec_desc = cls.spec().get_description()
-        if spec_desc:
-            desc.append("Specification")
-            desc.append("=============")
-            desc.append(spec_desc)
+        spec_description = cls.spec().get_description()
+        if spec_description:
+            description['spec'] = spec_description
 
-        return "\n".join(desc)
+        return description
 
     @classmethod
     def recreate_from(cls, saved_state, *args, **kwargs):
@@ -247,6 +217,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         self._outputs = {}
         self._uuid = None
         self.__event_helper = utils.EventHelper(ProcessListener)
+        self._CREATION_TIME = None
 
         super(Process, self).__init__()
 
@@ -257,7 +228,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         :return: The creation time
         :rtype: float
         """
-        return self.__CREATION_TIME
+        return self._CREATION_TIME
 
     @property
     def pid(self):
@@ -316,14 +287,10 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         :type out_state: :class:`plum.Bundle`
         """
         super(Process, self).save_instance_state(out_state)
-        # Immutables first
-        out_state[BundleKeys.CREATION_TIME] = self.creation_time
-        out_state[BundleKeys.PID] = self.pid
 
         # Inputs/outputs
         if self.raw_inputs is not None:
             out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
-        out_state[BundleKeys.OUTPUTS] = copy.deepcopy(self._outputs)
 
     @protected
     def load_instance_state(self, saved_state):
@@ -336,13 +303,9 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
             self._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._raw_inputs = None
-        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
-        self._outputs = copy.deepcopy(saved_state[BundleKeys.OUTPUTS])
-
-        # Immutable stuff
-        self.__CREATION_TIME = saved_state[BundleKeys.CREATION_TIME]
-        self._pid = saved_state[BundleKeys.PID]
+        raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
+        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
 
         self._update_future()
 
@@ -367,11 +330,12 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
         super(Process, self).on_create()
 
         # State stuff
-        self.__CREATION_TIME = time.time()
+        self._CREATION_TIME = time.time()
 
         # Input/output
         self._check_inputs(self._raw_inputs)
-        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
+        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
 
         # Set up a process ID
         self._uuid = uuid.uuid4()
@@ -445,58 +409,62 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
     @protected
     def out(self, output_port, value):
         self.on_output_emitting(output_port, value)
-        dynamic = False
-        # Do checks on the outputs
-        try:
-            # Check types (if known)
-            port = self.spec().get_output(output_port)
-        except KeyError:
-            if self.spec().has_dynamic_output():
-                dynamic = True
-                port = self.spec().get_dynamic_output()
-            else:
-                raise TypeError(
-                    "Process trying to output on unknown output port {}, "
-                    "and does not have a dynamic output port in spec.".
-                        format(output_port))
 
-            if port.valid_type is not None and not isinstance(value, port.valid_type):
-                raise TypeError(
-                    "Process returned output '{}' of wrong type."
-                    "Expected '{}', got '{}'".
-                        format(output_port, port.valid_type, type(value)))
+        is_valid, message = self.spec().validate_outputs({output_port: value})
+
+        if not is_valid:
+            raise TypeError(message)
+
+        # The output was accepted by the output PortNamespace which means that if it
+        # doesn't have it explicitly, it was dynamically accepted
+        if self.spec().has_output(output_port):
+            dynamic = False
+        else:
+            dynamic = True
 
         self._outputs[output_port] = value
         self.on_output_emitted(output_port, value, dynamic)
 
     @protected
-    def create_input_args(self, inputs):
+    def create_input_args(self, port_namespace, inputs):
         """
-        Take the passed input arguments and fill in any default values for
-        inputs that have no been supplied.
+        Take the passed input arguments and match it to the ports of the port namespace,
+        filling in any default values for inputs that have not been supplied as long as the
+        default is defined
 
-        Preconditions:
-        * All required inputs have been supplied
-
-        :param inputs: The supplied input values.
-        :return: A dictionary of inputs including any with default values
+        :param port_namespace: the port namespace against which to compare the inputs dictionary
+        :param inputs: the dictionary with supplied inputs
+        :return: an AttributesFrozenDict with the inputs, complemented with port default values
+        :raises: ValueError if no input was specified for a required port without a default value
         """
-        if inputs is None:
-            ins = {}
-        else:
-            ins = dict(inputs)
-        # Go through the spec filling in any default and checking for required
-        # inputs
-        for name, port in self.spec().inputs.items():
-            if name not in ins:
+        for name, port in port_namespace.items():
+
+            if name not in inputs:
                 if port.has_default():
-                    ins[name] = port.default
+                    port_value = port.default
                 elif port.required:
-                    raise ValueError(
-                        "Value not supplied for required inputs port {}".format(name)
-                    )
+                    raise ValueError('Value not supplied for required inputs port {}'.format(name))
+                else:
+                    continue
+            else:
+                port_value = inputs[name]
 
-        return ins
+            if isinstance(port, PortNamespace):
+                inputs[name] = self.create_input_args(port, port_value)
+            else:
+                inputs[name] = port_value
+
+        return utils.AttributesFrozendict(inputs)
+
+    def exposed_inputs(self, process_class, namespace=None):
+        """
+        Gather a dictionary of the inputs that were exposed for a given Process
+        class under an optional namespace.
+
+        :param process_class: Process class whose inputs to try and retrieve
+        :param namespace: PortNamespace in which to look for the inputs
+        """
+        return self.spec().exposed_inputs(self.inputs, process_class, namespace)
 
     @protected
     def encode_input_args(self, inputs):
@@ -522,7 +490,7 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
     def get_status_info(self, out_status_info):
         out_status_info.update({
-            BundleKeys.CREATION_TIME: self.creation_time,
+            'ctime': self.creation_time,
             'process_string': str(self),
             'state': self.state,
             'state_info': str(self._state)
@@ -559,15 +527,9 @@ class Process(with_metaclass(ABCMeta, base.ProcessStateMachine)):
 
     # endregion
 
-    def _send_message(self, subject, body=None, to=None):
-        body_ = {'uuid': self.uuid}
-        if body is not None:
-            body_.update(body)
-        self.send_message(subject, to=to, body=body_)
-
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
-        valid, msg = self.spec().validate(inputs)
+        valid, msg = self.spec().validate_inputs(inputs)
         if not valid:
             raise ValueError(msg)
 

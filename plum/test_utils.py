@@ -31,8 +31,8 @@ class DummyProcessWithOutput(process.Process):
     @classmethod
     def define(cls, spec):
         super(DummyProcessWithOutput, cls).define(spec)
-        spec.dynamic_input()
-        spec.dynamic_output()
+        spec.inputs.dynamic = True
+        spec.outputs.dynamic = True
 
     def _run(self, **kwargs):
         self.out("default", 5)
@@ -60,6 +60,16 @@ class WaitForSignalProcess(process.Process):
         return process.Wait(self.last_step)
 
     def last_step(self):
+        pass
+
+
+class NewLoopProcess(process.Process):
+
+    def __init__(self, *args, **kwargs):
+        kwargs['loop'] = plum.new_event_loop()
+        super(NewLoopProcess, self).__init__(*args, **kwargs)
+
+    def _run(self, **kwargs):
         pass
 
 
@@ -125,7 +135,7 @@ class ProcessEventsTester(EventsTesterMixin, process.Process):
     @classmethod
     def define(cls, spec):
         super(ProcessEventsTester, cls).define(spec)
-        spec.dynamic_output()
+        spec.outputs.dynamic = True
 
     @utils.override
     def _run(self):
@@ -241,8 +251,7 @@ class ProcessSaver(ProcessListener, Saver):
         self._save(self.process)
         if not self.process.done():
             self.process.play()
-            self._future.add_done_callback(lambda _: self.process.loop().stop())
-            self.process.loop().start()
+            self.process.loop().run_sync(lambda: self._future)
 
     @utils.override
     def on_process_running(self, process):
@@ -326,8 +335,6 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
                 snapshots[-j], saver.snapshots[-j],
                 snapshots[-j], saver.snapshots[-j],
                 exclude={
-                    str(process.BundleKeys.LOOP_CALLBACK),
-                    str(process.BundleKeys.AWAITING),
                     'CALLBACKS', 'DONE_CALLBACKS', 'SCHEDULED_CALLBACKS', 'PERSISTABLE_ID'
                 })
             j += 1
@@ -370,6 +377,7 @@ class TestPersister(persisters.Persister):
     """
     Test persister, just creates the bundle, noting else
     """
+
     def save_checkpoint(self, process, tag=None):
         """ Create the checkpoint bundle """
         persisters.Bundle(process)

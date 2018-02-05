@@ -1,8 +1,8 @@
+# -*- coding: utf-8 -*-
+import json
 import logging
-from plum.port import InputPort, InputGroupPort, OutputPort, \
-    DynamicOutputPort, DynamicInputPort
-
-LOGGER = logging.getLogger(__name__)
+from collections import defaultdict
+from plum.port import Port, PortNamespace, InputPort, OutputPort
 
 
 class ProcessSpec(object):
@@ -15,26 +15,44 @@ class ProcessSpec(object):
 
     Every Process class has one of these.
     """
+    NAME_INPUTS_PORT_NAMESPACE = 'inputs'
+    NAME_OUTPUTS_PORT_NAMESPACE = 'outputs'
+    PORT_NAMESPACE_TYPE = PortNamespace
     INPUT_PORT_TYPE = InputPort
-    DYNAMIC_INPUT_PORT_TYPE = DynamicInputPort
-    INPUT_GROUP_PORT_TYPE = InputGroupPort
+    OUTPUT_PORT_TYPE = OutputPort
+
 
     def __init__(self):
-        self._inputs = {}
-        self._outputs = {}
+        self._ports = self.PORT_NAMESPACE_TYPE()
         self._validator = None
         self._sealed = False
+        self._logger = logging.getLogger(__name__)
+
+        # Create the input and output port namespace
+        self._ports.create_port_namespace(self.NAME_INPUTS_PORT_NAMESPACE)
+        self._ports.create_port_namespace(self.NAME_OUTPUTS_PORT_NAMESPACE)
+
+    def __str__(self):
+        return json.dumps(self.get_description(), sort_keys=True, indent=4)
+
+    @property
+    def namespace_separator(self):
+        return self.PORT_NAMESPACE_TYPE.NAMESPACE_SEPARATOR
+
+    @property
+    def logger(self):
+        return self._logger
 
     def seal(self):
         """
-        Seal this specification disallowing any further changes.
+        Seal this specification disallowing any further changes
         """
         self._sealed = True
 
     @property
     def sealed(self):
         """
-        Indicates if the spec is sealed or not.
+        Indicates if the spec is sealed or not
 
         :return: True if sealed, False otherwise
         :rtype: bool
@@ -43,189 +61,172 @@ class ProcessSpec(object):
 
     def get_description(self):
         """
-        Get a text description of this process specification.
+        Get a description of this process specification
 
-        :return: A text description
-        :rtype: str
+        :return: a dictionary with the descriptions of the input and output port namespaces
         """
-        desc = []
-        if self.inputs:
-            desc.append("Inputs")
-            desc.append("======")
-            desc.append("".join([p.get_description() for k, p in
-                                 sorted(self.inputs.items(),
-                                        key=lambda x: x[0])]))
+        description = {
+            'inputs': self.inputs.get_description(),
+            'outputs': self.outputs.get_description()
+        }
 
-        if self.outputs:
-            desc.append("Outputs")
-            desc.append("=======")
-            desc.append("".join([p.get_description() for k, p in
-                                 sorted(self.outputs.items(),
-                                        key=lambda x: x[0])]))
+        return description
 
-        return "\n".join(desc)
+    @property
+    def ports(self):
+        return self._ports
 
-    # region Inputs
     @property
     def inputs(self):
         """
-        Get the inputs of the process specification
+        Get the input port namespace of the process specification
 
-        :return: The inputs
-        :rtype: dict
+        :return: the input PortNamespace
         """
-        return self._inputs
+        return self._ports[self.NAME_INPUTS_PORT_NAMESPACE]
 
-    def get_input(self, name):
-        try:
-            return self._inputs[name]
-        except KeyError:
-            raise ValueError("Unknown input '{}'".format(name))
+    @property
+    def outputs(self):
+        """
+        Get the output port namespace of the process specification
 
-    def get_dynamic_input(self):
-        return self._inputs.get(DynamicInputPort.NAME, None)
+        :return: the outputs PortNamespace
+        """
+        return self._ports[self.NAME_OUTPUTS_PORT_NAMESPACE]
 
-    def has_input(self, name):
-        return name in self._inputs
+    def _create_port(self, port_namespace, port_class, name, **kwargs):
+        """
+        Create a new Port of a given class and name in a given PortNamespace
+
+        :param port_namespace: PortNamespace to which to add the port
+        :param port_class: class of the Port to create
+        :param name: name of the port to create
+        :param kwargs: options for the port
+        """
+        if self.sealed:
+            raise RuntimeError('Cannot add an output port after the spec has been sealed')
+
+        namespace = name.split(self.namespace_separator)
+        port_name = namespace.pop()
+
+        if namespace:
+            namespace = self.namespace_separator.join(namespace)
+            port_namespace = port_namespace.create_port_namespace(namespace)
+
+        port_namespace[port_name] = port_class(port_name, **kwargs)
 
     def input(self, name, **kwargs):
         """
-        Define an Process input.
+        Define an input port in the input port namespace
 
-        :param name: The name of the input.
-        :param kwargs: The input port options.
+        :param name: name of the input port to create
+        :param kwargs: options for the input port
         """
-        self.input_port(name, self.INPUT_PORT_TYPE(name, **kwargs))
-
-    def dynamic_input(self, **kwargs):
-        self.input_port(self.DYNAMIC_INPUT_PORT_TYPE.NAME,
-                        self.DYNAMIC_INPUT_PORT_TYPE(**kwargs))
-
-    def no_dynamic_input(self):
-        try:
-            self.remove_input(DynamicInputPort.NAME)
-        except KeyError:
-            pass
-
-    def has_dynamic_input(self):
-        return self.has_input(DynamicInputPort.NAME)
-
-    def input_group(self, name, **kwargs):
-        self.input_port(name, self.INPUT_GROUP_PORT_TYPE(name, **kwargs))
-
-    def input_port(self, name, port):
-        if self.sealed:
-            raise RuntimeError("Cannot add an input after spec is sealed")
-        if not isinstance(port, InputPort):
-            raise TypeError("Input port must be an instance of InputPort")
-        if name in self._inputs:
-            LOGGER.info("Overwriting existing input '{}'.".format(name))
-
-        self._inputs[name] = port
-
-    def remove_input(self, name):
-        if self.sealed:
-            raise RuntimeError("Cannot remove an input after spec is sealed")
-        self._inputs.pop(name)
-
-    # endregion
-
-    # region Outputs
-    @property
-    def outputs(self):
-        return self._outputs
-
-    def get_output(self, name):
-        return self._outputs[name]
-
-    def get_dynamic_output(self):
-        return self._outputs.get(DynamicOutputPort.NAME, None)
-
-    def has_output(self, name):
-        return name in self._outputs
-
-    def has_dynamic_output(self):
-        return self.has_output(DynamicOutputPort.NAME)
+        self._create_port(self.inputs, self.INPUT_PORT_TYPE, name, **kwargs)
 
     def output(self, name, **kwargs):
-        self.output_port(name, OutputPort(name, **kwargs))
-
-    def optional_output(self, name, **kwargs):
-        self.output_port(name, OutputPort(name, required=False, **kwargs))
-
-    def output_port(self, name, port):
-        if self.sealed:
-            raise RuntimeError("Cannot add an output after spec is sealed")
-        if not isinstance(port, OutputPort):
-            raise TypeError("Output port must be an instance of OutputPort")
-        if name in self._outputs:
-            LOGGER.info("Overwriting existing output '{}'.".format(name))
-
-        self._outputs[name] = port
-
-    def dynamic_output(self, **kwargs):
-        self.output_port(
-            DynamicOutputPort.NAME, DynamicOutputPort(**kwargs))
-
-    def no_dynamic_output(self):
-        try:
-            self.remove_output(DynamicOutputPort.NAME)
-        except KeyError:
-            pass
-
-    def remove_output(self, name):
-        if self.sealed:
-            raise RuntimeError("Cannot remove an input after spec is sealed")
-        self._outputs.pop(name)
-
-    # end region
-
-    def validator(self, fn):
         """
-        Supply a validator function.  This should be a function that takes two
-        arguments: spec and inputs where spec will be this specification and
-        inputs will be a dictionary of inputs to be validated.  It should
-        return a tuple of bool, str|None where the bool indicates if the inputs
-        are valid and the str can optionally be used to provide a message with
-        a description of the problems(s) or it can be None.
+        Define an output port in the output port namespace
 
-        :param fn: The validation function
+        :param name: name of the output port to create
+        :param kwargs: options for the output port
+        """
+        self._create_port(self.outputs, self.OUTPUT_PORT_TYPE, name, **kwargs)
+
+    def input_namespace(self, name, **kwargs):
+        """
+        Create a new PortNamespace in the input port namespace. The keyword arguments will be
+        passed to the PortNamespace constructor. Any intermediate port namespaces that need to
+        be created for a nested namespace, will take constructor defaults
+
+        :param name: namespace of the new port namespace
+        :param kwargs: keyword arguments for the PortNamespace constructor
+        """
+        self._create_port(self.inputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
+
+    def output_namespace(self, name, **kwargs):
+        """
+        Create a new PortNamespace in the output port namespace. The keyword arguments will be
+        passed to the PortNamespace constructor. Any intermediate port namespaces that need to
+        be created for a nested namespace, will take constructor defaults
+
+        :param name: namespace of the new port namespace
+        :param kwargs: keyword arguments for the PortNamespace constructor
+        """
+        self._create_port(self.outputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
+
+    def has_input(self, name):
+        """
+        Return whether the input port namespace contains a port with the given name
+
+        :param name: key of the port in the input port namespace
+        """
+        return name in self.inputs
+
+    def has_output(self, name):
+        """
+        Return whether the output port namespace contains a port with the given name
+
+        :param name: key of the port in the output port namespace
+        """
+        return name in self.outputs
+
+    def validate_inputs(self, inputs=None):
+        """
+        Validate a dictionary of inputs according to the input port namespace of this specification
+
+        :param inputs: the inputs dictionary
         :return: valid or not, error string|None
-        :rtype: tuple(bool, str|None)
-        """
-        self._validator = fn
-
-    def validate(self, inputs=None):
-        """
-        This will validate a dictionary of inputs to make sure they are valid
-        according to this specification.
-
-        :param inputs: The inputs dictionary
-        :type inputs: dict
-        :return: A tuple indicating if the input is valid or not and an
-            optional error message
         :rtype: tuple(bool, str or None)
         """
-        if inputs is None:
-            inputs = {}
+        return self.inputs.validate(inputs)
 
-        # Check the inputs meet the requirements
-        if not self.has_dynamic_input():
-            unexpected = set(inputs.keys()) - set(self.inputs.keys())
-            if unexpected:
-                return False, \
-                       "Unexpected inputs found: '{}'.  If you want to allow " \
-                       "dynamic inputs add dynamic_input() to the spec " \
-                       "definition.".format(unexpected)
+    def validate_outputs(self, outputs=None):
+        """
+        Validate a dictionary of outputs according to the output port namespace of this specification
 
-        for name, port in self.inputs.items():
-            valid, msg = port.validate(inputs.get(name, None))
-            if not valid:
-                return False, msg
+        :param outputs: the outputs dictionary
+        :return: valid or not, error string|None
+        :rtype: tuple(bool, str or None)
+        """
+        return self.outputs.validate(outputs)
 
-        if self._validator is not None:
-            valid, msg = self._validator(self, inputs)
-            if not valid:
-                return False, msg
+    def expose_inputs(self, process_class, namespace=None, exclude=(), include=None):
+        """
+        This method allows one to automatically add the inputs from another Process to this ProcessSpec.
+        The optional namespace argument can be used to group the exposed inputs in a separated PortNamespace.
+        Specific input ports from the exposed process can be excluded or included, but they are mutually exclusive
+        and only one can be specified at a time.
 
-        return True, None
+        :param process_class: the Process class whose inputs to expose
+        :param namespace: a namespace in which to place the exposed inputs
+        :param exclude: list or tuple of input keys to exclude from being exposed
+        :param include: list or tuple of input keys to include as exposed inputs
+        """
+        if exclude and include is not None:
+            raise ValueError('exclude and include are mutually exclusive')
+
+        if namespace is None:
+            port_namespace = self.inputs
+        else:
+            port_namespace = self.inputs.create_port_namespace(namespace)
+
+        port_namespace.absorb(process_class.spec().inputs, exclude, include)
+
+    def exposed_inputs(self, inputs, process_class, namespace=None):
+        """
+        Return a dictionary of inputs that were exposed for a given Process class under an optional namespace.
+        The exposed inputs dictionary will effectively be obtained by projecting the inputs dictionary on the
+        input port namespace of the process class
+
+        :param inputs: the dictionary of validated inputs passed to the Process
+        :param process_class: process class whose inputs to try and retrieve
+        :param namespace: optional sub PortNamespace in which to look for the inputs
+        """
+        if namespace is not None:
+            inputs = inputs[namespace]
+
+        port_namespace = process_class.spec().inputs
+        project_inputs = port_namespace.project(inputs)
+
+        return project_inputs

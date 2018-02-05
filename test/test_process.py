@@ -1,8 +1,11 @@
 import plum
 import kiwipy
-
-from plum.process import *
+import unittest
+from past.builtins import basestring
+from plum import Process, ProcessState
 from plum import test_utils
+from plum import process
+from plum.utils import AttributesFrozendict
 
 from . import utils
 
@@ -62,8 +65,7 @@ class TestProcess(utils.TestCaseWithLoop):
             @classmethod
             def define(cls, spec):
                 super(WithDynamic, cls).define(spec)
-
-                spec.dynamic_input()
+                spec.inputs.dynamic = True
 
             def _run(self, **kwargs):
                 pass
@@ -167,66 +169,34 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertEqual(proc.state, ProcessState.FAILED)
 
     def test_get_description(self):
-        # Not all that much we can test for, but check if it's a string at
-        # least
+        class ProcWithoutSpec(Process):
+            pass
+
+        class ProcWithSpec(Process):
+            """ Process with a spec and a docstring """
+
+            @classmethod
+            def define(cls, spec):
+                super(ProcWithSpec, cls).define(spec)
+                spec.input('a', default=1)
+
         for proc_class in test_utils.TEST_PROCESSES:
             desc = proc_class.get_description()
-            self.assertIsInstance(desc, str)
+            self.assertIsInstance(desc, dict)
 
-        # Dummy process should at least use the docstring as part of the
-        # description and so it shouldn't be empty
-        desc = test_utils.DummyProcess.get_description()
-        self.assertNotEqual(desc, "")
+        desc_with_spec = ProcWithSpec.get_description()
+        desc_without_spec = ProcWithoutSpec.get_description()
 
-    def test_created_bundle(self):
-        """
-        Check that the bundle after just creating a process is as we expect
-        :return:
-        """
-        proc = test_utils.DummyProcessWithOutput()
-        b = plum.Bundle(proc)
+        self.assertIsInstance(desc_without_spec, dict)
+        self.assertTrue('spec' in desc_without_spec)
+        self.assertTrue('description' not in desc_without_spec)
+        self.assertIsInstance(desc_with_spec['spec'], dict)
 
-        self.assertIsNone(b.get(BundleKeys.INPUTS, None))
-        self.assertEqual(len(b[BundleKeys.OUTPUTS]), 0)
-
-    def test_instance_state(self):
-        proc = test_utils.DummyProcessWithOutput()
-
-        saver = test_utils.ProcessSaver(proc)
-        proc.play()
-        proc.execute()
-
-        for bundle, outputs in zip(saver.snapshots, saver.outputs):
-            # Check that it is a copy
-            self.assertIsNot(outputs, bundle[BundleKeys.OUTPUTS])
-            # Check the contents are the same
-            self.assertEqual(outputs, bundle[BundleKeys.OUTPUTS])
-
-        self.assertIsNot(
-            proc.outputs, saver.snapshots[-1][BundleKeys.OUTPUTS]
-        )
-
-    def test_saving_each_step(self):
-        for proc_class in test_utils.TEST_PROCESSES:
-            proc = proc_class()
-            saver = test_utils.ProcessSaver(proc)
-            saver.capture()
-            self.assertEqual(proc.state, ProcessState.FINISHED)
-            self.assertTrue(
-                test_utils.check_process_against_snapshots(
-                    self.loop, proc_class, saver.snapshots)
-            )
-
-    def test_saving_each_step_interleaved(self):
-        for ProcClass in test_utils.TEST_PROCESSES:
-            proc = ProcClass()
-            saver = test_utils.ProcessSaver(proc)
-            saver.capture()
-
-            self.assertTrue(
-                test_utils.check_process_against_snapshots(
-                    self.loop, ProcClass, saver.snapshots)
-            )
+        self.assertIsInstance(desc_with_spec, dict)
+        self.assertTrue('spec' in desc_with_spec)
+        self.assertTrue('description' in desc_with_spec)
+        self.assertIsInstance(desc_with_spec['spec'], dict)
+        self.assertIsInstance(desc_with_spec['description'], basestring)
 
     def test_logging(self):
         class LoggerTester(Process):
@@ -263,22 +233,6 @@ class TestProcess(utils.TestCaseWithLoop):
         except RuntimeError as e:
             self.assertEqual(proc.exception(), e)
 
-    def test_restart(self):
-        proc = _RestartProcess()
-        proc.execute(True)
-
-        # Save the state of the process
-        saved_state = plum.Bundle(proc)
-
-        # Load a process from the saved state
-        proc = saved_state.unbundle()
-        self.assertEqual(proc.state, ProcessState.WAITING)
-
-        # Now play it
-        proc.resume()
-        result = proc.execute(True)
-        self.assertEqual(proc.outputs, {'finished': True})
-
     def test_run_done(self):
         proc = test_utils.DummyProcess()
         proc.execute()
@@ -307,28 +261,6 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertTrue(proc.done())
         self.assertEqual(proc.state, ProcessState.FINISHED)
 
-    def test_wait_save_continue(self):
-        """ Test that process saved while in WAITING state restarts correctly when loaded """
-        proc = test_utils.WaitForSignalProcess()
-        proc.play()
-
-        # Wait - Run the process until it enters the WAITING state
-        proc.execute(True)
-
-        saved_state = plum.Bundle(proc)
-
-        # Run the process to the end
-        proc.resume()
-        result = proc.execute()
-
-        # Load from saved state and run again
-        proc = saved_state.unbundle(loop=self.loop)
-        proc.resume()
-        result2 = proc.execute()
-
-        # Check results match
-        self.assertEqual(result, result2)
-
     def test_cancel_in_run(self):
         class CancelProcess(Process):
             after_cancel = False
@@ -356,6 +288,128 @@ class TestProcess(utils.TestCaseWithLoop):
         gathered = plum.gather(*[proc.future() for proc in procs])
         plum.run_until_complete(gathered, self.loop)
 
+
+class SavePauseProc(Process):
+    steps_ran = None
+
+    def init(self):
+        super(SavePauseProc, self).init()
+        self.steps_ran = []
+
+    def run(self):
+        self.pause()
+        self.steps_ran.append(self.run.__name__)
+        return process.Continue(self.step2)
+
+    def step2(self):
+        self.steps_ran.append(self.step2.__name__)
+
+
+class TestProcessSaving(utils.TestCaseWithLoop):
+    def test_running_save_instance_state(self):
+        proc = SavePauseProc()
+        proc.execute(True)
+        bundle = plum.Bundle(proc)
+        self.assertListEqual([SavePauseProc.run.__name__], proc.steps_ran)
+        proc.execute(True)
+        self.assertListEqual(
+            [SavePauseProc.run.__name__, SavePauseProc.step2.__name__],
+            proc.steps_ran)
+
+        proc_unbundled = bundle.unbundle()
+        self.assertEqual(0, len(proc_unbundled.steps_ran))
+        proc_unbundled.execute()
+
+        self.assertEqual([SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
+
+    def test_created_bundle(self):
+        """
+        Check that the bundle after just creating a process is as we expect
+        """
+        proc1 = test_utils.DummyProcessWithOutput()
+        bundle1 = plum.Bundle(proc1)
+
+        proc2 = bundle1.unbundle()
+        bundle2 = plum.Bundle(proc2)
+
+        self.assertEqual(proc1.pid, proc2.pid)
+        self.assertDictEqual(bundle1, bundle2)
+
+    def test_instance_state(self):
+        proc = test_utils.DummyProcessWithOutput()
+
+        saver = test_utils.ProcessSaver(proc)
+        proc.play()
+        proc.execute()
+
+        for bundle, outputs in zip(saver.snapshots, saver.outputs):
+            # Check that it is a copy
+            self.assertIsNot(outputs, bundle['_outputs'])
+            # Check the contents are the same
+            self.assertDictEqual(outputs, bundle['_outputs'])
+
+        self.assertIsNot(proc.outputs, saver.snapshots[-1]['_outputs'])
+
+    def test_saving_each_step(self):
+        for proc_class in test_utils.TEST_PROCESSES:
+            proc = proc_class()
+            saver = test_utils.ProcessSaver(proc)
+            saver.capture()
+            self.assertEqual(proc.state, ProcessState.FINISHED)
+            self.assertTrue(
+                test_utils.check_process_against_snapshots(
+                    self.loop, proc_class, saver.snapshots)
+            )
+
+    def test_saving_each_step_interleaved(self):
+        for ProcClass in test_utils.TEST_PROCESSES:
+            proc = ProcClass()
+            saver = test_utils.ProcessSaver(proc)
+            saver.capture()
+
+            self.assertTrue(
+                test_utils.check_process_against_snapshots(
+                    self.loop, ProcClass, saver.snapshots)
+            )
+
+    def test_restart(self):
+        proc = _RestartProcess()
+        proc.execute(True)
+
+        # Save the state of the process
+        saved_state = plum.Bundle(proc)
+
+        # Load a process from the saved state
+        proc = saved_state.unbundle()
+        self.assertEqual(proc.state, ProcessState.WAITING)
+
+        # Now play it
+        proc.resume()
+        result = proc.execute(True)
+        self.assertEqual(proc.outputs, {'finished': True})
+
+    def test_wait_save_continue(self):
+        """ Test that process saved while in WAITING state restarts correctly when loaded """
+        proc = test_utils.WaitForSignalProcess()
+        proc.play()
+
+        # Wait - Run the process until it enters the WAITING state
+        proc.execute(True)
+
+        saved_state = plum.Bundle(proc)
+
+        # Run the process to the end
+        proc.resume()
+        result = proc.execute()
+
+        # Load from saved state and run again
+        proc = saved_state.unbundle(loop=self.loop)
+        proc.resume()
+        result2 = proc.execute()
+
+        # Check results match
+        self.assertEqual(result, result2)
+
     def test_recreate_from(self):
         proc = test_utils.DummyProcess()
         p2 = self._assert_same(proc)
@@ -377,23 +431,85 @@ class TestProcess(utils.TestCaseWithLoop):
         if p1.state == ProcessState.FINISHED:
             self.assertEqual(p1.result(), p2.result())
 
-    def _check_process_against_snapshot(self, snapshot, proc):
-        self.assertEqual(snapshot.state, proc.state)
 
-        new_bundle = plum.Bundle()
-        proc.save_instance_state(new_bundle)
-        self.assertEqual(snapshot.bundle, new_bundle,
-                         "Bundle mismatch with process class {}\n"
-                         "Snapshot:\n{}\n"
-                         "Loaded:\n{}".format(
-                             proc.__class__, snapshot.bundle, new_bundle))
+class TestProcessNamespace(utils.TestCaseWithLoop):
 
-        self.assertEqual(snapshot.outputs, proc.outputs,
-                         "Outputs mismatch with process class {}\n"
-                         "Snapshot:\n{}\n"
-                         "Loaded:\n{}".format(
-                             proc.__class__, snapshot.outputs, proc.outputs))
+    def test_namespaced_process(self):
+        """
+        Test that inputs in nested namespaces are properly validated and the returned
+        Process inputs data structure consists of nested AttributesFrozenDict instances
+        """
+        class NameSpacedProcess(Process):
 
+            @classmethod
+            def define(cls, spec):
+                super(NameSpacedProcess, cls).define(spec)
+                spec.input('some.name.space.a', valid_type=int)
+
+        proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})
+
+        # Test that the namespaced inputs are AttributesFrozendict
+        self.assertIsInstance(proc.inputs, AttributesFrozendict)
+        self.assertIsInstance(proc.inputs.some, AttributesFrozendict)
+        self.assertIsInstance(proc.inputs.some.name, AttributesFrozendict)
+        self.assertIsInstance(proc.inputs.some.name.space, AttributesFrozendict)
+
+        # Test that the input node is in the inputs of the process
+        input_value = proc.inputs.some.name.space.a
+        self.assertTrue(isinstance(input_value, int))
+        self.assertEquals(input_value, 5)
+
+    def test_namespaced_process_inputs(self):
+        """
+        Test the parsed inputs for a process with namespace only contains expected dictionaries
+        """
+        class NameSpacedProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(NameSpacedProcess, cls).define(spec)
+                spec.input('some.name.space.a', valid_type=int)
+                spec.input('test', valid_type=int, default=6)
+                spec.input('label', valid_type=basestring, required=False)
+                spec.input('description', valid_type=basestring, required=False)
+                spec.input('store_provenance', valid_type=bool, default=True)
+
+        proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})
+
+        self.assertEqual(proc.inputs.test, 6)
+        self.assertEqual(proc.inputs.store_provenance, True)
+        self.assertEqual(proc.inputs.some.name.space.a, 5)
+
+        self.assertTrue('label' not in proc.inputs)
+        self.assertTrue('description' not in proc.inputs)
+
+    def test_namespaced_process_dynamic(self):
+        """
+        Test that the input creation for processes with a dynamic nested port namespace is properly handled
+        """
+        namespace = 'name.space'
+
+        class DummyDynamicProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(DummyDynamicProcess, cls).define(spec)
+                spec.input_namespace(namespace)
+                spec.inputs['name']['space'].dynamic = True
+                spec.inputs['name']['space'].valid_type = int
+
+        original_inputs = [1, 2, 3, 4]
+
+        inputs = {'name': {'space': {str(l): l for l in original_inputs}}}
+        p = DummyDynamicProcess(inputs=inputs)
+
+        for label, value in p.inputs['name']['space'].items():
+            self.assertTrue(label in inputs['name']['space'])
+            self.assertEqual(int(label), value)
+            original_inputs.remove(value)
+
+        # Make sure there are no other inputs
+        self.assertFalse(original_inputs)
 
 class TestProcessEvents(utils.TestCaseWithLoop):
     def setUp(self):
@@ -464,7 +580,7 @@ class _RestartProcess(test_utils.WaitForSignalProcess):
     @classmethod
     def define(cls, spec):
         super(_RestartProcess, cls).define(spec)
-        spec.dynamic_output()
+        spec.outputs.dynamic = True
 
     def last_step(self):
         self.out("finished", True)

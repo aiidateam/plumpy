@@ -5,6 +5,7 @@ import functools
 import inspect
 import logging
 import os
+import plum
 import sys
 from .utils import call_with_super_check, super_check
 
@@ -16,7 +17,6 @@ _LOGGER = logging.getLogger(__name__)
 # Events to be ignored
 class EventResponse(Enum):
     IGNORED = 0
-    DELAYED = 1
 
 
 class StateMachineError(Exception):
@@ -76,7 +76,7 @@ def event(from_states='*', to_states='*'):
                 )
 
             result = wrapped(self, *a, **kw)
-            if result not in [EventResponse.IGNORED, EventResponse.DELAYED]:
+            if not (result == EventResponse.IGNORED or isinstance(result, plum.Future)):
                 if to_states != '*' and not \
                         any(isinstance(self._state, state)
                             for state in to_states):
@@ -105,8 +105,6 @@ class State(object):
     # from this one
     ALLOWED = set()
 
-    in_state = False
-
     @classmethod
     def is_terminal(cls):
         return not cls.ALLOWED
@@ -117,6 +115,7 @@ class State(object):
         :type state_machine: :class:`StateMachine`
         """
         self.state_machine = state_machine
+        self.in_state = False
 
     def __str__(self):
         return str(self.LABEL)
