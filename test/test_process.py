@@ -3,10 +3,9 @@ import kiwipy
 import unittest
 from past.builtins import basestring
 from plum import Process, ProcessState
-from plum.test_utils import check_process_against_snapshots
 from plum import test_utils
-from plum.test_utils import ProcessListenerTester, NewLoopProcess
 from plum import process
+from plum.utils import AttributesFrozendict
 
 from . import utils
 
@@ -432,6 +431,85 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         if p1.state == ProcessState.FINISHED:
             self.assertEqual(p1.result(), p2.result())
 
+
+class TestProcessNamespace(utils.TestCaseWithLoop):
+
+    def test_namespaced_process(self):
+        """
+        Test that inputs in nested namespaces are properly validated and the returned
+        Process inputs data structure consists of nested AttributesFrozenDict instances
+        """
+        class NameSpacedProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(NameSpacedProcess, cls).define(spec)
+                spec.input('some.name.space.a', valid_type=int)
+
+        proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})
+
+        # Test that the namespaced inputs are AttributesFrozendict
+        self.assertIsInstance(proc.inputs, AttributesFrozendict)
+        self.assertIsInstance(proc.inputs.some, AttributesFrozendict)
+        self.assertIsInstance(proc.inputs.some.name, AttributesFrozendict)
+        self.assertIsInstance(proc.inputs.some.name.space, AttributesFrozendict)
+
+        # Test that the input node is in the inputs of the process
+        input_value = proc.inputs.some.name.space.a
+        self.assertTrue(isinstance(input_value, int))
+        self.assertEquals(input_value, 5)
+
+    def test_namespaced_process_inputs(self):
+        """
+        Test the parsed inputs for a process with namespace only contains expected dictionaries
+        """
+        class NameSpacedProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(NameSpacedProcess, cls).define(spec)
+                spec.input('some.name.space.a', valid_type=int)
+                spec.input('test', valid_type=int, default=6)
+                spec.input('label', valid_type=basestring, required=False)
+                spec.input('description', valid_type=basestring, required=False)
+                spec.input('store_provenance', valid_type=bool, default=True)
+
+        proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})
+
+        self.assertEqual(proc.inputs.test, 6)
+        self.assertEqual(proc.inputs.store_provenance, True)
+        self.assertEqual(proc.inputs.some.name.space.a, 5)
+
+        self.assertTrue('label' not in proc.inputs)
+        self.assertTrue('description' not in proc.inputs)
+
+    def test_namespaced_process_dynamic(self):
+        """
+        Test that the input creation for processes with a dynamic nested port namespace is properly handled
+        """
+        namespace = 'name.space'
+
+        class DummyDynamicProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(DummyDynamicProcess, cls).define(spec)
+                spec.input_namespace(namespace)
+                spec.inputs['name']['space'].dynamic = True
+                spec.inputs['name']['space'].valid_type = int
+
+        original_inputs = [1, 2, 3, 4]
+
+        inputs = {'name': {'space': {str(l): l for l in original_inputs}}}
+        p = DummyDynamicProcess(inputs=inputs)
+
+        for label, value in p.inputs['name']['space'].items():
+            self.assertTrue(label in inputs['name']['space'])
+            self.assertEqual(int(label), value)
+            original_inputs.remove(value)
+
+        # Make sure there are no other inputs
+        self.assertFalse(original_inputs)
 
 class TestProcessEvents(utils.TestCaseWithLoop):
     def setUp(self):

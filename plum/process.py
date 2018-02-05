@@ -8,6 +8,7 @@ import uuid
 
 from future.utils import with_metaclass
 
+from plum.port import PortNamespace
 from plum.process_listener import ProcessListener
 from plum.process_spec import ProcessSpec
 from plum.utils import protected
@@ -15,8 +16,7 @@ from . import events
 from . import futures
 from . import base
 from . import base_process
-from .base_process import Continue, Wait, Cancel, Stop, ProcessState, \
-    Waiting
+from .base_process import Continue, Wait, Cancel, Stop, ProcessState, Waiting
 from .base import TransitionFailed
 from . import persisters
 from . import process_comms
@@ -303,7 +303,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             self._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._raw_inputs = None
-        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+
+        raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
+        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
 
         self._update_future()
 
@@ -332,7 +334,8 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
         # Input/output
         self._check_inputs(self._raw_inputs)
-        self._parsed_inputs = utils.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+        raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
+        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
 
         # Set up a process ID
         self._uuid = uuid.uuid4()
@@ -423,33 +426,35 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self.on_output_emitted(output_port, value, dynamic)
 
     @protected
-    def create_input_args(self, inputs):
+    def create_input_args(self, port_namespace, inputs):
         """
-        Take the passed input arguments and fill in any default values for
-        inputs that have no been supplied.
+        Take the passed input arguments and match it to the ports of the port namespace,
+        filling in any default values for inputs that have not been supplied as long as the
+        default is defined
 
-        Preconditions:
-        * All required inputs have been supplied
-
-        :param inputs: The supplied input values.
-        :return: A dictionary of inputs including any with default values
+        :param port_namespace: the port namespace against which to compare the inputs dictionary
+        :param inputs: the dictionary with supplied inputs
+        :return: an AttributesFrozenDict with the inputs, complemented with port default values
+        :raises: ValueError if no input was specified for a required port without a default value
         """
-        if inputs is None:
-            ins = {}
-        else:
-            ins = dict(inputs)
+        for name, port in port_namespace.items():
 
-        # Go through the spec filling in any default and checking for required inputs
-        for name, port in self.spec().inputs.items():
-            if name not in ins:
+            if name not in inputs:
                 if port.has_default():
-                    ins[name] = port.default
+                    port_value = port.default
                 elif port.required:
-                    raise ValueError(
-                        "Value not supplied for required inputs port {}".format(name)
-                    )
+                    raise ValueError('Value not supplied for required inputs port {}'.format(name))
+                else:
+                    continue
+            else:
+                port_value = inputs[name]
 
-        return ins
+            if isinstance(port, PortNamespace):
+                inputs[name] = self.create_input_args(port, port_value)
+            else:
+                inputs[name] = port_value
+
+        return utils.AttributesFrozendict(inputs)
 
     def exposed_inputs(self, process_class, namespace=None):
         """
