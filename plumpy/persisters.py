@@ -57,7 +57,7 @@ class Persister(with_metaclass(ABCMeta, object)):
         """
         Persist a Process instance
 
-        :param process: :class:`plum.process.Process`
+        :param process: :class:`plumpy.Process`
         :param tag: optional checkpoint identifier to allow distinguishing
             multiple checkpoints for the same process
         """
@@ -68,11 +68,11 @@ class Persister(with_metaclass(ABCMeta, object)):
         """
         Load a process from a persisted checkpoint by its process id
 
-        :param pid: the process id of the :class:`plum.process.Process`
+        :param pid: the process id of the :class:`plumpy.Process`
         :param tag: optional checkpoint identifier to allow retrieving
             a specific sub checkpoint for the corresponding process
         :return: a bundle with the process state
-        :rtype: :class:`plum.Bundle`
+        :rtype: :class:`plumpy.Bundle`
         """
         pass
 
@@ -104,7 +104,7 @@ class Persister(with_metaclass(ABCMeta, object)):
         Delete a persisted process checkpoint. No error will be raised if
         the checkpoint does not exist
 
-        :param pid: the process id of the :class:`plum.process.Process`
+        :param pid: the process id of the :class:`plumpy.Process`
         :param tag: optional checkpoint identifier to allow retrieving
             a specific sub checkpoint for the corresponding process
         """
@@ -115,7 +115,7 @@ class Persister(with_metaclass(ABCMeta, object)):
         """
         Delete all persisted checkpoints related to the given process id
 
-        :param pid: the process id of the :class:`plum.process.Process`
+        :param pid: the process id of the :class:`plumpy.Process`
         """
         pass
 
@@ -197,7 +197,7 @@ class PicklePersister(Persister):
         """
         Persist a process to a pickle on disk
 
-        :param process: :class:`plum.process.Process`
+        :param process: :class:`plumpy.Process`
         :param tag: optional checkpoint identifier to allow distinguishing
             multiple checkpoints for the same process
         """
@@ -212,11 +212,11 @@ class PicklePersister(Persister):
         """
         Load a process from a persisted checkpoint by its process id
 
-        :param pid: the process id of the :class:`plum.process.Process`
+        :param pid: the process id of the :class:`plumpy.Process`
         :param tag: optional checkpoint identifier to allow retrieving
             a specific sub checkpoint for the corresponding process
         :return: a bundle with the process state
-        :rtype: :class:`plum.Bundle`
+        :rtype: :class:`plumpy.Bundle`
         """
         filepath = self._pickle_filepath(pid, tag)
         checkpoint = PicklePersister.load_pickle(filepath)
@@ -257,7 +257,7 @@ class PicklePersister(Persister):
         Delete a persisted process checkpoint. No error will be raised if
         the checkpoint does not exist
 
-        :param pid: the process id of the :class:`plum.process.Process`
+        :param pid: the process id of the :class:`plumpy.Process`
         :param tag: optional checkpoint identifier to allow retrieving
             a specific sub checkpoint for the corresponding process
         """
@@ -272,7 +272,7 @@ class PicklePersister(Persister):
         """
         Delete all persisted checkpoints related to the given process id
 
-        :param pid: the process id of the :class:`plum.process.Process`
+        :param pid: the process id of the :class:`plumpy.Process`
         """
         for checkpoint in self.get_process_checkpoints(pid):
             self.delete_checkpoint(checkpoint.pid, checkpoint.tag)

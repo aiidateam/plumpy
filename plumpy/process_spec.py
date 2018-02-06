@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
-from collections import defaultdict
-from plum.port import Port, PortNamespace, InputPort, OutputPort
+
+from . import ports
 
 
 class ProcessSpec(object):
     """
-    A class that defines the specifications of a :class:`plum.process.Process`,
+    A class that defines the specifications of a :class:`plumpy.Process`,
     this includes what its inputs, outputs, etc are.
 
     All methods to modify the spec should have declarative names describe the
@@ -17,10 +17,9 @@ class ProcessSpec(object):
     """
     NAME_INPUTS_PORT_NAMESPACE = 'inputs'
     NAME_OUTPUTS_PORT_NAMESPACE = 'outputs'
-    PORT_NAMESPACE_TYPE = PortNamespace
-    INPUT_PORT_TYPE = InputPort
-    OUTPUT_PORT_TYPE = OutputPort
-
+    PORT_NAMESPACE_TYPE = ports.PortNamespace
+    INPUT_PORT_TYPE = ports.InputPort
+    OUTPUT_PORT_TYPE = ports.OutputPort
 
     def __init__(self):
         self._ports = self.PORT_NAMESPACE_TYPE()

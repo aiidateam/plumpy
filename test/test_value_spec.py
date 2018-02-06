@@ -1,4 +1,4 @@
-from plum.port import ValueSpec
+from plumpy.ports import ValueSpec
 
 from . import utils
 

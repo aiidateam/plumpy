@@ -1,11 +1,9 @@
-import plum
+import plumpy
 import kiwipy
 import unittest
 from past.builtins import basestring
-from plum import Process, ProcessState
-from plum import test_utils
-from plum import process
-from plum.utils import AttributesFrozendict
+from plumpy import Process, ProcessState, test_utils, process
+from plumpy.utils import AttributesFrozendict
 
 from . import utils
 
@@ -270,7 +268,7 @@ class TestProcess(utils.TestCaseWithLoop):
                 self.after_cancel = True
 
         proc = CancelProcess()
-        with self.assertRaises(plum.CancelledError):
+        with self.assertRaises(plumpy.CancelledError):
             proc.execute()
 
         self.assertFalse(proc.after_cancel)
@@ -285,8 +283,8 @@ class TestProcess(utils.TestCaseWithLoop):
             procs.append(proc)
 
         # Check that they all run
-        gathered = plum.gather(*[proc.future() for proc in procs])
-        plum.run_until_complete(gathered, self.loop)
+        gathered = plumpy.gather(*[proc.future() for proc in procs])
+        plumpy.run_until_complete(gathered, self.loop)
 
 
 class SavePauseProc(Process):
@@ -309,7 +307,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
     def test_running_save_instance_state(self):
         proc = SavePauseProc()
         proc.execute(True)
-        bundle = plum.Bundle(proc)
+        bundle = plumpy.Bundle(proc)
         self.assertListEqual([SavePauseProc.run.__name__], proc.steps_ran)
         proc.execute(True)
         self.assertListEqual(
@@ -327,10 +325,10 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         Check that the bundle after just creating a process is as we expect
         """
         proc1 = test_utils.DummyProcessWithOutput()
-        bundle1 = plum.Bundle(proc1)
+        bundle1 = plumpy.Bundle(proc1)
 
         proc2 = bundle1.unbundle()
-        bundle2 = plum.Bundle(proc2)
+        bundle2 = plumpy.Bundle(proc2)
 
         self.assertEqual(proc1.pid, proc2.pid)
         self.assertDictEqual(bundle1, bundle2)
@@ -377,7 +375,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         proc.execute(True)
 
         # Save the state of the process
-        saved_state = plum.Bundle(proc)
+        saved_state = plumpy.Bundle(proc)
 
         # Load a process from the saved state
         proc = saved_state.unbundle()
@@ -396,7 +394,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         # Wait - Run the process until it enters the WAITING state
         proc.execute(True)
 
-        saved_state = plum.Bundle(proc)
+        saved_state = plumpy.Bundle(proc)
 
         # Run the process to the end
         proc.resume()
@@ -424,7 +422,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         self._procs_same(proc, p2)
 
     def _assert_same(self, proc):
-        return plum.Bundle(proc).unbundle(loop=proc.loop())
+        return plumpy.Bundle(proc).unbundle(loop=proc.loop())
 
     def _procs_same(self, p1, p2):
         self.assertEqual(p1.state, p2.state)
@@ -439,6 +437,7 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
         Test that inputs in nested namespaces are properly validated and the returned
         Process inputs data structure consists of nested AttributesFrozenDict instances
         """
+
         class NameSpacedProcess(Process):
 
             @classmethod
@@ -463,6 +462,7 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
         """
         Test the parsed inputs for a process with namespace only contains expected dictionaries
         """
+
         class NameSpacedProcess(Process):
 
             @classmethod
@@ -510,6 +510,7 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
 
         # Make sure there are no other inputs
         self.assertFalse(original_inputs)
+
 
 class TestProcessEvents(utils.TestCaseWithLoop):
     def setUp(self):

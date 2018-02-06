@@ -1,5 +1,5 @@
 from .utils import TestCase
-from plum.utils import AttributesFrozendict
+from plumpy.utils import AttributesFrozendict
 
 
 class TestAttributesFrozendict(TestCase):

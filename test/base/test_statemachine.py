@@ -1,6 +1,6 @@
 from enum import Enum
 import unittest
-from plum.base import state_machine
+from plumpy.base import state_machine
 import time
 
 # Events

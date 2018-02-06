@@ -1,6 +1,6 @@
 import functools
-import plum
-import plum.stack as stack
+import plumpy
+import plumpy.stack as stack
 import unittest
 
 
@@ -15,13 +15,13 @@ class TestCase(unittest.TestCase):
 class TestCaseWithLoop(TestCase):
     def setUp(self):
         super(TestCaseWithLoop, self).setUp()
-        self.loop = plum.new_event_loop()
-        plum.set_event_loop(self.loop)
+        self.loop = plumpy.new_event_loop()
+        plumpy.set_event_loop(self.loop)
 
     def tearDown(self):
         self.loop.close()
         self.loop = None
-        plum.set_event_loop(None)
+        plumpy.set_event_loop(None)
 
 
 def get_message(receive_list, loop, subject, to, body, sender_id):

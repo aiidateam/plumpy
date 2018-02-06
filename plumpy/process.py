@@ -2,16 +2,14 @@
 
 from abc import ABCMeta
 import logging
-import plum
 import time
 import uuid
 
 from future.utils import with_metaclass
 
-from plum.port import PortNamespace
-from plum.process_listener import ProcessListener
-from plum.process_spec import ProcessSpec
-from plum.utils import protected
+from .process_listener import ProcessListener
+from .process_spec import ProcessSpec
+from .utils import protected
 from . import events
 from . import futures
 from . import base
@@ -20,6 +18,7 @@ from .base_process import Continue, Wait, Cancel, Stop, ProcessState, Waiting
 from .base import TransitionFailed
 from . import persisters
 from . import process_comms
+from . import ports
 from . import stack
 from . import utils
 
@@ -97,7 +96,7 @@ class Executor(ProcessListener):
 @persisters.auto_persist('_pid', '_outputs', '_CREATION_TIME')
 class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     """
-    The Process class is the base for any unit of work in plum.
+    The Process class is the base for any unit of work in plumpy.
 
     A process can be in one of the following states:
 
@@ -200,7 +199,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         :type logger: :class:`logging.Logger`
         :param loop: The event loop
         :param communicator: The (optional) communicator
-        :type communicator: :class:`plum.Communicator`
+        :type communicator: :class:`plumpy.Communicator`
         """
         # Don't allow the spec to be changed anymore
         self.spec().seal()
@@ -212,7 +211,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self._loop = loop if loop is not None else events.get_event_loop()
         self._communicator = communicator
 
-        self._future = plum.Future()
+        self._future = futures.Future()
         self._parsed_inputs = None
         self._outputs = {}
         self._uuid = None
@@ -284,7 +283,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         Ask the process to save its current instance state.
 
         :param out_state: A bundle to save the state to
-        :type out_state: :class:`plum.Bundle`
+        :type out_state: :class:`plumpy.Bundle`
         """
         super(Process, self).save_instance_state(out_state)
 
@@ -449,7 +448,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             else:
                 port_value = inputs[name]
 
-            if isinstance(port, PortNamespace):
+            if isinstance(port, ports.PortNamespace):
                 inputs[name] = self.create_input_args(port, port_value)
             else:
                 inputs[name] = port_value
@@ -470,7 +469,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def encode_input_args(self, inputs):
         """
         Encode input arguments such that they may be saved in a
-        :class:`plum.Bundle`
+        :class:`plumpy.Bundle`
 
         :param inputs: A mapping of the inputs as passed to the process
         :return: The encoded inputs
@@ -481,7 +480,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def decode_input_args(self, encoded):
         """
         Decode saved input arguments as they came from the saved instance state
-        :class:`plum.Bundle`
+        :class:`plumpy.Bundle`
 
         :param encoded:
         :return: The decoded input args

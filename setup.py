@@ -7,7 +7,7 @@ __license__ = "GPLv3 and MIT, see LICENSE file"
 __contributors__ = "Sebastiaan Huber"
 
 about = {}
-with open('plum/version.py') as f:
+with open('plumpy/version.py') as f:
     exec (f.read(), about)
 
 setup(
@@ -45,6 +45,6 @@ setup(
         ':python_version<"3.2"': ['backports.tempfile'],
         'dev': ['pytest', 'ipython', 'twine']
     },
-    packages=['plum', 'plum/base', 'plum/rmq'],
+    packages=['plumpy', 'plumpy/base', 'plumpy/rmq'],
     test_suite='test'
 )

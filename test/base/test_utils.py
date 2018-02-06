@@ -1,5 +1,5 @@
 import unittest
-from plum.base import utils
+from plumpy.base import utils
 
 
 class Root(object):

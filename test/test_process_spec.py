@@ -1,6 +1,5 @@
-import unittest
-from plum.port import PortNamespace, InputPort
-from plum.process import ProcessSpec
+from plumpy.ports import PortNamespace, InputPort
+from plumpy.process import ProcessSpec
 from .utils import TestCase
 
 

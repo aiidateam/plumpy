@@ -5,7 +5,7 @@ import functools
 import inspect
 import logging
 import os
-import plum
+import plumpy
 import sys
 from .utils import call_with_super_check, super_check
 
@@ -76,7 +76,7 @@ def event(from_states='*', to_states='*'):
                 )
 
             result = wrapped(self, *a, **kw)
-            if not (result == EventResponse.IGNORED or isinstance(result, plum.Future)):
+            if not (result == EventResponse.IGNORED or isinstance(result, plumpy.Future)):
                 if to_states != '*' and not \
                         any(isinstance(self._state, state)
                             for state in to_states):

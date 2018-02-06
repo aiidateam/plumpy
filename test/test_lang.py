@@ -1,5 +1,5 @@
 from .utils import TestCase
-from plum.lang import protected, override
+from plumpy.lang import protected, override
 
 
 class A(object):

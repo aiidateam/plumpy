@@ -1,8 +1,7 @@
 import collections
 from collections import namedtuple
 
-import plum
-from plum.process_listener import ProcessListener
+import plumpy
 from . import process
 from . import persisters
 from . import utils
@@ -66,7 +65,7 @@ class WaitForSignalProcess(process.Process):
 class NewLoopProcess(process.Process):
 
     def __init__(self, *args, **kwargs):
-        kwargs['loop'] = plum.new_event_loop()
+        kwargs['loop'] = plumpy.new_event_loop()
         super(NewLoopProcess, self).__init__(*args, **kwargs)
 
     def _run(self, **kwargs):
@@ -180,7 +179,7 @@ class ThreeStepsThenException(ThreeSteps):
         raise RuntimeError("Great scott!")
 
 
-class ProcessListenerTester(ProcessListener):
+class ProcessListenerTester(plumpy.ProcessListener):
     def __init__(self, process, expected_events, done_callback):
         process.add_process_listener(self)
         self.expected_events = set(expected_events)
@@ -235,17 +234,17 @@ class Saver(object):
         self.outputs.append(p.outputs.copy())
 
 
-class ProcessSaver(ProcessListener, Saver):
+class ProcessSaver(plumpy.ProcessListener, Saver):
     """
     Save the instance state of a process each time it is about to enter a new state
     """
 
     def __init__(self, proc):
-        ProcessListener.__init__(self)
+        plumpy.ProcessListener.__init__(self)
         Saver.__init__(self)
         self.process = proc
         proc.add_process_listener(self)
-        self._future = plum.Future()
+        self._future = plumpy.Future()
 
     def capture(self):
         self._save(self.process)
@@ -312,7 +311,6 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     Return True if they match, False otherwise.
 
     :param loop: The event loop
-    :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
     :param proc_class: The process class to check
     :type proc_class: :class:`Process`
     :param snapshots: The snapshots taken from from an execution of that

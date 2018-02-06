@@ -13,13 +13,13 @@ try:
 except ImportError:
     _HAS_TBLIB = False
 
-from plum.base import state_machine
-from plum.base.state_machine import InvalidStateError, event
-from plum.base import super_check, call_with_super_check
+from .base import state_machine
+from .base.state_machine import InvalidStateError, event
+from .base import super_check, call_with_super_check
 
 from . import futures
 from . import persisters
-from plum.persisters import auto_persist
+from .persisters import auto_persist
 from . import utils
 
 __all__ = ['ProcessStateMachine', 'ProcessState',

@@ -1,9 +1,9 @@
-import plum
-from plum import Process, ProcessState
-from plum.test_utils import ThreeSteps, \
+import plumpy
+from plumpy import Process, ProcessState
+from plumpy.test_utils import ThreeSteps, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
-from plum.test_utils import check_process_against_snapshots
-from plum.test_utils import ProcessSaver
+from plumpy.test_utils import check_process_against_snapshots
+from plumpy.test_utils import ProcessSaver
 
 from . import utils
 
@@ -36,7 +36,7 @@ class TestWaitingProcess(utils.TestCaseWithLoop):
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)
 
-        new_bundle = plum.Bundle()
+        new_bundle = plumpy.Bundle()
         proc.save_instance_state(new_bundle)
         self.assertEqual(snapshot.bundle, new_bundle,
                          "Bundle mismatch with process class {}\n"

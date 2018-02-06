@@ -8,6 +8,7 @@ from .futures import *
 from .persisters import *
 from .process import *
 from .process_comms import *
+from .process_listener import *
 from . import stack
 from .mixins import *
 from .utils import *
@@ -16,7 +17,7 @@ from .version import *
 __all__ = (events.__all__ + exceptions.__all__ + process.__all__ +
            utils.__all__ + futures.__all__ + mixins.__all__ + ['stack'] +
            persisters.__all__ + communications.__all__ + process_comms.__all__ +
-           version.__all__)
+           version.__all__, process_listener.__all__)
 
 
 # Do this se we don't get the "No handlers could be found..." warnings that will be produced

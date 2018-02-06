@@ -8,13 +8,13 @@ from collections import deque
 
 import frozendict
 
-import plum.lang
-from plum.settings import check_protected, check_override
+from . import lang
+from plumpy.settings import check_protected, check_override
 
 __all__ = []
 
-protected = plum.lang.protected(check=check_protected)
-override = plum.lang.override(check=check_override)
+protected = lang.protected(check=check_protected)
+override = lang.override(check=check_override)
 
 _LOGGER = logging.getLogger(__name__)
 _default_loop = None

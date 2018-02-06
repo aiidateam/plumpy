@@ -33,7 +33,7 @@ class ProcessReceiver(object):
 
     def __init__(self, process):
         """
-        :param process: :class:`plum.Process`
+        :param process: :class:`plumpy.Process`
         """
         self._process = process
 

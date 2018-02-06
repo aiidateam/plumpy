@@ -1,7 +1,7 @@
 import unittest
-import plum
-from plum import base, base_process
-from plum.base_process import ProcessStateMachine, ProcessState, Wait, Continue
+import plumpy
+from plumpy import base_process
+from plumpy.base_process import ProcessStateMachine, ProcessState, Wait, Continue
 
 
 def execute(proc):
@@ -70,7 +70,7 @@ class TestProcess(unittest.TestCase):
         proc = FauxProc()
         created1 = base_process.Created(proc, proc.dummy_fn, 'hello', some_kw='goodbye')
         saved_state = created1.save()
-        created2 = plum.Savable.load(saved_state, proc)
+        created2 = plumpy.Savable.load(saved_state, proc)
         saved_state2 = created2.save()
         self.assertDictEqual(saved_state, saved_state2)
         self._attributes_match(created1, created2)
