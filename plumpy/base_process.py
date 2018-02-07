@@ -18,8 +18,8 @@ from .base.state_machine import InvalidStateError, event
 from .base import super_check, call_with_super_check
 
 from . import futures
-from . import persisters
-from .persisters import auto_persist
+from . import persistence
+from .persistence import auto_persist
 from . import utils
 
 __all__ = ['ProcessStateMachine', 'ProcessState',
@@ -44,7 +44,7 @@ class CancelledError(BaseException):
 # region Commands
 
 
-class Command(persisters.Savable):
+class Command(persistence.Savable):
     pass
 
 
@@ -112,7 +112,7 @@ class ProcessState(Enum):
 
 
 @auto_persist('in_state')
-class State(state_machine.State, persisters.Savable):
+class State(state_machine.State, persistence.Savable):
     @property
     def process(self):
         return self.state_machine
@@ -201,7 +201,7 @@ class Running(State):
         super(Running, self).load_instance_state(saved_state, process)
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
         if self.COMMAND in saved_state:
-            self._command = persisters.Savable.load(saved_state[self.COMMAND], self.process)
+            self._command = persistence.Savable.load(saved_state[self.COMMAND], self.process)
 
     def cancel(self, message=None):
         if self._running:
@@ -431,7 +431,7 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
 
 class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
                                          state_machine.StateMachine,
-                                         persisters.Savable)):
+                                         persistence.Savable)):
     """
                   ___
                  |   v
@@ -584,9 +584,6 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
 
     # endregion
 
-    def save_state(self, out_state):
-        return call_with_super_check(self.save_instance_state, out_state)
-
     def save_instance_state(self, out_state):
         super(ProcessStateMachine, self).save_instance_state(out_state)
         out_state['_state'] = self._state.save()
@@ -679,4 +676,4 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         :type saved_state: :class:`Bundle`
         :return: An instance of the object with its state loaded from the save state.
         """
-        return persisters.Savable.load(saved_state, self)
+        return persistence.Savable.load(saved_state, self)

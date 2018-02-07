@@ -3,7 +3,7 @@ import tempfile
 if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
 
-from plumpy.persisters import PersistedCheckpoint, PicklePersister
+from plumpy.persistence import PersistedCheckpoint, PicklePersister
 from plumpy.test_utils import ProcessWithCheckpoint
 from test.utils import TestCaseWithLoop
 

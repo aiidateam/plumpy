@@ -300,6 +300,15 @@ class Savable(object):
 
     @staticmethod
     def load(saved_state, *args, **kwargs):
+        """
+        Load a `Savable` from a saved instance state
+
+        :param saved_state: The saved states
+        :param args: Positional args to be passed to `load_instance_state`
+        :param kwargs: Keyword args to be passed to `load_instance_state`
+        :return: The loaded Savable instance
+        :rtype: :class:`Savable`
+        """
         return Savable.load_with_classloader(
             saved_state, class_loader.ClassLoader(), *args, **kwargs)
 
@@ -330,22 +339,24 @@ class Savable(object):
 
     @super_check
     def load_instance_state(self, saved_state, *args, **kwargs):
-        self.load_members(self._auto_persist, saved_state)
+        if self._auto_persist is not None:
+            self.load_members(self._auto_persist, saved_state)
 
     @super_check
     def save_instance_state(self, out_state):
         self._ensure_persist_configured()
         out_state[self.META] = {}
-        out_state[self.CLASS_NAME] = utils.class_name(self)
-        self.save_members(self._auto_persist, out_state)
+        if self._auto_persist is not None:
+            self.save_members(self._auto_persist, out_state)
 
-    def save(self):
+    def save(self, include_class_name=True):
         out_state = {}
+        if include_class_name:
+            out_state[self.CLASS_NAME] = utils.class_name(self)
         base.call_with_super_check(self.save_instance_state, out_state)
         return out_state
 
     def save_members(self, members, out_state):
-        self._ensure_persist_configured()
         for member in members:
             value = getattr(self, member)
             if inspect.ismethod(value):

@@ -286,6 +286,20 @@ class TestProcess(utils.TestCaseWithLoop):
         gathered = plumpy.gather(*[proc.future() for proc in procs])
         plumpy.run_until_complete(gathered, self.loop)
 
+    def test_invalid_output(self):
+        class InvalidOutput(plumpy.Process):
+            def run(self):
+                self.out("invalid", 5)
+
+        proc = InvalidOutput()
+        with self.assertRaises(TypeError):
+            proc.execute()
+
+    def test_missing_output(self):
+        proc = test_utils.MissingOutputProcess()
+        with self.assertRaises(RuntimeError):
+            proc.execute()
+
 
 class SavePauseProc(Process):
     steps_ran = None
@@ -310,9 +324,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         bundle = plumpy.Bundle(proc)
         self.assertListEqual([SavePauseProc.run.__name__], proc.steps_ran)
         proc.execute(True)
-        self.assertListEqual(
-            [SavePauseProc.run.__name__, SavePauseProc.step2.__name__],
-            proc.steps_ran)
+        self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], proc.steps_ran)
 
         proc_unbundled = bundle.unbundle()
         self.assertEqual(0, len(proc_unbundled.steps_ran))
@@ -324,21 +336,16 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         """
         Check that the bundle after just creating a process is as we expect
         """
-        proc1 = test_utils.DummyProcessWithOutput()
-        bundle1 = plumpy.Bundle(proc1)
+        self._check_round_trip(test_utils.DummyProcess())
 
-        proc2 = bundle1.unbundle()
-        bundle2 = plumpy.Bundle(proc2)
-
-        self.assertEqual(proc1.pid, proc2.pid)
-        self.assertDictEqual(bundle1, bundle2)
-
-    def test_instance_state(self):
+    def test_instance_state_with_outputs(self):
         proc = test_utils.DummyProcessWithOutput()
 
         saver = test_utils.ProcessSaver(proc)
         proc.play()
         proc.execute()
+
+        self._check_round_trip(proc)
 
         for bundle, outputs in zip(saver.snapshots, saver.outputs):
             # Check that it is a copy
@@ -421,6 +428,12 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         p2 = self._assert_same(proc)
         self._procs_same(proc, p2)
 
+    def test_cancelled(self):
+        proc = test_utils.DummyProcess()
+        proc.cancel()
+        self.assertEqual(proc.state, plumpy.ProcessState.CANCELLED)
+        self._check_round_trip(proc)
+
     def _assert_same(self, proc):
         return plumpy.Bundle(proc).unbundle(loop=proc.loop())
 
@@ -428,6 +441,15 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         self.assertEqual(p1.state, p2.state)
         if p1.state == ProcessState.FINISHED:
             self.assertEqual(p1.result(), p2.result())
+
+    def _check_round_trip(self, proc1):
+        bundle1 = plumpy.Bundle(proc1)
+
+        proc2 = bundle1.unbundle()
+        bundle2 = plumpy.Bundle(proc2)
+
+        self.assertEqual(proc1.pid, proc2.pid)
+        self.assertDictEqual(bundle1, bundle2)
 
 
 class TestProcessNamespace(utils.TestCaseWithLoop):

@@ -219,7 +219,15 @@ def class_name(obj, class_loader=None, verify=True):
         # assume it's an instance
         obj = obj.__class__
 
-    name = obj.__module__ + '.' + obj.__name__
+    try:
+        qualname = obj.__qualname__
+    except AttributeError:
+        try:
+            qualname = obj.__qualname
+        except AttributeError:
+            qualname = obj.__name__
+
+    name = obj.__module__ + '.' + qualname
 
     if verify:
         try:

@@ -6,11 +6,11 @@ class ClassLoader(object):
         self._parent = parent
 
     @classmethod
-    def find_class(cls, name):
+    def find_class(cls, identifier):
         """
         Load a class from a string
         """
-        return utils.load_object(name)
+        return utils.load_object(identifier)
 
     def load_class(self, name):
         # Try the parent first

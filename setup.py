@@ -43,7 +43,7 @@ setup(
     extras_require={
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['backports.tempfile'],
-        'dev': ['pytest', 'ipython', 'twine']
+        'dev': ['pytest', 'ipython', 'twine', 'pytest-cov']
     },
     packages=['plumpy', 'plumpy/base', 'plumpy/rmq'],
     test_suite='test'

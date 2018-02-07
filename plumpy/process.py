@@ -16,7 +16,7 @@ from . import base
 from . import base_process
 from .base_process import Continue, Wait, Cancel, Stop, ProcessState, Waiting
 from .base import TransitionFailed
-from . import persisters
+from . import persistence
 from . import process_comms
 from . import ports
 from . import stack
@@ -93,7 +93,7 @@ class Executor(ProcessListener):
             process.remove_process_listener(self)
 
 
-@persisters.auto_persist('_pid', '_outputs', '_CREATION_TIME')
+@persistence.auto_persist('_pid', '_outputs', '_CREATION_TIME')
 class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plumpy.
@@ -275,9 +275,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def future(self):
         return self._future
 
-    def has_aborted(self):
-        return self.cancelled()
-
     def save_instance_state(self, out_state):
         """
         Ask the process to save its current instance state.
@@ -379,7 +376,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def on_finish(self, result):
         super(Process, self).on_finish(result)
         self._check_outputs()
-        self.future().set_result(result)
+        self.future().set_result(self.outputs)
         self._fire_event(ProcessListener.on_process_finished, result)
 
     def on_fail(self, exc_info):
@@ -537,9 +534,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         for name, port in self.spec().outputs.items():
             valid, msg = port.validate(self._outputs.get(name, None))
             if not valid:
-                raise RuntimeError(
-                    "Process {} failed because {}".format(self.get_name(), msg)
-                )
+                raise RuntimeError("Process {} failed because {}".format(self.get_name(), msg))
 
     def _update_future(self):
         if self.state == ProcessState.FINISHED:

@@ -3,7 +3,7 @@ from collections import namedtuple
 
 import plumpy
 from . import process
-from . import persisters
+from . import persistence
 from . import utils
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
@@ -32,10 +32,23 @@ class DummyProcessWithOutput(process.Process):
         super(DummyProcessWithOutput, cls).define(spec)
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
+        spec.output("default", valid_type=int)
 
-    def _run(self, **kwargs):
+    def run(self, **kwargs):
         self.out("default", 5)
-        return self.outputs
+
+
+class DummyProcessWithDynamicOutput(process.Process):
+    EXPECTED_OUTPUTS = {'default': 5}
+
+    @classmethod
+    def define(cls, spec):
+        super(DummyProcessWithDynamicOutput, cls).define(spec)
+        spec.inputs.dynamic = True
+        spec.outputs.dynamic = True
+
+    def run(self, **kwargs):
+        self.out("default", 5)
 
 
 class KeyboardInterruptProc(process.Process):
@@ -62,8 +75,19 @@ class WaitForSignalProcess(process.Process):
         pass
 
 
-class NewLoopProcess(process.Process):
+class MissingOutputProcess(process.Process):
+    """ A process that does not generate a required output """
 
+    @classmethod
+    def define(cls, spec):
+        super(MissingOutputProcess, cls).define(spec)
+        spec.output("default", required=True)
+
+    def run(self):
+        pass
+
+
+class NewLoopProcess(process.Process):
     def __init__(self, *args, **kwargs):
         kwargs['loop'] = plumpy.new_event_loop()
         super(NewLoopProcess, self).__init__(*args, **kwargs)
@@ -229,7 +253,7 @@ class Saver(object):
         self.outputs = []
 
     def _save(self, p):
-        b = persisters.Bundle(p)
+        b = persistence.Bundle(p)
         self.snapshots.append(b)
         self.outputs.append(p.outputs.copy())
 
@@ -286,6 +310,7 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
 TEST_PROCESSES = [
     DummyProcess,
     DummyProcessWithOutput,
+    DummyProcessWithDynamicOutput,
     ThreeSteps]
 
 TEST_WAITING_PROCESSES = [
@@ -297,7 +322,8 @@ TEST_WAITING_PROCESSES = [
 
 TEST_EXCEPTION_PROCESSES = [
     ExceptionProcess,
-    ThreeStepsThenException
+    ThreeStepsThenException,
+    MissingOutputProcess
 ]
 
 
@@ -371,14 +397,14 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
             )
 
 
-class TestPersister(persisters.Persister):
+class TestPersister(persistence.Persister):
     """
     Test persister, just creates the bundle, noting else
     """
 
     def save_checkpoint(self, process, tag=None):
         """ Create the checkpoint bundle """
-        persisters.Bundle(process)
+        persistence.Bundle(process)
 
     def load_checkpoint(self, pid, tag=None):
         raise NotImplementedError
