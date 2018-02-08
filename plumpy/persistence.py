@@ -27,13 +27,12 @@ class Bundle(dict):
         super(Bundle, self).from_dict(*args, **kwargs)
         return self
 
-    def __init__(self, persistable, cl=None):
+    def __init__(self, savable, cl=None):
         super(Bundle, self).__init__()
         if cl is not None:
             self.set_class_loader(cl)
-        self['CLASS_NAME'] = utils.class_name(persistable, self._class_loader)
-        self.update(persistable.save())
-        # persistable.save_state(self)
+        self['CLASS_NAME'] = utils.class_name(savable, self._class_loader)
+        self.update(savable.save())
 
     def set_class_loader(self, cl):
         self._class_loader = cl
@@ -306,11 +305,10 @@ class Savable(object):
         :param saved_state: The saved states
         :param args: Positional args to be passed to `load_instance_state`
         :param kwargs: Keyword args to be passed to `load_instance_state`
-        :return: The loaded Savable instance
+        :return: The recreated Savable instance
         :rtype: :class:`Savable`
         """
-        return Savable.load_with_classloader(
-            saved_state, class_loader.ClassLoader(), *args, **kwargs)
+        return Savable.load_with_classloader(saved_state, class_loader.ClassLoader(), *args, **kwargs)
 
     @staticmethod
     def load_with_classloader(saved_state, class_loader_, *args, **kwargs):
