@@ -86,7 +86,7 @@ class Continue(Command):
         out_state[self.CONTINUE_FN] = self.continue_fn.__name__
 
     def load_instance_state(self, saved_state, process):
-        super(Continue, self).load_instance_state(saved_state)
+        super(Continue, self).load_instance_state(saved_state, process)
         try:
             self.continue_fn = utils.load_function(saved_state[self.CONTINUE_FN])
         except ValueError:
@@ -118,7 +118,7 @@ class State(state_machine.State, persistence.Savable):
         return self.state_machine
 
     def load_instance_state(self, saved_state, process):
-        super(State, self).load_instance_state(saved_state)
+        super(State, self).load_instance_state(saved_state, process)
         self.state_machine = process
 
     def play(self):
@@ -588,8 +588,8 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         super(ProcessStateMachine, self).save_instance_state(out_state)
         out_state['_state'] = self._state.save()
 
-    def load_instance_state(self, saved_state):
-        super(ProcessStateMachine, self).load_instance_state(saved_state)
+    def load_instance_state(self, saved_state, load_context):
+        super(ProcessStateMachine, self).load_instance_state(saved_state, load_context)
         self._state = self.create_state(saved_state['_state'])
 
     def result(self):

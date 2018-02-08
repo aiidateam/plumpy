@@ -51,8 +51,8 @@ class Running(base_process.Running):
         if self._run_handle is not None:
             self._run_handle.cancel()
 
-    def load_instance_state(self, process, saved_state):
-        super(Running, self).load_instance_state(process, saved_state)
+    def load_instance_state(self, saved_state, process):
+        super(Running, self).load_instance_state(saved_state, process)
         if self.in_state:
             self.process.call_soon(self._run)
 
@@ -182,7 +182,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         """
         obj = cls.__new__(cls)
         obj.__init__(*args, **kwargs)
-        base.call_with_super_check(obj.load_instance_state, saved_state)
+        base.call_with_super_check(obj.load_instance_state, saved_state, None)
         base.call_with_super_check(obj.init)
         return obj
 
@@ -289,9 +289,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
 
     @protected
-    def load_instance_state(self, saved_state):
+    def load_instance_state(self, saved_state, load_context):
         # Set up runtime state
-        super(Process, self).load_instance_state(saved_state)
+        super(Process, self).load_instance_state(saved_state, load_context)
 
         # Inputs/outputs
         try:
