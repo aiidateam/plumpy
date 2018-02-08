@@ -7,22 +7,17 @@ import functools
 import inspect
 import re
 
-from aiida.common.extendeddicts import AttributeDict
-from aiida.orm.utils import load_node, load_workflow
-from aiida.common.lang import override
-from aiida.common.exceptions import MultipleObjectsError, NotExistent
-from aiida.utils.serialize import serialize_data, deserialize_data
-from . import processes
-from .awaitable import *
-from .context import *
-
+from . import mixins
 from . import persistence
 from . import process
+from . import utils
 
-__all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'Outputs', '_WorkChainSpec']
+__all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', '_WorkChainSpec']
+
+ToContext = dict
 
 
-class _WorkChainSpec(processes.ProcessSpec):
+class _WorkChainSpec(process.ProcessSpec):
     def __init__(self):
         super(_WorkChainSpec, self).__init__()
         self._outline = None
@@ -47,7 +42,7 @@ class _WorkChainSpec(processes.ProcessSpec):
         return self._outline
 
 
-class WorkChain(processes.Process):
+class WorkChain(mixins.ContextMixin, process.Process):
     """
     A WorkChain is a series of instructions carried out with the ability to save
     state in between.
@@ -56,35 +51,24 @@ class WorkChain(processes.Process):
     _STEPPER_STATE = 'stepper_state'
     _CONTEXT = 'CONTEXT'
 
-    def __init__(self, inputs=None, logger=None, runner=None):
-        super(WorkChain, self).__init__(inputs=inputs, logger=logger, runner=runner)
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
+        super(WorkChain, self).__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
         self._stepper = None
-        self._awaitables = []
-        self._context = AttributeDict()
+        self._awaitables = {}
 
     def on_create(self):
         super(WorkChain, self).on_create()
         self._stepper = self.spec().get_outline().create_stepper(self)
 
-    @property
-    def ctx(self):
-        return self._context
-
-    @override
     def save_instance_state(self, out_state):
         super(WorkChain, self).save_instance_state(out_state)
-        # Save the context
-        out_state[self._CONTEXT] = serialize_data(self.ctx.__dict__)
 
         # Ask the stepper to save itself
         if self._stepper is not None:
             out_state[self._STEPPER_STATE] = self._stepper.save()
 
-    @override
-    def load_instance_state(self, saved_state):
-        super(WorkChain, self).load_instance_state(saved_state)
-        # Load the context
-        self._context = AttributeDict(**deserialize_data(saved_state[self._CONTEXT]))
+    def load_instance_state(self, saved_state, load_context):
+        super(WorkChain, self).load_instance_state(saved_state, load_context)
 
         # Recreate the stepper
         self._stepper = None
@@ -94,43 +78,23 @@ class WorkChain(processes.Process):
 
         self.set_logger(self._calc.logger)
 
-    def insert_awaitable(self, awaitable):
-        """
-        Insert a awaitable that will cause the workchain to wait until the wait
-        on is finished before continuing to the next step.
-
-        :param awaitable: The thing to await
-        :type awaitable: :class:`aiida.work.awaitable.Awaitable`
-        """
-        self._awaitables.append(awaitable)
-
-    def remove_awaitable(self, awaitable):
-        """
-        Remove a awaitable.
-
-        Precondition: must be a awaitable that was previously inserted
-
-        :param awaitable: The awaitable to remove
-        """
-        self._awaitables.remove(awaitable)
-
     def to_context(self, **kwargs):
         """
         This is a convenience method that provides syntactic sugar, for
         a user to add multiple intersteps that will assign a certain value
         to the corresponding key in the context of the workchain
         """
-        for key, value in kwargs.items():
-            awaitable = construct_awaitable(value)
-            awaitable.key = key
-            self.insert_awaitable(awaitable)
+        for key, awaitable in kwargs.items():
+            if isinstance(awaitable, process.Process):
+                awaitable = awaitable.future()
+            self._awaitables[awaitable] = key
+            awaitable.add_done_callback(self._awaitable_done)
 
-    @override
     def run(self):
         return self._do_step()
 
     def _do_step(self):
-        self._awaitables = []
+        self._awaitables = {}
 
         try:
             finished, retval = self._stepper.step()
@@ -148,15 +112,16 @@ class WorkChain(processes.Process):
                 return process.Wait(self._do_step, 'Waiting before next step')
             else:
                 return process.Continue(self._do_step)
-        else:
-            return self.outputs
 
-    def on_wait(self, awaitables):
-        super(WorkChain, self).on_wait(awaitables)
-        if self._awaitables:
-            self.action_awaitables()
+    def _awaitable_done(self, awaitable):
+        key = self._awaitables.pop(awaitable)
+        try:
+            self.ctx[key] = awaitable.result()
+        except Exception as e:
+            self.fail(e)
         else:
-            self.call_soon(self.resume)
+            if not self._awaitables:
+                self.resume()
 
 
 class Stepper(persistence.Savable):
@@ -166,7 +131,7 @@ class Stepper(persistence.Savable):
         self._workchain = workchain
 
     def load_instance_state(self, saved_state, workchain):
-        super(Stepper, self).load_instance_state(saved_state)
+        super(Stepper, self).load_instance_state(saved_state, None)
         self._workchain = workchain
 
     @abc.abstractmethod
@@ -222,7 +187,7 @@ class _FunctionStepper(Stepper):
         out_state['_fn'] = self._fn.__name__
 
     def load_instance_state(self, saved_state, workchain):
-        super(_FunctionStepper, self).load_instance_state(saved_state, workchain)
+        super(_FunctionStepper, self).load_instance_state(saved_state, None)
         self._fn = getattr(workchain, saved_state['_fn'])
 
     def step(self):
@@ -231,7 +196,7 @@ class _FunctionStepper(Stepper):
 
 class _FunctionCall(_Instruction):
     def __init__(self, func):
-        assert issubclass(func.im_class, processes.Process)
+        assert issubclass(func.im_class, process.Process)
         args = inspect.getargspec(func)[0]
         assert len(args) == 1, "Step must take one argument only: self"
 
@@ -288,9 +253,9 @@ class _BlockStepper(Stepper):
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
-    def load_instance_state(self, saved_state, block, workchain):
-        super(_BlockStepper, self).load_instance_state(saved_state, workchain)
-        self._block = block
+    def load_instance_state(self, saved_state, load_context):
+        super(_BlockStepper, self).load_instance_state(saved_state, load_context)
+        self._block = load_context.block_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
         if stepper_state is not None:
@@ -321,15 +286,13 @@ class _Block(_Instruction, collections.Sequence):
     def __len__(self):
         return len(self._instruction)
 
-    @override
     def create_stepper(self, workchain):
         return _BlockStepper(self, workchain)
 
-    @override
     def recreate_stepper(self, saved_state, workchain):
-        return _BlockStepper.recreate_from(saved_state, self, workchain)
+        load_context = utils.SimpleNamespace(workchain=workchain, block_instruction=self)
+        return _BlockStepper.recreate_from(saved_state, load_context)
 
-    @override
     def get_description(self):
         return [instruction.get_description() for instruction in self._instruction]
 
@@ -409,9 +372,9 @@ class _IfStepper(Stepper):
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
-    def load_instance_state(self, saved_state, if_instruction, workchain):
-        super(_IfStepper, self).load_instance_state(saved_state, workchain)
-        self._if_instruction = if_instruction
+    def load_instance_state(self, saved_state, load_context):
+        super(_IfStepper, self).load_instance_state(saved_state, load_context)
+        self._if_instruction = load_context.if_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
         if stepper_state is not None:
@@ -457,9 +420,9 @@ class _If(_Instruction, collections.Sequence):
         return _IfStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        return _IfStepper.recreate_from(saved_state, self, workchain)
+        load_context = utils.SimpleNamespace(workchain=workchain, if_instruction=self)
+        return _IfStepper.recreate_from(saved_state, load_context)
 
-    @override
     def get_description(self):
         description = collections.OrderedDict()
 
@@ -496,9 +459,9 @@ class _WhileStepper(Stepper):
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
-    def load_instance_state(self, saved_state, while_instruction, workchain):
-        super(_WhileStepper, self).load_instance_state(saved_state, workchain)
-        self._while_instruction = while_instruction
+    def load_instance_state(self, saved_state, load_context):
+        super(_WhileStepper, self).load_instance_state(saved_state, load_context)
+        self._while_instruction = load_context.while_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
         if stepper_state is not None:
@@ -517,15 +480,13 @@ class _While(_Conditional, _Instruction, collections.Sequence):
     def __len__(self):
         return 1
 
-    @override
     def create_stepper(self, workchain):
         return _WhileStepper(self, workchain)
 
-    @override
     def recreate_stepper(self, saved_state, workchain):
-        return _WhileStepper.recreate_from(saved_state, self, workchain)
+        load_context = utils.SimpleNamespace(workchain=workchain, while_instruction=self)
+        return _WhileStepper.recreate_from(saved_state, load_context)
 
-    @override
     def get_description(self):
         return {"while({})".format(self.predicate.__name__): self.body.get_description()}
 

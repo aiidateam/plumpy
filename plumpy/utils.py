@@ -158,7 +158,10 @@ class AttributesDict(SimpleNamespace):
         setattr(self, key, value)
 
     def __getitem__(self, item):
-        return getattr(self, item)
+        try:
+            return getattr(self, item)
+        except AttributeError:
+            raise KeyError("No key '{}'".format(item))
 
     def __delitem__(self, item):
         return delattr(self, item)

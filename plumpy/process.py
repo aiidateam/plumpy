@@ -275,6 +275,16 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def future(self):
         return self._future
 
+    def launch(self, process_class, inputs=None, pid=None, logger=None):
+        process = process_class(
+            inputs=inputs,
+            pid=pid,
+            logger=logger,
+            loop=self.loop(),
+            communicator=self._communicator)
+        process.play()
+        return process
+
     def save_instance_state(self, out_state):
         """
         Ask the process to save its current instance state.
