@@ -299,18 +299,17 @@ class Savable(object):
     _persist_configured = False
 
     @staticmethod
-    def load(saved_state, *args, **kwargs):
+    def load(saved_state, load_context=None):
         """
         Load a `Savable` from a saved instance state
 
         :param saved_state: The saved states
-        :param args: Positional args to be passed to `load_instance_state`
-        :param kwargs: Keyword args to be passed to `load_instance_state`
+        :param load_context: Additional runtime state that can be passed into when loading.
+            The type and content (if any) is completely user defined
         :return: The loaded Savable instance
         :rtype: :class:`Savable`
         """
-        return Savable.load_with_classloader(
-            saved_state, class_loader.ClassLoader(), *args, **kwargs)
+        return Savable.load_with_classloader(saved_state, class_loader.ClassLoader(), load_context)
 
     @staticmethod
     def load_with_classloader(saved_state, class_loader_, *args, **kwargs):
@@ -332,15 +331,15 @@ class Savable(object):
         pass
 
     @classmethod
-    def recreate_from(cls, saved_state, *args, **kwargs):
+    def recreate_from(cls, saved_state, load_context=None):
         obj = cls.__new__(cls)
-        base.call_with_super_check(obj.load_instance_state, saved_state, *args, **kwargs)
+        base.call_with_super_check(obj.load_instance_state, saved_state, load_context)
         return obj
 
     @super_check
-    def load_instance_state(self, saved_state, *args, **kwargs):
+    def load_instance_state(self, saved_state, load_context):
         if self._auto_persist is not None:
-            self.load_members(self._auto_persist, saved_state)
+            self.load_members(self._auto_persist, saved_state, load_context)
 
     @super_check
     def save_instance_state(self, out_state):
@@ -370,22 +369,22 @@ class Savable(object):
                 value = copy.deepcopy(value)
             out_state[member] = value
 
-    def load_members(self, members, saved_state):
+    def load_members(self, members, saved_state, load_context=None):
         for member in members:
-            setattr(self, member, self._get_value(saved_state, member))
+            setattr(self, member, self._get_value(saved_state, member, load_context))
 
     def _ensure_persist_configured(self):
         if not self._persist_configured:
             self.persist()
             self._persist_configured = True
 
-    def _get_value(self, saved_state, name):
+    def _get_value(self, saved_state, name, load_context):
         value = saved_state[name]
         if name in saved_state[self.META]:
             typ = saved_state[self.META][name]
             if typ == self.METHOD:
                 value = getattr(self, value)
             elif type == self.SAVABLE:
-                value = Savable.load(value)
+                value = Savable.load(value, load_context)
 
         return value
