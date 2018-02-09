@@ -36,7 +36,10 @@ class _WorkChainSpec(process.ProcessSpec):
 
         :param commands: One or more functions that make up this work chain.
         """
-        self._outline = commands if isinstance(commands, _Instruction) else _Block(commands)
+        if len(commands) == 1 and isinstance(commands[0], _Instruction):
+            self._outline = commands[0]
+        else:
+            self._outline = _Block(commands)
 
     def get_outline(self):
         return self._outline
@@ -75,8 +78,6 @@ class WorkChain(mixins.ContextMixin, process.Process):
         stepper_state = saved_state.get(self._STEPPER_STATE, None)
         if stepper_state is not None:
             self._stepper = self.spec().get_outline().recreate_stepper(stepper_state, self)
-
-        self.set_logger(self._calc.logger)
 
     def to_context(self, **kwargs):
         """
@@ -130,9 +131,9 @@ class Stepper(persistence.Savable):
     def __init__(self, workchain):
         self._workchain = workchain
 
-    def load_instance_state(self, saved_state, workchain):
-        super(Stepper, self).load_instance_state(saved_state, None)
-        self._workchain = workchain
+    def load_instance_state(self, saved_state, load_context):
+        super(Stepper, self).load_instance_state(saved_state, load_context)
+        self._workchain = load_context.workchain
 
     @abc.abstractmethod
     def step(self):
@@ -186,9 +187,9 @@ class _FunctionStepper(Stepper):
         super(_FunctionStepper, self).save_instance_state(out_state)
         out_state['_fn'] = self._fn.__name__
 
-    def load_instance_state(self, saved_state, workchain):
-        super(_FunctionStepper, self).load_instance_state(saved_state, None)
-        self._fn = getattr(workchain, saved_state['_fn'])
+    def load_instance_state(self, saved_state, load_context):
+        super(_FunctionStepper, self).load_instance_state(saved_state, load_context)
+        self._fn = getattr(self._workchain.__class__, saved_state['_fn'])
 
     def step(self):
         return True, self._fn(self._workchain)
@@ -206,7 +207,8 @@ class _FunctionCall(_Instruction):
         return _FunctionStepper(workchain, self._fn)
 
     def recreate_stepper(self, saved_state, workchain):
-        return _FunctionStepper(workchain, self._fn)
+        load_context = utils.SimpleNamespace(workchain=workchain, func_spec=self)
+        return _FunctionStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
         desc = self._fn.__name__
@@ -259,7 +261,7 @@ class _BlockStepper(Stepper):
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
         if stepper_state is not None:
-            self._child_stepper = self._block[self._pos].recreate_stepper(stepper_state)
+            self._child_stepper = self._block[self._pos].recreate_stepper(stepper_state, self._workchain)
 
 
 class _Block(_Instruction, collections.Sequence):
@@ -378,7 +380,7 @@ class _IfStepper(Stepper):
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
         if stepper_state is not None:
-            self._child_stepper = self._if_instruction[self._pos].body.recreate_stepper(stepper_state)
+            self._child_stepper = self._if_instruction[self._pos].body.recreate_stepper(stepper_state, self._workchain)
 
 
 class _If(_Instruction, collections.Sequence):
@@ -517,7 +519,7 @@ class _Return(_Instruction):
         return _ReturnStepper(workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        return _ReturnStepper(saved_state, workchain)
+        return _ReturnStepper(workchain)
 
     def get_description(self):
         """

@@ -486,7 +486,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         if isinstance(self._state, Failed):
             return self._state.exception
         else:
-            raise InvalidStateError("Has not failed")
+            return None
 
     def done(self):
         """

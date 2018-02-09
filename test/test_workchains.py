@@ -254,39 +254,32 @@ class TestWorkchain(utils.TestCaseWithLoop):
         with self.assertRaises(ValueError):
             spec.outline(type)
 
-    #
-    # def test_checkpointing(self):
-    #     A = 'A'
-    #     B = 'B'
-    #     C = 'C'
-    #     three = 3
-    #
-    #     # Try the if(..) part
-    #     finished_steps = \
-    #         self._run_with_checkpoints(Wf, inputs={'value': A, 'n': three})
-    #     # Check the steps that should have been run
-    #     for step, finished in finished_steps.iteritems():
-    #         if step not in ['s3', 's4', 'isB']:
-    #             self.assertTrue(
-    #                 finished, "Step {} was not called by workflow".format(step))
-    #
-    #     # Try the elif(..) part
-    #     finished_steps = \
-    #         self._run_with_checkpoints(Wf, inputs={'value': B, 'n': three})
-    #     # Check the steps that should have been run
-    #     for step, finished in finished_steps.iteritems():
-    #         if step not in ['isA', 's2', 's4']:
-    #             self.assertTrue(
-    #                 finished, "Step {} was not called by workflow".format(step))
-    #
-    #     # Try the else... part
-    #     finished_steps = \
-    #         self._run_with_checkpoints(Wf, inputs={'value': C, 'n': three})
-    #     # Check the steps that should have been run
-    #     for step, finished in finished_steps.iteritems():
-    #         if step not in ['isA', 's2', 'isB', 's3']:
-    #             self.assertTrue(
-    #                 finished, "Step {} was not called by workflow".format(step))
+    def test_checkpointing(self):
+        A = 'A'
+        B = 'B'
+        C = 'C'
+        three = 3
+
+        # Try the if(..) part
+        finished_steps = self._run_with_checkpoints(Wf, inputs={'value': A, 'n': three})
+        # Check the steps that should have been run
+        for step, finished in finished_steps.items():
+            if step not in ['s3', 's4', 'isB']:
+                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
+
+        # Try the elif(..) part
+        finished_steps = self._run_with_checkpoints(Wf, inputs={'value': B, 'n': three})
+        # Check the steps that should have been run
+        for step, finished in finished_steps.items():
+            if step not in ['isA', 's2', 's4']:
+                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
+
+        # Try the else... part
+        finished_steps = self._run_with_checkpoints(Wf, inputs={'value': C, 'n': three})
+        # Check the steps that should have been run
+        for step, finished in finished_steps.items():
+            if step not in ['isA', 's2', 'isB', 's3']:
+                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
 
     def test_return(self):
         class WcWithReturn(WorkChain):
@@ -339,7 +332,6 @@ class TestWorkchain(utils.TestCaseWithLoop):
         workchain = MainWorkChain()
         workchain.execute()
 
-    @unittest.skip('Need to implemet saving of workchains')
     def test_if_block_persistence(self):
         wc = IfTest()
         wc.execute(True)
@@ -347,13 +339,19 @@ class TestWorkchain(utils.TestCaseWithLoop):
         self.assertFalse(wc.ctx.s2)
 
         # Now bundle the thing
-        b = plumpy.Bundle(wc)
+        bundle = plumpy.Bundle(wc)
 
         # Load from saved tate
-        wc = b.unbundle()
-        wc.execute()
+        wc = bundle.unbundle()
         self.assertTrue(wc.ctx.s1)
         self.assertFalse(wc.ctx.s2)
+
+        bundle2 = plumpy.Bundle(wc)
+        self.assertDictEqual(bundle, bundle2)
+
+        wc.execute()
+        self.assertTrue(wc.ctx.s1)
+        self.assertTrue(wc.ctx.s2)
 
     def test_to_context(self):
         val = 5
@@ -371,13 +369,13 @@ class TestWorkchain(utils.TestCaseWithLoop):
             @classmethod
             def define(cls, spec):
                 super(Workchain, cls).define(spec)
-                spec.outline(cls.start, cls.result)
+                spec.outline(cls.start, cls.check)
 
             def start(self):
                 self.to_context(result_a=self.launch(SimpleWc))
                 return ToContext(result_b=self.launch(SimpleWc))
 
-            def result(self):
+            def check(self):
                 assert self.ctx.result_a['_return'] == val
                 assert self.ctx.result_b['_return'] == val
 
@@ -389,204 +387,14 @@ class TestWorkchain(utils.TestCaseWithLoop):
     #     runner = work.new_runner(persister=persister)
     #     workchain = Wf(runner=runner)
     #     workchain.execute()
-    #
-    # def _run_with_checkpoints(self, wf_class, inputs=None):
-    #     proc = wf_class(inputs=inputs)
-    #     work.run(proc)
-    #     return wf_class.finished_steps
+
+    def _run_with_checkpoints(self, wf_class, inputs=None):
+        # TODO: Actually save at each point!
+        proc = wf_class(inputs=inputs)
+        proc.execute()
+        return wf_class.finished_steps
 
 
-#
-# class TestWorkChainAbort(AiidaTestCase):
-#     """
-#     Test the functionality to abort a workchain
-#     """
-#
-#     def setUp(self):
-#         super(TestWorkChainAbort, self).setUp()
-#         self.assertEquals(len(ProcessStack.stack()), 0)
-#         self.runner = utils.create_test_runner()
-#
-#     def tearDown(self):
-#         super(TestWorkChainAbort, self).tearDown()
-#         work.set_runner(None)
-#         self.runner.close()
-#         self.runner = None
-#         self.assertEquals(len(ProcessStack.stack()), 0)
-#
-#     class AbortableWorkChain(WorkChain):
-#         @classmethod
-#         def define(cls, spec):
-#             super(TestWorkChainAbort.AbortableWorkChain, cls).define(spec)
-#             spec.outline(
-#                 cls.start,
-#                 cls.check
-#             )
-#
-#         def start(self):
-#             self.pause()
-#
-#         def check(self):
-#             raise RuntimeError('should have been aborted by now')
-#
-#     def test_simple_run(self):
-#         """
-#         Run the workchain which should hit the exception and therefore end
-#         up in the FAILED state
-#         """
-#         process = TestWorkChainAbort.AbortableWorkChain()
-#
-#         with self.assertRaises(RuntimeError):
-#             process.execute(True)
-#             process.execute()
-#
-#         self.assertEquals(process.calc.has_finished_ok(), False)
-#         self.assertEquals(process.calc.has_failed(), True)
-#         self.assertEquals(process.calc.has_aborted(), False)
-#
-#     def test_simple_kill_through_node(self):
-#         """
-#         Run the workchain for one step and then kill it by calling kill
-#         on the underlying WorkCalculation node. This should have the
-#         workchain end up in the ABORTED state.
-#         """
-#         process = TestWorkChainAbort.AbortableWorkChain()
-#
-#         with self.assertRaises(plum.CancelledError):
-#             process.execute(True)
-#             process.calc.kill()
-#             process.execute()
-#
-#         self.assertEquals(process.calc.has_finished_ok(), False)
-#         self.assertEquals(process.calc.has_failed(), False)
-#         self.assertEquals(process.calc.has_aborted(), True)
-#
-#     def test_simple_kill_through_process(self):
-#         """
-#         Run the workchain for one step and then kill it by calling kill
-#         on the workchain itself. This should have the workchain end up
-#         in the ABORTED state.
-#         """
-#         process = TestWorkChainAbort.AbortableWorkChain()
-#
-#         with self.assertRaises(plum.CancelledError):
-#             process.execute(True)
-#             process.abort()
-#             process.execute()
-#
-#         self.assertEquals(process.calc.has_finished_ok(), False)
-#         self.assertEquals(process.calc.has_failed(), False)
-#         self.assertEquals(process.calc.has_aborted(), True)
-#
-#
-# class TestWorkChainAbortChildren(AiidaTestCase):
-#     """
-#     Test the functionality to abort a workchain and verify that children
-#     are also aborted appropriately
-#     """
-#
-#     def setUp(self):
-#         super(TestWorkchainWithOldWorkflows, self).setUp()
-#         self.assertEquals(len(ProcessStack.stack()), 0)
-#         self.runner = utils.create_test_runner()
-#
-#     def tearDown(self):
-#         super(TestWorkchainWithOldWorkflows, self).tearDown()
-#         work.set_runner(None)
-#         self.runner.close()
-#         self.runner = None
-#         self.assertEquals(len(ProcessStack.stack()), 0)
-#
-#     class SubWorkChain(WorkChain):
-#         @classmethod
-#         def define(cls, spec):
-#             super(TestWorkChainAbortChildren.SubWorkChain, cls).define(spec)
-#             spec.outline(
-#                 cls.start,
-#                 cls.check
-#             )
-#
-#         def start(self):
-#             pass
-#
-#         def check(self):
-#             raise RuntimeError('should have been aborted by now')
-#
-#     class MainWorkChain(WorkChain):
-#         @classmethod
-#         def define(cls, spec):
-#             super(TestWorkChainAbortChildren.MainWorkChain, cls).define(spec)
-#             spec.input('kill', default=Bool(False))
-#             spec.outline(
-#                 cls.start,
-#                 cls.check
-#             )
-#
-#         def start(self):
-#             self.ctx.child = TestWorkChainAbortChildren.SubWorkChain()
-#             self.ctx.child.play()
-#             if self.inputs.kill:
-#                 self.abort()
-#
-#         def check(self):
-#             raise RuntimeError('should have been aborted by now')
-#
-#         def on_cancel(self, msg):
-#             super(TestWorkChainAbortChildren.MainWorkChain, self).on_cancel(msg)
-#             if self.inputs.kill:
-#                 assert self.ctx.child.calc.get_attr(self.calc.DO_ABORT_KEY, False), \
-#                     "Abort key not set on child"
-#
-#     def setUp(self):
-#         super(TestWorkChainAbortChildren, self).setUp()
-#         self.assertEquals(len(ProcessStack.stack()), 0)
-#         self.runner = utils.create_test_runner()
-#
-#     def tearDown(self):
-#         super(TestWorkChainAbortChildren, self).tearDown()
-#         work.set_runner(None)
-#         self.runner.close()
-#         self.runner = None
-#         self.assertEquals(len(ProcessStack.stack()), 0)
-#
-#     def test_simple_run(self):
-#         """
-#         Run the workchain which should hit the exception and therefore end
-#         up in the FAILED state
-#         """
-#         process = TestWorkChainAbortChildren.MainWorkChain()
-#
-#         with self.assertRaises(RuntimeError):
-#             process.execute()
-#
-#         self.assertEquals(process.calc.has_finished_ok(), False)
-#         self.assertEquals(process.calc.has_failed(), True)
-#         self.assertEquals(process.calc.has_aborted(), False)
-#
-#     def test_simple_kill_through_node(self):
-#         """
-#         Run the workchain for one step and then kill it by calling kill
-#         on the underlying WorkCalculation node. This should have the
-#         workchain end up in the CANCELLED state.
-#         """
-#         process = TestWorkChainAbortChildren.MainWorkChain(inputs={'kill': Bool(True)})
-#
-#         with self.assertRaises(plum.CancelledError):
-#             process.execute()
-#
-#         with self.assertRaises(plum.CancelledError):
-#             process.ctx.child.execute()
-#
-#         child = process.calc.get_outputs(link_type=LinkType.CALL)[0]
-#         self.assertEquals(child.has_finished_ok(), False)
-#         self.assertEquals(child.has_failed(), False)
-#         self.assertEquals(child.has_aborted(), True)
-#
-#         self.assertEquals(process.calc.has_finished_ok(), False)
-#         self.assertEquals(process.calc.has_failed(), False)
-#         self.assertEquals(process.calc.has_aborted(), True)
-#
-#
 class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
     """
     Test that inputs cannot be modified

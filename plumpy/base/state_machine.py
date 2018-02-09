@@ -197,6 +197,7 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
         cls.sealed = True
 
     def __init__(self, *args, **kwargs):
+        super(StateMachine, self).__init__()
         self.__ensure_built()
         self._state = None
         self._exception_handler = None

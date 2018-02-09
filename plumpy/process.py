@@ -94,7 +94,7 @@ class Executor(ProcessListener):
 
 
 @persistence.auto_persist('_pid', '_outputs', '_CREATION_TIME')
-class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
+class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine, persistence.SavableFuture)):
     """
     The Process class is the base for any unit of work in plumpy.
 

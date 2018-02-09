@@ -1,18 +1,12 @@
 import kiwipy
 from functools import partial
 
-from . import persistence
-
-__all__ = ['Future', 'SavableFuture', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
 
 InvalidStateError = kiwipy.InvalidStateError
 CancelledError = kiwipy.CancelledError
 
 Future = kiwipy.Future
-
-
-class SavableFuture(Future, persistence.Savable):
-    pass
 
 
 def copy_future(source, target):

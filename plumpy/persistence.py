@@ -9,11 +9,12 @@ import pickle
 from future.utils import with_metaclass
 
 from . import class_loader
+from . import futures
 from . import utils
 from . import base
 from .base import super_check
 
-__all__ = ['Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable']
+__all__ = ['Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable', 'SavableFuture']
 
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
@@ -289,11 +290,14 @@ def auto_persist(*members):
     return wrapped
 
 
+META = '!!meta'
+META__METHOD = 'm'
+META__SAVABLE = 'S'
+
+
 class Savable(object):
     CLASS_NAME = 'class_name'
-    META = '!!meta'
-    METHOD = 'm'
-    SAVABLE = 'S'
+
     _auto_persist = None
     _persist_configured = False
 
@@ -343,7 +347,6 @@ class Savable(object):
     @super_check
     def save_instance_state(self, out_state):
         self._ensure_persist_configured()
-        out_state[self.META] = {}
         if self._auto_persist is not None:
             self.save_members(self._auto_persist, out_state)
 
@@ -355,18 +358,22 @@ class Savable(object):
         return out_state
 
     def save_members(self, members, out_state):
+        meta = {}
         for member in members:
             value = getattr(self, member)
             if inspect.ismethod(value):
                 if value.__self__ is not self:
                     raise TypeError("Cannot persist methods of other classes")
-                out_state[self.META] = 'method'
+                meta[member] = META__METHOD
                 value = value.__name__
             elif isinstance(value, Savable):
+                meta[member] = META__SAVABLE
                 value = value.save()
             else:
                 value = copy.deepcopy(value)
             out_state[member] = value
+        if meta:
+            out_state.getdefault(META, {}).update(meta)
 
     def load_members(self, members, saved_state, load_context=None):
         for member in members:
@@ -379,11 +386,29 @@ class Savable(object):
 
     def _get_value(self, saved_state, name, load_context):
         value = saved_state[name]
-        if name in saved_state[self.META]:
-            typ = saved_state[self.META][name]
-            if typ == self.METHOD:
+        meta = saved_state.get(META, {})
+        if name in meta:
+            typ = meta[name]
+            if typ == META__METHOD:
                 value = getattr(self, value)
-            elif type == self.SAVABLE:
+            elif type == META__SAVABLE:
                 value = Savable.load(value, load_context)
 
         return value
+
+
+@auto_persist('_done', '_result', '_exc_info')
+class SavableFuture(futures.Future, Savable):
+    """
+    A savable future.
+
+    .. note: This does not save any assigned done callbacks.
+    """
+    def save_instance_state(self, out_state):
+        super(SavableFuture, self).save_instance_state(out_state)
+
+    def load_instance_state(self, saved_state, load_context):
+        super(SavableFuture, self).load_instance_state(saved_state, load_context)
+        self._log_traceback = False
+        self._tb_logger = None
+        self._callbacks = []
