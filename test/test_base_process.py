@@ -6,8 +6,8 @@ from plumpy.base_process import ProcessStateMachine, ProcessState, Wait, Continu
 
 def execute(proc):
     """ Execute a process state machine """
-    while proc.state in [ProcessState.CREATED, ProcessState.PAUSED, ProcessState.RUNNING]:
-        if proc.state in [ProcessState.CREATED, ProcessState.PAUSED]:
+    while proc.state in [ProcessState.CREATED, ProcessState.RUNNING]:
+        if proc.state in [ProcessState.CREATED]:
             proc.play()
         elif proc.state == ProcessState.RUNNING:
             proc._state._run()
@@ -18,8 +18,8 @@ def execute(proc):
 
 class SimpleProc(ProcessStateMachine):
     def do_run(self):
-        while self.state in [ProcessState.CREATED, ProcessState.PAUSED, ProcessState.RUNNING]:
-            if self.state in [ProcessState.CREATED, ProcessState.PAUSED]:
+        while self.state in [ProcessState.CREATED, ProcessState.RUNNING]:
+            if self.state in [ProcessState.CREATED]:
                 self.play()
             elif self.state == ProcessState.RUNNING:
                 self._state._run()

@@ -23,7 +23,7 @@ from .persistence import auto_persist
 from . import utils
 
 __all__ = ['ProcessStateMachine', 'ProcessState',
-           'Created', 'Running', 'Waiting', 'Paused', 'Finished', 'Failed',
+           'Created', 'Running', 'Waiting', 'Finished', 'Failed',
            'Cancelled',
            # Commands
            'Cancel', 'Stop', 'Wait', 'Continue']
@@ -105,7 +105,6 @@ class ProcessState(Enum):
     CREATED = 'created'
     RUNNING = 'running'
     WAITING = 'waiting'
-    PAUSED = 'paused'
     FINISHED = 'finished'
     FAILED = 'failed'
     CANCELLED = 'cancelled'
@@ -124,6 +123,13 @@ class State(state_machine.State, persistence.Savable):
     def play(self):
         return state_machine.EventResponse.IGNORED
 
+    def pause(self):
+        # Cannot pause a terminal state
+        return not self.is_terminal()
+
+    def unpause(self):
+        return True
+
     def cancel(self, msg=None):
         self.transition_to(ProcessState.CANCELLED, msg)
         return True
@@ -132,8 +138,7 @@ class State(state_machine.State, persistence.Savable):
 @auto_persist('args', 'kwargs')
 class Created(State):
     LABEL = ProcessState.CREATED
-    ALLOWED = {ProcessState.PAUSED,
-               ProcessState.RUNNING,
+    ALLOWED = {ProcessState.RUNNING,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
 
@@ -154,10 +159,6 @@ class Created(State):
         super(Created, self).load_instance_state(saved_state, process)
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
 
-    def pause(self):
-        self.transition_to(ProcessState.PAUSED, self)
-        return True
-
     def play(self):
         self.transition_to(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
         return True
@@ -172,7 +173,6 @@ class Running(State):
     LABEL = ProcessState.RUNNING
     ALLOWED = {ProcessState.RUNNING,
                ProcessState.WAITING,
-               ProcessState.PAUSED,
                ProcessState.FINISHED,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
@@ -182,7 +182,7 @@ class Running(State):
 
     _command = None
     _running = False
-    _interruption = None
+    _pausing = None
 
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Running, self).__init__(process)
@@ -211,13 +211,10 @@ class Running(State):
 
     def pause(self):
         if self._running:
-            if self._interruption is not None:
-                self._interruption.cancel()
-            self._interruption = futures.Future()
-            self._command = Pause()
-            return self._interruption
+            if not self._pausing:
+                self._pausing = futures.Future()
+            return self._pausing
         else:
-            self.transition_to(ProcessState.PAUSED, self)
             return True
 
     def resume(self, run_fn, value=NULL):
@@ -240,17 +237,16 @@ class Running(State):
             except CancelInterruption as e:
                 command = Cancel(str(e))
             except BaseException:
-                self.process.fail(*sys.exc_info()[1:])
+                self.transition_to(ProcessState.FAILED, *sys.exc_info()[1:])
                 return
             else:
                 if not isinstance(result, Command):
                     result = Stop(result)
 
-                if self._interruption is not None:
-                    # Use the command from the interruption and save the
-                    # new one for later
-                    command = self._command
+                if self._pausing is not None:
                     self._command = result
+                    self._pausing.set_result(True)
+                    return
                 else:
                     command = result
 
@@ -262,11 +258,11 @@ class Running(State):
         elif isinstance(command, Pause):
             self.pause()
         elif isinstance(command, Stop):
-            self.process.finish(command.result)
+            self.transition_to(ProcessState.FINISHED, command.result)
         elif isinstance(command, Wait):
-            self.process.wait(command.continue_fn, command.msg, command.data)
+            self.transition_to(ProcessState.WAITING, command.continue_fn, command.msg, command.data)
         elif isinstance(command, Continue):
-            self.process.resume(command.continue_fn, *command.args)
+            self.transition_to(ProcessState.RUNNING, command.continue_fn, *command.args)
         else:
             raise ValueError("Unrecognised command")
 
@@ -275,7 +271,6 @@ class Running(State):
 class Waiting(State):
     LABEL = ProcessState.WAITING
     ALLOWED = {ProcessState.RUNNING,
-               ProcessState.PAUSED,
                ProcessState.WAITING,
                ProcessState.CANCELLED,
                ProcessState.FAILED}
@@ -305,50 +300,11 @@ class Waiting(State):
         if callback_name is not None:
             self.done_callback = getattr(self.process, callback_name)
 
-    def pause(self):
-        self.transition_to(ProcessState.PAUSED, self)
-        return True
-
     def resume(self, value=NULL):
         if value == NULL:
             self.transition_to(ProcessState.RUNNING, self.done_callback)
         else:
             self.transition_to(ProcessState.RUNNING, self.done_callback, value)
-
-
-class Paused(State):
-    LABEL = ProcessState.PAUSED
-    ALLOWED = {ProcessState.WAITING,
-               ProcessState.RUNNING,
-               ProcessState.CANCELLED,
-               ProcessState.FAILED}
-
-    PAUSED_STATE = 'PAUSED_STATE'
-
-    def __init__(self, process, paused_state):
-        """
-        :param process: The associated process
-        :param paused_state: The state that was interrupted by pausing
-        :type paused_state: :class:`State`
-        """
-        super(Paused, self).__init__(process)
-        self.paused_state = paused_state
-
-    def save_instance_state(self, out_state):
-        super(Paused, self).save_instance_state(out_state)
-        out_state[self.PAUSED_STATE] = self.paused_state.save()
-
-    def load_instance_state(self, saved_state, process):
-        super(Paused, self).load_instance_state(saved_state, process)
-        self.paused_state = process.create_state(saved_state[self.PAUSED_STATE])
-
-    def play(self):
-        if self.paused_state.LABEL == ProcessState.CREATED:
-            # Go direct to the next state
-            self.paused_state.play()
-        else:
-            self.transition_to(self.paused_state)
-        return True
 
 
 class Failed(State):
@@ -436,9 +392,9 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
                   ___
                  |   v
     CREATED --- RUNNING --- FINISHED (o)
-        |     /  |   ^      /
-        v    /   v   |     /
-      PAUSED --- WAITING---
+                 |   ^      /
+                 v   |     /
+                 WAITING---
                  |   ^
                   ----
 
@@ -464,7 +420,6 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             ProcessState.CREATED: Created,
             ProcessState.RUNNING: Running,
             ProcessState.WAITING: Waiting,
-            ProcessState.PAUSED: Paused,
             ProcessState.FINISHED: Finished,
             ProcessState.FAILED: Failed,
             ProcessState.CANCELLED: Cancelled
@@ -509,8 +464,6 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             call_with_super_check(self.on_create)
         elif state_label == ProcessState.RUNNING:
             call_with_super_check(self.on_run)
-        elif state_label == ProcessState.PAUSED:
-            call_with_super_check(self.on_pause)
         elif state_label == ProcessState.WAITING:
             call_with_super_check(self.on_wait, state.data)
         elif state_label == ProcessState.FINISHED:
@@ -524,8 +477,6 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         super(ProcessStateMachine, self).on_exiting()
 
         state = self.state
-        if state == ProcessState.PAUSED:
-            call_with_super_check(self.on_exit_paused)
         if state == ProcessState.WAITING:
             call_with_super_check(self.on_exit_waiting)
         elif state == ProcessState.RUNNING:
@@ -536,7 +487,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         if final_state == ProcessState.CREATED:
             raise_(type(exception), exception, trace)
         else:
-            self.fail(exception, trace)
+            self.transition_to(ProcessState.FAILED, exception, trace)
 
     @super_check
     def on_create(self):
@@ -564,10 +515,6 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
 
     @super_check
     def on_paused(self):
-        pass
-
-    @super_check
-    def on_exit_paused(self):
         pass
 
     @super_check
@@ -617,21 +564,10 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         """
         return self._state.play()
 
-    @event(from_states=(Created, Running, Waiting), to_states=(Paused, Failed))
+    @event(from_states=(Created, Running, Waiting), to_states=(Failed))
     def pause(self):
         """ Pause the process """
         return self._state.pause()
-
-    @event(from_states=(Running, Waiting), to_states=(Waiting, Failed))
-    def wait(self, done_callback=None, msg=None, data=None):
-        """
-        Wait for something
-        :param done_callback: A function to call when done waiting
-        :param msg: The waiting message
-        :type msg: str
-        :param data: Optional information about what to wait for
-         """
-        self.transition_to(ProcessState.WAITING, done_callback, msg, data)
 
     @event(from_states=(Running, Waiting), to_states=(Running, Failed))
     def resume(self, *args):
@@ -639,14 +575,6 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         Start running the process again
         """
         return self._state.resume(*args)
-
-    @event(from_states=(Running, Waiting), to_states=(Finished, Failed))
-    def finish(self, result=None):
-        """
-        The process has finished
-        :param result: An optional result from this process
-        """
-        self.transition_to(ProcessState.FINISHED, result)
 
     @event(to_states=Failed)
     def fail(self, exception, trace_back=None):

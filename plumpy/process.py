@@ -56,6 +56,9 @@ class Running(base_process.Running):
         if self.in_state:
             self.process.call_soon(self._run)
 
+    def unpause(self):
+        self._run_handle = self.process.call_soon(self._run)
+
     def _run(self):
         with stack.in_stack(self.process):
             super(Running, self)._run()
@@ -83,8 +86,10 @@ class Executor(ProcessListener):
             self._future = futures.Future()
             futures.chain(process.future(), self._future)
 
-            if process.state in [ProcessState.CREATED, ProcessState.PAUSED]:
+            if process.state == ProcessState.CREATED:
                 process.play()
+            if process.paused:
+                process.unpause()
 
             return loop.run_sync(lambda: self._future)
         finally:
@@ -93,7 +98,7 @@ class Executor(ProcessListener):
             process.remove_process_listener(self)
 
 
-@persistence.auto_persist('_pid', '_outputs', '_CREATION_TIME')
+@persistence.auto_persist('_pid', '_outputs', '_CREATION_TIME', '_paused')
 class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plumpy.
@@ -218,6 +223,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._CREATION_TIME = None
 
+        self.__paused = False
+        self._pausing = None  # If pausing, this will be a future
+
         super(Process, self).__init__()
 
     @property
@@ -269,6 +277,27 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         else:
             return _LOGGER
 
+    @property
+    def paused(self):
+        return self._paused
+
+    @property
+    def _paused(self):
+        return self.__paused
+
+    @_paused.setter
+    def _paused(self, paused):
+        if paused == self.__paused:
+            return
+
+        self.__paused = paused
+        if paused:
+            base.call_with_super_check(self.on_pause)
+        else:
+            # TODO: Put this in
+            # base.call_with_super_check(self.on_play)
+            pass
+
     def loop(self):
         return self._loop
 
@@ -284,6 +313,40 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             communicator=self._communicator)
         process.play()
         return process
+
+    def pause(self):
+        if self._paused:
+            # Already paused
+            return True
+        if self._pausing:
+            return self._pausing
+
+        state_paused = self._state.pause()
+        if isinstance(state_paused, futures.Future):
+            # The state is pausing itself
+            self._pausing = state_paused
+
+            def paused(future):
+                # Finished pausing the state, check what the outcome was
+                self._pausing = None
+                if not (future.cancelled() or future.exception()):
+                    self._paused = future.result()
+
+            state_paused.add_done_callback(paused)
+            return state_paused
+        else:
+            self._paused = state_paused
+            return self._paused
+
+    def unpause(self):
+        if not self._paused:
+            if self._pausing:
+                self._pausing.cancel()
+            return True
+
+        state_unpaused = self._state.unpause()
+        self._paused = not state_unpaused
+        return self._paused
 
     def save_instance_state(self, out_state):
         """

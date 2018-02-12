@@ -245,10 +245,11 @@ class TestProcess(utils.TestCaseWithLoop):
 
         # Wait - Run the process and wait until it is waiting
         proc.execute(True)
+        self.assertEqual(proc.state, ProcessState.WAITING)
 
         proc.pause()
-        self.assertEqual(proc.state, ProcessState.PAUSED)
-        proc.play()
+        self.assertTrue(proc.paused)
+        proc.unpause()
         self.assertEqual(proc.state, ProcessState.WAITING)
         proc.resume()
 
@@ -415,32 +416,11 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         # Check results match
         self.assertEqual(result, result2)
 
-    def test_recreate_from(self):
-        proc = test_utils.DummyProcess()
-        p2 = self._assert_same(proc)
-        self._procs_same(proc, p2)
-
-        proc.play()
-        p2 = self._assert_same(proc)
-        self._procs_same(proc, p2)
-
-        proc.finish()
-        p2 = self._assert_same(proc)
-        self._procs_same(proc, p2)
-
     def test_cancelled(self):
         proc = test_utils.DummyProcess()
         proc.cancel()
         self.assertEqual(proc.state, plumpy.ProcessState.CANCELLED)
         self._check_round_trip(proc)
-
-    def _assert_same(self, proc):
-        return plumpy.Bundle(proc).unbundle(loop=proc.loop())
-
-    def _procs_same(self, p1, p2):
-        self.assertEqual(p1.state, p2.state)
-        if p1.state == ProcessState.FINISHED:
-            self.assertEqual(p1.result(), p2.result())
 
     def _check_round_trip(self, proc1):
         bundle1 = plumpy.Bundle(proc1)
