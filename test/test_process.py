@@ -1,6 +1,5 @@
 import plumpy
 import kiwipy
-import unittest
 from past.builtins import basestring
 from plumpy import Process, ProcessState, test_utils, process
 from plumpy.utils import AttributesFrozendict
@@ -247,10 +246,14 @@ class TestProcess(utils.TestCaseWithLoop):
         proc.execute(True)
         self.assertEqual(proc.state, ProcessState.WAITING)
 
-        proc.pause()
+        result = proc.pause()
+        self.assertTrue(result)
         self.assertTrue(proc.paused)
-        proc.play()
-        self.assertEqual(proc.state, ProcessState.WAITING)
+
+        result = proc.play()
+        self.assertTrue(result)
+        self.assertFalse(proc.paused)
+
         proc.resume()
 
         # Run

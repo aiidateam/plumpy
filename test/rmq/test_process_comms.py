@@ -50,8 +50,9 @@ class TestProcessReceiver(TestCaseWithLoop):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a play message
         result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.PLAY_MSG)
+        self.assertTrue(result)
 
-        self.assertEqual(proc.state, plumpy.ProcessState.WAITING)
+        self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
 
     def test_cancel(self):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
@@ -84,7 +85,7 @@ class TestProcessReceiver(TestCaseWithLoop):
         action.execute(self.communicator)
         self.communicator.await(action, timeout=AWAIT_TIMEOUT)
 
-        self.assertEqual(proc.state, plumpy.ProcessState.WAITING)
+        self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
 
     def test_cancel_action(self):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)

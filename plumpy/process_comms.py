@@ -40,7 +40,7 @@ class ProcessReceiver(object):
     def __call__(self, msg):
         intent = msg['intent']
         if intent == Intent.PLAY:
-            return self._process.start()
+            return self._process.play()
         elif intent == Intent.PAUSE:
             return self._process.pause()
         elif intent == Intent.CANCEL:

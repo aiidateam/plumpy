@@ -631,9 +631,9 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             return True
 
         if self._state.play():
-            self._paused = True
+            self._paused = False
 
-        return self._paused
+        return not self._paused
 
     @event(from_states=(Running, Waiting), to_states=(Running, Failed))
     def resume(self, *args):
