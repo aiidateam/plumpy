@@ -290,41 +290,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         process.start()
         return process
 
-    def pause(self):
-        if self._paused:
-            # Already paused
-            return True
-        if self._pausing:
-            return self._pausing
-
-        state_paused = self._state.pause()
-        if isinstance(state_paused, futures.Future):
-            # The state is pausing itself
-            self._pausing = state_paused
-
-            def paused(future):
-                # Finished pausing the state, check what the outcome was
-                self._pausing = None
-                if not (future.cancelled() or future.exception()):
-                    self._paused = future.result()
-
-            state_paused.add_done_callback(paused)
-            return state_paused
-        else:
-            self._paused = state_paused
-            return self._paused
-
-    def play(self):
-        if not self._paused:
-            if self._pausing:
-                self._pausing.cancel()
-            return True
-
-        if self._state.play():
-            self._paused = True
-
-        return self._paused
-
     def save_instance_state(self, out_state):
         """
         Ask the process to save its current instance state.

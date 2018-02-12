@@ -586,13 +586,54 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
     @event(to_states=(Running, Waiting, Failed))
     def start(self):
         """
-        Play the process if in the CREATED or PAUSED state
+        Start the process if in the CREATED state
         """
         return self._state.start()
 
     def pause(self):
-        """ Pause the process """
-        return self._state.pause()
+        """
+        Pause the process.  Returns True if after this call the process is paused, False otherwise
+
+        :return: True paused, False otherwise
+        """
+        if self._paused:
+            # Already paused
+            return True
+        if self._pausing:
+            return self._pausing
+
+        state_paused = self._state.pause()
+        if isinstance(state_paused, futures.Future):
+            # The state is pausing itself
+            self._pausing = state_paused
+
+            def paused(future):
+                # Finished pausing the state, check what the outcome was
+                self._pausing = None
+                if not (future.cancelled() or future.exception()):
+                    self._paused = future.result()
+
+            state_paused.add_done_callback(paused)
+            return state_paused
+        else:
+            self._paused = state_paused
+            return self._paused
+
+    def play(self):
+        """
+        Play a process. Returns True if after this call the process is playing, False otherwise
+
+        :return: True if playing, False otherwise
+        """
+        if not self._paused:
+            if self._pausing:
+                self._pausing.cancel()
+            return True
+
+        if self._state.play():
+            self._paused = True
+
+        return self._paused
 
     @event(from_states=(Running, Waiting), to_states=(Running, Failed))
     def resume(self, *args):
