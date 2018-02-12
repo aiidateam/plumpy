@@ -120,14 +120,15 @@ class State(state_machine.State, persistence.Savable):
         super(State, self).load_instance_state(saved_state, process)
         self.state_machine = process
 
-    def play(self):
-        return state_machine.EventResponse.IGNORED
+    def start(self):
+        # Default response is to ignore start event
+        return False
 
     def pause(self):
         # Cannot pause a terminal state
         return not self.is_terminal()
 
-    def unpause(self):
+    def play(self):
         return True
 
     def cancel(self, msg=None):
@@ -159,7 +160,7 @@ class Created(State):
         super(Created, self).load_instance_state(saved_state, process)
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
 
-    def play(self):
+    def start(self):
         self.transition_to(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
         return True
 
@@ -425,6 +426,31 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             ProcessState.CANCELLED: Cancelled
         }
 
+    def __init__(self):
+        super(ProcessStateMachine, self).__init__()
+        self.__paused = False
+        self._pausing = None  # If pausing, this will be a future
+
+    @property
+    def paused(self):
+        return self._paused
+
+    @property
+    def _paused(self):
+        return self.__paused
+
+    @_paused.setter
+    def _paused(self, paused):
+        if self._paused == paused:
+            return
+
+        # We are changing the paused state
+        self.__paused = paused
+        if self.__paused:
+            call_with_super_check(self.on_pause)
+        else:
+            call_with_super_check(self.on_play)
+
     def create_initial_state(self):
         return self.get_state_class(ProcessState.CREATED)(self, self.run)
 
@@ -514,7 +540,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         pass
 
     @super_check
-    def on_paused(self):
+    def on_play(self):
         pass
 
     @super_check
@@ -558,13 +584,12 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
 
     # region commands
     @event(to_states=(Running, Waiting, Failed))
-    def play(self):
+    def start(self):
         """
         Play the process if in the CREATED or PAUSED state
         """
-        return self._state.play()
+        return self._state.start()
 
-    @event(from_states=(Created, Running, Waiting), to_states=(Failed))
     def pause(self):
         """ Pause the process """
         return self._state.pause()

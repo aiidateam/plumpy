@@ -8,7 +8,7 @@ def execute(proc):
     """ Execute a process state machine """
     while proc.state in [ProcessState.CREATED, ProcessState.RUNNING]:
         if proc.state in [ProcessState.CREATED]:
-            proc.play()
+            proc.start()
         elif proc.state == ProcessState.RUNNING:
             proc._state._run()
 
@@ -20,7 +20,7 @@ class SimpleProc(ProcessStateMachine):
     def do_run(self):
         while self.state in [ProcessState.CREATED, ProcessState.RUNNING]:
             if self.state in [ProcessState.CREATED]:
-                self.play()
+                self.start()
             elif self.state == ProcessState.RUNNING:
                 self._state._run()
 

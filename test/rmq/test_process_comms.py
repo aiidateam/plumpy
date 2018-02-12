@@ -40,7 +40,7 @@ class TestProcessReceiver(TestCaseWithLoop):
 
     def test_pause(self):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        proc.play()
+        proc.start()
         # Send a pause message
         result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.PAUSE_MSG)
 
@@ -69,7 +69,7 @@ class TestProcessReceiver(TestCaseWithLoop):
 
     def test_pause_action(self):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        proc.play()
+        proc.start()
         # Send a pause message
         action = plumpy.PauseAction(proc.pid)
         action.execute(self.communicator)

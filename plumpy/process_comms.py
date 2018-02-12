@@ -40,7 +40,7 @@ class ProcessReceiver(object):
     def __call__(self, msg):
         intent = msg['intent']
         if intent == Intent.PLAY:
-            return self._process.play()
+            return self._process.start()
         elif intent == Intent.PAUSE:
             return self._process.pause()
         elif intent == Intent.CANCEL:
@@ -253,7 +253,7 @@ class ProcessLauncher(object):
         if task[PERSIST_KEY]:
             self._persister.save_checkpoint(proc)
         if task[PLAY_KEY]:
-            proc.play()
+            proc.start()
 
         if task[NOWAIT_KEY]:
             return proc.pid
@@ -267,7 +267,7 @@ class ProcessLauncher(object):
         tag = task.get(TAG_KEY, None)
         saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
         proc = saved_state.unbundle(*self._unbundle_args, **self._unbundle_kwargs)
-        proc.play()
+        proc.start()
         if task[NOWAIT_KEY]:
             return True
         else:

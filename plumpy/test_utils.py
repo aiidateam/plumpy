@@ -273,7 +273,7 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
     def capture(self):
         self._save(self.process)
         if not self.process.done():
-            self.process.play()
+            self.process.start()
             self.process.loop().run_sync(lambda: self._future)
 
     @utils.override

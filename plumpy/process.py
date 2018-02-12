@@ -56,7 +56,7 @@ class Running(base_process.Running):
         if self.in_state:
             self.process.call_soon(self._run)
 
-    def unpause(self):
+    def play(self):
         self._run_handle = self.process.call_soon(self._run)
 
     def _run(self):
@@ -87,9 +87,9 @@ class Executor(ProcessListener):
             futures.chain(process.future(), self._future)
 
             if process.state == ProcessState.CREATED:
-                process.play()
+                process.start()
             if process.paused:
-                process.unpause()
+                process.play()
 
             return loop.run_sync(lambda: self._future)
         finally:
@@ -223,9 +223,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._CREATION_TIME = None
 
-        self.__paused = False
-        self._pausing = None  # If pausing, this will be a future
-
         super(Process, self).__init__()
 
     @property
@@ -277,27 +274,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         else:
             return _LOGGER
 
-    @property
-    def paused(self):
-        return self._paused
-
-    @property
-    def _paused(self):
-        return self.__paused
-
-    @_paused.setter
-    def _paused(self, paused):
-        if paused == self.__paused:
-            return
-
-        self.__paused = paused
-        if paused:
-            base.call_with_super_check(self.on_pause)
-        else:
-            # TODO: Put this in
-            # base.call_with_super_check(self.on_play)
-            pass
-
     def loop(self):
         return self._loop
 
@@ -311,7 +287,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             logger=logger,
             loop=self.loop(),
             communicator=self._communicator)
-        process.play()
+        process.start()
         return process
 
     def pause(self):
@@ -338,14 +314,15 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             self._paused = state_paused
             return self._paused
 
-    def unpause(self):
+    def play(self):
         if not self._paused:
             if self._pausing:
                 self._pausing.cancel()
             return True
 
-        state_unpaused = self._state.unpause()
-        self._paused = not state_unpaused
+        if self._state.play():
+            self._paused = True
+
         return self._paused
 
     def save_instance_state(self, out_state):
@@ -445,6 +422,10 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def on_pause(self):
         super(Process, self).on_pause()
         self._fire_event(ProcessListener.on_process_paused)
+
+    def on_play(self):
+        super(Process, self).on_pause()
+        self._fire_event(ProcessListener.on_process_played)
 
     def on_finish(self, result):
         super(Process, self).on_finish(result)
@@ -560,6 +541,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def get_status_info(self, out_status_info):
         out_status_info.update({
             'ctime': self.creation_time,
+            'paused': self.paused,
             'process_string': str(self),
             'state': self.state,
             'state_info': str(self._state)

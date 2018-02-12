@@ -69,7 +69,7 @@ class TestProcess(utils.TestCaseWithLoop):
                 pass
 
         with self.assertRaises(ValueError):
-            NoDynamic(inputs={'a': 5}).play()
+            NoDynamic(inputs={'a': 5}).start()
 
         proc = WithDynamic(inputs={'a': 5})
         proc.execute()
@@ -161,7 +161,7 @@ class TestProcess(utils.TestCaseWithLoop):
 
     def test_exception(self):
         proc = test_utils.ExceptionProcess()
-        proc.play()
+        proc.start()
         with self.assertRaises(RuntimeError):
             proc.execute()
         self.assertEqual(proc.state, ProcessState.FAILED)
@@ -249,7 +249,7 @@ class TestProcess(utils.TestCaseWithLoop):
 
         proc.pause()
         self.assertTrue(proc.paused)
-        proc.unpause()
+        proc.play()
         self.assertEqual(proc.state, ProcessState.WAITING)
         proc.resume()
 
@@ -280,7 +280,7 @@ class TestProcess(utils.TestCaseWithLoop):
         procs = []
         for proc_class in test_utils.TEST_PROCESSES + test_utils.TEST_EXCEPTION_PROCESSES:
             proc = proc_class(loop=self.loop)
-            proc.play()
+            proc.start()
             procs.append(proc)
 
         # Check that they all run
@@ -343,7 +343,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         proc = test_utils.DummyProcessWithOutput()
 
         saver = test_utils.ProcessSaver(proc)
-        proc.play()
+        proc.start()
         proc.execute()
 
         self._check_round_trip(proc)
@@ -397,7 +397,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
         proc = test_utils.WaitForSignalProcess()
-        proc.play()
+        proc.start()
 
         # Wait - Run the process until it enters the WAITING state
         proc.execute(True)
@@ -526,7 +526,7 @@ class TestProcessEvents(utils.TestCaseWithLoop):
         events_tester = test_utils.ProcessListenerTester(
             self.proc, ('running', 'output_emitted', 'finished'),
             self.loop.stop)
-        self.proc.play()
+        self.proc.start()
 
         utils.run_loop_with_timeout(self.loop)
         self.assertSetEqual(events_tester.called, events_tester.expected_events)

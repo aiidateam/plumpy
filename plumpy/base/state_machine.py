@@ -9,14 +9,9 @@ import plumpy
 import sys
 from .utils import call_with_super_check, super_check
 
-__all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed', 'EventResponse']
+__all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
-
-
-# Events to be ignored
-class EventResponse(Enum):
-    IGNORED = 0
 
 
 class StateMachineError(Exception):
@@ -76,7 +71,7 @@ def event(from_states='*', to_states='*'):
                 )
 
             result = wrapped(self, *a, **kw)
-            if not (result == EventResponse.IGNORED or isinstance(result, plumpy.Future)):
+            if not (result is False or isinstance(result, plumpy.Future)):
                 if to_states != '*' and not \
                         any(isinstance(self._state, state)
                             for state in to_states):

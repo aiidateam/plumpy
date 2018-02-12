@@ -42,7 +42,7 @@ class Playing(state_machine.State):
         self._update_time()
 
     def play(self, track=None):
-        return state_machine.EventResponse.IGNORED
+        return False
 
     def _update_time(self):
         current_time = time.time()
@@ -129,7 +129,7 @@ class TestStateMachine(unittest.TestCase):
         cd_player.play()
         self.assertEqual(cd_player.state, PLAYING)
 
-        self.assertEqual(cd_player.play(), state_machine.EventResponse.IGNORED)
+        self.assertEqual(cd_player.play(), False)
 
         cd_player.stop()
         self.assertEqual(cd_player.state, STOPPED)

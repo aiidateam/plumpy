@@ -369,9 +369,9 @@ class TestWorkchain(utils.TestCaseWithLoop):
             @classmethod
             def define(cls, spec):
                 super(Workchain, cls).define(spec)
-                spec.outline(cls.start, cls.check)
+                spec.outline(cls.begin, cls.check)
 
-            def start(self):
+            def begin(self):
                 self.to_context(result_a=self.launch(SimpleWc))
                 return ToContext(result_b=self.launch(SimpleWc))
 

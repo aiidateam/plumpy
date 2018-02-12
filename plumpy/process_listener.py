@@ -43,6 +43,15 @@ class ProcessListener(with_metaclass(ABCMeta, object)):
         """
         pass
 
+    def on_process_played(self, process):
+        """
+        Called when the process is about to re-enter the RUNNING state
+
+        :param process: The process
+        :type process: :class:`plumpy.Process`
+        """
+        pass
+
     def on_output_emitted(self, process, output_port, value, dynamic):
         """
         Called when the process has emitted an output value

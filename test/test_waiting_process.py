@@ -11,7 +11,7 @@ from . import utils
 class TestWaitingProcess(utils.TestCaseWithLoop):
     def test_instance_state(self):
         proc = ThreeSteps()
-        proc.play()
+        proc.start()
         wl = ProcessSaver(proc)
         proc.execute()
 
@@ -28,7 +28,7 @@ class TestWaitingProcess(utils.TestCaseWithLoop):
 
     def test_abort(self):
         p = WaitForSignalProcess()
-        p.play()
+        p.start()
         p.execute(True)
         p.cancel()
         self.assertTrue(p.cancelled())
