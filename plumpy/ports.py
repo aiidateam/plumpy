@@ -376,7 +376,11 @@ class PortNamespace(collections.MutableMapping, Port):
         Validate the namespace port itself and subsequently all the port_values it contains
 
         :param port_values: an arbitrarily nested dictionary of parsed port values
+        :return: valid or not, error string|None
+        :rtype: tuple(bool, str or None)
         """
+        is_valid, message = True, None
+
         if port_values is None:
             port_values = {}
         else:
@@ -388,22 +392,56 @@ class PortNamespace(collections.MutableMapping, Port):
             if not is_valid:
                 return is_valid, message
 
-        # Validate each port individually, popping its name if found in input dictionary
+        # Validate all input ports explicitly specified in this port namespace
+        is_valid, message = self.validate_ports(port_values)
+        if not is_valid:
+            return is_valid, message
+
+        # If any port_values remain, validate against the dynamic properties of the namespace
+        is_valid, message = self.validate_dynamic_ports(port_values)
+        if not is_valid:
+            return is_valid, message
+
+        return is_valid, message
+
+    def validate_ports(self, port_values=None):
+        """
+        Validate port values with respect to the explicitly defined ports of the port namespace.
+        Ports values that are matched to an actual Port will be popped from the dictionary
+
+        :param port_values: an arbitrarily nested dictionary of parsed port values
+        :return: valid or not, error string|None
+        :rtype: tuple(bool, str or None)
+        """
+        is_valid, message = True, None
+
         for name, port in self._ports.items():
             is_valid, message = port.validate(port_values.pop(name, None))
             if not is_valid:
                 return is_valid, message
 
-        # If any port_values remain, we better support dynamic ports
+        return is_valid, message
+
+    def validate_dynamic_ports(self, port_values=None):
+        """
+        Validate port values with respect to the dynamic properties of the port namespace. It will
+        check if the namespace is actually dynamic and if all values adhere to the valid types of
+        the namespace if those are specified
+
+        :param port_values: an arbitrarily nested dictionary of parsed port values
+        :return: valid or not, error string|None
+        :rtype: tuple(bool, str or None)
+        """
+        is_valid, message = True, None
+
         if port_values and not self.dynamic:
            return False, 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
 
-        # If any port_values remain and we have a valid_type, make sure they match the type
-        if port_values and self._valid_type is not None:
+        if self._valid_type is not None:
             valid_type = self._valid_type
             for port_name, port_value in port_values.items():
                 if not isinstance(port_value, valid_type):
                     return False, 'Invalid type {} for dynamic port value: expected {}'.format(
                         type(port_value), valid_type)
 
-        return True, None
+        return is_valid, message
