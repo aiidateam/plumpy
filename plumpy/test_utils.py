@@ -2,29 +2,29 @@ import collections
 from collections import namedtuple
 
 import plumpy
-from . import process
+from . import processes
 from . import persistence
 from . import utils
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
 
-class DummyProcess(process.Process):
+class DummyProcess(processes.Process):
     """
     Process with no inputs or outputs and does nothing when ran.
     """
 
     EXPECTED_STATE_SEQUENCE = [
-        process.ProcessState.CREATED,
-        process.ProcessState.RUNNING,
-        process.ProcessState.FINISHED]
+        processes.ProcessState.CREATED,
+        processes.ProcessState.RUNNING,
+        processes.ProcessState.FINISHED]
 
     @utils.override
     def _run(self):
         pass
 
 
-class DummyProcessWithOutput(process.Process):
+class DummyProcessWithOutput(processes.Process):
     EXPECTED_OUTPUTS = {'default': 5}
 
     @classmethod
@@ -38,7 +38,7 @@ class DummyProcessWithOutput(process.Process):
         self.out("default", 5)
 
 
-class DummyProcessWithDynamicOutput(process.Process):
+class DummyProcessWithDynamicOutput(processes.Process):
     EXPECTED_OUTPUTS = {'default': 5}
 
     @classmethod
@@ -51,31 +51,31 @@ class DummyProcessWithDynamicOutput(process.Process):
         self.out("default", 5)
 
 
-class KeyboardInterruptProc(process.Process):
+class KeyboardInterruptProc(processes.Process):
     @utils.override
     def _run(self):
         raise KeyboardInterrupt()
 
 
-class ProcessWithCheckpoint(process.Process):
+class ProcessWithCheckpoint(processes.Process):
     @utils.override
     def _run(self):
-        return process.Continue(self.last_step)
+        return processes.Continue(self.last_step)
 
     def last_step(self):
         pass
 
 
-class WaitForSignalProcess(process.Process):
+class WaitForSignalProcess(processes.Process):
     @utils.override
     def _run(self):
-        return process.Wait(self.last_step)
+        return processes.Wait(self.last_step)
 
     def last_step(self):
         pass
 
 
-class MissingOutputProcess(process.Process):
+class MissingOutputProcess(processes.Process):
     """ A process that does not generate a required output """
 
     @classmethod
@@ -87,7 +87,7 @@ class MissingOutputProcess(process.Process):
         pass
 
 
-class NewLoopProcess(process.Process):
+class NewLoopProcess(processes.Process):
     def __init__(self, *args, **kwargs):
         kwargs['loop'] = plumpy.new_event_loop()
         super(NewLoopProcess, self).__init__(*args, **kwargs)
@@ -107,7 +107,7 @@ class EventsTesterMixin(object):
         cls.called_events.append(event)
 
     def __init__(self, *args, **kwargs):
-        assert isinstance(self, process.Process), \
+        assert isinstance(self, processes.Process), \
             "Mixin has to be used with a type derived from a Process"
         super(EventsTesterMixin, self).__init__(*args, **kwargs)
         self.__class__.called_events = []
@@ -124,8 +124,7 @@ class EventsTesterMixin(object):
 
     @utils.override
     def _on_output_emitted(self, output_port, value, dynamic):
-        super(EventsTesterMixin, self)._on_output_emitted(
-            output_port, value, dynamic)
+        super(EventsTesterMixin, self)._on_output_emitted(output_port, value, dynamic)
         self.called('emitted')
 
     @utils.override
@@ -154,7 +153,7 @@ class EventsTesterMixin(object):
         self.called('terminate')
 
 
-class ProcessEventsTester(EventsTesterMixin, process.Process):
+class ProcessEventsTester(EventsTesterMixin, processes.Process):
     @classmethod
     def define(cls, spec):
         super(ProcessEventsTester, cls).define(spec)
@@ -171,10 +170,10 @@ class ThreeSteps(ProcessEventsTester):
     @utils.override
     def _run(self):
         self.out("test", 5)
-        return process.Continue(self.middle_step)
+        return processes.Continue(self.middle_step)
 
     def middle_step(self, ):
-        return process.Continue(self.last_step)
+        return processes.Continue(self.last_step)
 
     def last_step(self):
         pass
@@ -184,7 +183,7 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
     @utils.override
     def _run(self):
         self.out("test", 5)
-        return process.Continue(self.middle_step)
+        return processes.Continue(self.middle_step)
 
     def middle_step(self):
         pass

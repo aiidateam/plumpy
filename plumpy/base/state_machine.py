@@ -150,7 +150,7 @@ class StateMachineMeta(type):
 class StateMachine(with_metaclass(StateMachineMeta, object)):
     STATES = None
     STATES_MAP = None
-    sealed = False
+    # sealed = False
 
     _transitioning = False
     _transition_failing = False
@@ -174,8 +174,12 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
 
     @classmethod
     def __ensure_built(cls):
-        if cls.sealed:
-            return
+        try:
+            # Check if it's already been built (and therefore sealed)
+            if cls.__getattribute__(cls, 'sealed'):
+                return
+        except AttributeError:
+            pass
 
         cls.STATES = cls.get_states()
         assert isinstance(cls.STATES, collections.Iterable)
@@ -185,8 +189,7 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
         for state_cls in cls.STATES:
             assert issubclass(state_cls, State)
             label = state_cls.LABEL
-            assert label not in cls.STATES_MAP, \
-                "Duplicate label '{}'".format(label)
+            assert label not in cls.STATES_MAP, "Duplicate label '{}'".format(label)
             cls.STATES_MAP[label] = state_cls
 
         cls.sealed = True

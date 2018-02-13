@@ -306,6 +306,7 @@ class Waiting(State):
             self.transition_to(ProcessState.RUNNING, self.done_callback)
         else:
             self.transition_to(ProcessState.RUNNING, self.done_callback, value)
+        return True
 
 
 class Failed(State):

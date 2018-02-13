@@ -6,10 +6,11 @@ from enum import Enum
 import functools
 import inspect
 import re
+import sys
 
 from . import mixins
 from . import persistence
-from . import process
+from . import processes
 from . import utils
 
 __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', '_WorkChainSpec']
@@ -17,7 +18,7 @@ __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', '_WorkChainSpec
 ToContext = dict
 
 
-class _WorkChainSpec(process.ProcessSpec):
+class _WorkChainSpec(processes.ProcessSpec):
     def __init__(self):
         super(_WorkChainSpec, self).__init__()
         self._outline = None
@@ -36,16 +37,51 @@ class _WorkChainSpec(process.ProcessSpec):
 
         :param commands: One or more functions that make up this work chain.
         """
-        if len(commands) == 1 and isinstance(commands[0], _Instruction):
-            self._outline = commands[0]
+        if len(commands) == 1:
+            # There is only a single instruction
+            self._outline = _ensure_instruction(commands[0])
         else:
+            # There are multiple instructions
             self._outline = _Block(commands)
 
     def get_outline(self):
         return self._outline
 
 
-class WorkChain(mixins.ContextMixin, process.Process):
+@persistence.auto_persist('_awaiting')
+class Waiting(processes.Waiting):
+    """ Overwrite the waiting state"""
+
+    def __init__(self, process, done_callback, msg=None, awaiting=None):
+        super(Waiting, self).__init__(process, done_callback, msg, awaiting)
+        self._awaiting = {}
+        for awaitable, key in awaiting.items():
+            if isinstance(awaitable, processes.Process):
+                awaitable = awaitable.future()
+            self._awaiting[awaitable] = key
+
+    def enter(self):
+        super(Waiting, self).enter()
+        for awaitable in self._awaiting.keys():
+            awaitable.add_done_callback(self._awaitable_done)
+
+    def exit(self):
+        super(Waiting, self).exit()
+        for awaitable in self._awaiting.keys():
+            awaitable.remove_done_callback(self._awaitable_done)
+
+    def _awaitable_done(self, awaitable):
+        key = self._awaiting.pop(awaitable)
+        try:
+            self.process.ctx[key] = awaitable.result()
+        except Exception:
+            self.transition_to(processes.ProcessState.FAILED, *sys.exc_info()[1:])
+        else:
+            if not self._awaiting:
+                self.transition_to(processes.ProcessState.RUNNING, self.done_callback)
+
+
+class WorkChain(mixins.ContextMixin, processes.Process):
     """
     A WorkChain is a series of instructions carried out with the ability to save
     state in between.
@@ -53,6 +89,12 @@ class WorkChain(mixins.ContextMixin, process.Process):
     _spec_type = _WorkChainSpec
     _STEPPER_STATE = 'stepper_state'
     _CONTEXT = 'CONTEXT'
+
+    @classmethod
+    def get_state_classes(cls):
+        states_map = super(WorkChain, cls).get_state_classes()
+        states_map[processes.ProcessState.WAITING] = Waiting
+        return states_map
 
     def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         super(WorkChain, self).__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
@@ -86,10 +128,9 @@ class WorkChain(mixins.ContextMixin, process.Process):
         to the corresponding key in the context of the workchain
         """
         for key, awaitable in kwargs.items():
-            if isinstance(awaitable, process.Process):
+            if isinstance(awaitable, processes.Process):
                 awaitable = awaitable.future()
             self._awaitables[awaitable] = key
-            awaitable.add_done_callback(self._awaitable_done)
 
     def run(self):
         return self._do_step()
@@ -110,19 +151,9 @@ class WorkChain(mixins.ContextMixin, process.Process):
                     raise TypeError("Invalid value returned from step '{}'".format(retval))
 
             if self._awaitables:
-                return process.Wait(self._do_step, 'Waiting before next step')
+                return processes.Wait(self._do_step, 'Waiting before next step', self._awaitables)
             else:
-                return process.Continue(self._do_step)
-
-    def _awaitable_done(self, awaitable):
-        key = self._awaitables.pop(awaitable)
-        try:
-            self.ctx[key] = awaitable.result()
-        except Exception as e:
-            self.fail(e)
-        else:
-            if not self._awaitables:
-                self.resume()
+                return processes.Continue(self._do_step)
 
 
 class Stepper(persistence.Savable):
@@ -197,9 +228,12 @@ class _FunctionStepper(Stepper):
 
 class _FunctionCall(_Instruction):
     def __init__(self, func):
-        assert issubclass(func.im_class, process.Process)
-        args = inspect.getargspec(func)[0]
-        assert len(args) == 1, "Step must take one argument only: self"
+        try:
+            args = inspect.getargspec(func)[0]
+        except TypeError:
+            raise TypeError("func is not a function, got {}".format(type(func)))
+        if len(args) != 1:
+            raise TypeError("Step must take one argument only: self")
 
         self._fn = func
 
@@ -273,11 +307,9 @@ class _Block(_Instruction, collections.Sequence):
         # Build up the list of commands
         comms = []
         for instruction in instructions:
-            if inspect.ismethod(instruction):
-                # It's a plain method of the workchain
+            if not isinstance(instruction, _Instruction):
+                # Assume it's a function call
                 instruction = _FunctionCall(instruction)
-            elif not isinstance(instruction, _Instruction):
-                raise ValueError("Workflow commands {} is not an instruction or class method.".format(instruction))
 
             comms.append(instruction)
         self._instruction = comms
@@ -568,3 +600,12 @@ def while_(condition):
 
 # Global singleton for return statements in workchain outlines
 return_ = _Return()
+
+
+def _ensure_instruction(command):
+    # There is only a single instruction
+    if isinstance(command, _Instruction):
+        return command
+    else:
+        # It must be a direct function call
+        return _FunctionCall(command)

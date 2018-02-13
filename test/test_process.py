@@ -1,7 +1,8 @@
 import plumpy
 import kiwipy
 from past.builtins import basestring
-from plumpy import Process, ProcessState, test_utils, process
+import plumpy
+from plumpy import Process, ProcessState, test_utils
 from plumpy.utils import AttributesFrozendict
 
 from . import utils
@@ -315,7 +316,7 @@ class SavePauseProc(Process):
     def run(self):
         self.pause()
         self.steps_ran.append(self.run.__name__)
-        return process.Continue(self.step2)
+        return plumpy.Continue(self.step2)
 
     def step2(self):
         self.steps_ran.append(self.step2.__name__)
@@ -544,12 +545,13 @@ class TestProcessEvents(utils.TestCaseWithLoop):
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_failed(self):
-        events_tester = test_utils.ProcessListenerTester(self.proc, ('failed',), self.loop.stop)
-        self.proc.fail(RuntimeError('See ya later suckers'))
-        utils.run_loop_with_timeout(self.loop)
+        proc = test_utils.ExceptionProcess()
+        events_tester = test_utils.ProcessListenerTester(proc, ('failed', 'running', 'output_emitted',), self.loop.stop)
+        with self.assertRaises(RuntimeError):
+            proc.execute()
 
         # Do the checks
-        self.assertIsNotNone(self.proc.exception())
+        self.assertIsNotNone(proc.exception())
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_paused(self):

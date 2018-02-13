@@ -22,7 +22,7 @@ from . import ports
 from . import stack
 from . import utils
 
-__all__ = ['Process', 'ProcessState',
+__all__ = ['Process', 'ProcessState', 'ProcessSpec',
            'Cancel', 'Wait', 'Stop', 'Continue', 'BundleKeys',
            'TransitionFailed', 'Executor', 'Waiting']
 

@@ -1,8 +1,10 @@
 import inspect
+from past.builtins import basestring
 import plumpy
 from plumpy.workchains import *
 import unittest
 
+from plumpy import test_utils
 from . import utils
 
 
@@ -146,26 +148,23 @@ class TestWorkchain(utils.TestCaseWithLoop):
         # Try the if(..) part
         Wf(inputs=dict(value=A, n=three)).execute()
         # Check the steps that should have been run
-        for step, finished in Wf.finished_steps.iteritems():
+        for step, finished in Wf.finished_steps.items():
             if step not in ['s3', 's4', 'isB']:
-                self.assertTrue(
-                    finished, "Step {} was not called by workflow".format(step))
+                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
 
         # Try the elif(..) part
         finished_steps = Wf(inputs=dict(value=B, n=three)).execute()
         # Check the steps that should have been run
-        for step, finished in finished_steps.iteritems():
+        for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 's4']:
-                self.assertTrue(
-                    finished, "Step {} was not called by workflow".format(step))
+                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
 
         # Try the else... part
         finished_steps = Wf(inputs=dict(value=C, n=three)).execute()
         # Check the steps that should have been run
-        for step, finished in finished_steps.iteritems():
+        for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 'isB', 's3']:
-                self.assertTrue(
-                    finished, "Step {} was not called by workflow".format(step))
+                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
 
     def test_incorrect_outline(self):
         class Wf(WorkChain):
@@ -175,7 +174,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 # Try defining an invalid outline
                 spec.outline(5)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             Wf.spec()
 
     def test_same_input_node(self):
@@ -248,11 +247,11 @@ class TestWorkchain(utils.TestCaseWithLoop):
         """
         spec = _WorkChainSpec()
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             spec.outline(5)
 
-        with self.assertRaises(ValueError):
-            spec.outline(type)
+        with self.assertRaises(TypeError):
+            spec.outline(lambda x, y: 5)
 
     def test_checkpointing(self):
         A = 'A'
@@ -387,6 +386,26 @@ class TestWorkchain(utils.TestCaseWithLoop):
     #     runner = work.new_runner(persister=persister)
     #     workchain = Wf(runner=runner)
     #     workchain.execute()
+
+    def test_exception_tocontext(self):
+        my_exception = RuntimeError("Should not be reached")
+
+        class Workchain(WorkChain):
+            @classmethod
+            def define(cls, spec):
+                super(Workchain, cls).define(spec)
+                spec.outline(cls.begin, cls.check)
+
+            def begin(self):
+                self.to_context(result_a=self.launch(test_utils.ExceptionProcess))
+
+            def check(self):
+                raise my_exception
+
+        workchain = Workchain()
+        with self.assertRaises(RuntimeError):
+            workchain.execute()
+        self.assertNotEqual(workchain.exception(), my_exception)
 
     def _run_with_checkpoints(self, wf_class, inputs=None):
         # TODO: Actually save at each point!

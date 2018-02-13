@@ -1,5 +1,5 @@
 from plumpy.ports import PortNamespace, InputPort
-from plumpy.process import ProcessSpec
+from plumpy import ProcessSpec
 from .utils import TestCase
 
 
