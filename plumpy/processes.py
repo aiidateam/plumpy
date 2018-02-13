@@ -423,19 +423,39 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
     @protected
     def out(self, output_port, value):
+        """
+        Record an output value for a specific output port. If the output port matches an
+        explicitly defined Port it will be validated against that. If not it will be validated
+        against the PortNamespace, which means it will be checked for dynamicity and whether
+        the type of the value is valid
+
+        :param output_port: the name of the output port, can be namespaced
+        :param value: the value for the output port
+        :raises: TypeError if the output value is not validated against the port
+        """
         self.on_output_emitting(output_port, value)
 
-        is_valid, message = self.spec().validate_outputs({output_port: value})
+        namespace_separator = self.spec().namespace_separator
+
+        namespace = output_port.split(namespace_separator)
+        port_name = namespace.pop()
+
+        if namespace:
+            port_namespace = self.spec().outputs.get_port(namespace_separator.join(namespace))
+        else:
+            port_namespace = self.spec().outputs
+
+        try:
+            port = port_namespace[port_name]
+            dynamic = False
+            is_valid, message = port.validate(value)
+        except KeyError:
+            port = port_namespace
+            dynamic = True
+            is_valid, message = port.validate_dynamic_ports({port_name: value})
 
         if not is_valid:
             raise TypeError(message)
-
-        # The output was accepted by the output PortNamespace which means that if it
-        # doesn't have it explicitly, it was dynamically accepted
-        if self.spec().has_output(output_port):
-            dynamic = False
-        else:
-            dynamic = True
 
         self._outputs[output_port] = value
         self.on_output_emitted(output_port, value, dynamic)
