@@ -33,7 +33,7 @@ class Bundle(dict):
         if cl is not None:
             self.set_class_loader(cl)
         self['CLASS_NAME'] = utils.class_name(savable, self._class_loader)
-        self.update(savable.save())
+        self.update(savable.save(class_loader_=cl))
 
     def set_class_loader(self, cl):
         self._class_loader = cl
@@ -350,10 +350,12 @@ class Savable(object):
         if self._auto_persist is not None:
             self.save_members(self._auto_persist, out_state)
 
-    def save(self, include_class_name=True):
+    def save(self, include_class_name=True, class_loader_=None):
+        if class_loader_ is None:
+            class_loader_ = class_loader.ClassLoader()
         out_state = {}
         if include_class_name:
-            out_state[self.CLASS_NAME] = utils.class_name(self, verify=False)
+            out_state[self.CLASS_NAME] = utils.class_name(self, class_loader=class_loader_)
         base.call_with_super_check(self.save_instance_state, out_state)
         return out_state
 
