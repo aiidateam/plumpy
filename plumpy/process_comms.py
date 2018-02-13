@@ -108,10 +108,10 @@ CONTINUE_TASK = 'continue'
 
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, play=True,
-                       persist=False, nowait=True):
+                       persist=False, nowait=True, class_loader=None):
     msg_body = {
         TASK_KEY: LAUNCH_TASK,
-        PROCESS_CLASS_KEY: utils.class_name(process_class, verify=False),
+        PROCESS_CLASS_KEY: utils.class_name(process_class, class_loader=class_loader),
         PLAY_KEY: play,
         PERSIST_KEY: persist,
         NOWAIT_KEY: nowait,
@@ -166,10 +166,10 @@ class ContinueProcessAction(TaskAction):
 
 
 class ExecuteProcessAction(communications.Action):
-    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False):
+    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False, class_loader=None):
         super(ExecuteProcessAction, self).__init__()
         self._launch_action = LaunchProcessAction(
-            process_class, init_args, init_kwargs, play=False, persist=True)
+            process_class, init_args, init_kwargs, play=False, persist=True, class_loader=class_loader)
         self._nowait = nowait
 
     def get_launch_future(self):
