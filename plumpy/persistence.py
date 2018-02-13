@@ -353,7 +353,7 @@ class Savable(object):
     def save(self, include_class_name=True):
         out_state = {}
         if include_class_name:
-            out_state[self.CLASS_NAME] = utils.class_name(self)
+            out_state[self.CLASS_NAME] = utils.class_name(self, verify=False)
         base.call_with_super_check(self.save_instance_state, out_state)
         return out_state
 
