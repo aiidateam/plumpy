@@ -13,18 +13,18 @@ from . import persistence
 from . import processes
 from . import utils
 
-__all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', '_WorkChainSpec']
+__all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
 
 ToContext = dict
 
 
-class _WorkChainSpec(processes.ProcessSpec):
+class WorkChainSpec(processes.ProcessSpec):
     def __init__(self):
-        super(_WorkChainSpec, self).__init__()
+        super(WorkChainSpec, self).__init__()
         self._outline = None
 
     def get_description(self):
-        description = super(_WorkChainSpec, self).get_description()
+        description = super(WorkChainSpec, self).get_description()
 
         if self._outline:
             description['outline'] = self._outline.get_description()
@@ -86,7 +86,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     A WorkChain is a series of instructions carried out with the ability to save
     state in between.
     """
-    _spec_type = _WorkChainSpec
+    _spec_type = WorkChainSpec
     _STEPPER_STATE = 'stepper_state'
     _CONTEXT = 'CONTEXT'
 

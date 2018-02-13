@@ -245,7 +245,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         """
         Test some malformed outlines
         """
-        spec = _WorkChainSpec()
+        spec = WorkChainSpec()
 
         with self.assertRaises(TypeError):
             spec.outline(5)
