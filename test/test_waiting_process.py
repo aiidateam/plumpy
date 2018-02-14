@@ -30,8 +30,8 @@ class TestWaitingProcess(utils.TestCaseWithLoop):
         p = WaitForSignalProcess()
         p.start()
         p.execute(True)
-        p.cancel()
-        self.assertTrue(p.cancelled())
+        p.kill()
+        self.assertTrue(p.killed())
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)

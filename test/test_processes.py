@@ -24,17 +24,17 @@ class ForgetToCallParent(Process):
         if self.forget_on != 'run':
             super(ForgetToCallParent, self).on_run()
 
-    def on_fail(self, exception):
-        if self.forget_on != 'fail':
-            super(ForgetToCallParent, self).on_fail(exception)
+    def on_except(self, exception):
+        if self.forget_on != 'except':
+            super(ForgetToCallParent, self).on_except(exception)
 
     def on_finish(self, result):
         if self.forget_on != 'finish':
             super(ForgetToCallParent, self).on_finish(result)
 
-    def on_cancel(self, msg):
-        if self.forget_on != 'cancel':
-            super(ForgetToCallParent, self).on_cancel(msg)
+    def on_kill(self, msg):
+        if self.forget_on != 'kill':
+            super(ForgetToCallParent, self).on_kill(msg)
 
 
 class TestProcess(utils.TestCaseWithLoop):
@@ -140,10 +140,10 @@ class TestProcess(utils.TestCaseWithLoop):
                 proc = ForgetToCallParent(event)
                 proc.execute()
 
-    def test_forget_to_call_parent_cancel(self):
+    def test_forget_to_call_parent_kill(self):
         with self.assertRaises(AssertionError):
-            proc = ForgetToCallParent('cancel')
-            proc.cancel()
+            proc = ForgetToCallParent('kill')
+            proc.kill()
             proc.execute()
 
     def test_pid(self):
@@ -164,7 +164,7 @@ class TestProcess(utils.TestCaseWithLoop):
         proc.start()
         with self.assertRaises(RuntimeError):
             proc.execute()
-        self.assertEqual(proc.state, ProcessState.FAILED)
+        self.assertEqual(proc.state, ProcessState.EXCEPTED)
 
     def test_get_description(self):
         class ProcWithoutSpec(Process):
@@ -205,13 +205,13 @@ class TestProcess(utils.TestCaseWithLoop):
         proc = LoggerTester()
         proc.execute()
 
-    def test_cancel(self):
+    def test_kill(self):
         proc = test_utils.DummyProcess(loop=self.loop)
 
-        proc.cancel('Farewell!')
-        self.assertTrue(proc.cancelled())
-        self.assertEqual(proc.cancelled_msg(), 'Farewell!')
-        self.assertEqual(proc.state, ProcessState.CANCELLED)
+        proc.kill('Farewell!')
+        self.assertTrue(proc.killed())
+        self.assertEqual(proc.killed_msg(), 'Farewell!')
+        self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_wait_continue(self):
         proc = test_utils.WaitForSignalProcess()
@@ -264,20 +264,20 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertTrue(proc.done())
         self.assertEqual(proc.state, ProcessState.FINISHED)
 
-    def test_cancel_in_run(self):
-        class CancelProcess(Process):
-            after_cancel = False
+    def test_kill_in_run(self):
+        class KillProcess(Process):
+            after_kill = False
 
             def _run(self, **kwargs):
-                self.cancel()
-                self.after_cancel = True
+                self.kill()
+                self.after_kill = True
 
-        proc = CancelProcess()
-        with self.assertRaises(plumpy.CancelledError):
+        proc = KillProcess()
+        with self.assertRaises(plumpy.KilledError):
             proc.execute()
 
-        self.assertFalse(proc.after_cancel)
-        self.assertEqual(proc.state, ProcessState.CANCELLED)
+        self.assertFalse(proc.after_kill)
+        self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_run_multiple(self):
         # Create and play some processes
@@ -429,10 +429,10 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         # Check results match
         self.assertEqual(result, result2)
 
-    def test_cancelled(self):
+    def test_killed(self):
         proc = test_utils.DummyProcess()
-        proc.cancel()
-        self.assertEqual(proc.state, plumpy.ProcessState.CANCELLED)
+        proc.kill()
+        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
         self._check_round_trip(proc)
 
     def _check_round_trip(self, proc1):
@@ -544,18 +544,18 @@ class TestProcessEvents(utils.TestCaseWithLoop):
         utils.run_loop_with_timeout(self.loop)
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
-    def test_cancelled(self):
-        events_tester = test_utils.ProcessListenerTester(self.proc, ('cancelled',), self.loop.stop)
-        self.proc.cancel()
+    def test_killed(self):
+        events_tester = test_utils.ProcessListenerTester(self.proc, ('killed',), self.loop.stop)
+        self.proc.kill()
         utils.run_loop_with_timeout(self.loop)
 
         # Do the checks
-        self.assertTrue(self.proc.cancelled())
+        self.assertTrue(self.proc.killed())
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
-    def test_failed(self):
+    def test_excepted(self):
         proc = test_utils.ExceptionProcess()
-        events_tester = test_utils.ProcessListenerTester(proc, ('failed', 'running', 'output_emitted',), self.loop.stop)
+        events_tester = test_utils.ProcessListenerTester(proc, ('excepted', 'running', 'output_emitted',), self.loop.stop)
         with self.assertRaises(RuntimeError):
             proc.execute()
 

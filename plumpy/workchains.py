@@ -73,7 +73,7 @@ class Waiting(processes.Waiting):
         try:
             self.process.ctx[key] = awaitable.result()
         except Exception:
-            self.transition_to(processes.ProcessState.FAILED, *sys.exc_info()[1:])
+            self.transition_to(processes.ProcessState.EXCEPTED, *sys.exc_info()[1:])
         else:
             if not self._awaiting:
                 self.transition_to(processes.ProcessState.RUNNING, self.done_callback)
