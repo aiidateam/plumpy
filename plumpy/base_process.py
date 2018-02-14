@@ -162,6 +162,9 @@ class Created(State):
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
 
     def start(self):
+        # Make sure it's not paused
+        self.process.play()
+        # Now start
         self.transition_to(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
         return True
 

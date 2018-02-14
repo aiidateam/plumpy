@@ -7,7 +7,7 @@ from . import futures
 __all__ = ['ProcessReceiver', 'PAUSE_MSG', 'PLAY_MSG', 'CANCEL_MSG', 'STATUS_MSG',
            'ProcessAction', 'PlayAction', 'PauseAction', 'CancelAction', 'StatusAction',
            'LaunchProcessAction', 'ContinueProcessAction', 'ExecuteProcessAction',
-           'ProcessLauncher']
+           'ProcessLauncher', 'create_continue_body', 'create_launch_body']
 
 INTENT_KEY = 'intent'
 
@@ -108,7 +108,6 @@ CONTINUE_TASK = 'continue'
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, play=True,
                        persist=False, nowait=True, class_loader=None):
-
     if class_loader is None:
         class_loader = internal_class_loader.get_class_loader()
 
@@ -222,17 +221,10 @@ class ProcessLauncher(object):
     }
     """
 
-    def __init__(self,
-                 loop=None,
-                 persister=None,
-                 unbunble_args=(),
-                 unbunble_kwargs=None,
-                 class_loader=None
-                 ):
+    def __init__(self, loop=None, persister=None, load_context=None, class_loader=None):
         self._loop = loop
         self._persister = persister
-        self._unbundle_args = unbunble_args
-        self._unbundle_kwargs = unbunble_kwargs if unbunble_kwargs is not None else {}
+        self._load_context = load_context
 
         if class_loader is not None:
             self._class_loader = class_loader
@@ -276,8 +268,11 @@ class ProcessLauncher(object):
 
         tag = task.get(TAG_KEY, None)
         saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
-        proc = saved_state.unbundle(*self._unbundle_args, **self._unbundle_kwargs)
+        proc = saved_state.unbundle(self._load_context)
+
+        # Call start in case it's not started yet
         proc.start()
+
         if task[NOWAIT_KEY]:
             return True
         else:

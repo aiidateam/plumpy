@@ -305,6 +305,14 @@ class TestProcess(utils.TestCaseWithLoop):
         with self.assertRaises(RuntimeError):
             proc.execute()
 
+    def test_process_start_if_paused(self):
+        """ Test that starting a paused process unpauses it """
+        process = test_utils.DummyProcess()
+        process.pause()
+        self.assertTrue(process.paused)
+        process.start()
+        self.assertFalse(process.paused)
+
 
 @plumpy.auto_persist('steps_ran')
 class SavePauseProc(Process):

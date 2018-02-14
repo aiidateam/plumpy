@@ -15,7 +15,7 @@ from . import base
 from .base import super_check
 
 __all__ = ['Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable', 'SavableFuture',
-           'LoadContext', 'PersistedCheckpoint']
+           'LoadContext', 'PersistedCheckpoint', 'InMemoryPersister']
 
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
@@ -293,6 +293,42 @@ class PicklePersister(Persister):
         """
         for checkpoint in self.get_process_checkpoints(pid):
             self.delete_checkpoint(checkpoint.pid, checkpoint.tag)
+
+
+class InMemoryPersister(with_metaclass(ABCMeta, object)):
+    """ Mainly to be used in testing/debugging """
+
+    def __init__(self):
+        super(InMemoryPersister, self).__init__()
+        self._checkpoints = {}
+
+    def save_checkpoint(self, process, tag=None):
+        self._checkpoints.setdefault(process.pid, {})[tag] = Bundle(process)
+
+    def load_checkpoint(self, pid, tag=None):
+        return self._checkpoints[pid][tag]
+
+    def get_checkpoints(self):
+        cps = []
+        for pid in self._checkpoints:
+            cps.extend(self.get_process_checkpoints(pid))
+        return cps
+
+    def get_process_checkpoints(self, pid):
+        cps = []
+        for tag, bundle in self._checkpoints[pid]:
+            cps.append(PersistedCheckpoint(tag, bundle))
+        return cps
+
+    def delete_checkpoint(self, pid, tag=None):
+        try:
+            del self._checkpoints[pid][tag]
+        except KeyError:
+            pass
+
+    def delete_process_checkpoints(self, pid):
+        if pid in self._checkpoints:
+            del self._checkpoints[pid]
 
 
 def auto_persist(*members):
