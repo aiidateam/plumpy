@@ -1,5 +1,8 @@
 import plumpy
+from plumpy import test_utils
 import unittest
+
+from . import utils
 
 
 class TestSavable(unittest.TestCase):
@@ -45,3 +48,14 @@ class TestSavable(unittest.TestCase):
         loaded = savable.recreate_from(saved_state1)
         saved_state2 = loaded.save(include_class_name=False)
         self.assertDictEqual(saved_state1, saved_state2)
+
+
+class TestBundle(utils.TestCaseWithLoop):
+    def test_bundle_load_context(self):
+        """ Check that the loop from the load context is used """
+        proc = test_utils.DummyProcess(loop=self.loop)
+        bundle = plumpy.Bundle(proc)
+
+        loop2 = plumpy.new_event_loop()
+        proc2 = bundle.unbundle(plumpy.LoadContext(loop=loop2))
+        self.assertIs(loop2, proc2.loop())

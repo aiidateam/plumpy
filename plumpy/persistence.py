@@ -56,13 +56,14 @@ class Bundle(dict):
         :return: An instance of the Savable
         :rtype: :class:`Savable`
         """
-        load_context = None
         try:
             class_loader_name = Savable.get_custom_meta(self, self.CLASS_LOADER)
         except ValueError:
             pass
         else:
-            load_context = LoadContext(class_loader=utils.load_object(class_loader_name))
+            if load_context is None:
+                load_context = LoadContext()
+            load_context.copyextend(class_loader=utils.load_object(class_loader_name))
 
         return Savable.load(self, load_context)
 
