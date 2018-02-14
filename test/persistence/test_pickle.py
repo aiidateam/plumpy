@@ -3,7 +3,7 @@ import tempfile
 if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
 
-from plumpy.persistence import PersistedCheckpoint, PicklePersister
+import plumpy
 from plumpy.test_utils import ProcessWithCheckpoint
 from test.utils import TestCaseWithLoop
 
@@ -12,17 +12,18 @@ class TestPicklePersister(TestCaseWithLoop):
 
     def test_save_load_roundtrip(self):
         """
-        Test the PicklePersister by taking a dummpy process, saving a checkpoint
+        Test the plumpy.PicklePersister by taking a dummpy process, saving a checkpoint
         and recreating it from the same checkpoint
         """
         process = ProcessWithCheckpoint()
 
         with tempfile.TemporaryDirectory() as directory:
-            persister = PicklePersister(directory)
+            persister = plumpy.PicklePersister(directory)
             persister.save_checkpoint(process)
 
             bundle = persister.load_checkpoint(process.pid)
-            recreated = bundle.unbundle(loop=self.loop)
+            load_context = plumpy.LoadContext(loop=self.loop)
+            recreated = bundle.unbundle(load_context)
 
     def test_get_checkpoints_without_tags(self):
         """
@@ -30,13 +31,13 @@ class TestPicklePersister(TestCaseWithLoop):
         process_a = ProcessWithCheckpoint()
         process_b = ProcessWithCheckpoint()
 
-        checkpoint_a = PersistedCheckpoint(process_a.pid, None)
-        checkpoint_b = PersistedCheckpoint(process_b.pid, None)
+        checkpoint_a = plumpy.PersistedCheckpoint(process_a.pid, None)
+        checkpoint_b = plumpy.PersistedCheckpoint(process_b.pid, None)
 
         checkpoints = [checkpoint_a, checkpoint_b]
 
         with tempfile.TemporaryDirectory() as directory:
-            persister = PicklePersister(directory)
+            persister = plumpy.PicklePersister(directory)
             persister.save_checkpoint(process_a)
             persister.save_checkpoint(process_b)
 
@@ -52,13 +53,13 @@ class TestPicklePersister(TestCaseWithLoop):
         tag_a = 'tag_a'
         tag_b = 'tag_b'
 
-        checkpoint_a = PersistedCheckpoint(process_a.pid, tag_a)
-        checkpoint_b = PersistedCheckpoint(process_b.pid, tag_b)
+        checkpoint_a = plumpy.PersistedCheckpoint(process_a.pid, tag_a)
+        checkpoint_b = plumpy.PersistedCheckpoint(process_b.pid, tag_b)
 
         checkpoints = [checkpoint_a, checkpoint_b]
 
         with tempfile.TemporaryDirectory() as directory:
-            persister = PicklePersister(directory)
+            persister = plumpy.PicklePersister(directory)
             persister.save_checkpoint(process_a, tag=tag_a)
             persister.save_checkpoint(process_b, tag=tag_b)
 
@@ -72,15 +73,15 @@ class TestPicklePersister(TestCaseWithLoop):
         process_a = ProcessWithCheckpoint()
         process_b = ProcessWithCheckpoint()
 
-        checkpoint_a1 = PersistedCheckpoint(process_a.pid, '1')
-        checkpoint_a2 = PersistedCheckpoint(process_a.pid, '2')
-        checkpoint_b1 = PersistedCheckpoint(process_b.pid, '1')
-        checkpoint_b2 = PersistedCheckpoint(process_b.pid, '2')
+        checkpoint_a1 = plumpy.PersistedCheckpoint(process_a.pid, '1')
+        checkpoint_a2 = plumpy.PersistedCheckpoint(process_a.pid, '2')
+        checkpoint_b1 = plumpy.PersistedCheckpoint(process_b.pid, '1')
+        checkpoint_b2 = plumpy.PersistedCheckpoint(process_b.pid, '2')
 
         checkpoints = [checkpoint_a1, checkpoint_a2]
 
         with tempfile.TemporaryDirectory() as directory:
-            persister = PicklePersister(directory)
+            persister = plumpy.PicklePersister(directory)
             persister.save_checkpoint(process_a, tag='1')
             persister.save_checkpoint(process_a, tag='2')
             persister.save_checkpoint(process_b, tag='1')
@@ -96,13 +97,13 @@ class TestPicklePersister(TestCaseWithLoop):
         process_a = ProcessWithCheckpoint()
         process_b = ProcessWithCheckpoint()
 
-        checkpoint_a1 = PersistedCheckpoint(process_a.pid, '1')
-        checkpoint_a2 = PersistedCheckpoint(process_a.pid, '2')
-        checkpoint_b1 = PersistedCheckpoint(process_b.pid, '1')
-        checkpoint_b2 = PersistedCheckpoint(process_b.pid, '2')
+        checkpoint_a1 = plumpy.PersistedCheckpoint(process_a.pid, '1')
+        checkpoint_a2 = plumpy.PersistedCheckpoint(process_a.pid, '2')
+        checkpoint_b1 = plumpy.PersistedCheckpoint(process_b.pid, '1')
+        checkpoint_b2 = plumpy.PersistedCheckpoint(process_b.pid, '2')
 
         with tempfile.TemporaryDirectory() as directory:
-            persister = PicklePersister(directory)
+            persister = plumpy.PicklePersister(directory)
             persister.save_checkpoint(process_a, tag='1')
             persister.save_checkpoint(process_a, tag='2')
             persister.save_checkpoint(process_b, tag='1')
@@ -126,15 +127,15 @@ class TestPicklePersister(TestCaseWithLoop):
         process_a = ProcessWithCheckpoint()
         process_b = ProcessWithCheckpoint()
 
-        checkpoint_a1 = PersistedCheckpoint(process_a.pid, '1')
-        checkpoint_a2 = PersistedCheckpoint(process_a.pid, '2')
-        checkpoint_b1 = PersistedCheckpoint(process_b.pid, '1')
-        checkpoint_b2 = PersistedCheckpoint(process_b.pid, '2')
+        checkpoint_a1 = plumpy.PersistedCheckpoint(process_a.pid, '1')
+        checkpoint_a2 = plumpy.PersistedCheckpoint(process_a.pid, '2')
+        checkpoint_b1 = plumpy.PersistedCheckpoint(process_b.pid, '1')
+        checkpoint_b2 = plumpy.PersistedCheckpoint(process_b.pid, '2')
 
         checkpoints = [checkpoint_a1, checkpoint_a2, checkpoint_b1]
 
         with tempfile.TemporaryDirectory() as directory:
-            persister = PicklePersister(directory)
+            persister = plumpy.PicklePersister(directory)
             persister.save_checkpoint(process_a, tag='1')
             persister.save_checkpoint(process_a, tag='2')
             persister.save_checkpoint(process_b, tag='1')

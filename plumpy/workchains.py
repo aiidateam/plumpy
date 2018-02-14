@@ -239,7 +239,7 @@ class _FunctionCall(_Instruction):
         return _FunctionStepper(workchain, self._fn)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = utils.SimpleNamespace(workchain=workchain, func_spec=self)
+        load_context = persistence.LoadContext(workchain=workchain, func_spec=self)
         return _FunctionStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
@@ -322,7 +322,7 @@ class _Block(_Instruction, collections.Sequence):
         return _BlockStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = utils.SimpleNamespace(workchain=workchain, block_instruction=self)
+        load_context = persistence.LoadContext(workchain=workchain, block_instruction=self)
         return _BlockStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
@@ -452,7 +452,7 @@ class _If(_Instruction, collections.Sequence):
         return _IfStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = utils.SimpleNamespace(workchain=workchain, if_instruction=self)
+        load_context = persistence.LoadContext(workchain=workchain, if_instruction=self)
         return _IfStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
@@ -516,7 +516,7 @@ class _While(_Conditional, _Instruction, collections.Sequence):
         return _WhileStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = utils.SimpleNamespace(workchain=workchain, while_instruction=self)
+        load_context = persistence.LoadContext(workchain=workchain, while_instruction=self)
         return _WhileStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):

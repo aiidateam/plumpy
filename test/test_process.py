@@ -306,6 +306,7 @@ class TestProcess(utils.TestCaseWithLoop):
             proc.execute()
 
 
+@plumpy.auto_persist('steps_ran')
 class SavePauseProc(Process):
     steps_ran = None
 
@@ -413,7 +414,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         result = proc.execute()
 
         # Load from saved state and run again
-        proc = saved_state.unbundle(loop=self.loop)
+        proc = saved_state.unbundle(plumpy.LoadContext(loop=self.loop))
         proc.resume()
         result2 = proc.execute()
 

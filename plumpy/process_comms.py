@@ -3,7 +3,6 @@ import functools
 from . import class_loader as internal_class_loader
 from . import communications
 from . import futures
-from . import utils
 
 __all__ = ['ProcessReceiver', 'PAUSE_MSG', 'PLAY_MSG', 'CANCEL_MSG', 'STATUS_MSG',
            'ProcessAction', 'PlayAction', 'PauseAction', 'CancelAction', 'StatusAction',
@@ -109,9 +108,13 @@ CONTINUE_TASK = 'continue'
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, play=True,
                        persist=False, nowait=True, class_loader=None):
+
+    if class_loader is None:
+        class_loader = internal_class_loader.get_class_loader()
+
     msg_body = {
         TASK_KEY: LAUNCH_TASK,
-        PROCESS_CLASS_KEY: utils.class_name(process_class, class_loader=class_loader),
+        PROCESS_CLASS_KEY: class_loader.class_identifier(process_class),
         PLAY_KEY: play,
         PERSIST_KEY: persist,
         NOWAIT_KEY: nowait,
@@ -234,7 +237,7 @@ class ProcessLauncher(object):
         if class_loader is not None:
             self._class_loader = class_loader
         else:
-            self._class_loader = internal_class_loader.ClassLoader()
+            self._class_loader = internal_class_loader.get_class_loader()
 
     def __call__(self, task):
         """

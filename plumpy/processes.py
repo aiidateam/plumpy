@@ -51,8 +51,8 @@ class Running(base_process.Running):
         if self._run_handle is not None:
             self._run_handle.cancel()
 
-    def load_instance_state(self, saved_state, process):
-        super(Running, self).load_instance_state(saved_state, process)
+    def load_instance_state(self, saved_state, load_context):
+        super(Running, self).load_instance_state(saved_state, load_context)
         if self.in_state:
             self.process.call_soon(self._run)
 
@@ -98,7 +98,7 @@ class Executor(ProcessListener):
             process.remove_process_listener(self)
 
 
-@persistence.auto_persist('_pid', '_outputs', '_CREATION_TIME', '_paused')
+@persistence.auto_persist('_pid', '_outputs', '_CREATION_TIME')
 class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plumpy.
@@ -175,21 +175,20 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         return description
 
     @classmethod
-    def recreate_from(cls, saved_state, *args, **kwargs):
-        """"""
+    def recreate_from(cls, saved_state, load_context=None):
         """
         Recreate a process from a saved state, passing any positional and 
         keyword arguments on to load_instance_state
 
-        :param args: The positional arguments for load_instance_state
-        :param kwargs: The keyword arguments for load_instance_state
+        :param saved_state: The saved state to load from
+        :param load_context: The load context to use
+        :type load_context: :class:`persistence.LoadContext`
         :return: An instance of the object with its state loaded from the save state.
+        :rtype: :class:`Process`
         """
-        obj = cls.__new__(cls)
-        obj.__init__(*args, **kwargs)
-        base.call_with_super_check(obj.load_instance_state, saved_state, None)
-        base.call_with_super_check(obj.init)
-        return obj
+        process = super(Process, cls).recreate_from(saved_state, load_context)
+        base.call_with_super_check(process.init)
+        return process
 
     def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         """
@@ -212,16 +211,17 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         # Input/output
         self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
         self._pid = pid
-        self._logger = logger
-        self._loop = loop if loop is not None else events.get_event_loop()
-        self._communicator = communicator
-
-        self._future = futures.Future()
         self._parsed_inputs = None
         self._outputs = {}
         self._uuid = None
-        self.__event_helper = utils.EventHelper(ProcessListener)
         self._CREATION_TIME = None
+
+        # Runtime variables
+        self._future = futures.Future()
+        self.__event_helper = utils.EventHelper(ProcessListener)
+        self._logger = logger
+        self._loop = loop if loop is not None else events.get_event_loop()
+        self._communicator = communicator
 
         super(Process, self).__init__()
 
@@ -305,7 +305,28 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
     @protected
     def load_instance_state(self, saved_state, load_context):
-        # Set up runtime state
+        # Runtime variables, set initial states
+        self._future = futures.Future()
+        self.__event_helper = utils.EventHelper(ProcessListener)
+        self._logger = None
+        self._loop = None
+        self._communicator = None
+
+        loop = None
+        if 'loop' in load_context:
+            loop = load_context.loop
+        if loop is None:
+            loop = events.get_event_loop()
+        self._loop = loop
+
+        if 'communicator' in load_context:
+            self._communicator = load_context.communicator
+
+        if 'logger' in load_context:
+            self._logger = load_context.logger
+
+        # Need to call this here as things downstream may rely on us having the
+        # runtime variable above
         super(Process, self).load_instance_state(saved_state, load_context)
 
         # Inputs/outputs

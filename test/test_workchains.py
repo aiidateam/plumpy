@@ -139,6 +139,8 @@ class TestContext(unittest.TestCase):
 
 
 class TestWorkchain(utils.TestCaseWithLoop):
+    maxDiff = None
+
     def test_run(self):
         A = 'A'
         B = 'B'

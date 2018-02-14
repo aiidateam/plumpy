@@ -14,13 +14,14 @@ from . import utils
 from . import base
 from .base import super_check
 
-__all__ = ['Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable', 'SavableFuture']
+__all__ = ['Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable', 'SavableFuture',
+           'LoadContext', 'PersistedCheckpoint']
 
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
 
 class Bundle(dict):
-    _class_loader = class_loader.ClassLoader()
+    CLASS_LOADER = 'class_loader'
 
     @classmethod
     def from_dict(cls, *args, **kwargs):
@@ -28,27 +29,42 @@ class Bundle(dict):
         super(Bundle, self).from_dict(*args, **kwargs)
         return self
 
-    def __init__(self, savable, cl=None):
+    def __init__(self, savable, class_loader_=None):
+        """
+        Create a bundle from a savable.  Optionally keep information about the
+        class loader that can be used to load the classes in the bundle.
+
+        :param savable: The savable object to bundle
+        :type savable: :class:`Savable`
+        :param class_loader_: The optional class loader to use
+        :type class_loader_: :class:`class_loader.ClassLoader`
+        """
         super(Bundle, self).__init__()
-        if cl is not None:
-            self.set_class_loader(cl)
-        self['CLASS_NAME'] = utils.class_name(savable, self._class_loader)
-        self.update(savable.save(class_loader_=cl))
 
-    def set_class_loader(self, cl):
-        self._class_loader = cl
+        # If we have a class loader, save it in the bundle
+        if class_loader_ is not None:
+            Savable.set_custom_meta(self, self.CLASS_LOADER, utils.class_name(class_loader_))
 
-    def unbundle(self, *args, **kwargs):
+        self.update(savable.save(class_loader_=class_loader_))
+
+    def unbundle(self, load_context=None):
         """
         This method loads the class of the object and calls its recreate_from
         method passing the positional and keyword arguments.
 
-        :param args: Positional arguments for recreate_from
-        :param kwargs: Keyword arguments for recreate_from
-        :return: An instance of the Persistable
+        :param load_context: The optional load context
+        :return: An instance of the Savable
+        :rtype: :class:`Savable`
         """
-        cls = self._class_loader.load_class(self['CLASS_NAME'])
-        return cls.recreate_from(self, *args, **kwargs)
+        load_context = None
+        try:
+            class_loader_name = Savable.get_custom_meta(self, self.CLASS_LOADER)
+        except ValueError:
+            pass
+        else:
+            load_context = LoadContext(class_loader=utils.load_object(class_loader_name))
+
+        return Savable.load(self, load_context)
 
 
 class Persister(with_metaclass(ABCMeta, object)):
@@ -290,9 +306,35 @@ def auto_persist(*members):
     return wrapped
 
 
+class LoadContext(object):
+    def __init__(self, *args, **kwargs):
+        self._values = dict(*args, **kwargs)
+
+    def __getattr__(self, item):
+        try:
+            return self._values[item]
+        except KeyError:
+            raise AttributeError("item '{}' not found".format(item))
+
+    def __iter__(self):
+        return self._value.__iter__()
+
+    def __contains__(self, item):
+        return self._values.__contains__(item)
+
+    def copyextend(self, **kwargs):
+        """ Add additional information to the context by making a copy with the new values """
+        extended = self._values.copy()
+        extended.update(kwargs)
+        return LoadContext(extended)
+
+
 META = '!!meta'
-META__METHOD = 'm'
-META__SAVABLE = 'S'
+META__CLASS_NAME = 'class_name'
+META__USER = 'user'
+META__TYPES = 'types'
+META__TYPE__METHOD = 'm'
+META__TYPE__SAVABLE = 'S'
 
 
 class Savable(object):
@@ -302,26 +344,38 @@ class Savable(object):
     _persist_configured = False
 
     @staticmethod
+    def _ensure_load_context(load_context):
+        """ Prepare a load context """
+        if load_context is None:
+            load_context = LoadContext()
+        elif not isinstance(load_context, LoadContext):
+            raise TypeError("load_context must be of type LoadContext")
+
+        if 'class_loader' not in load_context:
+            load_context = load_context.copyextend(class_loader=class_loader.get_class_loader())
+
+        return load_context
+
+    @staticmethod
     def load(saved_state, load_context=None):
         """
-        Load a `Savable` from a saved instance state
+        Load a `Savable` from a saved instance state.  The load context is a way of passing
+        runtime data to the object being loaded.
 
-        :param saved_state: The saved states
+        :param saved_state: The saved state
         :param load_context: Additional runtime state that can be passed into when loading.
             The type and content (if any) is completely user defined
         :return: The loaded Savable instance
         :rtype: :class:`Savable`
         """
-        return Savable.load_with_classloader(saved_state, class_loader.ClassLoader(), load_context)
-
-    @staticmethod
-    def load_with_classloader(saved_state, class_loader_, *args, **kwargs):
+        load_context = Savable._ensure_load_context(load_context)
         try:
-            load_cls = class_loader_.load_class(saved_state[Savable.CLASS_NAME])
+            class_name = Savable._get_class_name(saved_state)
+            load_cls = load_context.class_loader.load_class(class_name)
         except KeyError:
             raise ValueError("Class name not found in saved state")
         else:
-            return load_cls.recreate_from(saved_state, *args, **kwargs)
+            return load_cls.recreate_from(saved_state, load_context)
 
     @classmethod
     def auto_persist(cls, *members):
@@ -335,12 +389,23 @@ class Savable(object):
 
     @classmethod
     def recreate_from(cls, saved_state, load_context=None):
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+        :type load_context: :class:`LoadContext`
+        :return: The recreated instance
+        :rtype: :class:`Savable`
+        """
+        load_context = Savable._ensure_load_context(load_context)
         obj = cls.__new__(cls)
         base.call_with_super_check(obj.load_instance_state, saved_state, load_context)
         return obj
 
     @super_check
     def load_instance_state(self, saved_state, load_context):
+        self._ensure_persist_configured()
         if self._auto_persist is not None:
             self.load_members(self._auto_persist, saved_state, load_context)
 
@@ -355,27 +420,25 @@ class Savable(object):
             class_loader_ = class_loader.ClassLoader()
         out_state = {}
         if include_class_name:
-            out_state[self.CLASS_NAME] = utils.class_name(self, class_loader=class_loader_)
+            Savable._set_class_name(out_state, class_loader_.class_identifier(self))
+
         base.call_with_super_check(self.save_instance_state, out_state)
         return out_state
 
     def save_members(self, members, out_state):
-        meta = {}
         for member in members:
             value = getattr(self, member)
             if inspect.ismethod(value):
                 if value.__self__ is not self:
                     raise TypeError("Cannot persist methods of other classes")
-                meta[member] = META__METHOD
+                Savable._set_meta_type(out_state, member, META__TYPE__METHOD)
                 value = value.__name__
             elif isinstance(value, Savable):
-                meta[member] = META__SAVABLE
+                Savable._set_meta_type(out_state, member, META__TYPE__SAVABLE)
                 value = value.save()
             else:
                 value = copy.deepcopy(value)
             out_state[member] = value
-        if meta:
-            out_state.getdefault(META, {}).update(meta)
 
     def load_members(self, members, saved_state, load_context=None):
         for member in members:
@@ -386,15 +449,58 @@ class Savable(object):
             self.persist()
             self._persist_configured = True
 
+    # region Metadata getter/setters
+
+    @staticmethod
+    def set_custom_meta(out_state, name, value):
+        user_dict = Savable._get_create_meta(out_state).setdefault(META__USER, {})
+        user_dict[name] = value
+
+    @staticmethod
+    def get_custom_meta(saved_state, name):
+        try:
+            return Savable._get_create_meta(saved_state)[name]
+        except KeyError:
+            raise ValueError("Unknown meta key '{}'".format(name))
+
+    @staticmethod
+    def _get_create_meta(out_state):
+        return out_state.setdefault(META, {})
+
+    @staticmethod
+    def _set_class_name(out_state, name):
+        Savable._get_create_meta(out_state)[META__CLASS_NAME] = name
+
+    @staticmethod
+    def _get_class_name(saved_state):
+        return Savable._get_create_meta(saved_state)[META__CLASS_NAME]
+
+    @staticmethod
+    def _set_meta_type(out_state, name, type_spec):
+        type_dict = Savable._get_create_meta(out_state).setdefault(META__TYPES, {})
+        type_dict[name] = type_spec
+
+    @staticmethod
+    def _get_meta_type(saved_state, name):
+        try:
+            types_dict = saved_state[META]
+            try:
+                return types_dict[name]
+            except KeyError:
+                pass
+        except KeyError:
+            pass
+
+    # endregion
+
     def _get_value(self, saved_state, name, load_context):
         value = saved_state[name]
-        meta = saved_state.get(META, {})
-        if name in meta:
-            typ = meta[name]
-            if typ == META__METHOD:
-                value = getattr(self, value)
-            elif type == META__SAVABLE:
-                value = Savable.load(value, load_context)
+
+        typ = Savable._get_meta_type(saved_state, name)
+        if typ == META__TYPE__METHOD:
+            value = getattr(self, value)
+        elif type == META__TYPE__SAVABLE:
+            value = Savable.load(value, load_context)
 
         return value
 
@@ -406,6 +512,7 @@ class SavableFuture(futures.Future, Savable):
 
     .. note: This does not save any assigned done callbacks.
     """
+
     def save_instance_state(self, out_state):
         super(SavableFuture, self).save_instance_state(out_state)
 
