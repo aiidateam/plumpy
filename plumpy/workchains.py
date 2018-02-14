@@ -2,8 +2,6 @@
 
 import abc
 import collections
-from enum import Enum
-import functools
 import inspect
 import re
 import sys
