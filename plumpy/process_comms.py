@@ -1,5 +1,6 @@
 import functools
 
+from . import class_loader as internal_class_loader
 from . import communications
 from . import futures
 from . import utils
@@ -107,10 +108,10 @@ CONTINUE_TASK = 'continue'
 
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, play=True,
-                       persist=False, nowait=True):
+                       persist=False, nowait=True, class_loader=None):
     msg_body = {
         TASK_KEY: LAUNCH_TASK,
-        PROCESS_CLASS_KEY: utils.class_name(process_class),
+        PROCESS_CLASS_KEY: utils.class_name(process_class, class_loader=class_loader),
         PLAY_KEY: play,
         PERSIST_KEY: persist,
         NOWAIT_KEY: nowait,
@@ -165,10 +166,10 @@ class ContinueProcessAction(TaskAction):
 
 
 class ExecuteProcessAction(communications.Action):
-    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False):
+    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False, class_loader=None):
         super(ExecuteProcessAction, self).__init__()
         self._launch_action = LaunchProcessAction(
-            process_class, init_args, init_kwargs, play=False, persist=True)
+            process_class, init_args, init_kwargs, play=False, persist=True, class_loader=class_loader)
         self._nowait = nowait
 
     def get_launch_future(self):
@@ -223,11 +224,17 @@ class ProcessLauncher(object):
                  persister=None,
                  unbunble_args=(),
                  unbunble_kwargs=None,
+                 class_loader=None
                  ):
         self._loop = loop
         self._persister = persister
         self._unbundle_args = unbunble_args
         self._unbundle_kwargs = unbunble_kwargs if unbunble_kwargs is not None else {}
+
+        if class_loader is not None:
+            self._class_loader = class_loader
+        else:
+            self._class_loader = internal_class_loader.ClassLoader()
 
     def __call__(self, task):
         """
@@ -246,7 +253,7 @@ class ProcessLauncher(object):
         if task[PERSIST_KEY] and not self._persister:
             raise communications.TaskRejected("Cannot persist process, no persister")
 
-        proc_class = utils.load_object(task[PROCESS_CLASS_KEY])
+        proc_class = self._class_loader.load_class(task[PROCESS_CLASS_KEY])
         args = task.get(ARGS_KEY, ())
         kwargs = task.get(KWARGS_KEY, {})
         proc = proc_class(*args, **kwargs)
