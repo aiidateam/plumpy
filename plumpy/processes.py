@@ -591,7 +591,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
         for name, port in self.spec().outputs.items():
-            valid, msg = port.validate(self._outputs.get(name, None))
+            valid, msg = port.validate(self._outputs.get(name, ports.UNSPECIFIED))
             if not valid:
                 raise RuntimeError("Process {} failed because {}".format(self.get_name(), msg))
 

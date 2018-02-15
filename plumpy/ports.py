@@ -8,7 +8,9 @@ from future.utils import with_metaclass
 from six import string_types
 
 _LOGGER = logging.getLogger(__name__)
-_NULL = ()
+UNSPECIFIED = ()
+
+__all__ = ['UNSPECIFIED', 'ValueSpec']
 
 
 class ValueSpec(with_metaclass(ABCMeta, object)):
@@ -83,7 +85,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         self._validator = validator
 
     def validate(self, value):
-        if value is _NULL:
+        if value is UNSPECIFIED:
             if self._required:
                 return False, "required value was not provided for '{}'". \
                     format(self.name)
@@ -122,12 +124,12 @@ class InputPort(Port):
         as required. Otherwise the input should always be marked explicitly
         to be not required even if a default is specified.
         """
-        if default is _NULL:
+        if default is UNSPECIFIED:
             return required
         else:
             return False
 
-    def __init__(self, name, valid_type=None, help=None, default=_NULL, required=True, validator=None):
+    def __init__(self, name, valid_type=None, help=None, default=UNSPECIFIED, required=True, validator=None):
         super(InputPort, self).__init__(
             name, valid_type=valid_type, help=help, required=InputPort.required_override(required, default),
             validator=validator)
@@ -136,7 +138,7 @@ class InputPort(Port):
             _LOGGER.info("the required attribute for the input port '{}' was overridden "
                          "because a default was specified".format(name))
 
-        if default is not _NULL:
+        if default is not UNSPECIFIED:
             default_valid, msg = self.validate(default)
             if not default_valid:
                 raise ValueError("Invalid default value: {}".format(msg))
@@ -144,7 +146,7 @@ class InputPort(Port):
         self._default = default
 
     def has_default(self):
-        return self._default is not _NULL
+        return self._default is not UNSPECIFIED
 
     @property
     def default(self):
@@ -183,7 +185,8 @@ class PortNamespace(collections.MutableMapping, Port):
     """
     NAMESPACE_SEPARATOR = '.'
 
-    def __init__(self, name=None, help=None, required=True, validator=None, valid_type=None, default=_NULL, dynamic=False):
+    def __init__(self, name=None, help=None, required=True, validator=None, valid_type=None, default=UNSPECIFIED,
+                 dynamic=False):
         super(PortNamespace, self).__init__(
             name=name, help=help, required=required, validator=validator, valid_type=valid_type
         )
@@ -216,7 +219,7 @@ class PortNamespace(collections.MutableMapping, Port):
         return self._ports
 
     def has_default(self):
-        return self._default is not _NULL
+        return self._default is not UNSPECIFIED
 
     @property
     def default(self):
@@ -416,7 +419,7 @@ class PortNamespace(collections.MutableMapping, Port):
         is_valid, message = True, None
 
         for name, port in self._ports.items():
-            is_valid, message = port.validate(port_values.pop(name, _NULL))
+            is_valid, message = port.validate(port_values.pop(name, UNSPECIFIED))
             if not is_valid:
                 return is_valid, message
 
@@ -435,7 +438,7 @@ class PortNamespace(collections.MutableMapping, Port):
         is_valid, message = True, None
 
         if port_values and not self.dynamic:
-           return False, 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
+            return False, 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
 
         if self._valid_type is not None:
             valid_type = self._valid_type
