@@ -75,32 +75,32 @@ class TestProcess(unittest.TestCase):
         self.assertDictEqual(saved_state, saved_state2)
         self._attributes_match(created1, created2)
 
-    def test_fail(self):
-        class FailProc(SimpleProc):
+    def test_except(self):
+        class ExceptingProc(SimpleProc):
             def run(self):
                 raise RuntimeError("You're on yer own pal")
 
-        p = FailProc()
+        p = ExceptingProc()
         with self.assertRaises(RuntimeError):
             p.do_run()
         self.assertIsNotNone(p.exception())
 
-    def test_immediate_cancel(self):
-        """ Check that if a process is cancelled from within it's method
+    def test_immediate_kill(self):
+        """ Check that if a process is killed from within it's method
          then it is actioned immediately"""
 
         class Proc(ProcessStateMachine):
-            after_cancel = False
+            after_kill = False
 
             def run(self):
-                self.cancel("Cancel immediately")
-                self.after_cancel = True
+                self.kill("Kill immediately")
+                self.after_kill = True
 
         proc = Proc()
-        with self.assertRaises(base_process.CancelledError):
+        with self.assertRaises(base_process.KilledError):
             execute(proc)
-        self.assertFalse(proc.after_cancel)
-        self.assertEqual(proc.state, ProcessState.CANCELLED)
+        self.assertFalse(proc.after_kill)
+        self.assertEqual(proc.state, ProcessState.KILLED)
 
     def _attributes_match(self, a, b):
         self.assertDictEqual(a.__dict__, b.__dict__)

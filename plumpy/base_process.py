@@ -23,10 +23,9 @@ from .persistence import auto_persist
 from . import utils
 
 __all__ = ['ProcessStateMachine', 'ProcessState',
-           'Created', 'Running', 'Waiting', 'Finished', 'Failed',
-           'Cancelled',
+           'Created', 'Running', 'Waiting', 'Finished', 'Excepted', 'Killed',
            # Commands
-           'Cancel', 'Stop', 'Wait', 'Continue']
+           'Kill', 'Stop', 'Wait', 'Continue']
 
 
 class __NULL(object):
@@ -37,8 +36,8 @@ class __NULL(object):
 NULL = __NULL()
 
 
-class CancelledError(BaseException):
-    """The process was cancelled."""
+class KilledError(BaseException):
+    """The process was killed."""
 
 
 # region Commands
@@ -49,7 +48,7 @@ class Command(persistence.Savable):
 
 
 @auto_persist('msg')
-class Cancel(Command):
+class Kill(Command):
     def __init__(self, msg=None):
         self.msg = msg
 
@@ -107,8 +106,8 @@ class ProcessState(Enum):
     RUNNING = 'running'
     WAITING = 'waiting'
     FINISHED = 'finished'
-    FAILED = 'failed'
-    CANCELLED = 'cancelled'
+    EXCEPTED = 'excepted'
+    KILLED = 'killed'
 
 
 @auto_persist('in_state')
@@ -136,8 +135,8 @@ class State(state_machine.State, persistence.Savable):
     def play(self):
         return True
 
-    def cancel(self, msg=None):
-        self.transition_to(ProcessState.CANCELLED, msg)
+    def kill(self, msg=None):
+        self.transition_to(ProcessState.KILLED, msg)
         return True
 
 
@@ -145,8 +144,8 @@ class State(state_machine.State, persistence.Savable):
 class Created(State):
     LABEL = ProcessState.CREATED
     ALLOWED = {ProcessState.RUNNING,
-               ProcessState.CANCELLED,
-               ProcessState.FAILED}
+               ProcessState.KILLED,
+               ProcessState.EXCEPTED}
 
     RUN_FN = 'run_fn'
 
@@ -173,7 +172,7 @@ class Created(State):
         return True
 
 
-class CancelInterruption(Exception):
+class KillInterruption(Exception):
     pass
 
 
@@ -183,8 +182,8 @@ class Running(State):
     ALLOWED = {ProcessState.RUNNING,
                ProcessState.WAITING,
                ProcessState.FINISHED,
-               ProcessState.CANCELLED,
-               ProcessState.FAILED}
+               ProcessState.KILLED,
+               ProcessState.EXCEPTED}
 
     RUN_FN = 'run_fn'
     COMMAND = 'command'
@@ -212,11 +211,11 @@ class Running(State):
         if self.COMMAND in saved_state:
             self._command = persistence.Savable.load(saved_state[self.COMMAND], load_context)
 
-    def cancel(self, message=None):
+    def kill(self, message=None):
         if self._running:
-            raise CancelInterruption(message)
+            raise KillInterruption(message)
         else:
-            return super(Running, self).cancel(message)
+            return super(Running, self).kill(message)
 
     def pause(self):
         if self._running:
@@ -243,10 +242,10 @@ class Running(State):
                     result = self.run_fn(*self.args, **self.kwargs)
                 finally:
                     self._running = False
-            except CancelInterruption as e:
-                command = Cancel(str(e))
+            except KillInterruption as e:
+                command = Kill(str(e))
             except BaseException:
-                self.transition_to(ProcessState.FAILED, *sys.exc_info()[1:])
+                self.transition_to(ProcessState.EXCEPTED, *sys.exc_info()[1:])
                 return
             else:
                 if not isinstance(result, Command):
@@ -262,8 +261,8 @@ class Running(State):
         self._action_command(command)
 
     def _action_command(self, command):
-        if isinstance(command, Cancel):
-            self.process.cancel(command.msg)
+        if isinstance(command, Kill):
+            self.process.kill(command.msg)
         elif isinstance(command, Pause):
             self.pause()
         elif isinstance(command, Stop):
@@ -281,8 +280,8 @@ class Waiting(State):
     LABEL = ProcessState.WAITING
     ALLOWED = {ProcessState.RUNNING,
                ProcessState.WAITING,
-               ProcessState.CANCELLED,
-               ProcessState.FAILED}
+               ProcessState.KILLED,
+               ProcessState.EXCEPTED}
 
     DONE_CALLBACK = 'DONE_CALLBACK'
 
@@ -317,8 +316,8 @@ class Waiting(State):
         return True
 
 
-class Failed(State):
-    LABEL = ProcessState.FAILED
+class Excepted(State):
+    LABEL = ProcessState.EXCEPTED
 
     EXC_VALUE = 'ex_value'
     TRACEBACK = 'traceback'
@@ -329,24 +328,24 @@ class Failed(State):
         :param exception: The exception instance
         :param trace_back: An optional exception traceback
         """
-        super(Failed, self).__init__(process)
+        super(Excepted, self).__init__(process)
         self.exception = exception
         self.traceback = trace_back
 
     def __str__(self):
         return "{} ({})".format(
-            super(Failed, self).__str__(),
+            super(Excepted, self).__str__(),
             traceback.format_exception_only(type(self.exception), self.exception)[0]
         )
 
     def save_instance_state(self, out_state):
-        super(Failed, self).save_instance_state(out_state)
+        super(Excepted, self).save_instance_state(out_state)
         out_state[self.EXC_VALUE] = yaml.dump(self.exception)
         if self.traceback is not None:
             out_state[self.TRACEBACK] = "".join(traceback.format_tb(self.traceback))
 
     def load_instance_state(self, saved_state, load_context):
-        super(Failed, self).load_instance_state(saved_state, load_context)
+        super(Excepted, self).load_instance_state(saved_state, load_context)
         self.exception = yaml.load(saved_state[self.EXC_VALUE])
         if _HAS_TBLIB:
             try:
@@ -375,16 +374,16 @@ class Finished(State):
 
 
 @auto_persist('msg')
-class Cancelled(State):
-    LABEL = ProcessState.CANCELLED
+class Killed(State):
+    LABEL = ProcessState.KILLED
 
     def __init__(self, process, msg):
         """
         :param process: The associated process
-        :param msg: Optional cancellation message
+        :param msg: Optional kill message
         :type msg: str
         """
-        super(Cancelled, self).__init__(process)
+        super(Killed, self).__init__(process)
         self.msg = msg
 
 
@@ -410,8 +409,8 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
                   ----
 
 
-      * -- FAILED (o)
-      * -- CANCELLED (o)
+      * -- EXCEPTED (o)
+      * -- KILLED (o)
 
       * = any non terminal state
     """
@@ -432,8 +431,8 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             ProcessState.RUNNING: Running,
             ProcessState.WAITING: Waiting,
             ProcessState.FINISHED: Finished,
-            ProcessState.FAILED: Failed,
-            ProcessState.CANCELLED: Cancelled
+            ProcessState.EXCEPTED: Excepted,
+            ProcessState.KILLED: Killed
         }
 
     def __init__(self):
@@ -464,24 +463,24 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
     def create_initial_state(self):
         return self.get_state_class(ProcessState.CREATED)(self, self.run)
 
-    def cancelled(self):
-        return self.state == ProcessState.CANCELLED
+    def killed(self):
+        return self.state == ProcessState.KILLED
 
-    def cancelled_msg(self):
-        if isinstance(self._state, Cancelled):
+    def killed_msg(self):
+        if isinstance(self._state, Killed):
             return self._state.msg
         else:
-            raise InvalidStateError("Has not been cancelled")
+            raise InvalidStateError("Has not been killed")
 
     def exception(self):
-        if isinstance(self._state, Failed):
+        if isinstance(self._state, Excepted):
             return self._state.exception
         else:
             return None
 
     def done(self):
         """
-        Return True if the call was successfully cancelled or finished running.
+        Return True if the call was successfully killed or finished running.
         :rtype: bool
         """
         return self._state.is_terminal()
@@ -504,10 +503,10 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             call_with_super_check(self.on_wait, state.data)
         elif state_label == ProcessState.FINISHED:
             call_with_super_check(self.on_finish, state.result)
-        elif state_label == ProcessState.CANCELLED:
-            call_with_super_check(self.on_cancel, state.msg)
-        elif state_label == ProcessState.FAILED:
-            call_with_super_check(self.on_fail, state.get_exc_info())
+        elif state_label == ProcessState.KILLED:
+            call_with_super_check(self.on_kill, state.msg)
+        elif state_label == ProcessState.EXCEPTED:
+            call_with_super_check(self.on_except, state.get_exc_info())
 
     def on_exiting(self):
         super(ProcessStateMachine, self).on_exiting()
@@ -518,12 +517,12 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         elif state == ProcessState.RUNNING:
             call_with_super_check(self.on_exit_running)
 
-    def transition_failed(self, initial_state, final_state, exception, trace):
+    def transition_excepted(self, initial_state, final_state, exception, trace):
         # If we are creating, then reraise instead of failing.
         if final_state == ProcessState.CREATED:
             raise_(type(exception), exception, trace)
         else:
-            self.transition_to(ProcessState.FAILED, exception, trace)
+            self.transition_to(ProcessState.EXCEPTED, exception, trace)
 
     @super_check
     def on_create(self):
@@ -558,11 +557,11 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         pass
 
     @super_check
-    def on_fail(self, exc_info):
+    def on_except(self, exc_info):
         pass
 
     @super_check
-    def on_cancel(self, sg):
+    def on_kill(self, sg):
         pass
 
     # endregion
@@ -579,22 +578,22 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
     def result(self):
         """
         Get the result from the process if it is finished.
-        If the process was cancelled then a CancelledError will be raise.
-        If the process has failed then the failing exception will be raised.
+        If the process was killed then a KilledError will be raise.
+        If the process has excepted then the failing exception will be raised.
         If in any other state this will raise an InvalidStateError.
         :return: The result of the process
         """
         if isinstance(self._state, Finished):
             return self._state.result
-        elif isinstance(self._state, Cancelled):
-            raise CancelledError()
-        elif isinstance(self._state, Failed):
+        elif isinstance(self._state, Killed):
+            raise KilledError()
+        elif isinstance(self._state, Excepted):
             raise self._state.exception
         else:
             raise InvalidStateError
 
     # region commands
-    @event(to_states=(Running, Waiting, Failed))
+    @event(to_states=(Running, Waiting, Excepted))
     def start(self):
         """
         Start the process if in the CREATED state
@@ -638,7 +637,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         """
         if not self._paused:
             if self._pausing:
-                self._pausing.cancel()
+                self._pausing.kill()
             return True
 
         if self._state.play():
@@ -646,30 +645,30 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
 
         return not self._paused
 
-    @event(from_states=(Running, Waiting), to_states=(Running, Failed))
+    @event(from_states=(Running, Waiting), to_states=(Running, Excepted))
     def resume(self, *args):
         """
         Start running the process again
         """
         return self._state.resume(*args)
 
-    @event(to_states=Failed)
+    @event(to_states=Excepted)
     def fail(self, exception, trace_back=None):
         """
         Fail the process in response to an exception
         :param exception: The exception that caused the failure
         :param trace_back: Optional exception traceback
         """
-        self.transition_to(ProcessState.FAILED, exception, trace_back)
+        self.transition_to(ProcessState.EXCEPTED, exception, trace_back)
 
-    @event(to_states=(Cancelled, Failed))
-    def cancel(self, msg=None):
+    @event(to_states=(Killed, Excepted))
+    def kill(self, msg=None):
         """
-        Cancel the process
-        :param msg: An optional cancellation message
+        Kill the process
+        :param msg: An optional kill message
         :type msg: str
         """
-        return self._state.cancel(msg)
+        return self._state.kill(msg)
 
         # endregion
 
