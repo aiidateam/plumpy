@@ -233,12 +233,12 @@ class ProcessListenerTester(plumpy.ProcessListener):
         self.called.add('finished')
         self._check_done()
 
-    def on_process_failed(self, process, exc_info):
-        self.called.add('failed')
+    def on_process_excepted(self, process, exc_info):
+        self.called.add('excepted')
         self._check_done()
 
-    def on_process_cancelled(self, process, msg):
-        self.called.add('cancelled')
+    def on_process_killed(self, process, msg):
+        self.called.add('killed')
         self._check_done()
 
     def _check_done(self):
@@ -295,12 +295,12 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
         self._future.set_result(True)
 
     @utils.override
-    def on_process_failed(self, process, exc_info):
+    def on_process_excepted(self, process, exc_info):
         self._save(process)
         self._future.set_result(True)
 
     @utils.override
-    def on_process_cancelled(self, process, msg):
+    def on_process_killed(self, process, msg):
         self._save(process)
         self._future.set_result(True)
 

@@ -4,8 +4,8 @@ from . import class_loader as internal_class_loader
 from . import communications
 from . import futures
 
-__all__ = ['ProcessReceiver', 'PAUSE_MSG', 'PLAY_MSG', 'CANCEL_MSG', 'STATUS_MSG',
-           'ProcessAction', 'PlayAction', 'PauseAction', 'CancelAction', 'StatusAction',
+__all__ = ['ProcessReceiver', 'PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
+           'ProcessAction', 'PlayAction', 'PauseAction', 'KillAction', 'StatusAction',
            'LaunchProcessAction', 'ContinueProcessAction', 'ExecuteProcessAction',
            'ProcessLauncher', 'create_continue_body', 'create_launch_body']
 
@@ -15,13 +15,13 @@ INTENT_KEY = 'intent'
 class Intent(object):
     PLAY = 'play'
     PAUSE = 'pause'
-    CANCEL = 'cancel'
+    KILL = 'kill'
     STATUS = 'status'
 
 
 PAUSE_MSG = {INTENT_KEY: Intent.PAUSE}
 PLAY_MSG = {INTENT_KEY: Intent.PLAY}
-CANCEL_MSG = {INTENT_KEY: Intent.CANCEL}
+KILL_MSG = {INTENT_KEY: Intent.KILL}
 STATUS_MSG = {INTENT_KEY: Intent.STATUS}
 
 
@@ -43,8 +43,8 @@ class ProcessReceiver(object):
             return self._process.play()
         elif intent == Intent.PAUSE:
             return self._process.pause()
-        elif intent == Intent.CANCEL:
-            return self._process.cancel(msg=msg.get('msg', None))
+        elif intent == Intent.KILL:
+            return self._process.kill(msg=msg.get('msg', None))
         elif intent == Intent.STATUS:
             status_info = {}
             self._process.get_status_info(status_info)
@@ -85,9 +85,9 @@ class StatusAction(ProcessAction):
         super(StatusAction, self).__init__(pid, STATUS_MSG)
 
 
-class CancelAction(ProcessAction):
+class KillAction(ProcessAction):
     def __init__(self, pid):
-        super(CancelAction, self).__init__(pid, CANCEL_MSG)
+        super(KillAction, self).__init__(pid, KILL_MSG)
 
 
 TASK_KEY = 'task'
@@ -185,7 +185,7 @@ class ExecuteProcessAction(communications.Action):
     def _on_launch_done(self, publisher, launch_future):
         # The result of the launch future is the PID of the process
         if launch_future.cancelled():
-            self.cancel()
+            self.kill()
         elif launch_future.exception() is not None:
             self.set_exception(launch_future.exception())
         else:

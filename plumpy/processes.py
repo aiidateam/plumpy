@@ -14,7 +14,7 @@ from . import events
 from . import futures
 from . import base
 from . import base_process
-from .base_process import Continue, Wait, Cancel, Stop, ProcessState, Waiting
+from .base_process import Continue, Wait, Kill, Stop, ProcessState, Waiting
 from .base import TransitionFailed
 from . import persistence
 from . import process_comms
@@ -23,7 +23,7 @@ from . import stack
 from . import utils
 
 __all__ = ['Process', 'ProcessState', 'ProcessSpec',
-           'Cancel', 'Wait', 'Stop', 'Continue', 'BundleKeys',
+           'Kill', 'Wait', 'Stop', 'Continue', 'BundleKeys',
            'TransitionFailed', 'Executor', 'Waiting']
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class Running(base_process.Running):
         super(Running, self).exit()
         # Make sure the run callback doesn't get actioned if it wasn't already
         if self._run_handle is not None:
-            self._run_handle.cancel()
+            self._run_handle.kill()
 
     def load_instance_state(self, saved_state, load_context):
         super(Running, self).load_instance_state(saved_state, load_context)
@@ -106,20 +106,18 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     A process can be in one of the following states:
 
     * CREATED
-    * STARTED
     * RUNNING
     * WAITING
     * FINISHED
-    * STOPPED
-    * DESTROYED
+    * EXCEPTED
+    * KILLED
 
     as defined in the :class:`ProcessState` enum.
-
 
     ::
 
     When a Process enters a state is always gets a corresponding message, e.g.
-    on entering RUNNING it will receive the on_run message.  These are
+    on entering RUNNING it will receive the on_run message. These are
     always called immediately after that state is entered but before being
     executed.
     """
@@ -419,15 +417,15 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self.future().set_result(self.outputs)
         self._fire_event(ProcessListener.on_process_finished, result)
 
-    def on_fail(self, exc_info):
-        super(Process, self).on_fail(exc_info)
+    def on_except(self, exc_info):
+        super(Process, self).on_except(exc_info)
         self.future().set_exc_info(exc_info)
-        self._fire_event(ProcessListener.on_process_failed, exc_info)
+        self._fire_event(ProcessListener.on_process_excepted, exc_info)
 
-    def on_cancel(self, msg):
-        super(Process, self).on_cancel(msg)
+    def on_kill(self, msg):
+        super(Process, self).on_kill(msg)
         self.future().cancel()
-        self._fire_event(ProcessListener.on_process_cancelled, msg)
+        self._fire_event(ProcessListener.on_process_killed, msg)
 
     # endregion
 
@@ -571,8 +569,8 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         """
         self._loop.add_callback(callback, *args, **kwargs)
 
-    def callback_failed(self, callback, exception, trace):
-        if self.state != ProcessState.FAILED:
+    def callback_excepted(self, callback, exception, trace):
+        if self.state != ProcessState.EXCEPTED:
             self.fail(exception, trace)
 
     # endregion
@@ -600,7 +598,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def _update_future(self):
         if self.state == ProcessState.FINISHED:
             self._future.set_result(self.outputs)
-        elif self.state == ProcessState.CANCELLED:
+        elif self.state == ProcessState.KILLED:
             self._future.cancel()
-        elif self.state == ProcessState.FAILED:
+        elif self.state == ProcessState.EXCEPTED:
             self._future.set_exception(self._state.exception)

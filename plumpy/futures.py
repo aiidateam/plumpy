@@ -1,10 +1,10 @@
 import kiwipy
 from functools import partial
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'KilledError']
 
 InvalidStateError = kiwipy.InvalidStateError
-CancelledError = kiwipy.CancelledError
+KilledError = kiwipy.CancelledError
 
 Future = kiwipy.Future
 
@@ -35,7 +35,7 @@ def chain(a, b):
     """Chain two futures together so that when one completes, so does the other.
 
     The result (success or failure) of ``a`` will be copied to ``b``, unless
-    ``b`` has already been completed or cancelled by the time ``a`` finishes.
+    ``b`` has already been completed or killed by the time ``a`` finishes.
     """
 
     a.add_done_callback(lambda first: copy_future(first, b))
@@ -60,7 +60,7 @@ class _GatheringFuture(Future):
         for i, future in enumerate(self._children):
             future.add_done_callback(partial(self._completed, i))
 
-    def cancel(self):
+    def kill(self):
         for child in self._children:
             child.cancel()
 

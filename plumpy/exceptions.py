@@ -1,7 +1,7 @@
-__all__ = ['CancelledError']
+__all__ = ['KilledError']
 
 
-class CancelledError(Exception):
+class KilledError(Exception):
     pass
 
 
@@ -21,7 +21,7 @@ class LockError(Exception):
     pass
 
 
-class ProcessFailed(Exception):
+class ProcessExcepted(Exception):
     pass
 
 
