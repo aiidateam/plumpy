@@ -83,7 +83,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         self._validator = validator
 
     def validate(self, value):
-        if value is None:
+        if value is _NULL:
             if self._required:
                 return False, "required value was not provided for '{}'". \
                     format(self.name)
@@ -416,7 +416,7 @@ class PortNamespace(collections.MutableMapping, Port):
         is_valid, message = True, None
 
         for name, port in self._ports.items():
-            is_valid, message = port.validate(port_values.pop(name, None))
+            is_valid, message = port.validate(port_values.pop(name, _NULL))
             if not is_valid:
                 return is_valid, message
 
