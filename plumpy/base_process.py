@@ -115,6 +115,10 @@ class ProcessState(Enum):
 class State(state_machine.State, persistence.Savable):
     @property
     def process(self):
+        """
+        :return: The process
+        :rtype: :class:`ProcessStateMachine`
+        """
         return self.state_machine
 
     def load_instance_state(self, saved_state, load_context):
