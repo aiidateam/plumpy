@@ -102,7 +102,7 @@ class ThreadSafeCounter(object):
 
 
 _PENDING = 'PENDING'
-_CANCELLED = 'CANCELLED'
+_KILLED = 'KILLED'
 _FINISHED = 'FINISHED'
 
 

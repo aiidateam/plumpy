@@ -54,12 +54,12 @@ class TestProcessReceiver(TestCaseWithLoop):
 
         self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
 
-    def test_cancel(self):
+    def test_kill(self):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        # Send a cancel message
-        result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.CANCEL_MSG)
+        # Send a kill message
+        result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.KILL_MSG)
 
-        self.assertEqual(proc.state, plumpy.ProcessState.CANCELLED)
+        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
 
     def test_status(self):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
@@ -87,14 +87,14 @@ class TestProcessReceiver(TestCaseWithLoop):
 
         self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
 
-    def test_cancel_action(self):
+    def test_kill_action(self):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        # Send a cancel message
-        action = plumpy.CancelAction(proc.pid)
+        # Send a kill message
+        action = plumpy.KillAction(proc.pid)
         action.execute(self.communicator)
         self.communicator.await(action, timeout=AWAIT_TIMEOUT)
 
-        self.assertEqual(proc.state, plumpy.ProcessState.CANCELLED)
+        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
 
     def test_status(self):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
