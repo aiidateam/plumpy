@@ -357,9 +357,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
             compare_dictionaries(
                 snapshots[-j], saver.snapshots[-j],
                 snapshots[-j], saver.snapshots[-j],
-                exclude={
-                    'CALLBACKS', 'DONE_CALLBACKS', 'SCHEDULED_CALLBACKS', 'PERSISTABLE_ID'
-                })
+                exclude={'exception'})
             j += 1
 
     return True
@@ -391,9 +389,7 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
             compare_value(bundle1, bundle2, vv1, vv2, exclude)
     else:
         if v1 != v2:
-            raise ValueError(
-                "Dict values mismatch for :\n{} != {}".format(v1, v2)
-            )
+            raise ValueError("Dict values mismatch for :\n{} != {}".format(v1, v2))
 
 
 class TestPersister(persistence.Persister):

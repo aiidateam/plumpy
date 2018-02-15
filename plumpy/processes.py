@@ -98,7 +98,7 @@ class Executor(ProcessListener):
             process.remove_process_listener(self)
 
 
-@persistence.auto_persist('_pid', '_outputs', '_CREATION_TIME')
+@persistence.auto_persist('_pid', '_outputs', '_CREATION_TIME', '_future')
 class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plumpy.
@@ -215,7 +215,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self._CREATION_TIME = None
 
         # Runtime variables
-        self._future = futures.Future()
+        self._future = persistence.SavableFuture()
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = logger
         self._loop = loop if loop is not None else events.get_event_loop()
@@ -336,8 +336,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
         raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
         self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
-
-        self._update_future()
 
     def add_process_listener(self, listener):
         assert (listener != self), "Cannot listen to yourself!"
@@ -594,11 +592,3 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             valid, msg = port.validate(self._outputs.get(name, ports.UNSPECIFIED))
             if not valid:
                 raise RuntimeError("Process {} failed because {}".format(self.get_name(), msg))
-
-    def _update_future(self):
-        if self.state == ProcessState.FINISHED:
-            self._future.set_result(self.outputs)
-        elif self.state == ProcessState.KILLED:
-            self._future.cancel()
-        elif self.state == ProcessState.EXCEPTED:
-            self._future.set_exception(self._state.exception)

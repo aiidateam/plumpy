@@ -332,6 +332,8 @@ class SavePauseProc(Process):
 
 
 class TestProcessSaving(utils.TestCaseWithLoop):
+    maxDiff = None
+
     def test_running_save_instance_state(self):
         proc = SavePauseProc()
         proc.execute(True)

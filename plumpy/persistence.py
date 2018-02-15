@@ -520,11 +520,7 @@ class Savable(object):
     @staticmethod
     def _get_meta_type(saved_state, name):
         try:
-            types_dict = saved_state[META]
-            try:
-                return types_dict[name]
-            except KeyError:
-                pass
+            return saved_state[META][META__TYPES][name]
         except KeyError:
             pass
 
@@ -536,25 +532,34 @@ class Savable(object):
         typ = Savable._get_meta_type(saved_state, name)
         if typ == META__TYPE__METHOD:
             value = getattr(self, value)
-        elif type == META__TYPE__SAVABLE:
+        elif typ == META__TYPE__SAVABLE:
             value = Savable.load(value, load_context)
 
         return value
 
 
-@auto_persist('_done', '_result', '_exc_info')
+@auto_persist('_done', '_result')
 class SavableFuture(futures.Future, Savable):
     """
     A savable future.
 
     .. note: This does not save any assigned done callbacks.
     """
+    EXCEPTION = 'exception'
 
     def save_instance_state(self, out_state):
         super(SavableFuture, self).save_instance_state(out_state)
+        if self.done() and self.exception() is not None:
+            out_state[self.EXCEPTION] = self.exception()
 
     def load_instance_state(self, saved_state, load_context):
         super(SavableFuture, self).load_instance_state(saved_state, load_context)
+        try:
+            exception = saved_state[self.EXCEPTION]
+            self._exc_info = (type(exception), exception, None)
+        except KeyError:
+            self._exc_info = None
+
         self._log_traceback = False
         self._tb_logger = None
         self._callbacks = []
