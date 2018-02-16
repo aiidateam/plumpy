@@ -149,11 +149,16 @@ class StateMachineMeta(type):
 
 class StateMachine(with_metaclass(StateMachineMeta, object)):
     STATES = None
-    STATES_MAP = None
+    _STATES_MAP = None
     # sealed = False
 
     _transitioning = False
     _transition_failing = False
+
+    @classmethod
+    def get_states_map(cls):
+        cls.__ensure_built()
+        return cls._STATES_MAP
 
     @classmethod
     def get_states(cls):
@@ -170,7 +175,7 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
     @classmethod
     def get_state_class(cls, label):
         cls.__ensure_built()
-        return cls.STATES_MAP[label]
+        return cls._STATES_MAP[label]
 
     @classmethod
     def __ensure_built(cls):
@@ -185,12 +190,12 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
         assert isinstance(cls.STATES, collections.Iterable)
 
         # Build the states map
-        cls.STATES_MAP = {}
+        cls._STATES_MAP = {}
         for state_cls in cls.STATES:
             assert issubclass(state_cls, State)
             label = state_cls.LABEL
-            assert label not in cls.STATES_MAP, "Duplicate label '{}'".format(label)
-            cls.STATES_MAP[label] = state_cls
+            assert label not in cls._STATES_MAP, "Duplicate label '{}'".format(label)
+            cls._STATES_MAP[label] = state_cls
 
         cls.sealed = True
 
@@ -296,6 +301,6 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
             return state
         else:
             try:
-                return self.STATES_MAP[state]
+                return self.get_states_map()[state]
             except KeyError:
                 raise ValueError("{} is not a valid state".format(state))

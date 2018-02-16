@@ -3,6 +3,7 @@ import functools
 from . import class_loader as internal_class_loader
 from . import communications
 from . import futures
+from . import persistence
 
 __all__ = ['ProcessReceiver', 'PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
            'ProcessAction', 'PlayAction', 'PauseAction', 'KillAction', 'StatusAction',
@@ -224,10 +225,11 @@ class ProcessLauncher(object):
     def __init__(self, loop=None, persister=None, load_context=None, class_loader=None):
         self._loop = loop
         self._persister = persister
-        self._load_context = load_context
+        self._load_context = load_context if load_context is not None else persistence.LoadContext()
 
         if class_loader is not None:
             self._class_loader = class_loader
+            self._load_context = self._load_context.copyextend(class_loader=class_loader)
         else:
             self._class_loader = internal_class_loader.get_class_loader()
 

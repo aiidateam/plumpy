@@ -298,12 +298,14 @@ class PicklePersister(Persister):
 class InMemoryPersister(with_metaclass(ABCMeta, object)):
     """ Mainly to be used in testing/debugging """
 
-    def __init__(self):
+    def __init__(self, class_loader_=None):
         super(InMemoryPersister, self).__init__()
         self._checkpoints = {}
+        self._class_loader = class_loader_
 
     def save_checkpoint(self, process, tag=None):
-        self._checkpoints.setdefault(process.pid, {})[tag] = Bundle(process)
+        self._checkpoints.setdefault(process.pid, {})[tag] = \
+            Bundle(process, class_loader_=self._class_loader)
 
     def load_checkpoint(self, pid, tag=None):
         return self._checkpoints[pid][tag]
