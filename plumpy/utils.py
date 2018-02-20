@@ -4,7 +4,7 @@ import importlib
 import inspect
 import logging
 import threading
-from collections import deque
+from collections import deque, defaultdict
 
 import frozendict
 
@@ -277,3 +277,16 @@ def load_module(fullname):
         raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
 
     return mod, remainder
+
+def wrap_dict(flat_dict, separator='.'):
+    sub_dicts = defaultdict(dict)
+    res = {}
+    for key, value in flat_dict.items():
+        if separator in key:
+            namespace, sub_key = key.split(separator, 1)
+            sub_dicts[namespace][sub_key] = value
+        else:
+            res[key] = value
+    for namespace, sub_dict in sub_dicts.items():
+        res[namespace] = wrap_dict(sub_dict)
+    return res

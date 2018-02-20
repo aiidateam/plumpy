@@ -390,6 +390,21 @@ class TestWorkchain(utils.TestCaseWithLoop):
     #     workchain = Wf(runner=runner)
     #     workchain.execute()
 
+    def test_output_namespace(self):
+        """Test running a workchain with nested outputs."""
+        class TestWorkChain(WorkChain):
+            @classmethod
+            def define(cls, spec):
+                super(TestWorkChain, cls).define(spec)
+                spec.output('x.y', required=True)
+                spec.outline(cls.do_run)
+
+            def do_run(self):
+                self.out('x.y', 5)
+
+        workchain = TestWorkChain()
+        workchain.execute()
+
     def test_exception_tocontext(self):
         my_exception = RuntimeError("Should not be reached")
 
