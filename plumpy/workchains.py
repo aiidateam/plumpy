@@ -15,6 +15,8 @@ __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec'
 
 ToContext = dict
 
+LINE_NUMBER_SEPARATOR = ':'
+
 
 class WorkChainSpec(processes.ProcessSpec):
     def __init__(self):
@@ -223,6 +225,9 @@ class _FunctionStepper(Stepper):
     def step(self):
         return True, self._fn(self._workchain)
 
+    def __str__(self):
+        return self._fn.__name__
+
 
 class _FunctionCall(_Instruction):
     def __init__(self, func):
@@ -295,6 +300,9 @@ class _BlockStepper(Stepper):
         if stepper_state is not None:
             self._child_stepper = self._block[self._pos].recreate_stepper(stepper_state, self._workchain)
 
+    def __str__(self):
+        return str(self._pos) + ':' + str(self._child_stepper)
+
 
 class _Block(_Instruction, collections.Sequence):
     """
@@ -342,10 +350,11 @@ class _Conditional(object):
       body
     """
 
-    def __init__(self, parent, predicate):
+    def __init__(self, parent, predicate, label):
         self._parent = parent
         self._predicate = predicate
         self._body = None
+        self._label = label
 
     @property
     def body(self):
@@ -362,6 +371,9 @@ class _Conditional(object):
         assert self._body is None
         self._body = _Block(instructions)
         return self._parent
+
+    def __str__(self):
+        return self._label + '(' + self.predicate.__name__ + ')'
 
 
 @persistence.auto_persist('_pos')
@@ -412,11 +424,18 @@ class _IfStepper(Stepper):
         if stepper_state is not None:
             self._child_stepper = self._if_instruction[self._pos].body.recreate_stepper(stepper_state, self._workchain)
 
+    def __str__(self):
+        s = str(self._if_instruction[self._pos])
+        if self._child_stepper is not None:
+            s += '(' + str(self._child_stepper) + ')'
+
+        return s
+
 
 class _If(_Instruction, collections.Sequence):
     def __init__(self, condition):
         super(_If, self).__init__()
-        self._ifs = [_Conditional(self, condition)]
+        self._ifs = [_Conditional(self, condition, label=if_.__name__)]
         self._sealed = False
 
     def __getitem__(self, idx):
@@ -435,13 +454,13 @@ class _If(_Instruction, collections.Sequence):
         return self
 
     def elif_(self, condition):
-        self._ifs.append(_Conditional(self, condition))
+        self._ifs.append(_Conditional(self, condition, label=self.elif_.__name__))
         return self._ifs[-1]
 
     def else_(self, *commands):
         assert not self._sealed
         # Create a dummy conditional that always returns True
-        cond = _Conditional(self, lambda wf: True)
+        cond = _Conditional(self, lambda wf: True, label=self.else_.__name__)
         cond(*commands)
         self._ifs.append(cond)
         # Can't do any more after the else
@@ -499,11 +518,18 @@ class _WhileStepper(Stepper):
         if stepper_state is not None:
             self._child_stepper = self._while_instruction.body.recreate_stepper(stepper_state)
 
+    def __str__(self):
+        s = str(self._while_instruction)
+        if self._child_stepper is not None:
+            s += '(' + str(self._child_stepper) + ')'
+
+        return s
+
 
 class _While(_Conditional, _Instruction, collections.Sequence):
 
     def __init__(self, predicate):
-        super(_While, self).__init__(self, predicate)
+        super(_While, self).__init__(self, predicate, label=while_.__name__)
 
     def __getitem__(self, idx):
         assert idx == 0

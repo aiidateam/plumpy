@@ -2,6 +2,7 @@ import inspect
 from past.builtins import basestring
 import plumpy
 from plumpy.workchains import *
+from plumpy.process_listener import ProcessListener
 import unittest
 
 from plumpy import test_utils
@@ -414,6 +415,68 @@ class TestWorkchain(utils.TestCaseWithLoop):
         proc = wf_class(inputs=inputs)
         proc.execute()
         return wf_class.finished_steps
+
+    def test_stepper_info(self):
+        """Check status information provided by steppers"""
+
+        class Wf(WorkChain):
+            @classmethod
+            def define(cls, spec):
+                super(Wf, cls).define(spec)
+                spec.input('N', valid_type=int)
+                spec.outline(
+                   cls.check_N,
+                    while_(cls.step)(
+                        cls.chill,
+                        cls.chill,
+                    ),
+                   if_(cls.step)(
+                        cls.chill,
+                    ).elif_(cls.step)(
+                        cls.chill,
+                    ).else_(
+                        cls.chill
+                    ),
+                )
+
+            def check_N(self):
+                assert 'N' in self.inputs
+
+            def chill(self):
+                pass
+
+            def step(self):
+                if not hasattr(self.ctx, 'step'):
+                    self.ctx.step = 0
+
+                self.ctx.step += 1
+
+                if self.ctx.step < self.inputs['N']:
+                    return True
+                else:
+                    return False
+
+        class StatusCollector(ProcessListener):
+            def __init__(self):
+                self.stepper_strings = []
+
+            def on_process_running(self, process):
+                self.stepper_strings.append(
+                    str(process._stepper)
+                )
+
+        collector = StatusCollector()
+
+        wf = Wf(inputs=dict(N=4))
+        wf.add_process_listener(collector)
+        wf.execute()
+
+        stepper_strings = ['0:check_N', '1:while_(step)',
+                '1:while_(step)(1:chill)', '1:while_(step)',
+                '1:while_(step)(1:chill)', '1:while_(step)',
+                '1:while_(step)(1:chill)', '1:while_(step)', '2:if_(step)']
+        self.assertListEqual(collector.stepper_strings, stepper_strings)
+
 
 
 class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
