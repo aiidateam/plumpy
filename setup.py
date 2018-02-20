@@ -4,7 +4,7 @@ from setuptools import setup
 
 __author__ = "Martin Uhrin"
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__contributors__ = "Sebastiaan Huber"
+__contributors__ = "Sebastiaan Huber, Leopold Talirz, Dominik Gresch"
 
 about = {}
 with open('plumpy/version.py') as f:
