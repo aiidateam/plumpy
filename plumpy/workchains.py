@@ -15,8 +15,6 @@ __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec'
 
 ToContext = dict
 
-LINE_NUMBER_SEPARATOR = ':'
-
 
 class WorkChainSpec(processes.ProcessSpec):
     def __init__(self):
