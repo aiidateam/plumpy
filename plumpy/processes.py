@@ -175,7 +175,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     @classmethod
     def recreate_from(cls, saved_state, load_context=None):
         """
-        Recreate a process from a saved state, passing any positional and 
+        Recreate a process from a saved state, passing any positional and
         keyword arguments on to load_instance_state
 
         :param saved_state: The saved state to load from
@@ -588,7 +588,8 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
+        wrapped = utils.wrap_dict(self._outputs, separator=self.spec().namespace_separator)
         for name, port in self.spec().outputs.items():
-            valid, msg = port.validate(self._outputs.get(name, ports.UNSPECIFIED))
+            valid, msg = port.validate(wrapped.get(name, ports.UNSPECIFIED))
             if not valid:
                 raise RuntimeError("Process {} failed because {}".format(self.get_name(), msg))
