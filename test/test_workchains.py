@@ -396,9 +396,9 @@ class TestWorkchain(utils.TestCaseWithLoop):
             def define(cls, spec):
                 super(TestWorkChain, cls).define(spec)
                 spec.output('x.y', required=True)
-                spec.outline(cls.run)
+                spec.outline(cls.do_run)
 
-            def run(self):
+            def do_run(self):
                 self.out('x.y', 5)
 
         workchain = TestWorkChain()
