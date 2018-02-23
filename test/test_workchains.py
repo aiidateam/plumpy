@@ -283,30 +283,84 @@ class TestWorkchain(utils.TestCaseWithLoop):
             if step not in ['isA', 's2', 'isB', 's3']:
                 self.assertTrue(finished, "Step {} was not called by workflow".format(step))
 
-    def test_return(self):
+    def test_return_in_outline(self):
+
         class WcWithReturn(WorkChain):
+
+            FAILED_CODE = 1
+
             @classmethod
             def define(cls, spec):
                 super(WcWithReturn, cls).define(spec)
+                spec.input('success', valid_type=bool, required=False)
                 spec.outline(
-                    cls.s1,
-                    if_(cls.isA)(
+                    cls.step_one,
+                    if_(cls.do_success)(
                         return_
+                    ).elif_(cls.do_failed)(
+                        return_(cls.FAILED_CODE)
+                    ).else_(
+                        cls.default
                     ),
+                )
+
+            def step_one(self):
+                pass
+
+            def do_success(self):
+                return 'success' in self.inputs and self.inputs.success is True
+
+            def do_failed(self):
+                return 'success' in self.inputs and self.inputs.success is False
+
+            def default(self):
+                raise RuntimeError('Should already have returned')
+
+        workchain = WcWithReturn(inputs=dict(success=True))
+        workchain.execute()
+
+        workchain = WcWithReturn(inputs=dict(success=False))
+        workchain.execute()
+
+        with self.assertRaises(RuntimeError):
+            workchain = WcWithReturn()
+            workchain.execute()
+
+    def test_return_in_step(self):
+
+        class WcWithReturn(WorkChain):
+
+            FAILED_CODE = 1
+
+            @classmethod
+            def define(cls, spec):
+                super(WcWithReturn, cls).define(spec)
+                spec.input('success', valid_type=bool, required=False)
+                spec.outline(
+                    cls.step_one,
                     cls.after
                 )
 
-            def s1(self):
-                pass
-
-            def isA(self):
-                return True
+            def step_one(self):
+                if 'success' not in self.inputs:
+                    return
+                elif self.inputs.success is True:
+                    return 0
+                elif self.inputs.success is False:
+                    return self.FAILED_CODE
 
             def after(self):
-                raise RuntimeError("Shouldn't get here")
+                raise RuntimeError('Should already have returned')
 
-        workchain = WcWithReturn()
+        workchain = WcWithReturn(inputs=dict(success=True))
         workchain.execute()
+
+        workchain = WcWithReturn(inputs=dict(success=False))
+        workchain.execute()
+
+        with self.assertRaises(RuntimeError):
+            workchain = WcWithReturn()
+            workchain.execute()
 
     def test_tocontext_schedule_workchain(self):
         class MainWorkChain(WorkChain):
