@@ -137,21 +137,21 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         self._awaitables = {}
 
         try:
-            finished, retval = self._stepper.step()
-        except _PropagateReturn:
-            finished, retval = True, None
+            finished, return_value = self._stepper.step()
+        except _PropagateReturn as exception:
+            finished, return_value = True, exception.exit_code
 
-        if not finished:
-            if retval is not None:
-                if isinstance(retval, ToContext):
-                    self.to_context(**retval)
-                else:
-                    raise TypeError("Invalid value returned from step '{}'".format(retval))
+        if not finished and (return_value is None or isinstance(return_value, ToContext)):
+
+            if isinstance(return_value, ToContext):
+                self.to_context(**return_value)
 
             if self._awaitables:
                 return processes.Wait(self._do_step, 'Waiting before next step', self._awaitables)
             else:
                 return processes.Continue(self._do_step)
+        else:
+            return return_value
 
 
 class Stepper(persistence.Savable):
@@ -548,19 +548,23 @@ class _While(_Conditional, _Instruction, collections.Sequence):
 
 
 class _PropagateReturn(BaseException):
-    pass
+
+    def __init__(self, exit_code):
+        self.exit_code = exit_code
 
 
 class _ReturnStepper(Stepper):
+
+    def __init__(self, return_instruction, workchain):
+        super(_ReturnStepper, self).__init__(workchain)
+        self._return_instruction = return_instruction
+
     def step(self):
         """
-        Execute on step of the instructions.
-        :return: A 2-tuple with entries:
-            0. True if the stepper has finished, False otherwise
-            1. The return value from the executed step
-        :rtype: tuple
+        Raise a _PropagateReturn exception where the value is the exit code set
+        in the _Return instruction upon instantiation
         """
-        raise _PropagateReturn()
+        raise _PropagateReturn(self._return_instruction._exit_code)
 
 
 class _Return(_Instruction):
@@ -569,11 +573,18 @@ class _Return(_Instruction):
     outline and cease execution immediately.
     """
 
+    def __init__(self, exit_code=None):
+        super(_Return, self).__init__()
+        self._exit_code = exit_code
+
+    def __call__(self, exit_code):
+        return _Return(exit_code)
+
     def create_stepper(self, workchain):
-        return _ReturnStepper(workchain)
+        return _ReturnStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        return _ReturnStepper(workchain)
+        return _ReturnStepper(self, workchain)
 
     def get_description(self):
         """
@@ -620,8 +631,26 @@ def while_(condition):
     return _While(condition)
 
 
-# Global singleton for return statements in workchain outlines
 return_ = _Return()
+"""
+A global singleton that contains a Return instruction that allows to exit
+out of the workchain outline directly with None as exit code
+To set a specific exit code, call it with the desired exit code
+
+Use as::
+
+  if_(cls.conditional)(
+    return_
+  )
+
+or
+
+  if_(cls.conditional)(
+    return_(EXIT_CODE)
+  )
+
+:param exit_code: an integer exit code to pass as the return value, None by default
+"""
 
 
 def _ensure_instruction(command):
