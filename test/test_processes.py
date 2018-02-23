@@ -313,6 +313,22 @@ class TestProcess(utils.TestCaseWithLoop):
         process.start()
         self.assertFalse(process.paused)
 
+    def test_pause_play_in_process(self):
+        """ Test that we can pause and cancel that by playing within the process """
+
+        test_case = self
+
+        class TestPausePlay(plumpy.Process):
+            def run(self):
+                fut = self.pause()
+                test_case.assertIsInstance(fut, plumpy.Future)
+                result = self.play()
+                test_case.assertTrue(result)
+
+        proc = TestPausePlay()
+        proc.execute()
+        self.assertEquals(plumpy.ProcessState.FINISHED, proc.state)
+
 
 @plumpy.auto_persist('steps_ran')
 class SavePauseProc(Process):
@@ -557,7 +573,8 @@ class TestProcessEvents(utils.TestCaseWithLoop):
 
     def test_excepted(self):
         proc = test_utils.ExceptionProcess()
-        events_tester = test_utils.ProcessListenerTester(proc, ('excepted', 'running', 'output_emitted',), self.loop.stop)
+        events_tester = test_utils.ProcessListenerTester(proc, ('excepted', 'running', 'output_emitted',),
+                                                         self.loop.stop)
         with self.assertRaises(RuntimeError):
             proc.execute()
 

@@ -221,6 +221,7 @@ class Running(State):
         if self._running:
             if not self._pausing:
                 self._pausing = futures.Future()
+                self._pausing.add_done_callback(self._paused)
             return self._pausing
         else:
             return True
@@ -273,6 +274,10 @@ class Running(State):
             self.transition_to(ProcessState.RUNNING, command.continue_fn, *command.args)
         else:
             raise ValueError("Unrecognised command")
+
+    def _paused(self, future):
+        assert future is self._pausing
+        self._pausing = None
 
 
 @auto_persist('msg', 'data')
@@ -637,7 +642,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         """
         if not self._paused:
             if self._pausing:
-                self._pausing.kill()
+                self._pausing.cancel()
             return True
 
         if self._state.play():
