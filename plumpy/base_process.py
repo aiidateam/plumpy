@@ -393,6 +393,11 @@ class Killed(State):
 class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
     pass
 
+# Make ProcessStateMachineMeta instances (classes) YAML - able
+yaml.representer.Representer.add_representer(
+    ProcessStateMachineMeta,
+    yaml.representer.Representer.represent_name
+)
 
 @persistence.auto_persist('_paused_flag')
 class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
