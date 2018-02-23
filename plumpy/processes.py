@@ -38,32 +38,6 @@ class BundleKeys(object):
     INPUTS = 'INPUTS'
 
 
-class Running(base_process.Running):
-    _run_handle = None
-
-    def enter(self):
-        super(Running, self).enter()
-        self._run_handle = self.process.call_soon(self._run)
-
-    def exit(self):
-        super(Running, self).exit()
-        # Make sure the run callback doesn't get actioned if it wasn't already
-        if self._run_handle is not None:
-            self._run_handle.kill()
-
-    def load_instance_state(self, saved_state, load_context):
-        super(Running, self).load_instance_state(saved_state, load_context)
-        if self.in_state:
-            self.process.call_soon(self._run)
-
-    def play(self):
-        self._run_handle = self.process.call_soon(self._run)
-
-    def _run(self):
-        with stack.in_stack(self.process):
-            super(Running, self)._run()
-
-
 class Executor(ProcessListener):
     _future = None
     _loop = None
@@ -124,12 +98,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
     # Static class stuff ######################
     _spec_type = ProcessSpec
-
-    @classmethod
-    def get_state_classes(cls):
-        states_map = super(Process, cls).get_state_classes()
-        states_map[ProcessState.RUNNING] = Running
-        return states_map
 
     @classmethod
     def spec(cls):
@@ -218,10 +186,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self._future = persistence.SavableFuture()
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = logger
-        self._loop = loop if loop is not None else events.get_event_loop()
         self._communicator = communicator
 
-        super(Process, self).__init__()
+        super(Process, self).__init__(loop)
 
     @property
     def creation_time(self):
@@ -272,9 +239,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         else:
             return _LOGGER
 
-    def loop(self):
-        return self._loop
-
     def future(self):
         return self._future
 
@@ -307,15 +271,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self._future = futures.Future()
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = None
-        self._loop = None
         self._communicator = None
-
-        loop = None
-        if 'loop' in load_context:
-            loop = load_context.loop
-        if loop is None:
-            loop = events.get_event_loop()
-        self._loop = loop
 
         if 'communicator' in load_context:
             self._communicator = load_context.communicator
@@ -549,30 +505,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             'state': self.state,
             'state_info': str(self._state)
         })
-
-    # region callbacks
-    def call_soon(self, callback, *args, **kwargs):
-        """
-        Schedule a callback to what is considered an internal process function
-        (this needn't be a method).  If it raises an exception it will cause
-        the process to fail.
-        """
-        handle = events.Handle(self, callback, args, kwargs)
-        self._loop.add_callback(handle._run)
-        return handle
-
-    def call_soon_external(self, callback, *args, **kwargs):
-        """
-        Schedule a callback to an external method.  If there is an
-        exception in the callback it will not cause the process to fail.
-        """
-        self._loop.add_callback(callback, *args, **kwargs)
-
-    def callback_excepted(self, callback, exception, trace):
-        if self.state != ProcessState.EXCEPTED:
-            self.fail(exception, trace)
-
-    # endregion
 
     # region State entry/exit events
 

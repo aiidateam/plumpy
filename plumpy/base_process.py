@@ -17,9 +17,11 @@ from .base import state_machine
 from .base.state_machine import InvalidStateError, event
 from .base import super_check, call_with_super_check
 
+from . import events
 from . import futures
 from . import persistence
 from .persistence import auto_persist
+from . import stack
 from . import utils
 
 __all__ = ['ProcessStateMachine', 'ProcessState',
@@ -185,12 +187,14 @@ class Running(State):
                ProcessState.KILLED,
                ProcessState.EXCEPTED}
 
-    RUN_FN = 'run_fn'
-    COMMAND = 'command'
+    RUN_FN = 'run_fn'  # The key used to store the function to run
+    COMMAND = 'command'  # The key used to store an upcoming command
 
+    # Class level defaults
     _command = None
     _running = False
     _pausing = None
+    _run_handle = None
 
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Running, self).__init__(process)
@@ -198,6 +202,18 @@ class Running(State):
         self.run_fn = run_fn
         self.args = args
         self.kwargs = kwargs
+        self._run_handle = None
+
+    def enter(self):
+        super(Running, self).enter()
+        self._run_handle = self.process.call_soon(self._run)
+
+    def exit(self):
+        super(Running, self).exit()
+        # Make sure the run callback doesn't get actioned if it wasn't already
+        if self._run_handle is not None:
+            self._run_handle.kill()
+            self._run_handle = None
 
     def save_instance_state(self, out_state):
         super(Running, self).save_instance_state(out_state)
@@ -211,11 +227,22 @@ class Running(State):
         if self.COMMAND in saved_state:
             self._command = persistence.Savable.load(saved_state[self.COMMAND], load_context)
 
+        if self.in_state:
+            self.play()
+
     def kill(self, message=None):
         if self._running:
             raise KillInterruption(message)
         else:
             return super(Running, self).kill(message)
+
+    def play(self):
+        if not self.in_state:
+            raise RuntimeError("Cannot play when not in this state")
+        if self._run_handle is not None:
+            return False
+        self._run_handle = self.process.call_soon(self._run)
+        return True
 
     def pause(self):
         if self._running:
@@ -234,32 +261,34 @@ class Running(State):
         return True
 
     def _run(self):
-        if self._command is not None:
-            command = self._command
-        else:
-            try:
-                try:
-                    self._running = True
-                    result = self.run_fn(*self.args, **self.kwargs)
-                finally:
-                    self._running = False
-            except KillInterruption as e:
-                command = Kill(str(e))
-            except BaseException:
-                self.transition_to(ProcessState.EXCEPTED, *sys.exc_info()[1:])
-                return
+        self._run_handle = None
+        with stack.in_stack(self.process):
+            if self._command is not None:
+                command = self._command
             else:
-                if not isinstance(result, Command):
-                    result = Stop(result)
-
-                if self._pausing is not None:
-                    self._command = result
-                    self._pausing.set_result(True)
+                try:
+                    try:
+                        self._running = True
+                        result = self.run_fn(*self.args, **self.kwargs)
+                    finally:
+                        self._running = False
+                except KillInterruption as e:
+                    command = Kill(str(e))
+                except BaseException:
+                    self.transition_to(ProcessState.EXCEPTED, *sys.exc_info()[1:])
                     return
                 else:
-                    command = result
+                    if not isinstance(result, Command):
+                        result = Stop(result)
 
-        self._action_command(command)
+                    if self._pausing is not None:
+                        self._command = result
+                        self._pausing.set_result(True)
+                        return
+                    else:
+                        command = result
+
+            self._action_command(command)
 
     def _action_command(self, command):
         if isinstance(command, Kill):
@@ -412,9 +441,9 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
                   ___
                  |   v
     CREATED --- RUNNING --- FINISHED (o)
-                 |   ^      /
-                 v   |     /
-                 WAITING---
+                 |   ^     /
+                 v   |    /
+                 WAITING--
                  |   ^
                   ----
 
@@ -445,8 +474,10 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             ProcessState.KILLED: Killed
         }
 
-    def __init__(self):
+    def __init__(self, loop=None):
         super(ProcessStateMachine, self).__init__()
+        self._loop = loop if loop is not None else events.get_event_loop()
+
         self._paused_flag = False
         self._pausing = None  # If pausing, this will be a future
 
@@ -469,6 +500,34 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             call_with_super_check(self.on_pause)
         else:
             call_with_super_check(self.on_play)
+
+    # region loop methods
+
+    def loop(self):
+        return self._loop
+
+    def call_soon(self, callback, *args, **kwargs):
+        """
+        Schedule a callback to what is considered an internal process function
+        (this needn't be a method).  If it raises an exception it will cause
+        the process to fail.
+        """
+        handle = events.Handle(self, callback, args, kwargs)
+        self._loop.add_callback(handle._run)
+        return handle
+
+    def call_soon_external(self, callback, *args, **kwargs):
+        """
+        Schedule a callback to an external method.  If there is an
+        exception in the callback it will not cause the process to fail.
+        """
+        self._loop.add_callback(callback, *args, **kwargs)
+
+    def callback_excepted(self, callback, exception, trace):
+        if self.state != ProcessState.EXCEPTED:
+            self.fail(exception, trace)
+
+    # endregion
 
     def create_initial_state(self):
         return self.get_state_class(ProcessState.CREATED)(self, self.run)
@@ -582,6 +641,12 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
 
     def load_instance_state(self, saved_state, load_context):
         super(ProcessStateMachine, self).load_instance_state(saved_state, load_context)
+
+        if 'loop' in load_context:
+            self._loop = load_context.loop
+        else:
+            self._loop = events.get_event_loop()
+
         self._pausing = None  # If pausing, this will be a future
         self._state = self.create_state(saved_state['_state'])
 
