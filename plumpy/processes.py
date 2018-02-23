@@ -218,10 +218,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self._future = persistence.SavableFuture()
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = logger
-        self._loop = loop if loop is not None else events.get_event_loop()
         self._communicator = communicator
 
-        super(Process, self).__init__()
+        super(Process, self).__init__(loop)
 
     @property
     def creation_time(self):
@@ -272,9 +271,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         else:
             return _LOGGER
 
-    def loop(self):
-        return self._loop
-
     def future(self):
         return self._future
 
@@ -307,15 +303,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self._future = futures.Future()
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = None
-        self._loop = None
         self._communicator = None
-
-        loop = None
-        if 'loop' in load_context:
-            loop = load_context.loop
-        if loop is None:
-            loop = events.get_event_loop()
-        self._loop = loop
 
         if 'communicator' in load_context:
             self._communicator = load_context.communicator
@@ -549,29 +537,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             'state_info': str(self._state)
         })
 
-    # region callbacks
-    def call_soon(self, callback, *args, **kwargs):
-        """
-        Schedule a callback to what is considered an internal process function
-        (this needn't be a method).  If it raises an exception it will cause
-        the process to fail.
-        """
-        handle = events.Handle(self, callback, args, kwargs)
-        self._loop.add_callback(handle._run)
-        return handle
-
-    def call_soon_external(self, callback, *args, **kwargs):
-        """
-        Schedule a callback to an external method.  If there is an
-        exception in the callback it will not cause the process to fail.
-        """
-        self._loop.add_callback(callback, *args, **kwargs)
-
-    def callback_excepted(self, callback, exception, trace):
-        if self.state != ProcessState.EXCEPTED:
-            self.fail(exception, trace)
-
-    # endregion
 
     # region State entry/exit events
 

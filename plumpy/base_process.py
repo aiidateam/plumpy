@@ -17,6 +17,7 @@ from .base import state_machine
 from .base.state_machine import InvalidStateError, event
 from .base import super_check, call_with_super_check
 
+from . import events
 from . import futures
 from . import persistence
 from .persistence import auto_persist
@@ -407,9 +408,9 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
                   ___
                  |   v
     CREATED --- RUNNING --- FINISHED (o)
-                 |   ^      /
-                 v   |     /
-                 WAITING---
+                 |   ^     /
+                 v   |    /
+                 WAITING--
                  |   ^
                   ----
 
@@ -440,8 +441,10 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             ProcessState.KILLED: Killed
         }
 
-    def __init__(self):
+    def __init__(self, loop=None):
         super(ProcessStateMachine, self).__init__()
+        self._loop = loop if loop is not None else events.get_event_loop()
+
         self._paused_flag = False
         self._pausing = None  # If pausing, this will be a future
 
@@ -464,6 +467,34 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             call_with_super_check(self.on_pause)
         else:
             call_with_super_check(self.on_play)
+
+    # region loop methods
+
+    def loop(self):
+        return self._loop
+
+    def call_soon(self, callback, *args, **kwargs):
+        """
+        Schedule a callback to what is considered an internal process function
+        (this needn't be a method).  If it raises an exception it will cause
+        the process to fail.
+        """
+        handle = events.Handle(self, callback, args, kwargs)
+        self._loop.add_callback(handle._run)
+        return handle
+
+    def call_soon_external(self, callback, *args, **kwargs):
+        """
+        Schedule a callback to an external method.  If there is an
+        exception in the callback it will not cause the process to fail.
+        """
+        self._loop.add_callback(callback, *args, **kwargs)
+
+    def callback_excepted(self, callback, exception, trace):
+        if self.state != ProcessState.EXCEPTED:
+            self.fail(exception, trace)
+
+    # endregion
 
     def create_initial_state(self):
         return self.get_state_class(ProcessState.CREATED)(self, self.run)
@@ -577,6 +608,12 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
 
     def load_instance_state(self, saved_state, load_context):
         super(ProcessStateMachine, self).load_instance_state(saved_state, load_context)
+
+        if 'loop' in load_context:
+            self._loop = load_context.loop
+        else:
+            self._loop = events.get_event_loop()
+
         self._pausing = None  # If pausing, this will be a future
         self._state = self.create_state(saved_state['_state'])
 
