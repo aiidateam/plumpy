@@ -38,32 +38,6 @@ class BundleKeys(object):
     INPUTS = 'INPUTS'
 
 
-class Running(base_process.Running):
-    _run_handle = None
-
-    def enter(self):
-        super(Running, self).enter()
-        self._run_handle = self.process.call_soon(self._run)
-
-    def exit(self):
-        super(Running, self).exit()
-        # Make sure the run callback doesn't get actioned if it wasn't already
-        if self._run_handle is not None:
-            self._run_handle.kill()
-
-    def load_instance_state(self, saved_state, load_context):
-        super(Running, self).load_instance_state(saved_state, load_context)
-        if self.in_state:
-            self.process.call_soon(self._run)
-
-    def play(self):
-        self._run_handle = self.process.call_soon(self._run)
-
-    def _run(self):
-        with stack.in_stack(self.process):
-            super(Running, self)._run()
-
-
 class Executor(ProcessListener):
     _future = None
     _loop = None
@@ -124,12 +98,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
     # Static class stuff ######################
     _spec_type = ProcessSpec
-
-    @classmethod
-    def get_state_classes(cls):
-        states_map = super(Process, cls).get_state_classes()
-        states_map[ProcessState.RUNNING] = Running
-        return states_map
 
     @classmethod
     def spec(cls):
@@ -536,7 +504,6 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             'state': self.state,
             'state_info': str(self._state)
         })
-
 
     # region State entry/exit events
 

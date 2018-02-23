@@ -21,6 +21,7 @@ from . import events
 from . import futures
 from . import persistence
 from .persistence import auto_persist
+from . import stack
 from . import utils
 
 __all__ = ['ProcessStateMachine', 'ProcessState',
@@ -186,12 +187,14 @@ class Running(State):
                ProcessState.KILLED,
                ProcessState.EXCEPTED}
 
-    RUN_FN = 'run_fn'
-    COMMAND = 'command'
+    RUN_FN = 'run_fn'  # The key used to store the function to run
+    COMMAND = 'command'  # The key used to store an upcoming command
 
+    # Class level defaults
     _command = None
     _running = False
     _pausing = None
+    _run_handle = None
 
     def __init__(self, process, run_fn, *args, **kwargs):
         super(Running, self).__init__(process)
@@ -199,6 +202,18 @@ class Running(State):
         self.run_fn = run_fn
         self.args = args
         self.kwargs = kwargs
+        self._run_handle = None
+
+    def enter(self):
+        super(Running, self).enter()
+        self._run_handle = self.process.call_soon(self._run)
+
+    def exit(self):
+        super(Running, self).exit()
+        # Make sure the run callback doesn't get actioned if it wasn't already
+        if self._run_handle is not None:
+            self._run_handle.kill()
+            self._run_handle = None
 
     def save_instance_state(self, out_state):
         super(Running, self).save_instance_state(out_state)
@@ -212,11 +227,22 @@ class Running(State):
         if self.COMMAND in saved_state:
             self._command = persistence.Savable.load(saved_state[self.COMMAND], load_context)
 
+        if self.in_state:
+            self.play()
+
     def kill(self, message=None):
         if self._running:
             raise KillInterruption(message)
         else:
             return super(Running, self).kill(message)
+
+    def play(self):
+        if not self.in_state:
+            raise RuntimeError("Cannot play when not in this state")
+        if self._run_handle is not None:
+            return False
+        self._run_handle = self.process.call_soon(self._run)
+        return True
 
     def pause(self):
         if self._running:
@@ -235,32 +261,34 @@ class Running(State):
         return True
 
     def _run(self):
-        if self._command is not None:
-            command = self._command
-        else:
-            try:
-                try:
-                    self._running = True
-                    result = self.run_fn(*self.args, **self.kwargs)
-                finally:
-                    self._running = False
-            except KillInterruption as e:
-                command = Kill(str(e))
-            except BaseException:
-                self.transition_to(ProcessState.EXCEPTED, *sys.exc_info()[1:])
-                return
+        self._run_handle = None
+        with stack.in_stack(self.process):
+            if self._command is not None:
+                command = self._command
             else:
-                if not isinstance(result, Command):
-                    result = Stop(result)
-
-                if self._pausing is not None:
-                    self._command = result
-                    self._pausing.set_result(True)
+                try:
+                    try:
+                        self._running = True
+                        result = self.run_fn(*self.args, **self.kwargs)
+                    finally:
+                        self._running = False
+                except KillInterruption as e:
+                    command = Kill(str(e))
+                except BaseException:
+                    self.transition_to(ProcessState.EXCEPTED, *sys.exc_info()[1:])
                     return
                 else:
-                    command = result
+                    if not isinstance(result, Command):
+                        result = Stop(result)
 
-        self._action_command(command)
+                    if self._pausing is not None:
+                        self._command = result
+                        self._pausing.set_result(True)
+                        return
+                    else:
+                        command = result
+
+            self._action_command(command)
 
     def _action_command(self, command):
         if isinstance(command, Kill):

@@ -259,9 +259,9 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
             if self._state is None:
                 assert label == self.initial_state_label()
             else:
-                assert label in self._state.ALLOWED, \
-                    "Cannot transition from {} to {}".format(
-                        self._state.LABEL, label)
+                if label not in self._state.ALLOWED:
+                    raise RuntimeError(
+                        "Cannot transition from {} to {}".format(self._state.LABEL, label))
                 call_with_super_check(self._state.exit)
                 self._state.in_state = False
 
