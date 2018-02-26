@@ -315,7 +315,8 @@ class Waiting(State):
     ALLOWED = {ProcessState.RUNNING,
                ProcessState.WAITING,
                ProcessState.KILLED,
-               ProcessState.EXCEPTED}
+               ProcessState.EXCEPTED,
+               ProcessState.FINISHED}
 
     DONE_CALLBACK = 'DONE_CALLBACK'
 
