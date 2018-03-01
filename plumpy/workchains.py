@@ -46,39 +46,6 @@ class WorkChainSpec(processes.ProcessSpec):
         return self._outline
 
 
-@persistence.auto_persist('_awaiting')
-class Waiting(processes.Waiting):
-    """ Overwrite the waiting state"""
-
-    def __init__(self, process, done_callback, msg=None, awaiting=None):
-        super(Waiting, self).__init__(process, done_callback, msg, awaiting)
-        self._awaiting = {}
-        for awaitable, key in awaiting.items():
-            if isinstance(awaitable, processes.Process):
-                awaitable = awaitable.future()
-            self._awaiting[awaitable] = key
-
-    def enter(self):
-        super(Waiting, self).enter()
-        for awaitable in self._awaiting.keys():
-            awaitable.add_done_callback(self._awaitable_done)
-
-    def exit(self):
-        super(Waiting, self).exit()
-        for awaitable in self._awaiting.keys():
-            awaitable.remove_done_callback(self._awaitable_done)
-
-    def _awaitable_done(self, awaitable):
-        key = self._awaiting.pop(awaitable)
-        try:
-            self.process.ctx[key] = awaitable.result()
-        except Exception:
-            self.transition_to(processes.ProcessState.EXCEPTED, *sys.exc_info()[1:])
-        else:
-            if not self._awaiting:
-                self.transition_to(processes.ProcessState.RUNNING, self.done_callback)
-
-
 class WorkChain(mixins.ContextMixin, processes.Process):
     """
     A WorkChain is a series of instructions carried out with the ability to save
@@ -87,12 +54,6 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     _spec_type = WorkChainSpec
     _STEPPER_STATE = 'stepper_state'
     _CONTEXT = 'CONTEXT'
-
-    # @classmethod
-    # def get_state_classes(cls):
-    #     states_map = super(WorkChain, cls).get_state_classes()
-    #     states_map[processes.ProcessState.WAITING] = Waiting
-    #     return states_map
 
     def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         super(WorkChain, self).__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
