@@ -88,11 +88,11 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     _STEPPER_STATE = 'stepper_state'
     _CONTEXT = 'CONTEXT'
 
-    @classmethod
-    def get_state_classes(cls):
-        states_map = super(WorkChain, cls).get_state_classes()
-        states_map[processes.ProcessState.WAITING] = Waiting
-        return states_map
+    # @classmethod
+    # def get_state_classes(cls):
+    #     states_map = super(WorkChain, cls).get_state_classes()
+    #     states_map[processes.ProcessState.WAITING] = Waiting
+    #     return states_map
 
     def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         super(WorkChain, self).__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
@@ -128,12 +128,20 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         for key, awaitable in kwargs.items():
             if isinstance(awaitable, processes.Process):
                 awaitable = awaitable.future()
-            self._awaitables[awaitable] = key
+            self._awaitables[key] = awaitable
 
     def run(self):
         return self._do_step()
 
-    def _do_step(self):
+    def _do_step(self, results=None):
+        # Take the results and put them in the context
+        if results is not None:
+            for key, result in results.items():
+                existing = self.ctx.get(key, None)
+                if isinstance(existing, collections.MutableSequence):
+                    existing.append(result)
+                else:
+                    self.ctx[key] = result
         self._awaitables = {}
 
         try:
@@ -149,7 +157,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
                     raise TypeError("Invalid value returned from step '{}'".format(retval))
 
             if self._awaitables:
-                return processes.Wait(self._do_step, 'Waiting before next step', self._awaitables)
+                return processes.Wait(self._awaitables, self._do_step, msg='Waiting before next step')
             else:
                 return processes.Continue(self._do_step)
 

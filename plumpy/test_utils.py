@@ -2,6 +2,7 @@ import collections
 from collections import namedtuple
 
 import plumpy
+from . import futures
 from . import processes
 from . import persistence
 from . import utils
@@ -67,12 +68,22 @@ class ProcessWithCheckpoint(processes.Process):
 
 
 class WaitForSignalProcess(processes.Process):
-    @utils.override
-    def _run(self):
-        return processes.Wait(self.last_step)
+    EXPECTED_OUTPUTS = {'default': 5}
 
-    def last_step(self):
-        pass
+    @classmethod
+    def define(cls, spec):
+        super(WaitForSignalProcess, cls).define(spec)
+        spec.outputs.dynamic = True
+
+    def signal(self):
+        self._state.future.set_result(True)
+
+    @utils.override
+    def run(self):
+        return processes.Wait(persistence.SavableFuture(), self.last_step)
+
+    def last_step(self, barrier):
+        self.out('default', 5)
 
 
 class MissingOutputProcess(processes.Process):

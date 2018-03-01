@@ -217,7 +217,7 @@ class TestProcess(utils.TestCaseWithLoop):
         proc = test_utils.WaitForSignalProcess()
         # Wait - Execute the process and wait until it is waiting
         proc.execute(True)
-        proc.resume()
+        proc.signal()
         proc.execute(True)
 
         # Check it's done
@@ -247,15 +247,14 @@ class TestProcess(utils.TestCaseWithLoop):
         proc.execute(True)
         self.assertEqual(proc.state, ProcessState.WAITING)
 
-        result = proc.pause()
-        self.assertTrue(result)
+        self.assertTrue(proc.pause())
         self.assertTrue(proc.paused)
 
-        result = proc.play()
-        self.assertTrue(result)
-        self.assertFalse(proc.paused)
+        # Signal the process to resume
+        proc.signal()
 
-        proc.resume()
+        self.assertTrue(proc.play())
+        self.assertFalse(proc.paused)
 
         # Run
         proc.execute(True)
@@ -328,6 +327,23 @@ class TestProcess(utils.TestCaseWithLoop):
         proc = TestPausePlay()
         proc.execute()
         self.assertEquals(plumpy.ProcessState.FINISHED, proc.state)
+
+    def test_waiting(self):
+        test_case = self
+
+        class MyProc(plumpy.Process):
+            def run(self):
+                return plumpy.Wait(self.do_stuff, self.step2)
+
+            def do_stuff(self):
+                return "Done doin'!"
+
+            def step2(self, result):
+                test_case.assertEqual("Done doin'!", result)
+
+        p = MyProc()
+        p.execute()
+        self.assertEqual(p.state, ProcessState.FINISHED)
 
 
 @plumpy.auto_persist('steps_ran')
@@ -421,14 +437,13 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         self.assertEqual(proc.state, ProcessState.WAITING)
 
         # Now play it
-        proc.resume()
+        proc.signal()
         result = proc.execute(True)
         self.assertEqual(proc.outputs, {'finished': True})
 
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
         proc = test_utils.WaitForSignalProcess()
-        proc.start()
 
         # Wait - Run the process until it enters the WAITING state
         proc.execute(True)
@@ -436,12 +451,12 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         saved_state = plumpy.Bundle(proc)
 
         # Run the process to the end
-        proc.resume()
+        proc.signal()
         result = proc.execute()
 
         # Load from saved state and run again
         proc = saved_state.unbundle(plumpy.LoadContext(loop=self.loop))
-        proc.resume()
+        proc.signal()
         result2 = proc.execute()
 
         # Check results match
@@ -613,10 +628,7 @@ class TestProcessEvents(utils.TestCaseWithLoop):
 
 
 class _RestartProcess(test_utils.WaitForSignalProcess):
-    @classmethod
-    def define(cls, spec):
-        super(_RestartProcess, cls).define(spec)
-        spec.outputs.dynamic = True
+    EXPECTED_OUTPUTS = {'finished': True}
 
     def last_step(self):
         self.out("finished", True)

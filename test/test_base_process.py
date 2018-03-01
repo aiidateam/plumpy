@@ -49,19 +49,6 @@ class TestProcess(unittest.TestCase):
         result = proc.do_run()
         self.assertTrue(result)
 
-    def test_waiting(self):
-        class MyProc(SimpleProc):
-            def run(self):
-                return Wait(self.step2, msg='Waiting for the end of time')
-
-            def step2(self):
-                return True
-
-        p = MyProc()
-        p.do_run()
-        self.assertEqual(p.state, ProcessState.WAITING)
-        p.resume()
-
     def test_state_saving_created(self):
         class FauxProc(object):
             def dummy_fn(self):

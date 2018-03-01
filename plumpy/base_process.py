@@ -1,8 +1,11 @@
 import abc
 from builtins import str
+import collections
 from enum import Enum
+import inspect
 from future.utils import with_metaclass, raise_
 import sys
+import tornado.gen
 import traceback
 import yaml
 
@@ -59,9 +62,28 @@ class Pause(Command):
     pass
 
 
+def _ensure_future(future_coro_function):
+    if isinstance(future_coro_function, futures.Future):
+        return future_coro_function
+    else:
+        try:
+            return persistence.SavableTask(future_coro_function)
+        except TypeError:
+            try:
+                return futures.Task(future_coro_function)
+            except TypeError:
+                raise TypeError("Must supply a future, function or coroutine")
+
+
 @auto_persist('msg', 'data')
 class Wait(Command):
-    def __init__(self, continue_fn=None, msg=None, data=None):
+    def __init__(self, awaitable, continue_fn=None, msg=None, data=None):
+        if isinstance(awaitable, collections.Sequence):
+            self.future = [_ensure_future(towait) for towait in awaitable]
+        elif isinstance(awaitable, collections.Mapping):
+            self.future = {key: _ensure_future(towait) for key, towait in awaitable.items()}
+        else:
+            self.future = _ensure_future(awaitable)
         self.continue_fn = continue_fn
         self.msg = msg
         self.data = data
@@ -253,13 +275,6 @@ class Running(State):
         else:
             return True
 
-    def resume(self, run_fn, value=NULL):
-        if value == NULL:
-            self.transition_to(ProcessState.RUNNING, run_fn)
-        else:
-            self.transition_to(ProcessState.RUNNING, run_fn, value)
-        return True
-
     def _run(self):
         self._run_handle = None
         with stack.in_stack(self.process):
@@ -298,7 +313,12 @@ class Running(State):
         elif isinstance(command, Stop):
             self.transition_to(ProcessState.FINISHED, command.result)
         elif isinstance(command, Wait):
-            self.transition_to(ProcessState.WAITING, command.continue_fn, command.msg, command.data)
+            self.transition_to(
+                ProcessState.WAITING,
+                command.future,
+                command.continue_fn,
+                msg=command.msg,
+                data=command.data)
         elif isinstance(command, Continue):
             self.transition_to(ProcessState.RUNNING, command.continue_fn, *command.args)
         else:
@@ -309,7 +329,7 @@ class Running(State):
         self._pausing = None
 
 
-@auto_persist('msg', 'data')
+@auto_persist('msg', 'data', 'future')
 class Waiting(State):
     LABEL = ProcessState.WAITING
     ALLOWED = {ProcessState.RUNNING,
@@ -325,11 +345,13 @@ class Waiting(State):
             state_info += " ({})".format(self.msg)
         return state_info
 
-    def __init__(self, process, done_callback, msg=None, data=None):
+    def __init__(self, process, future, done_callback, msg=None, data=None):
         super(Waiting, self).__init__(process)
+        self.future = future
         self.done_callback = done_callback
         self.msg = msg
         self.data = data
+        self.process.loop().add_callback(self._await)
 
     def save_instance_state(self, out_state):
         super(Waiting, self).save_instance_state(out_state)
@@ -337,17 +359,40 @@ class Waiting(State):
             out_state[self.DONE_CALLBACK] = self.done_callback.__name__
 
     def load_instance_state(self, saved_state, load_context):
+        # The 'instance' variable is used by the future it there is a
+        # method that needs to be loaded
+        load_context.copyextend(instance=load_context.process)
         super(Waiting, self).load_instance_state(saved_state, load_context)
         callback_name = saved_state.get(self.DONE_CALLBACK, None)
         if callback_name is not None:
             self.done_callback = getattr(self.process, callback_name)
 
-    def resume(self, value=NULL):
-        if value == NULL:
-            self.transition_to(ProcessState.RUNNING, self.done_callback)
+        # Schedule the await callback
+        self.process.loop().add_callback(self._await)
+
+    @tornado.gen.coroutine
+    def _await(self):
+        try:
+            result = yield self.future
+            self._resume(result)
+        except Exception:
+            exc_info = sys.exc_info()
+            self.transition_to(ProcessState.EXCEPTED, exc_info[1], exc_info[2])
+
+    def _resume(self, result):
+        if self._callback_accepts_result():
+            self.transition_to(ProcessState.RUNNING, self.done_callback, result)
         else:
-            self.transition_to(ProcessState.RUNNING, self.done_callback, value)
-        return True
+            self.transition_to(ProcessState.RUNNING, self.done_callback)
+
+    def _callback_accepts_result(self):
+        args, varargs, keywords, defaults = inspect.getargspec(self.done_callback)
+        if len(args) == 2:
+            return True
+        elif keywords and len(args) + len(keywords) >= 2:
+            return True
+        else:
+            return False
 
 
 class Excepted(State):
@@ -714,13 +759,6 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             self._paused = False
 
         return not self._paused
-
-    @event(from_states=(Running, Waiting), to_states=(Running, Excepted))
-    def resume(self, *args):
-        """
-        Start running the process again
-        """
-        return self._state.resume(*args)
 
     @event(to_states=Excepted)
     def fail(self, exception, trace_back=None):

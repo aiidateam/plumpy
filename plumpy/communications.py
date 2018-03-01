@@ -1,6 +1,4 @@
-import abc
 import kiwipy
-from future.utils import with_metaclass
 
 from . import futures
 

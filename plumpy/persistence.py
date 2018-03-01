@@ -444,12 +444,27 @@ class Savable(object):
 
     @super_check
     def load_instance_state(self, saved_state, load_context):
+        """
+        Load the instance state of this Savable, this is usually used internally
+        and not called directly by the user.
+
+        :param saved_state: The saved state dictionary
+        :type saved_state: :class:`collections.Mapping`
+        :param load_context: The load context
+        :type load_context: :class:`LoadContext`
+        """
         self._ensure_persist_configured()
         if self._auto_persist is not None:
             self.load_members(self._auto_persist, saved_state, load_context)
 
     @super_check
     def save_instance_state(self, out_state):
+        """
+        Save the instance state of a savable to a mapping
+
+        :param out_state: The mapping to save the state to
+        :type out_state: :class:`collections.MutableMapping`
+        """
         self._ensure_persist_configured()
         if self._auto_persist is not None:
             self.save_members(self._auto_persist, out_state)
@@ -540,6 +555,54 @@ class Savable(object):
         return value
 
 
+@auto_persist('_fn')
+class SavableFunction(Savable):
+    def __init__(self, fn):
+        super(SavableFunction, self).__init__()
+        if inspect.ismethod(fn):
+            self._fn = SavableMethod(fn)
+        elif inspect.isfunction(fn):
+            self._fn = SavableFreeFunction(fn)
+        else:
+            raise TypeError("{} is not a function or a method".format(fn))
+
+
+class SavableFreeFunction(Savable):
+    FN = 'fn'
+
+    def __init__(self, fn):
+        self._fn = fn
+
+    def __call__(self, *args, **kwargs):
+        return self._fn(*args, **kwargs)
+
+    def save_instance_state(self, out_state):
+        super(SavableFreeFunction, self).save_instance_state(out_state)
+        out_state[self.FN] = utils.function_name(self._fn)
+
+    def load_instance_state(self, saved_state, load_context):
+        super(SavableFreeFunction, self).load_instance_state(saved_state, load_context)
+        self._fn = utils.load_function(saved_state[self.FN])
+
+
+class SavableMethod(Savable):
+    FN = 'fn'
+
+    def __init__(self, fn):
+        self._fn = fn
+
+    def __call__(self, *args, **kwargs):
+        return self._fn(*args, **kwargs)
+
+    def save_instance_state(self, out_state):
+        super(SavableMethod, self).save_instance_state(out_state)
+        out_state[self.FN] = utils.function_name(self._fn)
+
+    def load_instance_state(self, saved_state, load_context):
+        super(SavableMethod, self).load_instance_state(saved_state, load_context)
+        self._fn = utils.load_function(saved_state[self.FN], load_context.instance)
+
+
 @auto_persist('_done', '_result')
 class SavableFuture(futures.Future, Savable):
     """
@@ -565,3 +628,17 @@ class SavableFuture(futures.Future, Savable):
         self._log_traceback = False
         self._tb_logger = None
         self._callbacks = []
+
+
+@auto_persist('_coro_or_fn', '_args', '_kwargs')
+class SavableTask(SavableFuture, futures.Task):
+    def __init__(self, coro_or_fn, *args, **kwargs):
+        super(SavableTask, self).__init__(coro_or_fn, *args, **kwargs)
+        self._coro_or_fn = SavableFunction(coro_or_fn)
+        self._args = args
+        self._kwargs = kwargs
+
+    def load_instance_state(self, saved_state, load_context):
+        super(SavableTask, self).load_instance_state(saved_state, load_context)
+        if not self.done():
+            self._schedule_callback(self._coro_or_fn, *self._args, **self._kwargs)

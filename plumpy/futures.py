@@ -1,12 +1,38 @@
 import kiwipy
 from functools import partial
+import sys
+import tornado.gen
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'KilledError']
+from . import events
+
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'KilledError', 'Task']
 
 InvalidStateError = kiwipy.InvalidStateError
 KilledError = kiwipy.CancelledError
 
 Future = kiwipy.Future
+
+
+class Task(Future):
+    def __init__(self, coro_or_fn, *args, **kwargs):
+        super(Task, self).__init__()
+        self._schedule_callback(coro_or_fn, *args, **kwargs)
+
+    def _schedule_callback(self, coro_or_fn, *args, **kwargs):
+        loop = events.get_event_loop()
+        loop.add_callback(self.do_call, coro_or_fn, *args, **kwargs)
+
+    @tornado.gen.coroutine
+    def do_call(self, fn, *args, **kwargs):
+        if not self.cancelled():
+            try:
+                if tornado.gen.is_coroutine_function(fn):
+                    result = yield fn(*args, **kwargs)
+                else:
+                    result = fn(*args, **kwargs)
+                self.set_result(result)
+            except BaseException:
+                self.set_exc_info(sys.exc_info())
 
 
 def copy_future(source, target):
