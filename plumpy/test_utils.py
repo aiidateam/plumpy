@@ -138,8 +138,8 @@ class EventsTesterMixin(object):
         self.called('resume')
 
     @utils.override
-    def on_finish(self, result):
-        super(EventsTesterMixin, self).on_finish(result)
+    def on_finish(self, result, successful):
+        super(EventsTesterMixin, self).on_finish(result, successful)
         self.called('finish')
 
     @utils.override

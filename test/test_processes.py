@@ -2,7 +2,7 @@ import plumpy
 import kiwipy
 from past.builtins import basestring
 import plumpy
-from plumpy import Process, ProcessState, test_utils
+from plumpy import Process, ProcessState, UnsuccessfulResult, InvalidStateError, test_utils
 from plumpy.utils import AttributesFrozendict
 
 from . import utils
@@ -28,9 +28,9 @@ class ForgetToCallParent(Process):
         if self.forget_on != 'except':
             super(ForgetToCallParent, self).on_except(exception)
 
-    def on_finish(self, result):
+    def on_finish(self, result, successful):
         if self.forget_on != 'finish':
-            super(ForgetToCallParent, self).on_finish(result)
+            super(ForgetToCallParent, self).on_finish(result, successful)
 
     def on_kill(self, msg):
         if self.forget_on != 'kill':
@@ -302,8 +302,29 @@ class TestProcess(utils.TestCaseWithLoop):
 
     def test_missing_output(self):
         proc = test_utils.MissingOutputProcess()
-        with self.assertRaises(RuntimeError):
-            proc.execute()
+
+        with self.assertRaises(InvalidStateError):
+            proc.successful()
+
+        proc.execute()
+
+        self.assertEquals(proc.successful(), False)
+
+    def test_unsuccessful_result(self):
+        ERROR_CODE = 256
+
+        class Proc(Process):
+            @classmethod
+            def define(cls, spec):
+                super(Proc, cls).define(spec)
+
+            def _run(self):
+                return UnsuccessfulResult(ERROR_CODE)
+
+        proc = Proc()
+        proc.execute()
+
+        self.assertEquals(proc.result(), ERROR_CODE)
 
     def test_process_start_if_paused(self):
         """ Test that starting a paused process unpauses it """
