@@ -24,8 +24,8 @@ from .persistence import auto_persist
 from . import stack
 from . import utils
 
-__all__ = ['ProcessStateMachine', 'ProcessState',
-           'Created', 'Running', 'Waiting', 'Finished', 'Excepted', 'Killed',
+__all__ = ['ProcessStateMachine', 'ProcessState', 'KilledError', 'UnsuccessfulResult',
+           'Created', 'Running', 'Waiting', 'Finished', 'Excepted', 'Killed', 'InvalidStateError',
            # Commands
            'Kill', 'Stop', 'Wait', 'Continue']
 
@@ -40,6 +40,13 @@ NULL = __NULL()
 
 class KilledError(BaseException):
     """The process was killed."""
+
+
+class UnsuccessfulResult(object):
+    """The result of the process was unsuccessful"""
+
+    def __init__(self, result=None):
+        self.result = result
 
 
 # region Commands
@@ -69,8 +76,9 @@ class Wait(Command):
 
 @auto_persist('result')
 class Stop(Command):
-    def __init__(self, result):
+    def __init__(self, result, successful):
         self.result = result
+        self.successful = successful
 
 
 @auto_persist('args', 'kwargs')
@@ -279,7 +287,11 @@ class Running(State):
                     return
                 else:
                     if not isinstance(result, Command):
-                        result = Stop(result)
+
+                        if isinstance(result, UnsuccessfulResult):
+                            result = Stop(result.result, False)
+                        else:
+                            result = Stop(result, True)
 
                     if self._pausing is not None:
                         self._command = result
@@ -296,7 +308,7 @@ class Running(State):
         elif isinstance(command, Pause):
             self.pause()
         elif isinstance(command, Stop):
-            self.transition_to(ProcessState.FINISHED, command.result)
+            self.transition_to(ProcessState.FINISHED, command.result, command.successful)
         elif isinstance(command, Wait):
             self.transition_to(ProcessState.WAITING, command.continue_fn, command.msg, command.data)
         elif isinstance(command, Continue):
@@ -399,13 +411,14 @@ class Excepted(State):
         return type(self.exception), self.exception, self.traceback
 
 
-@auto_persist('result')
+@auto_persist('result', 'successful')
 class Finished(State):
     LABEL = ProcessState.FINISHED
 
-    def __init__(self, process, result):
+    def __init__(self, process, result, successful):
         super(Finished, self).__init__(process)
         self.result = result
+        self.successful = successful
 
 
 @auto_persist('msg')
@@ -572,7 +585,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         elif state_label == ProcessState.WAITING:
             call_with_super_check(self.on_wait, state.data)
         elif state_label == ProcessState.FINISHED:
-            call_with_super_check(self.on_finish, state.result)
+            call_with_super_check(self.on_finish, state.result, state.successful)
         elif state_label == ProcessState.KILLED:
             call_with_super_check(self.on_kill, state.msg)
         elif state_label == ProcessState.EXCEPTED:
@@ -623,7 +636,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         pass
 
     @super_check
-    def on_finish(self, result):
+    def on_finish(self, result, successful):
         pass
 
     @super_check
@@ -667,6 +680,16 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
             raise self._state.exception
         else:
             raise InvalidStateError
+
+    def successful(self):
+        """
+        Returns whether the result of the process is considered successful
+        Will raise if the process is not in the FINISHED state
+        """
+        try:
+            return self._state.successful
+        except AttributeError:
+            raise InvalidStateError('process is not in the finished state')
 
     # region commands
     @event(to_states=(Running, Waiting, Excepted))

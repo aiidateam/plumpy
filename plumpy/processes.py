@@ -6,6 +6,7 @@ import time
 import uuid
 
 from future.utils import with_metaclass
+from kiwipy import CancelledError
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -14,6 +15,7 @@ from . import events
 from . import futures
 from . import base
 from . import base_process
+from .base.state_machine import StateEntryFailed
 from .base_process import Continue, Wait, Kill, Stop, ProcessState, Waiting
 from .base import TransitionFailed
 from . import persistence
@@ -65,7 +67,10 @@ class Executor(ProcessListener):
             if process.paused:
                 process.play()
 
-            return loop.run_sync(lambda: self._future)
+            try:
+                return loop.run_sync(lambda: self._future)
+            except CancelledError:
+                return process.result()
         finally:
             self._future = None
             self._loop = None
@@ -365,9 +370,15 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         super(Process, self).on_pause()
         self._fire_event(ProcessListener.on_process_played)
 
-    def on_finish(self, result):
-        super(Process, self).on_finish(result)
-        self._check_outputs()
+    def on_finish(self, result, successful):
+        super(Process, self).on_finish(result, successful)
+
+        if successful:
+            try:
+                self._check_outputs()
+            except ValueError:
+                raise StateEntryFailed(ProcessState.FINISHED, result, False)
+
         self.future().set_result(self.outputs)
         self._fire_event(ProcessListener.on_process_finished, result)
 
@@ -525,4 +536,4 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         for name, port in self.spec().outputs.items():
             valid, msg = port.validate(wrapped.get(name, ports.UNSPECIFIED))
             if not valid:
-                raise RuntimeError("Process {} failed because {}".format(self.get_name(), msg))
+                raise ValueError(msg)
