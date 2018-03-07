@@ -45,7 +45,7 @@ class Executor(ProcessListener):
     def __init__(self, interrupt_on_pause_or_wait=False):
         self._interrupt_on_pause_or_wait = interrupt_on_pause_or_wait
 
-    def on_process_waiting(self, process, data):
+    def on_process_waiting(self, process, msg):
         if self._interrupt_on_pause_or_wait and not self._future.done():
             self._future.set_result('waiting')
 
@@ -353,9 +353,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted,
                                        self, output_port, value, dynamic)
 
-    def on_wait(self, data):
-        super(Process, self).on_wait(data)
-        self._fire_event(ProcessListener.on_process_waiting, data)
+    def on_wait(self, state):
+        super(Process, self).on_wait(state)
+        self._fire_event(ProcessListener.on_process_waiting, state.msg)
 
     def on_pause(self):
         super(Process, self).on_pause()

@@ -14,6 +14,7 @@ from . import utils
 __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
 
 ToContext = dict
+StepResult = collections.namedtuple('StepResult', ('finished', 'result'))
 
 
 class WorkChainSpec(processes.ProcessSpec):
@@ -58,7 +59,6 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         super(WorkChain, self).__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
         self._stepper = None
-        self._awaitables = {}
 
     def on_create(self):
         super(WorkChain, self).on_create()
@@ -80,47 +80,24 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         if stepper_state is not None:
             self._stepper = self.spec().get_outline().recreate_stepper(stepper_state, self)
 
-    def to_context(self, **kwargs):
-        """
-        This is a convenience method that provides syntactic sugar, for
-        a user to add multiple intersteps that will assign a certain value
-        to the corresponding key in the context of the workchain
-        """
-        for key, awaitable in kwargs.items():
-            if isinstance(awaitable, processes.Process):
-                awaitable = awaitable.future()
-            self._awaitables[key] = awaitable
-
     def run(self):
         return self._do_step()
 
     def _do_step(self, results=None):
-        # Take the results and put them in the context
-        if results is not None:
-            for key, result in results.items():
-                existing = self.ctx.get(key, None)
-                if isinstance(existing, collections.MutableSequence):
-                    existing.append(result)
-                else:
-                    self.ctx[key] = result
-        self._awaitables = {}
-
         try:
             finished, retval = self._stepper.step()
         except _PropagateReturn:
             finished, retval = True, None
 
         if not finished:
-            if retval is not None:
-                if isinstance(retval, ToContext):
-                    self.to_context(**retval)
-                else:
-                    raise TypeError("Invalid value returned from step '{}'".format(retval))
+            try:
+                command = processes.Wait(retval, self._do_step, msg="Waiting before next step")
+            except ValueError:
+                command = processes.Continue(self._do_step, retval)
 
-            if self._awaitables:
-                return processes.Wait(self._awaitables, self._do_step, msg='Waiting before next step')
-            else:
-                return processes.Continue(self._do_step)
+            return command
+        else:
+            return processes.Stop(retval)
 
 
 class Stepper(persistence.Savable):
@@ -134,13 +111,16 @@ class Stepper(persistence.Savable):
         self._workchain = load_context.workchain
 
     @abc.abstractmethod
-    def step(self):
+    def step(self, param=None):
         """
         Execute on step of the instructions.
         :return: A 2-tuple with entries:
             0. True if the stepper has finished, False otherwise
             1. The return value from the executed step
-        :rtype: tuple
+
+        :param param: Optional value to pass to the step, usually the result
+            from the previous step
+        :rtype: :class:`StepResult`
         """
         pass
 
@@ -189,7 +169,7 @@ class _FunctionStepper(Stepper):
         super(_FunctionStepper, self).load_instance_state(saved_state, load_context)
         self._fn = getattr(self._workchain.__class__, saved_state['_fn'])
 
-    def step(self):
+    def step(self, param=None):
         return True, self._fn(self._workchain)
 
     def __str__(self):
@@ -234,10 +214,10 @@ class _BlockStepper(Stepper):
         self._pos = 0
         self._child_stepper = self._block[0].create_stepper(self._workchain)
 
-    def step(self):
+    def step(self, param=None):
         assert not self.finished(), "Can't call step after the block is finished"
 
-        finished, result = self._child_stepper.step()
+        finished, result = self._child_stepper.step(param)
         if finished:
             self.next_instruction()
 
@@ -351,7 +331,7 @@ class _IfStepper(Stepper):
         self._pos = 0
         self._child_stepper = None
 
-    def step(self):
+    def step(self, param=None):
         if self.finished():
             return True, None
 
@@ -368,7 +348,7 @@ class _IfStepper(Stepper):
             else:
                 self._child_stepper = self._if_instruction[self._pos].body.create_stepper(self._workchain)
 
-        finished, retval = self._child_stepper.step()
+        finished, retval = self._child_stepper.step(param)
         if finished:
             self._pos = len(self._if_instruction)
             self._child_stepper = None
@@ -457,7 +437,7 @@ class _WhileStepper(Stepper):
         self._while_instruction = while_instruction
         self._child_stepper = None
 
-    def step(self):
+    def step(self, param=None):
         # Do we need to check the condition?
         if self._child_stepper is None:
             # Should we go into the loop body?
@@ -466,7 +446,7 @@ class _WhileStepper(Stepper):
             else:  # Nope...we're done
                 return True, None
 
-        finished, result = self._child_stepper.step()
+        finished, result = self._child_stepper.step(param)
         if finished:
             self._child_stepper = None
 
@@ -521,14 +501,7 @@ class _PropagateReturn(BaseException):
 
 
 class _ReturnStepper(Stepper):
-    def step(self):
-        """
-        Execute on step of the instructions.
-        :return: A 2-tuple with entries:
-            0. True if the stepper has finished, False otherwise
-            1. The return value from the executed step
-        :rtype: tuple
-        """
+    def step(self, param=None):
         raise _PropagateReturn()
 
 

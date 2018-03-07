@@ -139,8 +139,8 @@ class EventsTesterMixin(object):
         self.called('emitted')
 
     @utils.override
-    def on_wait(self, wait_on):
-        super(EventsTesterMixin, self).on_wait(wait_on)
+    def on_wait(self, state):
+        super(EventsTesterMixin, self).on_wait(state)
         self.called('wait')
 
     @utils.override
@@ -228,7 +228,7 @@ class ProcessListenerTester(plumpy.ProcessListener):
         self.called.add('running')
         self._check_done()
 
-    def on_process_waiting(self, process, data):
+    def on_process_waiting(self, process, msg):
         self.called.add('waiting')
         self._check_done()
 
@@ -291,7 +291,7 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
         self._save(process)
 
     @utils.override
-    def on_process_waiting(self, process, data):
+    def on_process_waiting(self, process, msg):
         self._save(process)
 
     @utils.override

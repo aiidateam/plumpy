@@ -62,31 +62,50 @@ class Pause(Command):
     pass
 
 
-def _ensure_future(future_coro_function):
+def ensure_future(future_coro_function):
+    """
+    Takes a coroutine or function and schedules its execution returning a corresponding
+    future.  For convenience will also accept a plain future in which case it will
+    simply be returned.
+
+    :param future_coro_function: The future, function or coroutine
+    :return: A future representing the execution
+    :rtype: :class:`futures.Future`
+    """
     if isinstance(future_coro_function, futures.Future):
         return future_coro_function
     else:
+        return schedule_task(future_coro_function)
+
+
+def schedule_task(coro_function):
+    """
+    Schedule the execution of a coroutine of function and return a corresponding future.
+
+    :param coro_function: The coroutine of function to schedule
+    :return: A future representing the task
+    :rtype: :class:`futures.Future`
+    """
+    try:
+        return persistence.SavableTask(coro_function)
+    except TypeError:
         try:
-            return persistence.SavableTask(future_coro_function)
+            return futures.Task(coro_function)
         except TypeError:
-            try:
-                return futures.Task(future_coro_function)
-            except TypeError:
-                raise TypeError("Must supply a future, function or coroutine")
+            raise TypeError("Must supply a future, function or coroutine")
 
 
-@auto_persist('msg', 'data')
+@auto_persist('future', 'continue_fn', 'msg')
 class Wait(Command):
-    def __init__(self, awaitable, continue_fn=None, msg=None, data=None):
+    def __init__(self, awaitable, continue_fn, msg=None):
         if isinstance(awaitable, collections.Sequence):
-            self.future = [_ensure_future(towait) for towait in awaitable]
+            self.future = [ensure_future(towait) for towait in awaitable]
         elif isinstance(awaitable, collections.Mapping):
-            self.future = {key: _ensure_future(towait) for key, towait in awaitable.items()}
+            self.future = {key: ensure_future(towait) for key, towait in awaitable.items()}
         else:
-            self.future = _ensure_future(awaitable)
+            self.future = ensure_future(awaitable)
         self.continue_fn = continue_fn
         self.msg = msg
-        self.data = data
 
 
 @auto_persist('result')
@@ -106,10 +125,15 @@ class Continue(Command):
 
     def save_instance_state(self, out_state):
         super(Continue, self).save_instance_state(out_state)
-        out_state[self.CONTINUE_FN] = self.continue_fn.__name__
+        # Either a free function of a method of process
+        if inspect.ismethod(self.continue_fn):
+            out_state[self.CONTINUE_FN] = self.continue_fn.__name__
+        else:
+            out_state[self.CONTINUE_FN] = utils.function_name(self.continue_fn)
 
     def load_instance_state(self, saved_state, load_context):
         super(Continue, self).load_instance_state(saved_state, load_context)
+        # Either a free function or a method of process
         try:
             self.continue_fn = utils.load_function(saved_state[self.CONTINUE_FN])
         except ValueError:
@@ -313,12 +337,7 @@ class Running(State):
         elif isinstance(command, Stop):
             self.transition_to(ProcessState.FINISHED, command.result)
         elif isinstance(command, Wait):
-            self.transition_to(
-                ProcessState.WAITING,
-                command.future,
-                command.continue_fn,
-                msg=command.msg,
-                data=command.data)
+            self.transition_to(ProcessState.WAITING, command.future, command.continue_fn, msg=command.msg)
         elif isinstance(command, Continue):
             self.transition_to(ProcessState.RUNNING, command.continue_fn, *command.args)
         else:
@@ -329,7 +348,7 @@ class Running(State):
         self._pausing = None
 
 
-@auto_persist('msg', 'data', 'future')
+@auto_persist('msg', 'future')
 class Waiting(State):
     LABEL = ProcessState.WAITING
     ALLOWED = {ProcessState.RUNNING,
@@ -345,12 +364,11 @@ class Waiting(State):
             state_info += " ({})".format(self.msg)
         return state_info
 
-    def __init__(self, process, future, done_callback, msg=None, data=None):
+    def __init__(self, process, future, done_callback, msg=None):
         super(Waiting, self).__init__(process)
         self.future = future
         self.done_callback = done_callback
         self.msg = msg
-        self.data = data
         self.process.loop().add_callback(self._await)
 
     def save_instance_state(self, out_state):
@@ -609,7 +627,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         elif state_label == ProcessState.RUNNING:
             call_with_super_check(self.on_run)
         elif state_label == ProcessState.WAITING:
-            call_with_super_check(self.on_wait, state.data)
+            call_with_super_check(self.on_wait, state)
         elif state_label == ProcessState.FINISHED:
             call_with_super_check(self.on_finish, state.result)
         elif state_label == ProcessState.KILLED:
@@ -646,7 +664,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         pass
 
     @super_check
-    def on_wait(self, data):
+    def on_wait(self, state):
         pass
 
     @super_check

@@ -15,7 +15,7 @@ from . import base
 from .base import super_check
 
 __all__ = ['Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable', 'SavableFuture',
-           'LoadContext', 'PersistedCheckpoint', 'InMemoryPersister']
+           'LoadContext', 'PersistedCheckpoint', 'InMemoryPersister', 'SavableTask']
 
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 

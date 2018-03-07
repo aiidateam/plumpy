@@ -91,3 +91,33 @@ class TestProcess(unittest.TestCase):
 
     def _attributes_match(self, a, b):
         self.assertDictEqual(a.__dict__, b.__dict__)
+
+
+def dummy_fn():
+    pass
+
+
+class TestCommandPersistence(unittest.TestCase):
+    def test_continue(self):
+        fut = plumpy.SavableFuture()
+        contninue_cmd = plumpy.Continue(dummy_fn, 'arg', kwarg='kwarg')
+        saved_state = contninue_cmd.save()
+        continue_cmd_loaded = plumpy.Continue.recreate_from(saved_state)
+
+        for attr in ('args', 'kwargs', 'continue_fn'):
+            self.assertEquals(getattr(contninue_cmd, attr), getattr(continue_cmd_loaded, attr))
+
+    def test_stop(self):
+        stop_cmd = plumpy.Stop("I'm done")
+        saved_state = stop_cmd.save()
+        stop_cmd_loaded = plumpy.Stop.recreate_from(saved_state)
+        self.assertEquals(stop_cmd.result, stop_cmd_loaded.result)
+
+    def test_wait(self):
+        fut = plumpy.SavableFuture()
+        wait_cmd = plumpy.Wait(fut, dummy_fn, msg='Waiting for nothing')
+        saved_state = wait_cmd.save()
+        wait_cmd_loaded = plumpy.Wait.recreate_from(saved_state)
+
+        for attr in ('continue_fn', 'msg'):
+            self.assertEquals(getattr(wait_cmd, attr), getattr(wait_cmd_loaded, attr))

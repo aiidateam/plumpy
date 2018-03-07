@@ -25,12 +25,14 @@ class ProcessListener(with_metaclass(ABCMeta, object)):
         """
         pass
 
-    def on_process_waiting(self, process, data):
+    def on_process_waiting(self, process, msg):
         """
         Called when the process is about to enter the WAITING state
 
         :param process: The process
         :type process: :class:`plumpy.Process`
+        :param msg: The waiting message (if any)
+        :type msg: basestring or NoneType
         """
         pass
 
