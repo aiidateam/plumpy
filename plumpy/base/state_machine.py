@@ -18,6 +18,15 @@ class StateMachineError(Exception):
     pass
 
 
+class StateEntryFailed(Exception):
+
+    def __init__(self, state=None, *args, **kwargs):
+        super(StateEntryFailed, self).__init__('failed to enter state')
+        self.state = state
+        self.args = args
+        self.kwargs = kwargs
+
+
 class InvalidStateError(Exception):
     """The operation is not allowed in this state."""
 
@@ -265,7 +274,25 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
                 call_with_super_check(self._state.exit)
                 self._state.in_state = False
 
-            call_with_super_check(new_state.enter)
+            try:
+                call_with_super_check(new_state.enter)
+            except StateEntryFailed as exception:
+                new_state = exception.state
+                if not isinstance(new_state, State):
+                    state_cls = self._ensure_state_class(new_state)
+                    new_state = state_cls(self, *exception.args, **exception.kwargs)
+                label = new_state.LABEL
+
+                if self._state is None:
+                    assert label == self.initial_state_label()
+                else:
+                    if label not in self._state.ALLOWED:
+                        raise RuntimeError(
+                            "Cannot transition from {} to {}".format(self._state.LABEL, label))
+                    call_with_super_check(self._state.exit)
+                    self._state.in_state = False
+                call_with_super_check(new_state.enter)
+
             self._state = new_state
             new_state.in_state = True
             if self._state.is_terminal():
