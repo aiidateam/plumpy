@@ -35,7 +35,7 @@ class TestTaskActions(TestCaseWithLoop):
             testing_mode=True
         )
 
-        self.communicator.init()
+        self.communicator.connect()
 
         self._tmppath = tempfile.mkdtemp()
         self.persister = plumpy.PicklePersister(self._tmppath)
