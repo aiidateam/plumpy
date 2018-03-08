@@ -25,15 +25,15 @@ def coro(arg):
 class TestTask(utils.TestCaseWithLoop):
     def test_fn_task(self):
         RETVAL = 'ret this!'
-        result = plumpy.run_until_complete(plumpy.Task(func, RETVAL))
+        result = plumpy.run_until_complete(plumpy.CallbackTask(func, RETVAL))
         self.assertEquals(RETVAL, result)
 
     def test_exception_fn_task(self):
         with self.assertRaises(RuntimeError):
-            plumpy.run_until_complete(plumpy.Task(except_func()))
+            plumpy.run_until_complete(plumpy.CallbackTask(except_func()))
 
     def test_coro_task(self):
         RETVAL = 'coro this!'
-        result = plumpy.run_until_complete(plumpy.Task(coro, RETVAL))
+        result = plumpy.run_until_complete(plumpy.CallbackTask(coro, RETVAL))
         self.assertEquals(RETVAL, result)
 

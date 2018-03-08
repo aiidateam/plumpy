@@ -15,7 +15,7 @@ from . import base
 from .base import super_check
 
 __all__ = ['Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable', 'SavableFuture',
-           'LoadContext', 'PersistedCheckpoint', 'InMemoryPersister', 'SavableTask']
+           'LoadContext', 'PersistedCheckpoint', 'InMemoryPersister', 'SavableCallbackTask']
 
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
@@ -631,14 +631,18 @@ class SavableFuture(futures.Future, Savable):
 
 
 @auto_persist('_coro_or_fn', '_args', '_kwargs')
-class SavableTask(SavableFuture, futures.Task):
-    def __init__(self, coro_or_fn, *args, **kwargs):
-        super(SavableTask, self).__init__(coro_or_fn, *args, **kwargs)
-        self._coro_or_fn = SavableFunction(coro_or_fn)
+class SavableCallbackTask(SavableFuture, futures.CallbackTask):
+    def __init__(self, to_call, *args, **kwargs):
+        super(SavableCallbackTask, self).__init__(to_call, *args, **kwargs)
+        self._coro_or_fn = SavableFunction(to_call)
         self._args = args
         self._kwargs = kwargs
 
     def load_instance_state(self, saved_state, load_context):
-        super(SavableTask, self).load_instance_state(saved_state, load_context)
+        super(SavableCallbackTask, self).load_instance_state(saved_state, load_context)
         if not self.done():
             self._schedule_callback(self._coro_or_fn, *self._args, **self._kwargs)
+
+
+# Register the savable callback task as awaitable
+futures.ensure_awaitable.extend(SavableCallbackTask)

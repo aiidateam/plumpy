@@ -4,12 +4,11 @@ import abc
 import collections
 import inspect
 import re
-import sys
 
+from . import futures
 from . import mixins
 from . import persistence
 from . import processes
-from . import utils
 
 __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
 
@@ -90,12 +89,10 @@ class WorkChain(mixins.ContextMixin, processes.Process):
             finished, return_value = True, exception.exit_code
 
         if not finished:
-            try:
-                command = processes.Wait(return_value, self._do_step, msg="Waiting before next step")
-            except ValueError:
-                command = processes.Continue(self._do_step, return_value)
-
-            return command
+            if futures.is_awaitable(return_value):
+                return processes.Wait(return_value, self._do_step, msg="Waiting before next step")
+            else:
+                return processes.Continue(self._do_step, return_value)
         else:
             return processes.Stop(return_value, True)
 

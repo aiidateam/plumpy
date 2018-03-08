@@ -9,6 +9,8 @@ import tornado.gen
 import traceback
 import yaml
 
+from plumpy.futures import ensure_awaitable
+
 try:
     import tblib
 
@@ -69,22 +71,6 @@ class Pause(Command):
     pass
 
 
-def ensure_future(future_coro_function):
-    """
-    Takes a coroutine or function and schedules its execution returning a corresponding
-    future.  For convenience will also accept a plain future in which case it will
-    simply be returned.
-
-    :param future_coro_function: The future, function or coroutine
-    :return: A future representing the execution
-    :rtype: :class:`futures.Future`
-    """
-    if isinstance(future_coro_function, futures.Future):
-        return future_coro_function
-    else:
-        return schedule_task(future_coro_function)
-
-
 def schedule_task(coro_function):
     """
     Schedule the execution of a coroutine of function and return a corresponding future.
@@ -94,10 +80,10 @@ def schedule_task(coro_function):
     :rtype: :class:`futures.Future`
     """
     try:
-        return persistence.SavableTask(coro_function)
+        return persistence.SavableCallbackTask(coro_function)
     except TypeError:
         try:
-            return futures.Task(coro_function)
+            return futures.CallbackTask(coro_function)
         except TypeError:
             raise TypeError("Must supply a future, function or coroutine")
 
@@ -106,18 +92,18 @@ def schedule_task(coro_function):
 class Wait(Command):
     def __init__(self, awaitable, continue_fn, msg=None):
         if isinstance(awaitable, collections.Sequence):
-            self.future = [ensure_future(towait) for towait in awaitable]
+            self.future = [ensure_awaitable(towait) for towait in awaitable]
         elif isinstance(awaitable, collections.Mapping):
-            self.future = {key: ensure_future(towait) for key, towait in awaitable.items()}
+            self.future = {key: ensure_awaitable(towait) for key, towait in awaitable.items()}
         else:
-            self.future = ensure_future(awaitable)
+            self.future = ensure_awaitable(awaitable)
         self.continue_fn = continue_fn
         self.msg = msg
 
 
 @auto_persist('result')
 class Stop(Command):
-    def __init__(self, result, successful):
+    def __init__(self, result, successful=True):
         self.result = result
         self.successful = successful
 
