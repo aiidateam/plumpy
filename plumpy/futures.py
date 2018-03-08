@@ -57,7 +57,7 @@ class CallbackTask(Task):
                 self.future().set_exc_info(sys.exc_info())
 
 
-class TasksList(Task):
+class AwaitablesList(Task):
     def __init__(self, awaitables):
         if not isinstance(awaitables, collections.Sequence):
             raise ValueError("Must be a sequence")
@@ -66,6 +66,20 @@ class TasksList(Task):
 
     def future(self):
         return self._future
+
+
+class AwaitablesDict(Task):
+    def __init__(self, awaitables):
+        if not isinstance(awaitables, collections.Mapping):
+            raise ValueError("Must be a mapping")
+
+        self._keys = awaitables.keys()
+        self._awaitables = gather(awaitables.values())
+
+        self._future = Future()
+
+    def future(self):
+        return self.future()
 
 
 def copy_future(source, target):
@@ -147,7 +161,7 @@ def is_awaitable(obj):
 
 class _EnsureAwaitable(object):
     # Converters functions to create awaitables
-    _converters = [CallbackTask]
+    _converters = [CallbackTask, AwaitablesList, AwaitablesDict]
 
     def __call__(self, obj):
         """

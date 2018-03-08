@@ -91,12 +91,7 @@ def schedule_task(coro_function):
 @auto_persist('future', 'continue_fn', 'msg')
 class Wait(Command):
     def __init__(self, awaitable, continue_fn, msg=None):
-        if isinstance(awaitable, collections.Sequence):
-            self.future = [ensure_awaitable(towait) for towait in awaitable]
-        elif isinstance(awaitable, collections.Mapping):
-            self.future = {key: ensure_awaitable(towait) for key, towait in awaitable.items()}
-        else:
-            self.future = ensure_awaitable(awaitable)
+        self.future = futures.ensure_awaitable(awaitable)
         self.continue_fn = continue_fn
         self.msg = msg
 
