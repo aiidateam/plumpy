@@ -2,7 +2,9 @@ import functools
 import inspect
 import reprlib
 import sys
+
 from tornado import ioloop
+import tornado.gen
 
 __all__ = ['new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete']
 
@@ -17,11 +19,17 @@ def set_event_loop(loop):
         loop.make_current()
 
 
-def run_until_complete(future, loop=None):
+@tornado.gen.coroutine
+def _wait(awaitable):
+    result = yield awaitable
+    raise tornado.gen.Return(result)
+
+
+def run_until_complete(awaitable, loop=None):
     if loop is None:
         loop = get_event_loop()
 
-    return loop.run_sync(lambda: future)
+    return loop.run_sync(lambda: _wait(awaitable))
 
 
 def _get_function_source(func):

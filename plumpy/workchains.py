@@ -10,10 +10,14 @@ from . import mixins
 from . import persistence
 from . import processes
 
-__all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
+__all__ = ['WorkChain', 'if_', 'while_', 'return_', 'WorkChainSpec', 'Await']
 
-ToContext = dict
 StepResult = collections.namedtuple('StepResult', ('finished', 'result'))
+
+
+class Await(object):
+    def __init__(self, what):
+        self.what = futures.ensure_awaitable(what)
 
 
 class WorkChainSpec(processes.ProcessSpec):
@@ -84,15 +88,18 @@ class WorkChain(mixins.ContextMixin, processes.Process):
 
     def _do_step(self, results=None):
         try:
-            finished, return_value = self._stepper.step()
+            finished, return_value = self._stepper.step(results)
         except _PropagateReturn as exception:
             finished, return_value = True, exception.exit_code
 
         if not finished:
-            if futures.is_awaitable(return_value):
-                return processes.Wait(return_value, self._do_step, msg="Waiting before next step")
+            if isinstance(return_value, Await):
+                return processes.Wait(return_value.what, self._do_step, msg="Waiting before next step")
+            elif return_value is not None:
+                return processes.Stop(return_value, True)
             else:
-                return processes.Continue(self._do_step, return_value)
+                return processes.Continue(self._do_step)
+
         else:
             return processes.Stop(return_value, True)
 
@@ -167,20 +174,35 @@ class _FunctionStepper(Stepper):
         self._fn = getattr(self._workchain.__class__, saved_state['_fn'])
 
     def step(self, param=None):
-        return True, self._fn(self._workchain)
+        if self._fn_accepts_result():
+            result = self._fn(self._workchain, param)
+        else:
+            result = self._fn(self._workchain)
+
+        return True, result
 
     def __str__(self):
         return self._fn.__name__
+
+    def _fn_accepts_result(self):
+        args, varargs, keywords, defaults = inspect.getargspec(self._fn)
+        if len(args) == 2:
+            return True
+        elif keywords and len(args) + len(keywords) >= 2:
+            return True
+        else:
+            return False
 
 
 class _FunctionCall(_Instruction):
     def __init__(self, func):
         try:
-            args = inspect.getargspec(func)[0]
+            total_params = fn_total_parameters(func)
         except TypeError:
             raise TypeError("func is not a function, got {}".format(type(func)))
-        if len(args) != 1:
-            raise TypeError("Step must take one argument only: self")
+        else:
+            if total_params > 2:
+                raise TypeError("Step must take either self or self and one argument")
 
         self._fn = func
 
@@ -198,6 +220,18 @@ class _FunctionCall(_Instruction):
             desc += "({})".format(doc)
 
         return desc
+
+
+def fn_total_parameters(fn):
+    """
+    Return the total number of arguments a function can accept, this includes
+    positional and keyword.
+    """
+    args, varargs, keywords, defaults = inspect.getargspec(fn)
+    if keywords:
+        return len(args) + len(keywords)
+    else:
+        return len(args)
 
 
 STEPPER_STATE = 'stepper_state'
@@ -503,7 +537,7 @@ class _ReturnStepper(Stepper):
         super(_ReturnStepper, self).__init__(workchain)
         self._return_instruction = return_instruction
 
-    def step(self):
+    def step(self, param=None):
         """
         Raise a _PropagateReturn exception where the value is the exit code set
         in the _Return instruction upon instantiation

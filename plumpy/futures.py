@@ -1,13 +1,14 @@
 import kiwipy
 import collections
 from functools import partial
+from past.builtins import basestring
 import sys
 import tornado.gen
 
-from plumpy.base_process import schedule_task
 from . import events
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'KilledError', 'CallbackTask']
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'KilledError', 'CallbackTask',
+           'ensure_awaitable']
 
 InvalidStateError = kiwipy.InvalidStateError
 KilledError = kiwipy.CancelledError
@@ -37,8 +38,8 @@ class CallbackTask(Task):
         self._schedule_callback(to_call, *args, **kwargs)
         self._future = Future()
 
-    def future(self):
-        return self._future
+    def __await__(self):
+        return self._future.__await__()
 
     def _schedule_callback(self, coro_or_fn, *args, **kwargs):
         loop = events.get_event_loop()
@@ -46,40 +47,15 @@ class CallbackTask(Task):
 
     @tornado.gen.coroutine
     def do_call(self, fn, *args, **kwargs):
-        if not self.future().cancelled():
+        if not self._future.cancelled():
             try:
                 if tornado.gen.is_coroutine_function(fn):
                     result = yield fn(*args, **kwargs)
                 else:
                     result = fn(*args, **kwargs)
-                self.future().set_result(result)
+                self._future.set_result(result)
             except Exception:
-                self.future().set_exc_info(sys.exc_info())
-
-
-class AwaitablesList(Task):
-    def __init__(self, awaitables):
-        if not isinstance(awaitables, collections.Sequence):
-            raise ValueError("Must be a sequence")
-
-        self._futures = gather([get_future(ensure_awaitable(awaitable)) for awaitable in awaitables])
-
-    def future(self):
-        return self._future
-
-
-class AwaitablesDict(Task):
-    def __init__(self, awaitables):
-        if not isinstance(awaitables, collections.Mapping):
-            raise ValueError("Must be a mapping")
-
-        self._keys = awaitables.keys()
-        self._awaitables = gather(awaitables.values())
-
-        self._future = Future()
-
-    def future(self):
-        return self.future()
+                self._future.set_exc_info(sys.exc_info())
 
 
 def copy_future(source, target):
@@ -156,12 +132,31 @@ class _GatheringFuture(Future):
 
 
 def is_awaitable(obj):
-    return isinstance(obj, (Future, Task))
+    if hasattr(obj, '__await__'):
+        return True
+    elif isinstance(obj, collections.Sequence) and not isinstance(obj, basestring):
+        return all([is_awaitable(entry) for entry in obj])
+    elif isinstance(obj, collections.Mapping):
+        return all([is_awaitable(entry) for entry in obj.values()])
+
+    return False
+
+
+def _ensure_awaitable_list(awaitables):
+    if not isinstance(awaitables, collections.Sequence):
+        raise TypeError("Not a sequence of awaitables")
+    return [ensure_awaitable(awaitable) for awaitable in awaitables]
+
+
+def _ensure_awaitable_dict(awaitables):
+    if not isinstance(awaitables, collections.Mapping):
+        raise TypeError("Not a mapping of awaitables")
+    return {key: ensure_awaitable(awaitable) for key, awaitable in awaitables.items()}
 
 
 class _EnsureAwaitable(object):
     # Converters functions to create awaitables
-    _converters = [CallbackTask, AwaitablesList, AwaitablesDict]
+    _converters = [CallbackTask, _ensure_awaitable_list, _ensure_awaitable_dict]
 
     def __call__(self, obj):
         """
@@ -188,27 +183,3 @@ class _EnsureAwaitable(object):
 
 
 ensure_awaitable = _EnsureAwaitable()
-
-
-def get_future(awaitable):
-    """
-    Get the future for an awaitable, if the awaitable is a future it is returned,
-    if it is a Task then the corresponding future is returned.
-
-    :param awaitable: The awaitable to get the future for
-    :return: The future
-    :rtype: :class:`Future`
-    """
-
-    if isinstance(awaitable, Future):
-        return awaitable
-    elif isinstance(awaitable, Task):
-        return awaitable.future()
-    else:
-        raise TypeError("'{}' is not awaitable".format(awaitable))
-
-
-@tornado.gen.coroutine
-def wait(awaitable):
-    result = yield get_future(awaitable)
-    raise tornado.gen.Return(result)

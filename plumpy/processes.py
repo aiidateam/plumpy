@@ -195,6 +195,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
         super(Process, self).__init__(loop)
 
+    def __await__(self):
+        return self._future.__await__()
+
     @property
     def creation_time(self):
         """

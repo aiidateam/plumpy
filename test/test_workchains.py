@@ -181,6 +181,8 @@ class TestWorkchain(utils.TestCaseWithLoop):
             Wf.spec()
 
     def test_same_input_node(self):
+        test_case = self
+
         class Wf(WorkChain):
             @classmethod
             def define(cls, spec):
@@ -191,8 +193,8 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 spec.outline(cls.check_a_b)
 
             def check_a_b(self):
-                assert 'a' in self.inputs
-                assert 'b' in self.inputs
+                test_case.assertIn('a', self.inputs)
+                test_case.assertIn('b', self.inputs)
 
         x = 1
         Wf(inputs=dict(a=x, b=x)).execute()
@@ -200,6 +202,8 @@ class TestWorkchain(utils.TestCaseWithLoop):
     def test_context(self):
         A = "a"
         B = "b"
+
+        test_case = self
 
         class ReturnA(plumpy.Process):
             @classmethod
@@ -223,21 +227,14 @@ class TestWorkchain(utils.TestCaseWithLoop):
             @classmethod
             def define(cls, spec):
                 super(Wf, cls).define(spec)
-                spec.outline(cls.s1, cls.s2, cls.s3)
+                spec.outline(cls.s1, cls.s2)
 
             def s1(self):
-                return ToContext(r1=self.launch(ReturnA), r2=self.launch(ReturnB))
+                return plumpy.Await({'r1': self.launch(ReturnA), 'r2': self.launch(ReturnB)})
 
-            def s2(self):
-                assert self.ctx.r1['res'] == A
-                assert self.ctx.r2['res'] == B
-
-                # Try overwriting r1
-                return ToContext(r1=self.launch(ReturnB))
-
-            def s3(self):
-                assert self.ctx.r1['res'] == B
-                assert self.ctx.r2['res'] == B
+            def s2(self, result):
+                test_case.assertEquals(result['r1']['res'], A)
+                test_case.assertEquals(result['r2']['res'], B)
 
         Wf().execute()
 
@@ -254,7 +251,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
             spec.outline(5)
 
         with self.assertRaises(TypeError):
-            spec.outline(lambda x, y: 5)
+            spec.outline(lambda x, y, z: 5)
 
     def test_checkpointing(self):
         A = 'A'
@@ -286,7 +283,6 @@ class TestWorkchain(utils.TestCaseWithLoop):
     def test_return_in_outline(self):
 
         class WcWithReturn(WorkChain):
-
             FAILED_CODE = 1
 
             @classmethod
@@ -363,6 +359,8 @@ class TestWorkchain(utils.TestCaseWithLoop):
             workchain.execute()
 
     def test_tocontext_schedule_workchain(self):
+        test_case = self
+
         class MainWorkChain(WorkChain):
             @classmethod
             def define(cls, spec):
@@ -371,10 +369,10 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 spec.outputs.dynamic = True
 
             def run(self):
-                return ToContext(subwc=self.launch(SubWorkChain))
+                return plumpy.Await(self.launch(SubWorkChain))
 
             def check(self):
-                assert self.ctx.subwc.out.value == 5
+                test_case.assertEquals(self.ctx.subwc.out.value, 5)
 
         class SubWorkChain(WorkChain):
             @classmethod
@@ -409,35 +407,6 @@ class TestWorkchain(utils.TestCaseWithLoop):
         self.assertTrue(wc.ctx.s1)
         self.assertTrue(wc.ctx.s2)
 
-    def test_to_context(self):
-        val = 5
-
-        class SimpleWc(plumpy.Process):
-            @classmethod
-            def define(cls, spec):
-                super(SimpleWc, cls).define(spec)
-                spec.output("_return")
-
-            def run(self):
-                self.out('_return', val)
-
-        class Workchain(WorkChain):
-            @classmethod
-            def define(cls, spec):
-                super(Workchain, cls).define(spec)
-                spec.outline(cls.begin, cls.check)
-
-            def begin(self):
-                self.to_context(result_a=self.launch(SimpleWc))
-                return ToContext(result_b=self.launch(SimpleWc))
-
-            def check(self):
-                assert self.ctx.result_a['_return'] == val
-                assert self.ctx.result_b['_return'] == val
-
-        workchain = Workchain()
-        workchain.execute()
-
     # def test_persisting(self):
     #     persister = plumpy.test_utils.TestPersister()
     #     runner = work.new_runner(persister=persister)
@@ -446,6 +415,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
     def test_output_namespace(self):
         """Test running a workchain with nested outputs."""
+
         class TestWorkChain(WorkChain):
             @classmethod
             def define(cls, spec):
@@ -469,7 +439,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 spec.outline(cls.begin, cls.check)
 
             def begin(self):
-                self.to_context(result_a=self.launch(test_utils.ExceptionProcess))
+                return plumpy.Await(self.launch(test_utils.ExceptionProcess))
 
             def check(self):
                 raise my_exception
@@ -478,6 +448,25 @@ class TestWorkchain(utils.TestCaseWithLoop):
         with self.assertRaises(RuntimeError):
             workchain.execute()
         self.assertNotEqual(workchain.exception(), my_exception)
+
+    def test_await(self):
+        test_case = self
+
+        class Chain(WorkChain):
+            @classmethod
+            def define(cls, spec):
+                super(Chain, cls).define(spec)
+                spec.outline(cls.begin, cls.check)
+
+            def begin(self):
+                fut = plumpy.Future()
+                fut.set_result(5)
+                return plumpy.Await(fut)
+
+            def check(self, fut_result):
+                test_case.assertEquals(fut_result, 5)
+
+        Chain().execute()
 
     def _run_with_checkpoints(self, wf_class, inputs=None):
         # TODO: Actually save at each point!
@@ -488,18 +477,20 @@ class TestWorkchain(utils.TestCaseWithLoop):
     def test_stepper_info(self):
         """Check status information provided by steppers"""
 
+        test_case = self
+
         class Wf(WorkChain):
             @classmethod
             def define(cls, spec):
                 super(Wf, cls).define(spec)
                 spec.input('N', valid_type=int)
                 spec.outline(
-                   cls.check_N,
+                    cls.check_N,
                     while_(cls.step)(
                         cls.chill,
                         cls.chill,
                     ),
-                   if_(cls.step)(
+                    if_(cls.step)(
                         cls.chill,
                     ).elif_(cls.step)(
                         cls.chill,
@@ -509,7 +500,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 )
 
             def check_N(self):
-                assert 'N' in self.inputs
+                test_case.assertIn('N', self.inputs)
 
             def chill(self):
                 pass
@@ -541,11 +532,10 @@ class TestWorkchain(utils.TestCaseWithLoop):
         wf.execute()
 
         stepper_strings = ['0:check_N', '1:while_(step)',
-                '1:while_(step)(1:chill)', '1:while_(step)',
-                '1:while_(step)(1:chill)', '1:while_(step)',
-                '1:while_(step)(1:chill)', '1:while_(step)', '2:if_(step)']
+                           '1:while_(step)(1:chill)', '1:while_(step)',
+                           '1:while_(step)(1:chill)', '1:while_(step)',
+                           '1:while_(step)(1:chill)', '1:while_(step)', '2:if_(step)']
         self.assertListEqual(collector.stepper_strings, stepper_strings)
-
 
 
 class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
