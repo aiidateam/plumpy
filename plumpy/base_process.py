@@ -71,27 +71,10 @@ class Pause(Command):
     pass
 
 
-def schedule_task(coro_function):
-    """
-    Schedule the execution of a coroutine of function and return a corresponding future.
-
-    :param coro_function: The coroutine of function to schedule
-    :return: A future representing the task
-    :rtype: :class:`futures.Future`
-    """
-    try:
-        return persistence.SavableCallbackTask(coro_function)
-    except TypeError:
-        try:
-            return futures.CallbackTask(coro_function)
-        except TypeError:
-            raise TypeError("Must supply a future, function or coroutine")
-
-
-@auto_persist('future', 'continue_fn', 'msg')
+@auto_persist('to_await', 'continue_fn', 'msg')
 class Wait(Command):
     def __init__(self, awaitable, continue_fn, msg=None):
-        self.future = futures.ensure_awaitable(awaitable)
+        self.to_await = futures.ensure_awaitable(awaitable)
         self.continue_fn = continue_fn
         self.msg = msg
 
@@ -330,7 +313,7 @@ class Running(State):
         elif isinstance(command, Stop):
             self.transition_to(ProcessState.FINISHED, command.result, command.successful)
         elif isinstance(command, Wait):
-            self.transition_to(ProcessState.WAITING, command.future, command.continue_fn, msg=command.msg)
+            self.transition_to(ProcessState.WAITING, command.to_await, command.continue_fn, msg=command.msg)
         elif isinstance(command, Continue):
             self.transition_to(ProcessState.RUNNING, command.continue_fn, *command.args)
         else:
@@ -341,7 +324,7 @@ class Running(State):
         self._pausing = None
 
 
-@auto_persist('msg', 'future')
+@auto_persist('msg', 'awaiting')
 class Waiting(State):
     LABEL = ProcessState.WAITING
     ALLOWED = {ProcessState.RUNNING,
@@ -358,9 +341,12 @@ class Waiting(State):
             state_info += " ({})".format(self.msg)
         return state_info
 
-    def __init__(self, process, future, done_callback, msg=None):
+    def __init__(self, process, awaitable, done_callback, msg=None):
         super(Waiting, self).__init__(process)
-        self.future = future
+        if not futures.is_awaitable(awaitable):
+            raise TypeError("Waiting state expects an awaitable")
+
+        self.awaiting = awaitable
         self.done_callback = done_callback
         self.msg = msg
         self.process.loop().add_callback(self._await)
@@ -385,7 +371,7 @@ class Waiting(State):
     @tornado.gen.coroutine
     def _await(self):
         try:
-            result = yield self.future
+            result = yield self.awaiting
             self._resume(result)
         except Exception:
             exc_info = sys.exc_info()

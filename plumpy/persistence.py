@@ -45,7 +45,7 @@ class Bundle(dict):
         if class_loader_ is not None:
             Savable.set_custom_meta(self, self.CLASS_LOADER, utils.class_name(class_loader_))
 
-        self.update(savable.save(class_loader_=class_loader_))
+        Savable.update(self, savable.save(class_loader_=class_loader_))
 
     def unbundle(self, load_context=None):
         """
@@ -56,14 +56,18 @@ class Bundle(dict):
         :return: An instance of the Savable
         :rtype: :class:`Savable`
         """
+
+        # If there is a class loader specified in the metadata then try to load it
         try:
             class_loader_name = Savable.get_custom_meta(self, self.CLASS_LOADER)
         except ValueError:
             pass
         else:
+            cl = utils.load_object(class_loader_name)()
             if load_context is None:
-                load_context = LoadContext()
-            load_context.copyextend(class_loader=utils.load_object(class_loader_name))
+                load_context = LoadContext(class_loader=cl)
+            else:
+                load_context = load_context.copyextend(class_loader=cl)
 
         return Savable.load(self, load_context)
 
@@ -474,7 +478,7 @@ class Savable(object):
             class_loader_ = class_loader.ClassLoader()
         out_state = {}
         if include_class_name:
-            Savable._set_class_name(out_state, class_loader_.class_identifier(self))
+            Savable._set_class_name(out_state, class_loader_.class_identifier(self.__class__))
 
         base.call_with_super_check(self.save_instance_state, out_state)
         return out_state
@@ -513,7 +517,7 @@ class Savable(object):
     @staticmethod
     def get_custom_meta(saved_state, name):
         try:
-            return Savable._get_create_meta(saved_state)[name]
+            return Savable._get_create_meta(saved_state).get(META__USER, {})[name]
         except KeyError:
             raise ValueError("Unknown meta key '{}'".format(name))
 
@@ -540,6 +544,22 @@ class Savable(object):
             return saved_state[META][META__TYPES][name]
         except KeyError:
             pass
+
+    @staticmethod
+    def update(out_state, source_copy):
+        S = Savable
+        source = copy.deepcopy(source_copy)
+        # Meta
+        if META in source_copy:
+            source_meta = source.pop(META)
+            meta = S._get_create_meta(out_state)
+            if META__TYPES in source_meta:
+                meta.setdefault(META__TYPES, {}).update(source_meta[META__TYPES])
+            if META__USER in source_meta:
+                meta.setdefault(META__USER, {}).update(source_meta[META__USER])
+            if META__CLASS_NAME in source_meta:
+                meta[META__CLASS_NAME] = source_meta[META__CLASS_NAME]
+        out_state.update(source)
 
     # endregion
 

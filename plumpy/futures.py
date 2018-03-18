@@ -16,17 +16,7 @@ KilledError = kiwipy.CancelledError
 Future = kiwipy.Future
 
 
-class Task(object):
-    """
-    A task is an object that has a future meaning that it will eventually
-    be carried out producing a result, an exception or being cancelled.
-    """
-
-    def future(self):
-        pass
-
-
-class CallbackTask(Task):
+class CallbackTask(object):
     """
     A task that wraps a call to a function or a coroutine.
     """

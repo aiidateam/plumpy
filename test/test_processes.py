@@ -384,6 +384,28 @@ class SavePauseProc(Process):
         self.steps_ran.append(self.step2.__name__)
 
 
+class SequenceWaitProc(plumpy.Process):
+    ran_checks = False
+
+    def run(self):
+        return plumpy.Wait([plumpy.Future(), plumpy.Future()], self.check)
+
+    def check(self, result):
+        assert [True, True] == result
+        self.ran_checks = True
+
+
+class MappingWaitProc(plumpy.Process):
+    ran_checks = False
+
+    def run(self):
+        return plumpy.Wait({'a': plumpy.Future(), 'b': plumpy.Future()}, self.check)
+
+    def check(self, result):
+        assert [True, True] == result.values()
+        self.ran_checks = True
+
+
 class TestProcessSaving(utils.TestCaseWithLoop):
     maxDiff = None
 
@@ -488,6 +510,56 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         proc.kill()
         self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
         self._check_round_trip(proc)
+
+    def test_wait_sequence(self):
+        """
+        Check that we can return a sequence of awaitables to a wait command
+        """
+        proc = SequenceWaitProc()
+        proc.execute(True)
+        self.assertFalse(proc.ran_checks)
+        self.assertEquals(proc.state, ProcessState.WAITING)
+        # Save the state
+        saved_state = plumpy.Bundle(proc)
+        # Run the process to the end
+        for wait_for in proc._state.awaiting:
+            wait_for.set_result(True)
+        proc.execute()
+
+        # Load it
+        proc2 = saved_state.unbundle()
+        self.assertFalse(proc2.ran_checks)
+        self.assertEquals(proc2.state, ProcessState.WAITING)
+
+        # Run loaded to the end
+        for wait_for in proc2._state.awaiting:
+            wait_for.set_result(True)
+        proc2.execute()
+
+    def test_wait_mapping(self):
+        """
+        Check that we can return a mapping of awaitables to a wait command
+        """
+        proc = MappingWaitProc()
+        proc.execute(True)
+        self.assertFalse(proc.ran_checks)
+        self.assertEquals(proc.state, ProcessState.WAITING)
+        # Save the state
+        saved_state = plumpy.Bundle(proc)
+        # Run the process to the end
+        for wait_for in proc._state.awaiting.values():
+            wait_for.set_result(True)
+        proc.execute()
+
+        # Load it
+        proc2 = saved_state.unbundle()
+        self.assertFalse(proc2.ran_checks)
+        self.assertEquals(proc2.state, ProcessState.WAITING)
+
+        # Run loaded to the end
+        for wait_for in proc2._state.awaiting.values():
+            wait_for.set_result(True)
+        proc2.execute()
 
     def _check_round_trip(self, proc1):
         bundle1 = plumpy.Bundle(proc1)

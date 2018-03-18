@@ -7,6 +7,7 @@ class ClassLoader(object):
     """
     An object to load classes based on an identifier.
     """
+
     def __init__(self, parent=None):
         self._parent = parent
 
@@ -43,6 +44,28 @@ class ClassLoader(object):
         :type obj: type or object
         """
         return utils.class_name(obj, self)
+
+
+class InMemoryClassLoader(ClassLoader):
+    def __init__(self):
+        super(InMemoryClassLoader, self).__init__()
+        self._classes = {}
+
+    def register(self, cls):
+        self._classes[id(cls)] = cls
+
+    def find_class(self, identifier):
+        try:
+            return self._classes[identifier]
+        except KeyError:
+            raise ValueError("Unknown class '{}'".format(identifier))
+
+    def class_identifier(self, obj):
+        for identifier, cls in self._classes.items():
+            if obj is cls:
+                return identifier
+
+        raise ValueError("Unknown class")
 
 
 _class_loader = None

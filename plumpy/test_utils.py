@@ -76,7 +76,7 @@ class WaitForSignalProcess(processes.Process):
         spec.outputs.dynamic = True
 
     def signal(self):
-        self._state.future.set_result(True)
+        self._state.awaiting.set_result(True)
 
     @utils.override
     def run(self):

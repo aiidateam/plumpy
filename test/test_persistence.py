@@ -34,6 +34,13 @@ class TestSavable(unittest.TestCase):
 
         self._save_round_trip(Save())
 
+    def test_meta(self):
+        """ Test saing/loading metadata """
+        saved_state = {}
+        # Check that custom metadata is correctly saved and retrieved
+        plumpy.Savable.set_custom_meta(saved_state, 'test', 'value')
+        self.assertEquals('value', plumpy.Savable.get_custom_meta(saved_state, 'test'))
+
     def _save_round_trip(self, savable):
         """
         Do a round trip:
