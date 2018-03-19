@@ -39,7 +39,7 @@ class ProcessReceiver(object):
         self._process = process
 
     def __call__(self, msg):
-        intent = msg['intent']
+        intent = msg[INTENT_KEY]
         if intent == Intent.PLAY:
             return self._process.play()
         elif intent == Intent.PAUSE:
@@ -87,7 +87,10 @@ class StatusAction(ProcessAction):
 
 
 class KillAction(ProcessAction):
-    def __init__(self, pid):
+    def __init__(self, pid, msg=None):
+        from copy import copy
+        kill_msg = copy(KILL_MSG)
+        kill_msg['msg'] = msg
         super(KillAction, self).__init__(pid, KILL_MSG)
 
 
