@@ -349,7 +349,7 @@ class Waiting(State):
         self.awaiting = awaitable
         self.done_callback = done_callback
         self.msg = msg
-        self.process.loop().add_callback(self._await)
+        self.process.call_soon(self._await)
 
     def save_instance_state(self, out_state):
         super(Waiting, self).save_instance_state(out_state)
@@ -366,7 +366,7 @@ class Waiting(State):
             self.done_callback = getattr(self.process, callback_name)
 
         # Schedule the await callback
-        self.process.loop().add_callback(self._await)
+        self.process.call_soon(self._await)
 
     @tornado.gen.coroutine
     def _await(self):
@@ -495,7 +495,7 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
       * -- EXCEPTED (o)
       * -- KILLED (o)
 
-      * = any non terminal state
+      where * = any non terminal state
     """
 
     @classmethod

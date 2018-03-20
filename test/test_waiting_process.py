@@ -12,17 +12,22 @@ class TestWaitingProcess(utils.TestCaseWithLoop):
     def test_instance_state(self):
         proc = ThreeSteps()
         proc.start()
-        wl = ProcessSaver(proc)
-        proc.execute()
+        saver = ProcessSaver()
+        with saver.capture(proc):
+            proc.execute()
 
-        for bundle, outputs in zip(wl.snapshots, wl.outputs):
+        for bundle, outputs in zip(saver.snapshots, saver.outputs):
             self.assertEqual(outputs, bundle['_outputs'])
 
     def test_saving_each_step(self):
         for proc_class in TEST_WAITING_PROCESSES:
             proc = proc_class()
-            saver = ProcessSaver(proc)
-            saver.capture()
+            saver = ProcessSaver()
+            with saver.capture(proc):
+                try:
+                    proc.execute()
+                except:
+                    pass
 
             self.assertTrue(check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
 

@@ -433,9 +433,9 @@ class TestProcessSaving(utils.TestCaseWithLoop):
     def test_instance_state_with_outputs(self):
         proc = test_utils.DummyProcessWithOutput()
 
-        saver = test_utils.ProcessSaver(proc)
-        proc.start()
-        proc.execute()
+        saver = test_utils.ProcessSaver()
+        with saver.capture(proc):
+            proc.execute()
 
         self._check_round_trip(proc)
 
@@ -450,8 +450,10 @@ class TestProcessSaving(utils.TestCaseWithLoop):
     def test_saving_each_step(self):
         for proc_class in test_utils.TEST_PROCESSES:
             proc = proc_class()
-            saver = test_utils.ProcessSaver(proc)
-            saver.capture()
+            saver = test_utils.ProcessSaver()
+            with saver.capture(proc):
+                proc.execute()
+
             self.assertEqual(proc.state, ProcessState.FINISHED)
             self.assertTrue(
                 test_utils.check_process_against_snapshots(
@@ -461,8 +463,9 @@ class TestProcessSaving(utils.TestCaseWithLoop):
     def test_saving_each_step_interleaved(self):
         for ProcClass in test_utils.TEST_PROCESSES:
             proc = ProcClass()
-            saver = test_utils.ProcessSaver(proc)
-            saver.capture()
+            saver = test_utils.ProcessSaver()
+            with saver.capture(proc):
+                proc.execute()
 
             self.assertTrue(
                 test_utils.check_process_against_snapshots(

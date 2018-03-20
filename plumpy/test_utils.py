@@ -1,8 +1,8 @@
 import collections
 from collections import namedtuple
+import contextlib
 
 import plumpy
-from . import futures
 from . import processes
 from . import persistence
 from . import utils
@@ -273,18 +273,13 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
     Save the instance state of a process each time it is about to enter a new state
     """
 
-    def __init__(self, proc):
-        plumpy.ProcessListener.__init__(self)
-        Saver.__init__(self)
-        self.process = proc
-        proc.add_process_listener(self)
-        self._future = plumpy.Future()
-
-    def capture(self):
-        self._save(self.process)
-        if not self.process.done():
-            self.process.start()
-            self.process.loop().run_sync(lambda: self._future)
+    @contextlib.contextmanager
+    def capture(self, process):
+        try:
+            process.add_process_listener(self)
+            yield
+        finally:
+            process.remove_process_listener(self)
 
     @utils.override
     def on_process_running(self, process):
@@ -303,17 +298,14 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
     @utils.override
     def on_process_finished(self, process, outputs):
         self._save(process)
-        self._future.set_result(True)
 
     @utils.override
     def on_process_excepted(self, process, exc_info):
         self._save(process)
-        self._future.set_result(True)
 
     @utils.override
     def on_process_killed(self, process, msg):
         self._save(process)
-        self._future.set_result(True)
 
 
 # All the Processes that can be used
@@ -356,8 +348,13 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     """
     for i, bundle in zip(range(0, len(snapshots)), snapshots):
         loaded = bundle.unbundle(plumpy.LoadContext(loop=loop))
-        saver = ProcessSaver(loaded)
-        saver.capture()
+
+        saver = ProcessSaver()
+        with saver.capture(loaded):
+            try:
+                loaded.execute()
+            except:
+                pass  # Ignore any exceptions in the process
 
         # Now check going backwards until running that the saved states match
         j = 1
