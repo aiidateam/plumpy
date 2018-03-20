@@ -402,7 +402,8 @@ class MappingWaitProc(plumpy.Process):
         return plumpy.Wait({'a': plumpy.Future(), 'b': plumpy.Future()}, self.check)
 
     def check(self, result):
-        assert [True, True] == result.values()
+        assert len(result) == 2
+        assert all(result.values())
         self.ran_checks = True
 
 
