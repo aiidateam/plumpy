@@ -179,25 +179,24 @@ class ExecuteProcessAction(communications.Action):
         return self._launch_action
 
     def execute(self, publisher):
-        self._launch_action.add_done_callback(
-            functools.partial(self._on_launch_done, publisher))
+        self._launch_action.add_done_callback(functools.partial(self._on_launch_done, publisher))
         self._launch_action.execute(publisher)
 
     def _on_launch_done(self, publisher, launch_future):
-        # The result of the launch future is the PID of the process
         if launch_future.cancelled():
             self.kill()
         elif launch_future.exception() is not None:
             self.set_exception(launch_future.exception())
         else:
             # Action the continue task
-            continue_action = ContinueProcessAction(launch_future.result(), play=True, nowait=self._nowait)
+            continue_action = ContinueProcessAction(launch_future.result(), play=True)
+            continue_action.execute(publisher)
+
             if self._nowait:
-                continue_action.add_done_callback(
-                    lambda x: self.set_result(launch_future.result()))
+                # The result of the launch future is the PID of the process
+                self.set_result(launch_future.result())
             else:
                 futures.chain(continue_action, self)
-            continue_action.execute(publisher)
 
 
 class ProcessLauncher(object):
@@ -275,7 +274,4 @@ class ProcessLauncher(object):
         # Call start in case it's not started yet
         proc.start()
 
-        if task[NOWAIT_KEY]:
-            return True
-        else:
-            return proc.future()
+        return proc.future()
