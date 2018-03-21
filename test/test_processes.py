@@ -13,9 +13,6 @@ class ForgetToCallParent(Process):
         super(ForgetToCallParent, self).__init__()
         self.forget_on = forget_on
 
-    def _run(self):
-        pass
-
     def on_create(self):
         if self.forget_on != 'create':
             super(ForgetToCallParent, self).on_create()
@@ -56,17 +53,13 @@ class TestProcess(utils.TestCaseWithLoop):
 
     def test_dynamic_inputs(self):
         class NoDynamic(Process):
-            def _run(self, **kwargs):
-                pass
+            pass
 
         class WithDynamic(Process):
             @classmethod
             def define(cls, spec):
                 super(WithDynamic, cls).define(spec)
                 spec.inputs.dynamic = True
-
-            def _run(self, **kwargs):
-                pass
 
         with self.assertRaises(ValueError):
             NoDynamic(inputs={'a': 5}).start()
@@ -80,9 +73,6 @@ class TestProcess(utils.TestCaseWithLoop):
             def define(cls, spec):
                 super(Proc, cls).define(spec)
                 spec.input('a')
-
-            def _run(self):
-                pass
 
         p = Proc({'a': 5})
 
@@ -198,7 +188,7 @@ class TestProcess(utils.TestCaseWithLoop):
 
     def test_logging(self):
         class LoggerTester(Process):
-            def _run(self, **kwargs):
+            def run(self):
                 self.logger.info("Test")
 
         # TODO: Test giving a custom logger to see if it gets used
@@ -267,7 +257,7 @@ class TestProcess(utils.TestCaseWithLoop):
         class KillProcess(Process):
             after_kill = False
 
-            def _run(self, **kwargs):
+            def run(self):
                 self.kill()
                 self.after_kill = True
 
@@ -317,7 +307,7 @@ class TestProcess(utils.TestCaseWithLoop):
             def define(cls, spec):
                 super(Proc, cls).define(spec)
 
-            def _run(self):
+            def run(self):
                 return UnsuccessfulResult(ERROR_CODE)
 
         proc = Proc()

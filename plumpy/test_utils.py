@@ -20,10 +20,6 @@ class DummyProcess(processes.Process):
         processes.ProcessState.RUNNING,
         processes.ProcessState.FINISHED]
 
-    @utils.override
-    def _run(self):
-        pass
-
 
 class DummyProcessWithOutput(processes.Process):
     EXPECTED_OUTPUTS = {'default': 5}
@@ -53,14 +49,12 @@ class DummyProcessWithDynamicOutput(processes.Process):
 
 
 class KeyboardInterruptProc(processes.Process):
-    @utils.override
-    def _run(self):
+    def run(self):
         raise KeyboardInterrupt()
 
 
 class ProcessWithCheckpoint(processes.Process):
-    @utils.override
-    def _run(self):
+    def run(self):
         return processes.Continue(self.last_step)
 
     def last_step(self):
@@ -102,9 +96,6 @@ class NewLoopProcess(processes.Process):
     def __init__(self, *args, **kwargs):
         kwargs['loop'] = plumpy.new_event_loop()
         super(NewLoopProcess, self).__init__(*args, **kwargs)
-
-    def _run(self, **kwargs):
-        pass
 
 
 class EventsTesterMixin(object):
@@ -170,16 +161,14 @@ class ProcessEventsTester(EventsTesterMixin, processes.Process):
         super(ProcessEventsTester, cls).define(spec)
         spec.outputs.dynamic = True
 
-    @utils.override
-    def _run(self):
+    def run(self):
         self.out("test", 5)
 
 
 class ThreeSteps(ProcessEventsTester):
     _last_checkpoint = None
 
-    @utils.override
-    def _run(self):
+    def run(self):
         self.out("test", 5)
         return processes.Continue(self.middle_step)
 
@@ -191,8 +180,7 @@ class ThreeSteps(ProcessEventsTester):
 
 
 class TwoCheckpointNoFinish(ProcessEventsTester):
-    @utils.override
-    def _run(self):
+    def run(self):
         self.out("test", 5)
         return processes.Continue(self.middle_step)
 
@@ -201,8 +189,7 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
 
 
 class ExceptionProcess(ProcessEventsTester):
-    @utils.override
-    def _run(self):
+    def run(self):
         self.out("test", 5)
         raise RuntimeError("Great scott!")
 

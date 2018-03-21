@@ -121,10 +121,14 @@ class Handle(object):
     def killed(self):
         return self._killed
 
+    @tornado.gen.coroutine
     def _run(self):
         if not self._killed:
             try:
-                self._callback(*self._args, **self._kwargs)
+                if tornado.gen.is_coroutine_function(self._callback):
+                    yield self._callback(*self._args, **self._kwargs)
+                else:
+                    self._callback(*self._args, **self._kwargs)
             except BaseException:
                 exc_info = sys.exc_info()
                 self._process.callback_excepted(self._callback, exc_info[1], exc_info[2])

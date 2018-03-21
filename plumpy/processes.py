@@ -403,7 +403,8 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         self.on_entered(initial_state)
 
     def run(self):
-        return self._run()
+        pass
+        #return self._run()
 
     def execute(self, return_on_idle=False):
         return Executor(return_on_idle).execute(self)

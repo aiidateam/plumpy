@@ -3,7 +3,7 @@ import plumpy
 
 
 class StackTest(plumpy.Process):
-    def _run(self):
+    def run(self):
         assert len(plumpy.stack.stack()) == 1
         assert plumpy.stack.top() is self
 

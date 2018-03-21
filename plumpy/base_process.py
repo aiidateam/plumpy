@@ -271,6 +271,7 @@ class Running(State):
         else:
             return True
 
+    @tornado.gen.coroutine
     def _run(self):
         self._run_handle = None
         with stack.in_stack(self.process):
