@@ -514,7 +514,7 @@ class _WhileStepper(Stepper):
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
         if stepper_state is not None:
-            self._child_stepper = self._while_instruction.body.recreate_stepper(stepper_state)
+            self._child_stepper = self._while_instruction.body.recreate_stepper(stepper_state, self._workchain)
 
     def __str__(self):
         s = str(self._while_instruction)
