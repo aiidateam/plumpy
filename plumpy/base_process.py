@@ -760,7 +760,6 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         """
         self.transition_to(ProcessState.EXCEPTED, exception, trace_back)
 
-    @event(to_states=(Killed, Excepted))
     def kill(self, msg=None):
         """
         Kill the process

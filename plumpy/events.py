@@ -79,20 +79,20 @@ class Handle(object):
     """Object returned by callback registration methods."""
 
     __slots__ = ('_callback', '_args', '_kwargs', '_process',
-                 '_killed', '_repr', '__weakref__')
+                 '_cancelled', '_repr', '__weakref__')
 
     def __init__(self, process, callback, args, kwargs):
         self._process = process
         self._callback = callback
         self._args = args
         self._kwargs = kwargs
-        self._killed = False
+        self._cancelled = False
         self._repr = None
 
     def _repr_info(self):
         info = [self.__class__.__name__]
-        if self._killed:
-            info.append('killed')
+        if self._cancelled:
+            info.append('cancelled')
         if self._callback is not None:
             info.append(_format_callback_source(
                 self._callback, self._args, self._kwargs))
@@ -104,17 +104,17 @@ class Handle(object):
         info = self._repr_info()
         return '<{}>'.format(' '.join(info))
 
-    def kill(self):
-        if not self._killed:
-            self._killed = True
+    def cancel(self):
+        if not self._cancelled:
+            self._cancelled = True
             self._callback = None
             self._args = None
 
-    def killed(self):
-        return self._killed
+    def cancelled(self):
+        return self._cancelled
 
     def _run(self):
-        if not self._killed:
+        if not self._cancelled:
             try:
                 self._callback(*self._args, **self._kwargs)
             except BaseException:

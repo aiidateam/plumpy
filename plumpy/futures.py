@@ -1,10 +1,10 @@
 import kiwipy
 from functools import partial
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'KilledError']
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
 
 InvalidStateError = kiwipy.InvalidStateError
-KilledError = kiwipy.CancelledError
+CancelledError = kiwipy.CancelledError
 
 Future = kiwipy.Future
 
