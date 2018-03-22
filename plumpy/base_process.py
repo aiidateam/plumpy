@@ -3,6 +3,7 @@ from builtins import str
 from enum import Enum
 from future.utils import with_metaclass, raise_
 import sys
+import threading
 import traceback
 import yaml
 
@@ -220,7 +221,7 @@ class Running(State):
         super(Running, self).exit()
         # Make sure the run callback doesn't get actioned if it wasn't already
         if self._run_handle is not None:
-            self._run_handle.kill()
+            self._run_handle.cancel()
             self._run_handle = None
 
     def save_instance_state(self, out_state):
@@ -441,11 +442,27 @@ class Killed(State):
 class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
     pass
 
+
 # Make ProcessStateMachineMeta instances (classes) YAML - able
 yaml.representer.Representer.add_representer(
     ProcessStateMachineMeta,
     yaml.representer.Representer.represent_name
 )
+
+# Use thread-local storage for the stack
+_thread_local = threading.local()
+
+
+def _process_stack():
+    """Access the private live stack"""
+    global _thread_local
+    # Lazily create the first time it's used
+    try:
+        return _thread_local.process_stack
+    except AttributeError:
+        _thread_local.process_stack = []
+        return _thread_local.process_stack
+
 
 @persistence.auto_persist('_paused_flag')
 class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
@@ -467,6 +484,10 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
 
       * = any non terminal state
     """
+
+    @classmethod
+    def current_process(cls):
+        return _process_stack()[-1]
 
     @classmethod
     def get_states(cls):
@@ -526,7 +547,8 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         (this needn't be a method).  If it raises an exception it will cause
         the process to fail.
         """
-        handle = events.Handle(self, callback, args, kwargs)
+        args = (callback,) + args
+        handle = events.Handle(self, self._run_task, args, kwargs)
         self._loop.add_callback(handle._run)
         return handle
 
@@ -540,6 +562,21 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
     def callback_excepted(self, callback, exception, trace):
         if self.state != ProcessState.EXCEPTED:
             self.fail(exception, trace)
+
+    def _run_task(self, fn, *args, **kwargs):
+        try:
+            _process_stack().append(self)
+            return fn(*args, **kwargs)
+        except Exception:
+            if not self._state.is_terminal():
+                self.transition_to(ProcessState.EXCEPTED, *sys.exc_info()[1:])
+            else:
+                raise RuntimeError(
+                    "Exception during task but the process is already in terminal "
+                    "state:\n{}".format(traceback.format_exc()))
+        finally:
+            assert ProcessStateMachine.current_process() is self
+            _process_stack().pop()
 
     # endregion
 

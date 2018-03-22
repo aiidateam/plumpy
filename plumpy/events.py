@@ -3,6 +3,7 @@ import inspect
 import reprlib
 import sys
 from tornado import ioloop
+import tornado.gen
 
 __all__ = ['new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete']
 
@@ -113,6 +114,7 @@ class Handle(object):
     def cancelled(self):
         return self._cancelled
 
+    @tornado.gen.coroutine
     def _run(self):
         if not self._cancelled:
             try:
