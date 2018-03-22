@@ -338,6 +338,13 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             self._communicator.add_rpc_subscriber(
                 process_comms.ProcessReceiver(self), identifier=str(self.pid))
 
+    def close(self):
+        """
+        Remove all the RPC subscribers from the communicator tied to the process
+        """
+        if self._communicator is not None:
+            self._communicator.remove_rpc_subscriber(str(self.pid))
+
     def on_entered(self, from_state):
         if self._communicator:
             from_label = from_state.value if from_state is not None else None
