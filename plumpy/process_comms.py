@@ -5,7 +5,7 @@ from . import communications
 from . import futures
 from . import persistence
 
-__all__ = ['ProcessReceiver', 'PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
+__all__ = ['PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
            'ProcessAction', 'PlayAction', 'PauseAction', 'KillAction', 'StatusAction',
            'LaunchProcessAction', 'ContinueProcessAction', 'ExecuteProcessAction',
            'ProcessLauncher', 'create_continue_body', 'create_launch_body']
@@ -24,34 +24,6 @@ PAUSE_MSG = {INTENT_KEY: Intent.PAUSE}
 PLAY_MSG = {INTENT_KEY: Intent.PLAY}
 KILL_MSG = {INTENT_KEY: Intent.KILL}
 STATUS_MSG = {INTENT_KEY: Intent.STATUS}
-
-
-class ProcessReceiver(object):
-    """
-    Responsible for receiving messages and translating them to actions
-    on the process.
-    """
-
-    def __init__(self, process):
-        """
-        :param process: :class:`plumpy.Process`
-        """
-        self._process = process
-
-    def __call__(self, msg):
-        intent = msg['intent']
-        if intent == Intent.PLAY:
-            return self._process.play()
-        elif intent == Intent.PAUSE:
-            return self._process.pause()
-        elif intent == Intent.KILL:
-            return self._process.kill(msg=msg.get('msg', None))
-        elif intent == Intent.STATUS:
-            status_info = {}
-            self._process.get_status_info(status_info)
-            return status_info
-        else:
-            raise RuntimeError("Unknown intent")
 
 
 class ProcessAction(communications.Action):

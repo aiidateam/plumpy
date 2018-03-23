@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABCMeta
+from future.utils import with_metaclass
+from kiwipy import CancelledError
 import logging
 import time
 import uuid
-
-from future.utils import with_metaclass
-from kiwipy import CancelledError
+import tornado.gen
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -335,8 +335,29 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def init(self):
         """ Any common initialisation stuff after create or load goes here """
         if self._communicator is not None:
-            self._communicator.add_rpc_subscriber(
-                process_comms.ProcessReceiver(self), identifier=str(self.pid))
+            self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+
+    @tornado.gen.coroutine
+    def message_receive(self, msg):
+        intent = msg[process_comms.INTENT_KEY]
+
+        if intent == process_comms.Intent.PLAY:
+            result = self.play()
+        elif intent == process_comms.Intent.PAUSE:
+            result = self.pause()
+        elif intent == process_comms.Intent.KILL:
+            result = self.kill(msg=msg.get('msg', None))
+        elif intent == process_comms.Intent.STATUS:
+            status_info = {}
+            self.get_status_info(status_info)
+            result = status_info
+        else:
+            raise RuntimeError("Unknown intent")
+
+        if isinstance(result, futures.Future):
+            result = yield result
+
+        raise tornado.gen.Return(result)
 
     def close(self):
         """
