@@ -38,6 +38,7 @@ class BundleKeys(object):
     See :func:`save_instance_state` and :func:`load_instance_state`.
     """
     INPUTS = 'INPUTS'
+    OUTPUTS = 'OUTPUTS'
 
 
 class Executor(ProcessListener):
@@ -77,7 +78,7 @@ class Executor(ProcessListener):
             process.remove_process_listener(self)
 
 
-@persistence.auto_persist('_pid', '_outputs', '_CREATION_TIME', '_future')
+@persistence.auto_persist('_pid', '_CREATION_TIME', '_future')
 class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     """
     The Process class is the base for any unit of work in plumpy.
@@ -270,6 +271,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         if self.raw_inputs is not None:
             out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
 
+        if self.outputs:
+            out_state[BundleKeys.OUTPUTS] = self.encode_input_args(self.outputs)
+
     @protected
     def load_instance_state(self, saved_state, load_context):
         # Runtime variables, set initial states
@@ -294,6 +298,12 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             self._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._raw_inputs = None
+
+        try:
+            decoded = self.decode_input_args(saved_state[BundleKeys.OUTPUTS])
+            self._outputs = decoded
+        except KeyError:
+            self._outputs = {}
 
         raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
         self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
