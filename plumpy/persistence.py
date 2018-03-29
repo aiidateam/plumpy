@@ -149,7 +149,7 @@ class PicklePersister(Persister):
     in pickles on a filesystem.
     """
 
-    def __init__(self, pickle_directory):
+    def __init__(self, pickle_directory, class_loader_=None):
         """
         Instantiate a PicklePersister object that will persist processes by
         writing their bundles to a pickle in a directory specified by the
@@ -165,6 +165,7 @@ class PicklePersister(Persister):
             raise ValueError('failed to create the pickle directory at {}'.format(pickle_directory))
 
         self._pickle_directory = pickle_directory
+        self._class_loader = class_loader_
 
     @staticmethod
     def ensure_pickle_directory(dirpath):
@@ -220,7 +221,7 @@ class PicklePersister(Persister):
         :param tag: optional checkpoint identifier to allow distinguishing
             multiple checkpoints for the same process
         """
-        bundle = Bundle(process)
+        bundle = Bundle(process, class_loader_=self._class_loader)
         checkpoint = PersistedCheckpoint(process.pid, tag)
         persisted_pickle = PersistedPickle(checkpoint, bundle)
 
