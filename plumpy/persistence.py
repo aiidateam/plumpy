@@ -8,6 +8,8 @@ import os
 import pickle
 from future.utils import with_metaclass
 
+import yaml
+
 from . import class_loader
 from . import futures
 from . import utils
@@ -43,7 +45,7 @@ class Bundle(dict):
 
         # If we have a class loader, save it in the bundle
         if class_loader_ is not None:
-            Savable.set_custom_meta(self, self.CLASS_LOADER, utils.class_name(class_loader_))
+            Savable.set_custom_meta(self, self.CLASS_LOADER, yaml.dump(class_loader_))
 
         Savable.update(self, savable.save(class_loader_=class_loader_))
 
@@ -59,11 +61,11 @@ class Bundle(dict):
 
         # If there is a class loader specified in the metadata then try to load it
         try:
-            class_loader_name = Savable.get_custom_meta(self, self.CLASS_LOADER)
+            class_loader_dump = Savable.get_custom_meta(self, self.CLASS_LOADER)
         except ValueError:
             pass
         else:
-            cl = utils.load_object(class_loader_name)()
+            cl = yaml.load(class_loader_dump)
             if load_context is None:
                 load_context = LoadContext(class_loader=cl)
             else:
