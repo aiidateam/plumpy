@@ -348,6 +348,8 @@ class Process(object):
     # Methods that signal events have happened, these should be called by the
     # external processes driving the Process (usually the engine)
     def perform_create(self, pid=None, inputs=None, saved_instance_state=None):
+        if not inputs:
+            inputs = {}
 
         if saved_instance_state is not None:
             self.load_instance_state(saved_instance_state)
@@ -356,9 +358,9 @@ class Process(object):
                 pid = uuid.uuid1()
             self._pid = pid
             self._check_inputs(inputs)
-            if inputs is not None:
-                self._raw_inputs = util.AttributesFrozendict(inputs)
-                self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+
+            self._raw_inputs = util.AttributesFrozendict(inputs)
+            self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
         self._called = False
         self.on_create(pid, inputs, saved_instance_state)
@@ -573,7 +575,11 @@ class Process(object):
         try:
             return self.fast_forward()
         except error.FastForwardError:
-            return self._run(**self._parsed_inputs)
+            if self._parsed_inputs:
+                kwargs = self._parsed_inputs
+            else:
+                kwargs = {}
+            return self._run(**kwargs)
 
     @protected
     def get_exec_engine(self):
