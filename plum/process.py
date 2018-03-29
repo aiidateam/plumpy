@@ -75,7 +75,8 @@ class Process(object):
         See create_from, on_save_instance_state and _load_instance_state.
         """
         CLASS_NAME = 'class_name'
-        INPUTS = 'inputs'
+        INPUTS_RAW = 'inputs_raw'
+        INPUTS_PARSED = 'inputs_parsed'
         OUTPUTS = 'outputs'
         PID = 'pid'
         WAITING_ON = 'waiting_on'
@@ -266,10 +267,15 @@ class Process(object):
         bundle[self.BundleKeys.PID.value] = self.pid
 
         # Save inputs
-        inputs = None
+        inputs_raw = None
         if self._raw_inputs is not None:
-            inputs = Bundle(self._raw_inputs)
-        bundle[self.BundleKeys.INPUTS.value] = inputs
+            inputs_raw = Bundle(self._raw_inputs)
+        bundle[self.BundleKeys.INPUTS_RAW.value] = inputs_raw
+
+        inputs_parsed = None
+        if self._parsed_inputs is not None:
+            inputs_parsed = Bundle(self._parsed_inputs)
+        bundle[self.BundleKeys.INPUTS_PARSED.value] = inputs_parsed
 
         bundle[self.BundleKeys.OUTPUTS.value] = Bundle(self._outputs)
 
@@ -352,9 +358,7 @@ class Process(object):
             self._check_inputs(inputs)
             if inputs is not None:
                 self._raw_inputs = util.AttributesFrozendict(inputs)
-
-        self._parsed_inputs = \
-            util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
+                self._parsed_inputs = util.AttributesFrozendict(self.create_input_args(self.raw_inputs))
 
         self._called = False
         self.on_create(pid, inputs, saved_instance_state)
@@ -642,9 +646,13 @@ class Process(object):
     def load_instance_state(self, bundle):
         self._pid = bundle[self.BundleKeys.PID.value]
 
-        inputs = bundle.get(self.BundleKeys.INPUTS.value, None)
+        inputs = bundle.get(self.BundleKeys.INPUTS_RAW.value, None)
         if inputs is not None:
             self._raw_inputs = util.AttributesFrozendict(inputs)
+
+        inputs = bundle.get(self.BundleKeys.INPUTS_PARSED.value, None)
+        if inputs is not None:
+            self._parsed_inputs = util.AttributesFrozendict(inputs)
 
         self._outputs = bundle[self.BundleKeys.OUTPUTS.value].get_dict()
 
