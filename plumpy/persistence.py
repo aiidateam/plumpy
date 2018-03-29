@@ -65,7 +65,7 @@ class Bundle(dict):
         else:
             if load_context is None:
                 load_context = LoadContext()
-            load_context.copyextend(class_loader=yaml.load(class_loader_dump))
+            load_context = load_context.copyextend(class_loader=yaml.load(class_loader_dump))
 
         return Savable.load(self, load_context)
 
