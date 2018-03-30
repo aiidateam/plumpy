@@ -1,5 +1,5 @@
 import plumpy
-from plumpy import Process, ProcessState
+from plumpy import Process, ProcessState, BundleKeys
 from plumpy.test_utils import ThreeSteps, \
     DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
 from plumpy.test_utils import check_process_against_snapshots
@@ -16,7 +16,7 @@ class TestWaitingProcess(utils.TestCaseWithLoop):
         proc.execute()
 
         for bundle, outputs in zip(wl.snapshots, wl.outputs):
-            self.assertEqual(outputs, bundle['_outputs'])
+            self.assertEqual(outputs, bundle.get(BundleKeys.OUTPUTS, {}))
 
     def test_saving_each_step(self):
         for proc_class in TEST_WAITING_PROCESSES:
