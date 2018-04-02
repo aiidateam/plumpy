@@ -354,6 +354,13 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         """ Any common initialisation stuff after create or load goes here """
         if self._communicator is not None:
             self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+        if not self._future.done():
+            def try_killing(future):
+                if future.cancelled():
+                    if not self.kill('Killed by future being cancelled'):
+                        self.logger.warn("Failed to kill process on future cancel")
+                        
+            self._future.add_done_callback(try_killing)
 
     @tornado.gen.coroutine
     def message_receive(self, msg):
