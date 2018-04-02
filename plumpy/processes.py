@@ -3,6 +3,7 @@
 from abc import ABCMeta
 from future.utils import with_metaclass
 from kiwipy import CancelledError
+from pika.exceptions import ConnectionClosed
 import copy
 import logging
 import time
@@ -394,11 +395,15 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def on_entered(self, from_state):
         if self._communicator:
             from_label = from_state.value if from_state is not None else None
-            self._communicator.broadcast_send(
-                body=None,
-                sender=self.pid,
-                subject="state_changed.{}.{}".format(from_label, self.state.value)
-            )
+            try:
+                self._communicator.broadcast_send(
+                    body=None,
+                    sender=self.pid,
+                    subject='state_changed.{}.{}'.format(from_label, self.state.value)
+                )
+            except ConnectionClosed:
+                self.logger.info('no connection available to broadcast state change from {} to {}'
+                    .format(from_label, self.state.value))
 
     def on_run(self):
         super(Process, self).on_run()
