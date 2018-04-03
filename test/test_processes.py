@@ -1,8 +1,7 @@
 import plumpy
 import kiwipy
 from past.builtins import basestring
-import plumpy
-from plumpy import Process, ProcessState, UnsuccessfulResult, InvalidStateError, test_utils
+from plumpy import Process, ProcessState, UnsuccessfulResult, InvalidStateError, test_utils, BundleKeys
 from plumpy.utils import AttributesFrozendict
 
 from . import utils
@@ -402,11 +401,11 @@ class TestProcessSaving(utils.TestCaseWithLoop):
 
         for bundle, outputs in zip(saver.snapshots, saver.outputs):
             # Check that it is a copy
-            self.assertIsNot(outputs, bundle['_outputs'])
+            self.assertIsNot(outputs, bundle.get(BundleKeys.OUTPUTS, {}))
             # Check the contents are the same
-            self.assertDictEqual(outputs, bundle['_outputs'])
+            self.assertDictEqual(outputs, bundle.get(BundleKeys.OUTPUTS, {}))
 
-        self.assertIsNot(proc.outputs, saver.snapshots[-1]['_outputs'])
+        self.assertIsNot(proc.outputs, saver.snapshots[-1].get(BundleKeys.OUTPUTS, {}))
 
     def test_saving_each_step(self):
         for proc_class in test_utils.TEST_PROCESSES:

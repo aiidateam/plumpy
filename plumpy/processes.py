@@ -3,6 +3,8 @@
 from abc import ABCMeta
 from future.utils import with_metaclass
 from kiwipy import CancelledError
+from pika.exceptions import ConnectionClosed
+import copy
 import logging
 import time
 import uuid
@@ -37,7 +39,8 @@ class BundleKeys(object):
 
     See :func:`save_instance_state` and :func:`load_instance_state`.
     """
-    INPUTS = 'INPUTS'
+    INPUTS_RAW = 'INPUTS_RAW'
+    INPUTS_PARSED = 'INPUTS_PARSED'
     OUTPUTS = 'OUTPUTS'
 
 
@@ -269,7 +272,10 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
         # Inputs/outputs
         if self.raw_inputs is not None:
-            out_state[BundleKeys.INPUTS] = self.encode_input_args(self.raw_inputs)
+            out_state[BundleKeys.INPUTS_RAW] = self.encode_input_args(self.raw_inputs)
+
+        if self.inputs is not None:
+            out_state[BundleKeys.INPUTS_PARSED] = self.encode_input_args(self.inputs)
 
         if self.outputs:
             out_state[BundleKeys.OUTPUTS] = self.encode_input_args(self.outputs)
@@ -294,19 +300,22 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
         # Inputs/outputs
         try:
-            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS])
+            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS_RAW])
             self._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._raw_inputs = None
+
+        try:
+            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS_PARSED])
+            self._parsed_inputs = utils.AttributesFrozendict(decoded)
+        except KeyError:
+            self._parsed_inputs = None
 
         try:
             decoded = self.decode_input_args(saved_state[BundleKeys.OUTPUTS])
             self._outputs = decoded
         except KeyError:
             self._outputs = {}
-
-        raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
-        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
 
     def add_process_listener(self, listener):
         assert (listener != self), "Cannot listen to yourself!"
@@ -346,6 +355,13 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         """ Any common initialisation stuff after create or load goes here """
         if self._communicator is not None:
             self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+        if not self._future.done():
+            def try_killing(future):
+                if future.cancelled():
+                    if not self.kill('Killed by future being cancelled'):
+                        self.logger.warn("Failed to kill process on future cancel")
+                        
+            self._future.add_done_callback(try_killing)
 
     @tornado.gen.coroutine
     def message_receive(self, msg):
@@ -379,11 +395,15 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def on_entered(self, from_state):
         if self._communicator:
             from_label = from_state.value if from_state is not None else None
-            self._communicator.broadcast_send(
-                body=None,
-                sender=self.pid,
-                subject="state_changed.{}.{}".format(from_label, self.state.value)
-            )
+            try:
+                self._communicator.broadcast_send(
+                    body=None,
+                    sender=self.pid,
+                    subject='state_changed.{}.{}'.format(from_label, self.state.value)
+                )
+            except ConnectionClosed:
+                self.logger.info('no connection available to broadcast state change from {} to {}'
+                    .format(from_label, self.state.value))
 
     def on_run(self):
         super(Process, self).on_run()
@@ -527,24 +547,26 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     @protected
     def encode_input_args(self, inputs):
         """
-        Encode input arguments such that they may be saved in a
-        :class:`plumpy.Bundle`
+        Encode input arguments such that they may be saved in a :class:`plumpy.Bundle`.
+        The encoded inputs should contain no reference to the inputs that were passed in.
+        This often will mean making a deepcopy of the input dictionary.
 
         :param inputs: A mapping of the inputs as passed to the process
         :return: The encoded inputs
         """
-        return inputs
+        return copy.deepcopy(inputs)
 
     @protected
     def decode_input_args(self, encoded):
         """
-        Decode saved input arguments as they came from the saved instance state
-        :class:`plumpy.Bundle`
+        Decode saved input arguments as they came from the saved instance state :class:`plumpy.Bundle`.
+        The decoded inputs should contain no reference to the encoded inputs that were passed in.
+        This often will mean making a deepcopy of the encoded input dictionary.
 
         :param encoded:
         :return: The decoded input args
         """
-        return encoded
+        return copy.deepcopy(encoded)
 
     def get_status_info(self, out_status_info):
         out_status_info.update({
