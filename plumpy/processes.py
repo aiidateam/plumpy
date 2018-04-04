@@ -359,7 +359,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
             def try_killing(future):
                 if future.cancelled():
                     if not self.kill('Killed by future being cancelled'):
-                        self.logger.warn("Failed to kill process on future cancel")
+                        self.logger.warning("Failed to kill process on future cancel")
                         
             self._future.add_done_callback(try_killing)
 
