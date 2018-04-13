@@ -1,6 +1,6 @@
 import functools
 
-from . import class_loader as internal_class_loader
+from . import loaders
 from . import communications
 from . import futures
 from . import persistence
@@ -80,13 +80,13 @@ CONTINUE_TASK = 'continue'
 
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, play=True,
-                       persist=False, nowait=True, class_loader=None):
-    if class_loader is None:
-        class_loader = internal_class_loader.get_class_loader()
+                       persist=False, nowait=True, loader=None):
+    if loader is None:
+        loader = loaders.get_object_loader()
 
     msg_body = {
         TASK_KEY: LAUNCH_TASK,
-        PROCESS_CLASS_KEY: class_loader.class_identifier(process_class),
+        PROCESS_CLASS_KEY: loader.identify_object(process_class),
         PLAY_KEY: play,
         PERSIST_KEY: persist,
         NOWAIT_KEY: nowait,
@@ -141,10 +141,10 @@ class ContinueProcessAction(TaskAction):
 
 
 class ExecuteProcessAction(communications.Action):
-    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False, class_loader=None):
+    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
         super(ExecuteProcessAction, self).__init__()
         self._launch_action = LaunchProcessAction(
-            process_class, init_args, init_kwargs, play=False, persist=True, class_loader=class_loader)
+            process_class, init_args, init_kwargs, play=False, persist=True, loader=loader)
         self._nowait = nowait
 
     def get_launch_future(self):
@@ -193,16 +193,16 @@ class ProcessLauncher(object):
     }
     """
 
-    def __init__(self, loop=None, persister=None, load_context=None, class_loader=None):
+    def __init__(self, loop=None, persister=None, load_context=None, loader=None):
         self._loop = loop
         self._persister = persister
-        self._load_context = load_context if load_context is not None else persistence.LoadContext()
+        self._load_context = load_context if load_context is not None else persistence.LoadSaveContext()
 
-        if class_loader is not None:
-            self._class_loader = class_loader
-            self._load_context = self._load_context.copyextend(class_loader=class_loader)
+        if loader is not None:
+            self._loader = loader
+            self._load_context = self._load_context.copyextend(loader=loader)
         else:
-            self._class_loader = internal_class_loader.get_class_loader()
+            self._loader = loaders.get_object_loader()
 
     def __call__(self, task):
         """
@@ -221,7 +221,7 @@ class ProcessLauncher(object):
         if task[PERSIST_KEY] and not self._persister:
             raise communications.TaskRejected("Cannot persist process, no persister")
 
-        proc_class = self._class_loader.load_class(task[PROCESS_CLASS_KEY])
+        proc_class = self._loader.load_object(task[PROCESS_CLASS_KEY])
         args = task.get(ARGS_KEY, ())
         kwargs = task.get(KWARGS_KEY, {})
         proc = proc_class(*args, **kwargs)

@@ -460,7 +460,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         result = proc.execute()
 
         # Load from saved state and run again
-        proc = saved_state.unbundle(plumpy.LoadContext(loop=self.loop))
+        proc = saved_state.unbundle(plumpy.LoadSaveContext(loop=self.loop))
         proc.resume()
         result2 = proc.execute()
 

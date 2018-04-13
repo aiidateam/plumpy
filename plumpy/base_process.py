@@ -91,8 +91,8 @@ class Continue(Command):
         self.args = args
         self.kwargs = kwargs
 
-    def save_instance_state(self, out_state):
-        super(Continue, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(Continue, self).save_instance_state(out_state, save_context)
         out_state[self.CONTINUE_FN] = self.continue_fn.__name__
 
     def load_instance_state(self, saved_state, load_context):
@@ -167,8 +167,8 @@ class Created(State):
         self.args = args
         self.kwargs = kwargs
 
-    def save_instance_state(self, out_state):
-        super(Created, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(Created, self).save_instance_state(out_state, save_context)
         out_state[self.RUN_FN] = self.run_fn.__name__
 
     def load_instance_state(self, saved_state, load_context):
@@ -224,8 +224,8 @@ class Running(State):
             self._run_handle.cancel()
             self._run_handle = None
 
-    def save_instance_state(self, out_state):
-        super(Running, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(Running, self).save_instance_state(out_state, save_context)
         out_state[self.RUN_FN] = self.run_fn.__name__
         if self._command is not None:
             out_state[self.COMMAND] = self._command.save()
@@ -345,8 +345,8 @@ class Waiting(State):
         self.msg = msg
         self.data = data
 
-    def save_instance_state(self, out_state):
-        super(Waiting, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(Waiting, self).save_instance_state(out_state, save_context)
         if self.done_callback is not None:
             out_state[self.DONE_CALLBACK] = self.done_callback.__name__
 
@@ -386,8 +386,8 @@ class Excepted(State):
             traceback.format_exception_only(type(self.exception), self.exception)[0]
         )
 
-    def save_instance_state(self, out_state):
-        super(Excepted, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(Excepted, self).save_instance_state(out_state, save_context)
         out_state[self.EXC_VALUE] = yaml.dump(self.exception)
         if self.traceback is not None:
             out_state[self.TRACEBACK] = "".join(traceback.format_tb(self.traceback))
@@ -686,8 +686,8 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
 
     # endregion
 
-    def save_instance_state(self, out_state):
-        super(ProcessStateMachine, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(ProcessStateMachine, self).save_instance_state(out_state, save_context)
         out_state['_state'] = self._state.save()
 
     def load_instance_state(self, saved_state, load_context):
@@ -815,5 +815,5 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         :type saved_state: :class:`Bundle`
         :return: An instance of the object with its state loaded from the save state.
         """
-        load_context = persistence.LoadContext(process=self)
+        load_context = persistence.LoadSaveContext(process=self)
         return persistence.Savable.load(saved_state, load_context)

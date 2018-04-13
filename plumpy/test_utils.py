@@ -344,7 +344,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     :rtype: bool
     """
     for i, bundle in zip(range(0, len(snapshots)), snapshots):
-        loaded = bundle.unbundle(plumpy.LoadContext(loop=loop))
+        loaded = bundle.unbundle(plumpy.LoadSaveContext(loop=loop))
         saver = ProcessSaver(loaded)
         saver.capture()
 

@@ -22,7 +22,7 @@ class TestPicklePersister(TestCaseWithLoop):
             persister.save_checkpoint(process)
 
             bundle = persister.load_checkpoint(process.pid)
-            load_context = plumpy.LoadContext(loop=self.loop)
+            load_context = plumpy.LoadSaveContext(loop=self.loop)
             recreated = bundle.unbundle(load_context)
 
     def test_get_checkpoints_without_tags(self):

@@ -5,33 +5,30 @@ import unittest
 from . import utils
 
 
+class SaveEmpty(plumpy.Savable):
+    pass
+
+
+@plumpy.auto_persist('test')
+class Save1(plumpy.Savable):
+    def __init__(self):
+        self.test = 'sup yp'
+
+
+@plumpy.auto_persist('test')
+class Save(plumpy.Savable):
+    def __init__(self):
+        self.test = Save1()
+
+
 class TestSavable(unittest.TestCase):
     def test_empty_savable(self):
-        class Save(plumpy.Savable):
-            pass
-
-        self._save_round_trip(Save())
+        self._save_round_trip(SaveEmpty())
 
     def test_auto_persist(self):
-        @plumpy.auto_persist('test')
-        class Save(plumpy.Savable):
-            def __init__(self):
-                self.test = 'sup yp'
+        self._save_round_trip(Save1())
 
-        self._save_round_trip(Save())
-
-    @unittest.skip("Need to fix nested include_class_name=False")
     def test_auto_persist_savable(self):
-        @plumpy.auto_persist('test')
-        class Save1(plumpy.Savable):
-            def __init__(self):
-                self.test = 'sup yp'
-
-        @plumpy.auto_persist('test')
-        class Save(plumpy.Savable):
-            def __init__(self):
-                self.test = Save1()
-
         self._save_round_trip(Save())
 
     def _save_round_trip(self, savable):
@@ -44,9 +41,9 @@ class TestSavable(unittest.TestCase):
 
         :type savable: :class:`plumpy.Savable`
         """
-        saved_state1 = savable.save(include_class_name=False)
+        saved_state1 = savable.save()
         loaded = savable.recreate_from(saved_state1)
-        saved_state2 = loaded.save(include_class_name=False)
+        saved_state2 = loaded.save()
         self.assertDictEqual(saved_state1, saved_state2)
 
 
@@ -57,5 +54,5 @@ class TestBundle(utils.TestCaseWithLoop):
         bundle = plumpy.Bundle(proc)
 
         loop2 = plumpy.new_event_loop()
-        proc2 = bundle.unbundle(plumpy.LoadContext(loop=loop2))
+        proc2 = bundle.unbundle(plumpy.LoadSaveContext(loop=loop2))
         self.assertIs(loop2, proc2.loop())

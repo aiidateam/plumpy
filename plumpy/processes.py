@@ -157,7 +157,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
         :param saved_state: The saved state to load from
         :param load_context: The load context to use
-        :type load_context: :class:`persistence.LoadContext`
+        :type load_context: :class:`persistence.LoadSaveContext`
         :return: An instance of the object with its state loaded from the save state.
         :rtype: :class:`Process`
         """
@@ -261,14 +261,14 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         process.start()
         return process
 
-    def save_instance_state(self, out_state):
+    def save_instance_state(self, out_state, save_context):
         """
         Ask the process to save its current instance state.
 
         :param out_state: A bundle to save the state to
         :type out_state: :class:`plumpy.Bundle`
         """
-        super(Process, self).save_instance_state(out_state)
+        super(Process, self).save_instance_state(out_state, save_context)
 
         # Inputs/outputs
         if self.raw_inputs is not None:

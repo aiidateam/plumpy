@@ -70,7 +70,7 @@ class TestProcess(unittest.TestCase):
         proc = FauxProc()
         created1 = base_process.Created(proc, proc.dummy_fn, 'hello', some_kw='goodbye')
         saved_state = created1.save()
-        created2 = plumpy.Savable.load(saved_state, plumpy.LoadContext(process=proc))
+        created2 = plumpy.Savable.load(saved_state, plumpy.LoadSaveContext(process=proc))
         saved_state2 = created2.save()
         self.assertDictEqual(saved_state, saved_state2)
         self._attributes_match(created1, created2)

@@ -173,27 +173,6 @@ class AttributesDict(SimpleNamespace):
         return self.__dict__.get(*args, **kwargs)
 
 
-def function_name(fn):
-    try:
-        name = fn.__module__ + '.' + fn.__qualname__
-    except AttributeError:
-        if inspect.ismethod(fn):
-            cls = fn.__self__.__class__
-            name = class_name(cls) + '.' + fn.__name__
-        elif inspect.isfunction(fn):
-            name = fn.__module__ + '.' + fn.__name__
-        else:
-            raise ValueError("Must be function or method")
-
-    # Make sure we can load it
-    try:
-        load_object(name)
-    except ValueError:
-        raise ValueError("Could not create a consistent name for fn '{}'".format(fn))
-
-    return name
-
-
 def load_function(name, instance=None):
     obj = load_object(name)
     if inspect.ismethod(obj):
@@ -205,43 +184,6 @@ def load_function(name, instance=None):
         return obj
     else:
         raise ValueError("Invalid function name '{}'".format(name))
-
-
-def class_name(obj, class_loader=None, verify=True):
-    """
-    Given a class or an instance this function will give the fully qualified name
-    e.g. 'my_module.MyClass'
-
-    :param obj: The object to get the name from.
-    :param class_loader: Class loader used to verify that the resulting name
-        can be loaded
-    :return: The fully qualified name.
-    """
-
-    if not inspect.isclass(obj):
-        # assume it's an instance
-        obj = obj.__class__
-
-    try:
-        qualname = obj.__qualname__
-    except AttributeError:
-        try:
-            qualname = obj.__qualname
-        except AttributeError:
-            qualname = obj.__name__
-
-    name = obj.__module__ + '.' + qualname
-
-    if verify:
-        try:
-            if class_loader is not None:
-                class_loader.load_class(name)
-            else:
-                load_object(name)
-        except ValueError:
-            raise ValueError("Could not create a consistent full name for object '{}'".format(obj))
-
-    return name
 
 
 def load_object(fullname):

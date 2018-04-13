@@ -21,8 +21,8 @@ class ContextMixin(persistence.Savable):
     def ctx(self):
         return self._context
 
-    def save_instance_state(self, out_state):
-        super(ContextMixin, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(ContextMixin, self).save_instance_state(out_state, save_context)
         if self._context is not None:
             out_state[self.CONTEXT] = self._context.__dict__
 

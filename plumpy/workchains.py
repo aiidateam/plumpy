@@ -103,8 +103,8 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         super(WorkChain, self).on_create()
         self._stepper = self.spec().get_outline().create_stepper(self)
 
-    def save_instance_state(self, out_state):
-        super(WorkChain, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(WorkChain, self).save_instance_state(out_state, save_context)
 
         # Ask the stepper to save itself
         if self._stepper is not None:
@@ -212,8 +212,8 @@ class _FunctionStepper(Stepper):
         super(_FunctionStepper, self).__init__(workchain)
         self._fn = fn
 
-    def save_instance_state(self, out_state):
-        super(_FunctionStepper, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(_FunctionStepper, self).save_instance_state(out_state, save_context)
         out_state['_fn'] = self._fn.__name__
 
     def load_instance_state(self, saved_state, load_context):
@@ -242,7 +242,7 @@ class _FunctionCall(_Instruction):
         return _FunctionStepper(workchain, self._fn)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = persistence.LoadContext(workchain=workchain, func_spec=self)
+        load_context = persistence.LoadSaveContext(workchain=workchain, func_spec=self)
         return _FunctionStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
@@ -285,8 +285,8 @@ class _BlockStepper(Stepper):
     def finished(self):
         return self._pos == len(self._block)
 
-    def save_instance_state(self, out_state):
-        super(_BlockStepper, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(_BlockStepper, self).save_instance_state(out_state, save_context)
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
@@ -328,7 +328,7 @@ class _Block(_Instruction, collections.Sequence):
         return _BlockStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = persistence.LoadContext(workchain=workchain, block_instruction=self)
+        load_context = persistence.LoadSaveContext(workchain=workchain, block_instruction=self)
         return _BlockStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
@@ -409,8 +409,8 @@ class _IfStepper(Stepper):
     def finished(self):
         return self._pos == len(self._if_instruction)
 
-    def save_instance_state(self, out_state):
-        super(_IfStepper, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(_IfStepper, self).save_instance_state(out_state, save_context)
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
@@ -469,7 +469,7 @@ class _If(_Instruction, collections.Sequence):
         return _IfStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = persistence.LoadContext(workchain=workchain, if_instruction=self)
+        load_context = persistence.LoadSaveContext(workchain=workchain, if_instruction=self)
         return _IfStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
@@ -503,8 +503,8 @@ class _WhileStepper(Stepper):
 
         return False, result
 
-    def save_instance_state(self, out_state):
-        super(_WhileStepper, self).save_instance_state(out_state)
+    def save_instance_state(self, out_state, save_context):
+        super(_WhileStepper, self).save_instance_state(out_state, save_context)
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
@@ -540,7 +540,7 @@ class _While(_Conditional, _Instruction, collections.Sequence):
         return _WhileStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = persistence.LoadContext(workchain=workchain, while_instruction=self)
+        load_context = persistence.LoadSaveContext(workchain=workchain, while_instruction=self)
         return _WhileStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):

@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 import logging
 
-from .class_loader import *
+from .loaders import *
 from .communications import *
 from .events import *
 from .exceptions import *
@@ -21,7 +21,7 @@ from .workchains import *
 __all__ = (events.__all__ + exceptions.__all__ + processes.__all__ + base_process.__all__ +
            utils.__all__ + futures.__all__ + mixins.__all__ + ['stack'] +
            persistence.__all__ + communications.__all__ + process_comms.__all__ +
-           version.__all__, process_listener.__all__ + workchains.__all__ + class_loader.__all__ +
+           version.__all__, process_listener.__all__ + workchains.__all__ + loaders.__all__ +
            ports.__all__)
 
 
