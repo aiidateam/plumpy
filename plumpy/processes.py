@@ -2,18 +2,18 @@
 
 from abc import ABCMeta
 from future.utils import with_metaclass
-from kiwipy import CancelledError
 from pika.exceptions import ConnectionClosed
 import copy
 import logging
 import time
 import uuid
 import tornado.gen
+import tornado.concurrent
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import protected
-from . import events
+from . import exceptions
 from . import futures
 from . import base
 from . import base_process
@@ -23,12 +23,11 @@ from .base import TransitionFailed
 from . import persistence
 from . import process_comms
 from . import ports
-from . import stack
 from . import utils
 
 __all__ = ['Process', 'ProcessState', 'ProcessSpec',
            'Kill', 'Wait', 'Stop', 'Continue', 'BundleKeys',
-           'TransitionFailed', 'Executor', 'Waiting']
+           'TransitionFailed', 'Waiting']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,43 +41,6 @@ class BundleKeys(object):
     INPUTS_RAW = 'INPUTS_RAW'
     INPUTS_PARSED = 'INPUTS_PARSED'
     OUTPUTS = 'OUTPUTS'
-
-
-class Executor(ProcessListener):
-    _future = None
-    _loop = None
-
-    def __init__(self, interrupt_on_pause_or_wait=False):
-        self._interrupt_on_pause_or_wait = interrupt_on_pause_or_wait
-
-    def on_process_waiting(self, process, data):
-        if self._interrupt_on_pause_or_wait and not self._future.done():
-            self._future.set_result('waiting')
-
-    def on_process_paused(self, process):
-        if self._interrupt_on_pause_or_wait and not self._future.done():
-            self._future.set_result('paused')
-
-    def execute(self, process):
-        process.add_process_listener(self)
-        try:
-            loop = process.loop()
-            self._future = futures.Future()
-            futures.chain(process.future(), self._future)
-
-            if process.state == ProcessState.CREATED:
-                process.start()
-            if process.paused:
-                process.play()
-
-            try:
-                return loop.run_sync(lambda: self._future)
-            except CancelledError:
-                return process.result()
-        finally:
-            self._future = None
-            self._loop = None
-            process.remove_process_listener(self)
 
 
 @persistence.auto_persist('_pid', '_CREATION_TIME', '_future')
@@ -107,6 +69,10 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
     # Static class stuff ######################
     _spec_type = ProcessSpec
+    # Default placeholders, will be populated in init()
+    _waiting_callbacks = None
+    _paused_callbacks = None
+    _terminated_callbacks = None
 
     @classmethod
     def spec(cls):
@@ -261,12 +227,16 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
         process.start()
         return process
 
+    def has_terminated(self):
+        return self._state.is_terminal()
+
     def save_instance_state(self, out_state, save_context):
         """
         Ask the process to save its current instance state.
 
         :param out_state: A bundle to save the state to
         :type out_state: :class:`plumpy.Bundle`
+        :param save_context: The save context
         """
         super(Process, self).save_instance_state(out_state, save_context)
 
@@ -334,6 +304,24 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
     # region Process messages
 
+    def add_on_waiting_callback(self, callback):
+        self._waiting_callbacks.append(callback)
+
+    def remove_on_waiting_callback(self, callback):
+        self._waiting_callbacks.remove(callback)
+
+    def add_on_paused_callback(self, callback):
+        self._paused_callbacks.append(callback)
+
+    def remove_on_paused_callback(self, callback):
+        self._paused_callbacks.remove(callback)
+
+    def add_on_terminated_callback(self, callback):
+        self._terminated_callbacks.append(callback)
+
+    def remove_on_terminated_callback(self, callback):
+        self._terminated_callbacks.remove(callback)
+
     def on_create(self):
         super(Process, self).on_create()
 
@@ -353,6 +341,10 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     @base.super_check
     def init(self):
         """ Any common initialisation stuff after create or load goes here """
+        self._waiting_callbacks = []
+        self._paused_callbacks = []
+        self._terminated_callbacks = []
+
         if self._communicator is not None:
             self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
         if not self._future.done():
@@ -360,7 +352,7 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
                 if future.cancelled():
                     if not self.kill('Killed by future being cancelled'):
                         self.logger.warning("Failed to kill process on future cancel")
-                        
+
             self._future.add_done_callback(try_killing)
 
     @tornado.gen.coroutine
@@ -402,8 +394,9 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
                     subject='state_changed.{}.{}'.format(from_label, self.state.value)
                 )
             except ConnectionClosed:
-                self.logger.info('no connection available to broadcast state change from {} to {}'
-                    .format(from_label, self.state.value))
+                self.logger.info(
+                    'no connection available to broadcast state change from {} to {}'.format(
+                        from_label, self.state.value))
 
     def on_run(self):
         super(Process, self).on_run()
@@ -419,10 +412,14 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def on_wait(self, data):
         super(Process, self).on_wait(data)
         self._fire_event(ProcessListener.on_process_waiting, data)
+        for cb in self._waiting_callbacks:
+            self.call_soon_external(cb, self)
 
     def on_pause(self):
         super(Process, self).on_pause()
         self._fire_event(ProcessListener.on_process_paused)
+        for cb in self._paused_callbacks:
+            self.call_soon_external(cb, self)
 
     def on_play(self):
         super(Process, self).on_pause()
@@ -447,8 +444,13 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
 
     def on_kill(self, msg):
         super(Process, self).on_kill(msg)
-        self.future().cancel()
+        self.future().set_exception(exceptions.KilledError())
         self._fire_event(ProcessListener.on_process_killed, msg)
+
+    def on_terminated(self):
+        super(Process, self).on_terminated()
+        for cb in self._terminated_callbacks:
+            self.call_soon_external(cb, self)
 
     # endregion
 
@@ -460,8 +462,30 @@ class Process(with_metaclass(ABCMeta, base_process.ProcessStateMachine)):
     def run(self):
         return self._run()
 
-    def execute(self, return_on_idle=False):
-        return Executor(return_on_idle).execute(self)
+    def execute(self):
+        """
+        Execute the process.  This will return if the process terminates or is paused.
+
+        :return: None if not terminated, otherwise `self.outputs`
+        """
+        if not self.has_terminated():
+            loop = self._loop
+
+            # Set up the stop conditions
+            future = tornado.concurrent.Future()
+            self.add_on_paused_callback(lambda _: future.set_result('paused'))
+            self.add_on_terminated_callback(lambda _: future.set_result('terminated'))
+
+            if self.state == ProcessState.CREATED:
+                self.start()
+            if self.paused:
+                self.play()
+
+            loop.run_sync(lambda: future)
+
+        if self.has_terminated():
+            self.result()
+            return self.outputs
 
     @protected
     def out(self, output_port, value):

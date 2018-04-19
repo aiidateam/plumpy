@@ -4,6 +4,7 @@ from enum import Enum
 from future.utils import with_metaclass, raise_
 import sys
 import threading
+import tornado.ioloop
 import traceback
 import yaml
 
@@ -144,7 +145,8 @@ class State(state_machine.State, persistence.Savable):
         return not self.is_terminal()
 
     def play(self):
-        return True
+        # Cannot play a terminal state
+        return not self.is_terminal()
 
     def kill(self, msg=None):
         self.transition_to(ProcessState.KILLED, msg)
@@ -548,8 +550,8 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         the process to fail.
         """
         args = (callback,) + args
-        handle = events.Handle(self, self._run_task, args, kwargs)
-        self._loop.add_callback(handle._run)
+        handle = events.ProcessCallback(self, self._run_task, args, kwargs)
+        self._loop.add_callback(handle.run)
         return handle
 
     def call_soon_external(self, callback, *args, **kwargs):
@@ -773,7 +775,8 @@ class ProcessStateMachine(with_metaclass(ProcessStateMachineMeta,
         """
         if not self._paused:
             if self._pausing:
-                self._pausing.cancel()
+                # Not going to pause after all
+                self._pausing.set_result(False)
             return True
 
         if self._state.play():

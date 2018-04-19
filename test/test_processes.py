@@ -215,9 +215,10 @@ class TestProcess(utils.TestCaseWithLoop):
     def test_wait_continue(self):
         proc = test_utils.WaitForSignalProcess()
         # Wait - Execute the process and wait until it is waiting
-        proc.execute(True)
+        proc.add_on_waiting_callback(lambda _: proc.pause())
+        proc.execute()
         proc.resume()
-        proc.execute(True)
+        proc.execute()
 
         # Check it's done
         self.assertTrue(proc.done())
@@ -243,7 +244,8 @@ class TestProcess(utils.TestCaseWithLoop):
         proc = test_utils.WaitForSignalProcess()
 
         # Wait - Run the process and wait until it is waiting
-        proc.execute(True)
+        proc.add_on_waiting_callback(lambda _: proc.pause())
+        proc.execute()
         self.assertEqual(proc.state, ProcessState.WAITING)
 
         result = proc.pause()
@@ -257,7 +259,7 @@ class TestProcess(utils.TestCaseWithLoop):
         proc.resume()
 
         # Run
-        proc.execute(True)
+        proc.execute()
 
         # Check it's done
         self.assertTrue(proc.done())
@@ -372,10 +374,10 @@ class TestProcessSaving(utils.TestCaseWithLoop):
 
     def test_running_save_instance_state(self):
         proc = SavePauseProc()
-        proc.execute(True)
+        proc.execute()
         bundle = plumpy.Bundle(proc)
         self.assertListEqual([SavePauseProc.run.__name__], proc.steps_ran)
-        proc.execute(True)
+        proc.execute()
         self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], proc.steps_ran)
 
         proc_unbundled = bundle.unbundle()
@@ -431,7 +433,8 @@ class TestProcessSaving(utils.TestCaseWithLoop):
 
     def test_restart(self):
         proc = _RestartProcess()
-        proc.execute(True)
+        proc.add_on_waiting_callback(lambda _: proc.pause())
+        proc.execute()
 
         # Save the state of the process
         saved_state = plumpy.Bundle(proc)
@@ -442,7 +445,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
 
         # Now play it
         proc.resume()
-        result = proc.execute(True)
+        result = proc.execute()
         self.assertEqual(proc.outputs, {'finished': True})
 
     def test_wait_save_continue(self):
@@ -451,7 +454,8 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         proc.start()
 
         # Wait - Run the process until it enters the WAITING state
-        proc.execute(True)
+        proc.add_on_waiting_callback(lambda _: proc.pause())
+        proc.execute()
 
         saved_state = plumpy.Bundle(proc)
 

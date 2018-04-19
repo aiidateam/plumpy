@@ -27,11 +27,11 @@ class TestWaitingProcess(utils.TestCaseWithLoop):
             self.assertTrue(check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
 
     def test_abort(self):
-        p = WaitForSignalProcess()
-        p.start()
-        p.execute(True)
-        p.kill()
-        self.assertTrue(p.killed())
+        process = WaitForSignalProcess()
+        process.add_on_waiting_callback(lambda _: process.pause())
+        process.execute()
+        process.kill()
+        self.assertTrue(process.killed())
 
     def _check_process_against_snapshot(self, snapshot, proc):
         self.assertEqual(snapshot.state, proc.state)

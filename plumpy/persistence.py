@@ -35,7 +35,7 @@ class Bundle(dict):
         :param savable: The savable object to bundle
         :type savable: :class:`Savable`
         :param save_context: The optional save context to use
-        :type save_context: :class:`SaveContext`
+        :type save_context: :class:`LoadSaveContext`
         """
         super(Bundle, self).__init__()
         self.update(savable.save(save_context))
@@ -463,6 +463,8 @@ class Savable(object):
 
         if save_context is None:
             save_context = LoadSaveContext()
+
+        utils.type_check(save_context, LoadSaveContext)
 
         default_loader = loaders.get_object_loader()
         # If the user has specified a class loader, then save it in the saved state

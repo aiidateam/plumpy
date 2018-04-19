@@ -1,9 +1,5 @@
 import contextlib
 
-_PENDING = 0
-_CHECKING = 1
-_CALLED = 2
-
 __all__ = ['super_check', 'call_with_super_check']
 
 

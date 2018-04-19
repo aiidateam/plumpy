@@ -6,6 +6,11 @@ __all__ = ['ObjectLoader', 'DefaultObjectLoader', 'set_object_loader', 'get_obje
 
 
 class ObjectLoader(with_metaclass(abc.ABCMeta, object)):
+    """
+    An abstract object loaders. Concrete implementations can be used to identify an
+    object and load it with that identifier.
+    """
+
     @abc.abstractmethod
     def load_object(self, identifier):
         """

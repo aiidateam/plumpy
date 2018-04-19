@@ -286,7 +286,6 @@ class TestWorkchain(utils.TestCaseWithLoop):
     def test_return_in_outline(self):
 
         class WcWithReturn(WorkChain):
-
             FAILED_CODE = 1
 
             @classmethod
@@ -390,7 +389,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
     def test_if_block_persistence(self):
         wc = IfTest()
-        wc.execute(True)
+        wc.execute()
         self.assertTrue(wc.ctx.s1)
         self.assertFalse(wc.ctx.s2)
 
@@ -438,14 +437,9 @@ class TestWorkchain(utils.TestCaseWithLoop):
         workchain = Workchain()
         workchain.execute()
 
-    # def test_persisting(self):
-    #     persister = plumpy.test_utils.TestPersister()
-    #     runner = work.new_runner(persister=persister)
-    #     workchain = Wf(runner=runner)
-    #     workchain.execute()
-
     def test_output_namespace(self):
         """Test running a workchain with nested outputs."""
+
         class TestWorkChain(WorkChain):
             @classmethod
             def define(cls, spec):
@@ -494,12 +488,12 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 super(Wf, cls).define(spec)
                 spec.input('N', valid_type=int)
                 spec.outline(
-                   cls.check_N,
+                    cls.check_N,
                     while_(cls.step)(
                         cls.chill,
                         cls.chill,
                     ),
-                   if_(cls.step)(
+                    if_(cls.step)(
                         cls.chill,
                     ).elif_(cls.step)(
                         cls.chill,
@@ -541,11 +535,10 @@ class TestWorkchain(utils.TestCaseWithLoop):
         wf.execute()
 
         stepper_strings = ['0:check_N', '1:while_(step)',
-                '1:while_(step)(1:chill)', '1:while_(step)',
-                '1:while_(step)(1:chill)', '1:while_(step)',
-                '1:while_(step)(1:chill)', '1:while_(step)', '2:if_(step)']
+                           '1:while_(step)(1:chill)', '1:while_(step)',
+                           '1:while_(step)(1:chill)', '1:while_(step)',
+                           '1:while_(step)(1:chill)', '1:while_(step)', '2:if_(step)']
         self.assertListEqual(collector.stepper_strings, stepper_strings)
-
 
 
 class TestImmutableInputWorkchain(utils.TestCaseWithLoop):

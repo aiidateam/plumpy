@@ -101,11 +101,6 @@ class ThreadSafeCounter(object):
             return self.counter
 
 
-_PENDING = 'PENDING'
-_KILLED = 'KILLED'
-_FINISHED = 'FINISHED'
-
-
 class AttributesFrozendict(frozendict.frozendict):
     def __init__(self, *args, **kwargs):
         super(AttributesFrozendict, self).__init__(*args, **kwargs)
@@ -220,6 +215,7 @@ def load_module(fullname):
 
     return mod, remainder
 
+
 def wrap_dict(flat_dict, separator='.'):
     sub_dicts = defaultdict(dict)
     res = {}
@@ -232,3 +228,8 @@ def wrap_dict(flat_dict, separator='.'):
     for namespace, sub_dict in sub_dicts.items():
         res[namespace] = wrap_dict(sub_dict)
     return res
+
+
+def type_check(obj, expected_type):
+    if not isinstance(obj, expected_type):
+        raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
