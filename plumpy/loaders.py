@@ -37,6 +37,11 @@ class ObjectLoader(with_metaclass(abc.ABCMeta, object)):
 
 
 class DefaultObjectLoader(ObjectLoader):
+    """
+    A default implementation for an object loader.  Can load module level
+    classes, functions and constants.
+    """
+
     def load_object(self, identifier):
         mod, name = identifier.split(":")
         try:
