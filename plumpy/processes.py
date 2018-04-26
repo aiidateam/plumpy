@@ -13,7 +13,6 @@ import threading
 import tornado.concurrent
 from tornado.gen import coroutine, Return
 import tornado.stack_context
-import traceback
 import uuid
 import yaml
 
@@ -23,7 +22,7 @@ from .utils import protected
 from . import exceptions
 from . import futures
 from . import base
-from base import state_machine
+from .base import state_machine
 from .base import super_check, call_with_super_check
 from .base.state_machine import StateEntryFailed, StateMachine, event
 from .base import TransitionFailed
