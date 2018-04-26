@@ -128,7 +128,10 @@ class Process(with_metaclass(ProcessStateMachineMeta,
 
     @classmethod
     def current(cls):
-        return _process_stack()[-1]
+        if _process_stack():
+            return _process_stack()[-1]
+        else:
+            return None
 
     @classmethod
     def get_states(cls):
@@ -726,7 +729,7 @@ class Process(with_metaclass(ProcessStateMachineMeta,
 
     @super_check
     def on_killed(self):
-        self._fire_event(ProcessListener.on_process_killed, str(self.future().exception()))
+        self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
 
     def on_terminated(self):
         super(Process, self).on_terminated()
