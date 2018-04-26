@@ -1,12 +1,8 @@
-__all__ = ['KilledError']
+__all__ = ['KilledError', 'UnsuccessfulResult', 'InvalidStateError']
 
 
 class KilledError(Exception):
-    pass
-
-
-class ClassNotFoundException(Exception):
-    pass
+    """The process was killed."""
 
 
 class TimeoutError(Exception):
@@ -31,3 +27,10 @@ class Interrupted(Exception):
 
 class InvalidStateError(Exception):
     pass
+
+
+class UnsuccessfulResult(object):
+    """The result of the process was unsuccessful"""
+
+    def __init__(self, result=None):
+        self.result = result

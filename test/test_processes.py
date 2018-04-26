@@ -1,13 +1,14 @@
-import plumpy
 import kiwipy
+import plumpy
 from past.builtins import basestring
-from plumpy import Process, ProcessState, UnsuccessfulResult, InvalidStateError, test_utils, BundleKeys
+from plumpy import Process, ProcessState, test_utils, BundleKeys
 from plumpy.utils import AttributesFrozendict
+import tornado.gen
 
 from . import utils
 
 
-class ForgetToCallParent(Process):
+class ForgetToCallParent(plumpy.Process):
     def __init__(self, forget_on):
         super(ForgetToCallParent, self).__init__()
         self.forget_on = forget_on
@@ -68,7 +69,7 @@ class TestProcess(utils.TestCaseWithLoop):
                 pass
 
         with self.assertRaises(ValueError):
-            NoDynamic(inputs={'a': 5}).start()
+            NoDynamic(inputs={'a': 5}).execute()
 
         proc = WithDynamic(inputs={'a': 5})
         proc.execute()
@@ -160,7 +161,6 @@ class TestProcess(utils.TestCaseWithLoop):
 
     def test_exception(self):
         proc = test_utils.ExceptionProcess()
-        proc.start()
         with self.assertRaises(RuntimeError):
             proc.execute()
         self.assertEqual(proc.state, ProcessState.EXCEPTED)
@@ -285,7 +285,7 @@ class TestProcess(utils.TestCaseWithLoop):
         procs = []
         for proc_class in test_utils.TEST_PROCESSES + test_utils.TEST_EXCEPTION_PROCESSES:
             proc = proc_class(loop=self.loop)
-            proc.start()
+            self.loop.add_callback(proc.step_until_terminated)
             procs.append(proc)
 
         # Check that they all run
@@ -304,7 +304,7 @@ class TestProcess(utils.TestCaseWithLoop):
     def test_missing_output(self):
         proc = test_utils.MissingOutputProcess()
 
-        with self.assertRaises(InvalidStateError):
+        with self.assertRaises(plumpy.InvalidStateError):
             proc.successful()
 
         proc.execute()
@@ -320,20 +320,12 @@ class TestProcess(utils.TestCaseWithLoop):
                 super(Proc, cls).define(spec)
 
             def _run(self):
-                return UnsuccessfulResult(ERROR_CODE)
+                return plumpy.UnsuccessfulResult(ERROR_CODE)
 
         proc = Proc()
         proc.execute()
 
         self.assertEquals(proc.result(), ERROR_CODE)
-
-    def test_process_start_if_paused(self):
-        """ Test that starting a paused process unpauses it """
-        process = test_utils.DummyProcess()
-        process.pause()
-        self.assertTrue(process.paused)
-        process.start()
-        self.assertFalse(process.paused)
 
     def test_pause_play_in_process(self):
         """ Test that we can pause and cancel that by playing within the process """
@@ -351,9 +343,44 @@ class TestProcess(utils.TestCaseWithLoop):
         proc.execute()
         self.assertEquals(plumpy.ProcessState.FINISHED, proc.state)
 
+    def test_process_stack(self):
+        test_case = self
+
+        class StackTest(plumpy.Process):
+            def run(self):
+                test_case.assertIs(self, Process.current())
+
+        proc = StackTest()
+        proc.execute()
+
+    def test_process_stack_multiple(self):
+        """
+        Run multiple and nested processes to make sure the process stack is always correct
+        """
+        test_case = self
+
+        def test_nested(process):
+            test_case.assertIs(process, Process.current())
+
+        class StackTest(plumpy.Process):
+            def run(self):
+                test_case.assertIs(self, Process.current())
+                test_nested(self)
+
+        class ParentProcess(plumpy.Process):
+            def run(self):
+                test_case.assertIs(self, Process.current())
+                StackTest().execute()
+
+        to_run = []
+        for _ in range(100):
+            to_run.append(ParentProcess().step_until_terminated())
+
+        self.loop.run_sync(tornado.gen.coroutine(lambda: (yield tornado.gen.multi(to_run))))
+
 
 @plumpy.auto_persist('steps_ran')
-class SavePauseProc(Process):
+class SavePauseProc(plumpy.Process):
     steps_ran = None
 
     def init(self):
@@ -396,7 +423,6 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         proc = test_utils.DummyProcessWithOutput()
 
         saver = test_utils.ProcessSaver(proc)
-        proc.start()
         proc.execute()
 
         self._check_round_trip(proc)
@@ -443,7 +469,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
         proc = saved_state.unbundle()
         self.assertEqual(proc.state, ProcessState.WAITING)
 
-        # Now play it
+        # Now resume it
         proc.resume()
         result = proc.execute()
         self.assertEqual(proc.outputs, {'finished': True})
@@ -451,7 +477,6 @@ class TestProcessSaving(utils.TestCaseWithLoop):
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
         proc = test_utils.WaitForSignalProcess()
-        proc.start()
 
         # Wait - Run the process until it enters the WAITING state
         proc.add_on_waiting_callback(lambda _: proc.pause())
@@ -579,9 +604,10 @@ class TestProcessEvents(utils.TestCaseWithLoop):
 
     def test_basic_events(self):
         events_tester = test_utils.ProcessListenerTester(
-            self.proc, ('running', 'output_emitted', 'finished'),
-            self.loop.stop)
-        self.proc.start()
+            process=self.proc,
+            expected_events=('running', 'output_emitted', 'finished'),
+            done_callback=self.loop.stop)
+        self.loop.add_callback(self.proc.step_until_terminated)
 
         utils.run_loop_with_timeout(self.loop)
         self.assertSetEqual(events_tester.called, events_tester.expected_events)

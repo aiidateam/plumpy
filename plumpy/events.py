@@ -123,7 +123,7 @@ class ProcessCallback(object):
     def run(self):
         if not self._cancelled:
             try:
-                self._callback(*self._args, **self._kwargs)
+                yield self._callback(*self._args, **self._kwargs)
             except Exception:
                 exc_info = sys.exc_info()
                 self._process.callback_excepted(self._callback, exc_info[1], exc_info[2])

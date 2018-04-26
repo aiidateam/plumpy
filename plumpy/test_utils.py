@@ -3,6 +3,7 @@ from collections import namedtuple
 
 import plumpy
 from . import processes
+from . import process_states
 from . import persistence
 from . import utils
 
@@ -15,9 +16,9 @@ class DummyProcess(processes.Process):
     """
 
     EXPECTED_STATE_SEQUENCE = [
-        processes.ProcessState.CREATED,
-        processes.ProcessState.RUNNING,
-        processes.ProcessState.FINISHED]
+        process_states.ProcessState.CREATED,
+        process_states.ProcessState.RUNNING,
+        process_states.ProcessState.FINISHED]
 
     @utils.override
     def _run(self):
@@ -60,7 +61,7 @@ class KeyboardInterruptProc(processes.Process):
 class ProcessWithCheckpoint(processes.Process):
     @utils.override
     def _run(self):
-        return processes.Continue(self.last_step)
+        return process_states.Continue(self.last_step)
 
     def last_step(self):
         pass
@@ -69,7 +70,7 @@ class ProcessWithCheckpoint(processes.Process):
 class WaitForSignalProcess(processes.Process):
     @utils.override
     def _run(self):
-        return processes.Wait(self.last_step)
+        return process_states.Wait(self.last_step)
 
     def last_step(self):
         pass
@@ -170,10 +171,10 @@ class ThreeSteps(ProcessEventsTester):
     @utils.override
     def _run(self):
         self.out("test", 5)
-        return processes.Continue(self.middle_step)
+        return process_states.Continue(self.middle_step)
 
     def middle_step(self, ):
-        return processes.Continue(self.last_step)
+        return process_states.Continue(self.last_step)
 
     def last_step(self):
         pass
@@ -183,7 +184,7 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
     @utils.override
     def _run(self):
         self.out("test", 5)
-        return processes.Continue(self.middle_step)
+        return process_states.Continue(self.middle_step)
 
     def middle_step(self):
         pass
@@ -233,7 +234,7 @@ class ProcessListenerTester(plumpy.ProcessListener):
         self.called.add('finished')
         self._check_done()
 
-    def on_process_excepted(self, process, exc_info):
+    def on_process_excepted(self, process, reason):
         self.called.add('excepted')
         self._check_done()
 
@@ -267,13 +268,14 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
         Saver.__init__(self)
         self.process = proc
         proc.add_process_listener(self)
-        self._future = plumpy.Future()
 
     def capture(self):
         self._save(self.process)
         if not self.process.done():
-            self.process.start()
-            self.process.loop().run_sync(lambda: self._future)
+            try:
+                self.process.execute()
+            except Exception:
+                pass
 
     @utils.override
     def on_process_running(self, process):
@@ -292,17 +294,14 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
     @utils.override
     def on_process_finished(self, process, outputs):
         self._save(process)
-        self._future.set_result(True)
 
     @utils.override
-    def on_process_excepted(self, process, exc_info):
+    def on_process_excepted(self, process, reason):
         self._save(process)
-        self._future.set_result(True)
 
     @utils.override
     def on_process_killed(self, process, msg):
         self._save(process)
-        self._future.set_result(True)
 
 
 # All the Processes that can be used

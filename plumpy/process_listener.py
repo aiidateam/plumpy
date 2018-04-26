@@ -25,7 +25,7 @@ class ProcessListener(with_metaclass(ABCMeta, object)):
         """
         pass
 
-    def on_process_waiting(self, process, data):
+    def on_process_waiting(self, process):
         """
         Called when the process is about to enter the WAITING state
 
@@ -76,11 +76,12 @@ class ProcessListener(with_metaclass(ABCMeta, object)):
         """
         pass
 
-    def on_process_excepted(self, process, exc_info):
+    def on_process_excepted(self, process, reason):
         """
         Called when the process has excepted
 
         :param process: The process
+        :param reason: A string of the exception message
         :type process: :class:`plumpy.Process`
         """
         pass

@@ -1,15 +1,10 @@
 import functools
 import plumpy
-import plumpy.stack as stack
 import unittest
 
 
 class TestCase(unittest.TestCase):
-    def setUp(self):
-        self.assertTrue(stack.is_empty(), "The stack is not empty")
-
-    def tearDown(self):
-        self.assertTrue(stack.is_empty(), "The stack is not empty")
+    pass
 
 
 class TestCaseWithLoop(TestCase):

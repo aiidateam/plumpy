@@ -30,14 +30,4 @@ def call_with_super_check(fn, *args, **kwargs):
     assert self._called == call_count, \
         "Base '{}' was not called from '{}'\n" \
         "Hint: Did you forget to call the " \
-        "superclass method?".format(
-            fn.__name__, self.__class__)
-
-
-@contextlib.contextmanager
-def flag(var):
-    var = True
-    try:
-        yield
-    finally:
-        var = False
+        "superclass method?".format(fn.__name__, self.__class__)

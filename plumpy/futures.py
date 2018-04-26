@@ -1,9 +1,9 @@
 import kiwipy
 from functools import partial
+import tornado.concurrent
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'InvalidStateError', 'CancelledError']
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError']
 
-InvalidStateError = kiwipy.InvalidStateError
 CancelledError = kiwipy.CancelledError
 
 Future = kiwipy.Future

@@ -9,7 +9,7 @@ import sys
 from . import mixins
 from . import persistence
 from . import processes
-from . import utils
+from . import process_states
 
 __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
 
@@ -47,7 +47,7 @@ class WorkChainSpec(processes.ProcessSpec):
 
 
 @persistence.auto_persist('_awaiting')
-class Waiting(processes.Waiting):
+class Waiting(process_states.Waiting):
     """ Overwrite the waiting state"""
 
     def __init__(self, process, done_callback, msg=None, awaiting=None):
@@ -72,11 +72,11 @@ class Waiting(processes.Waiting):
         key = self._awaiting.pop(awaitable)
         try:
             self.process.ctx[key] = awaitable.result()
-        except Exception:
-            self.transition_to(processes.ProcessState.EXCEPTED, *sys.exc_info()[1:])
+        except Exception as e:
+            self._waiting_future.set_exception(e)
         else:
             if not self._awaiting:
-                self.transition_to(processes.ProcessState.RUNNING, self.done_callback)
+                self._waiting_future.set_result(process_states.NULL)
 
 
 class WorkChain(mixins.ContextMixin, processes.Process):
@@ -91,7 +91,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     @classmethod
     def get_state_classes(cls):
         states_map = super(WorkChain, cls).get_state_classes()
-        states_map[processes.ProcessState.WAITING] = Waiting
+        states_map[process_states.ProcessState.WAITING] = Waiting
         return states_map
 
     def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
@@ -147,9 +147,9 @@ class WorkChain(mixins.ContextMixin, processes.Process):
                 self.to_context(**return_value)
 
             if self._awaitables:
-                return processes.Wait(self._do_step, 'Waiting before next step', self._awaitables)
+                return process_states.Wait(self._do_step, 'Waiting before next step', self._awaitables)
             else:
-                return processes.Continue(self._do_step)
+                return process_states.Continue(self._do_step)
         else:
             return return_value
 

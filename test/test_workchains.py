@@ -488,33 +488,33 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 super(Wf, cls).define(spec)
                 spec.input('N', valid_type=int)
                 spec.outline(
-                    cls.check_N,
-                    while_(cls.step)(
+                    cls.check_n,
+                    while_(cls.do_step)(
                         cls.chill,
                         cls.chill,
                     ),
-                    if_(cls.step)(
+                    if_(cls.do_step)(
                         cls.chill,
-                    ).elif_(cls.step)(
+                    ).elif_(cls.do_step)(
                         cls.chill,
                     ).else_(
                         cls.chill
                     ),
                 )
 
-            def check_N(self):
+            def check_n(self):
                 assert 'N' in self.inputs
 
             def chill(self):
                 pass
 
-            def step(self):
-                if not hasattr(self.ctx, 'step'):
-                    self.ctx.step = 0
+            def do_step(self):
+                if not hasattr(self.ctx, 'do_step'):
+                    self.ctx.do_step = 0
 
-                self.ctx.step += 1
+                self.ctx.do_step += 1
 
-                if self.ctx.step < self.inputs['N']:
+                if self.ctx.do_step < self.inputs['N']:
                     return True
                 else:
                     return False
@@ -534,10 +534,10 @@ class TestWorkchain(utils.TestCaseWithLoop):
         wf.add_process_listener(collector)
         wf.execute()
 
-        stepper_strings = ['0:check_N', '1:while_(step)',
-                           '1:while_(step)(1:chill)', '1:while_(step)',
-                           '1:while_(step)(1:chill)', '1:while_(step)',
-                           '1:while_(step)(1:chill)', '1:while_(step)', '2:if_(step)']
+        stepper_strings = ['0:check_n', '1:while_(do_step)',
+                           '1:while_(do_step)(1:chill)', '1:while_(do_step)',
+                           '1:while_(do_step)(1:chill)', '1:while_(do_step)',
+                           '1:while_(do_step)(1:chill)', '1:while_(do_step)', '2:if_(do_step)']
         self.assertListEqual(collector.stepper_strings, stepper_strings)
 
 

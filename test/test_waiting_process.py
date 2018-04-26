@@ -11,7 +11,6 @@ from . import utils
 class TestWaitingProcess(utils.TestCaseWithLoop):
     def test_instance_state(self):
         proc = ThreeSteps()
-        proc.start()
         wl = ProcessSaver(proc)
         proc.execute()
 

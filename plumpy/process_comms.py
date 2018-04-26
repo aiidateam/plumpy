@@ -228,7 +228,8 @@ class ProcessLauncher(object):
         if task[PERSIST_KEY]:
             self._persister.save_checkpoint(proc)
         if task[PLAY_KEY]:
-            proc.start()
+            loop = proc.loop()
+            loop.add_callback(proc.step_until_terminated)
 
         if task[NOWAIT_KEY]:
             return proc.pid
@@ -244,6 +245,7 @@ class ProcessLauncher(object):
         proc = saved_state.unbundle(self._load_context)
 
         # Call start in case it's not started yet
-        proc.start()
+        loop = proc.loop()
+        loop.add_callback(proc.step_until_terminated)
 
         return proc.future()
