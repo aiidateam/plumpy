@@ -38,7 +38,7 @@ setup(
         'pyyaml',
         'tornado',
         'future',
-        'kiwipy[rmq]>=0.2.0.dev2'
+        'kiwipy[rmq]>=0.2.0'
     ],
     extras_require={
         ':python_version<"3.4"': ['enum34'],
