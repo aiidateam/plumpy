@@ -328,6 +328,28 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         else:
             return _LOGGER
 
+    @property
+    def paused(self):
+        return self._paused
+
+    @property
+    def _paused(self):
+        return self._paused_flag
+
+    @_paused.setter
+    def _paused(self, paused):
+        if self._paused == paused:
+            return
+
+        self._pausing = None
+
+        # We are changing the paused state
+        self._paused_flag = paused
+        if self._paused_flag:
+            call_with_super_check(self.on_paused)
+        else:
+            call_with_super_check(self.on_playing)
+
     def future(self):
         return self._future
 
@@ -372,28 +394,6 @@ class Process(with_metaclass(ProcessStateMachineMeta,
             return self._state.successful
         except AttributeError:
             raise exceptions.InvalidStateError('process is not in the finished state')
-
-    @property
-    def paused(self):
-        return self._paused
-
-    @property
-    def _paused(self):
-        return self._paused_flag
-
-    @_paused.setter
-    def _paused(self, paused):
-        if self._paused == paused:
-            return
-
-        self._pausing = None
-
-        # We are changing the paused state
-        self._paused_flag = paused
-        if self._paused_flag:
-            call_with_super_check(self.on_paused)
-        else:
-            call_with_super_check(self.on_playing)
 
     def killed(self):
         return self.state == process_states.ProcessState.KILLED
@@ -467,6 +467,15 @@ class Process(with_metaclass(ProcessStateMachineMeta,
 
     @coroutine
     def _run_task(self, fn, *args, **kwargs):
+        """
+        This method should be used to run all Process related functions and coroutines.
+        If there is an exception the process will enter the EXCEPTED state.
+
+        :param fn: A function or coroutine
+        :param args: Optional positional arguments passed to fn
+        :param kwargs:  Optional keyword arguments passed to fn
+        :return: The value as returned by fn
+        """
         # Make sure execute is a coroutine
         coro = utils.ensure_coroutine(fn)
         result = yield tornado.stack_context.run_with_stack_context(
@@ -588,6 +597,7 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         self._terminated_callbacks.remove(callback)
 
     def on_entering(self, state):
+        # Map these onto direct functions that the subclass can implement
         state_label = state.LABEL
         if state_label == process_states.ProcessState.CREATED:
             call_with_super_check(self.on_create)
@@ -603,6 +613,7 @@ class Process(with_metaclass(ProcessStateMachineMeta,
             call_with_super_check(self.on_except, state.get_exc_info())
 
     def on_entered(self, from_state):
+        # Map these onto direct functions that the subclass can implement
         state_label = self._state.LABEL
         if state_label == process_states.ProcessState.RUNNING:
             call_with_super_check(self.on_running)
@@ -924,7 +935,7 @@ class Process(with_metaclass(ProcessStateMachineMeta,
                 self._killing.set_result(True)
                 self._killing = None
 
-                # If we were also pausing, then kill takes precendence and
+                # If we were also pausing, then kill takes precedence and
                 # the pause is abandoned
                 if self._pausing:
                     self._pausing.set_result(False)

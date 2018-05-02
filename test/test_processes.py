@@ -378,6 +378,16 @@ class TestProcess(utils.TestCaseWithLoop):
 
         self.loop.run_sync(tornado.gen.coroutine(lambda: (yield tornado.gen.multi(to_run))))
 
+    def test_call_soon(self):
+        class CallSoon(plumpy.Process):
+            def run(self):
+                self.call_soon(self.do_except)
+
+            def do_except(self):
+                raise RuntimeError("Breaking yo!")
+
+        CallSoon().execute()
+
 
 @plumpy.auto_persist('steps_ran')
 class SavePauseProc(plumpy.Process):

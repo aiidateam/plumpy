@@ -269,6 +269,13 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
         return self._state.LABEL
 
     def add_state_event_callback(self, hook, callback):
+        """
+        Add a callback to be called on a particular state event hook.
+        The callback should have form fn(state_machine, hook, state)
+
+        :param hook: The state event hook
+        :param callback: The callback function
+        """
         self._event_callbacks.setdefault(hook, []).append(callback)
 
     def remove_state_event_callback(self, hook, callback):
