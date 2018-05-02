@@ -1,6 +1,6 @@
 from .utils import TestCase
 
-from plum.port import InputPort, PortNamespace
+from plumpy.ports import InputPort, PortNamespace
 
 
 class TestInputPort(TestCase):

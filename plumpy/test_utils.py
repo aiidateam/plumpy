@@ -1,31 +1,31 @@
 import collections
 from collections import namedtuple
 
-import plum
-from plum.process_listener import ProcessListener
-from . import process
-from . import persisters
+import plumpy
+from . import processes
+from . import process_states
+from . import persistence
 from . import utils
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
 
-class DummyProcess(process.Process):
+class DummyProcess(processes.Process):
     """
     Process with no inputs or outputs and does nothing when ran.
     """
 
     EXPECTED_STATE_SEQUENCE = [
-        process.ProcessState.CREATED,
-        process.ProcessState.RUNNING,
-        process.ProcessState.FINISHED]
+        process_states.ProcessState.CREATED,
+        process_states.ProcessState.RUNNING,
+        process_states.ProcessState.FINISHED]
 
     @utils.override
     def _run(self):
         pass
 
 
-class DummyProcessWithOutput(process.Process):
+class DummyProcessWithOutput(processes.Process):
     EXPECTED_OUTPUTS = {'default': 5}
 
     @classmethod
@@ -33,40 +33,64 @@ class DummyProcessWithOutput(process.Process):
         super(DummyProcessWithOutput, cls).define(spec)
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
+        spec.output("default", valid_type=int)
 
-    def _run(self, **kwargs):
+    def run(self, **kwargs):
         self.out("default", 5)
-        return self.outputs
 
 
-class KeyboardInterruptProc(process.Process):
+class DummyProcessWithDynamicOutput(processes.Process):
+    EXPECTED_OUTPUTS = {'default': 5}
+
+    @classmethod
+    def define(cls, spec):
+        super(DummyProcessWithDynamicOutput, cls).define(spec)
+        spec.inputs.dynamic = True
+        spec.outputs.dynamic = True
+
+    def run(self, **kwargs):
+        self.out("default", 5)
+
+
+class KeyboardInterruptProc(processes.Process):
     @utils.override
     def _run(self):
         raise KeyboardInterrupt()
 
 
-class ProcessWithCheckpoint(process.Process):
+class ProcessWithCheckpoint(processes.Process):
     @utils.override
     def _run(self):
-        return process.Continue(self.last_step)
+        return process_states.Continue(self.last_step)
 
     def last_step(self):
         pass
 
 
-class WaitForSignalProcess(process.Process):
+class WaitForSignalProcess(processes.Process):
     @utils.override
     def _run(self):
-        return process.Wait(self.last_step)
+        return process_states.Wait(self.last_step)
 
     def last_step(self):
         pass
 
 
-class NewLoopProcess(process.Process):
+class MissingOutputProcess(processes.Process):
+    """ A process that does not generate a required output """
 
+    @classmethod
+    def define(cls, spec):
+        super(MissingOutputProcess, cls).define(spec)
+        spec.output("default", required=True)
+
+    def run(self):
+        pass
+
+
+class NewLoopProcess(processes.Process):
     def __init__(self, *args, **kwargs):
-        kwargs['loop'] = plum.new_event_loop()
+        kwargs['loop'] = plumpy.new_event_loop()
         super(NewLoopProcess, self).__init__(*args, **kwargs)
 
     def _run(self, **kwargs):
@@ -84,7 +108,7 @@ class EventsTesterMixin(object):
         cls.called_events.append(event)
 
     def __init__(self, *args, **kwargs):
-        assert isinstance(self, process.Process), \
+        assert isinstance(self, processes.Process), \
             "Mixin has to be used with a type derived from a Process"
         super(EventsTesterMixin, self).__init__(*args, **kwargs)
         self.__class__.called_events = []
@@ -101,8 +125,7 @@ class EventsTesterMixin(object):
 
     @utils.override
     def _on_output_emitted(self, output_port, value, dynamic):
-        super(EventsTesterMixin, self)._on_output_emitted(
-            output_port, value, dynamic)
+        super(EventsTesterMixin, self)._on_output_emitted(output_port, value, dynamic)
         self.called('emitted')
 
     @utils.override
@@ -116,8 +139,8 @@ class EventsTesterMixin(object):
         self.called('resume')
 
     @utils.override
-    def on_finish(self, result):
-        super(EventsTesterMixin, self).on_finish(result)
+    def on_finish(self, result, successful):
+        super(EventsTesterMixin, self).on_finish(result, successful)
         self.called('finish')
 
     @utils.override
@@ -131,7 +154,7 @@ class EventsTesterMixin(object):
         self.called('terminate')
 
 
-class ProcessEventsTester(EventsTesterMixin, process.Process):
+class ProcessEventsTester(EventsTesterMixin, processes.Process):
     @classmethod
     def define(cls, spec):
         super(ProcessEventsTester, cls).define(spec)
@@ -148,10 +171,10 @@ class ThreeSteps(ProcessEventsTester):
     @utils.override
     def _run(self):
         self.out("test", 5)
-        return process.Continue(self.middle_step)
+        return process_states.Continue(self.middle_step)
 
     def middle_step(self, ):
-        return process.Continue(self.last_step)
+        return process_states.Continue(self.last_step)
 
     def last_step(self):
         pass
@@ -161,7 +184,7 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
     @utils.override
     def _run(self):
         self.out("test", 5)
-        return process.Continue(self.middle_step)
+        return process_states.Continue(self.middle_step)
 
     def middle_step(self):
         pass
@@ -180,7 +203,7 @@ class ThreeStepsThenException(ThreeSteps):
         raise RuntimeError("Great scott!")
 
 
-class ProcessListenerTester(ProcessListener):
+class ProcessListenerTester(plumpy.ProcessListener):
     def __init__(self, process, expected_events, done_callback):
         process.add_process_listener(self)
         self.expected_events = set(expected_events)
@@ -211,12 +234,12 @@ class ProcessListenerTester(ProcessListener):
         self.called.add('finished')
         self._check_done()
 
-    def on_process_failed(self, process, exc_info):
-        self.called.add('failed')
+    def on_process_excepted(self, process, reason):
+        self.called.add('excepted')
         self._check_done()
 
-    def on_process_cancelled(self, process, msg):
-        self.called.add('cancelled')
+    def on_process_killed(self, process, msg):
+        self.called.add('killed')
         self._check_done()
 
     def _check_done(self):
@@ -230,28 +253,29 @@ class Saver(object):
         self.outputs = []
 
     def _save(self, p):
-        b = persisters.Bundle(p)
+        b = persistence.Bundle(p)
         self.snapshots.append(b)
         self.outputs.append(p.outputs.copy())
 
 
-class ProcessSaver(ProcessListener, Saver):
+class ProcessSaver(plumpy.ProcessListener, Saver):
     """
     Save the instance state of a process each time it is about to enter a new state
     """
 
     def __init__(self, proc):
-        ProcessListener.__init__(self)
+        plumpy.ProcessListener.__init__(self)
         Saver.__init__(self)
         self.process = proc
         proc.add_process_listener(self)
-        self._future = plum.Future()
 
     def capture(self):
         self._save(self.process)
         if not self.process.done():
-            self.process.play()
-            self.process.loop().run_sync(lambda: self._future)
+            try:
+                self.process.execute()
+            except Exception:
+                pass
 
     @utils.override
     def on_process_running(self, process):
@@ -270,23 +294,21 @@ class ProcessSaver(ProcessListener, Saver):
     @utils.override
     def on_process_finished(self, process, outputs):
         self._save(process)
-        self._future.set_result(True)
 
     @utils.override
-    def on_process_failed(self, process, exc_info):
+    def on_process_excepted(self, process, reason):
         self._save(process)
-        self._future.set_result(True)
 
     @utils.override
-    def on_process_cancelled(self, process, msg):
+    def on_process_killed(self, process, msg):
         self._save(process)
-        self._future.set_result(True)
 
 
 # All the Processes that can be used
 TEST_PROCESSES = [
     DummyProcess,
     DummyProcessWithOutput,
+    DummyProcessWithDynamicOutput,
     ThreeSteps]
 
 TEST_WAITING_PROCESSES = [
@@ -298,7 +320,8 @@ TEST_WAITING_PROCESSES = [
 
 TEST_EXCEPTION_PROCESSES = [
     ExceptionProcess,
-    ThreeStepsThenException
+    ThreeStepsThenException,
+    MissingOutputProcess
 ]
 
 
@@ -312,7 +335,6 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     Return True if they match, False otherwise.
 
     :param loop: The event loop
-    :type loop: :class:`plum.loop.event_loop.AbstractEventLoop`
     :param proc_class: The process class to check
     :type proc_class: :class:`Process`
     :param snapshots: The snapshots taken from from an execution of that
@@ -321,7 +343,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     :rtype: bool
     """
     for i, bundle in zip(range(0, len(snapshots)), snapshots):
-        loaded = bundle.unbundle(loop=loop)
+        loaded = bundle.unbundle(plumpy.LoadSaveContext(loop=loop))
         saver = ProcessSaver(loaded)
         saver.capture()
 
@@ -334,9 +356,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
             compare_dictionaries(
                 snapshots[-j], saver.snapshots[-j],
                 snapshots[-j], saver.snapshots[-j],
-                exclude={
-                    'CALLBACKS', 'DONE_CALLBACKS', 'SCHEDULED_CALLBACKS', 'PERSISTABLE_ID'
-                })
+                exclude={'exception'})
             j += 1
 
     return True
@@ -368,19 +388,17 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
             compare_value(bundle1, bundle2, vv1, vv2, exclude)
     else:
         if v1 != v2:
-            raise ValueError(
-                "Dict values mismatch for :\n{} != {}".format(v1, v2)
-            )
+            raise ValueError("Dict values mismatch for :\n{} != {}".format(v1, v2))
 
 
-class TestPersister(persisters.Persister):
+class TestPersister(persistence.Persister):
     """
     Test persister, just creates the bundle, noting else
     """
 
     def save_checkpoint(self, process, tag=None):
         """ Create the checkpoint bundle """
-        persisters.Bundle(process)
+        persistence.Bundle(process)
 
     def load_checkpoint(self, pid, tag=None):
         raise NotImplementedError

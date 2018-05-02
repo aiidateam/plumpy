@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 
+from collections import deque, defaultdict
 import importlib
 import inspect
 import logging
 import threading
-from collections import deque
+import tornado.gen
 
 import frozendict
 
-import plum.lang
-from plum.settings import check_protected, check_override
+from . import lang
+from plumpy.settings import check_protected, check_override
 
 __all__ = []
 
-protected = plum.lang.protected(check=check_protected)
-override = plum.lang.override(check=check_override)
+protected = lang.protected(check=check_protected)
+override = lang.override(check=check_override)
 
 _LOGGER = logging.getLogger(__name__)
 _default_loop = None
@@ -49,8 +50,7 @@ class EventHelper(object):
             try:
                 getattr(l, event_function.__name__)(*args, **kwargs)
             except Exception as e:
-                _LOGGER.error(
-                    "Listener {} produced an exception:\n{}".format(l, e))
+                _LOGGER.error("Listener '{}' produced an exception:\n{}".format(l, e))
 
 
 class ListenContext(object):
@@ -99,11 +99,6 @@ class ThreadSafeCounter(object):
     def value(self):
         with self.lock:
             return self.counter
-
-
-_PENDING = 'PENDING'
-_CANCELLED = 'CANCELLED'
-_FINISHED = 'FINISHED'
 
 
 class AttributesFrozendict(frozendict.frozendict):
@@ -158,7 +153,10 @@ class AttributesDict(SimpleNamespace):
         setattr(self, key, value)
 
     def __getitem__(self, item):
-        return getattr(self, item)
+        try:
+            return getattr(self, item)
+        except AttributeError:
+            raise KeyError("No key '{}'".format(item))
 
     def __delitem__(self, item):
         return delattr(self, item)
@@ -168,27 +166,6 @@ class AttributesDict(SimpleNamespace):
 
     def get(self, *args, **kwargs):
         return self.__dict__.get(*args, **kwargs)
-
-
-def function_name(fn):
-    try:
-        name = fn.__module__ + '.' + fn.__qualname__
-    except AttributeError:
-        if inspect.ismethod(fn):
-            cls = fn.__self__.__class__
-            name = class_name(cls) + '.' + fn.__name__
-        elif inspect.isfunction(fn):
-            name = fn.__module__ + '.' + fn.__name__
-        else:
-            raise ValueError("Must be function or method")
-
-    # Make sure we can load it
-    try:
-        load_object(name)
-    except ValueError:
-        raise ValueError("Could not create a consistent name for fn '{}'".format(fn))
-
-    return name
 
 
 def load_function(name, instance=None):
@@ -202,35 +179,6 @@ def load_function(name, instance=None):
         return obj
     else:
         raise ValueError("Invalid function name '{}'".format(name))
-
-
-def class_name(obj, class_loader=None, verify=True):
-    """
-    Given a class or an instance this function will give the fully qualified name
-    e.g. 'my_module.MyClass'
-
-    :param obj: The object to get the name from.
-    :param class_loader: Class loader used to verify that the resulting name
-        can be loaded
-    :return: The fully qualified name.
-    """
-
-    if not inspect.isclass(obj):
-        # assume it's an instance
-        obj = obj.__class__
-
-    name = obj.__module__ + '.' + obj.__name__
-
-    if verify:
-        try:
-            if class_loader is not None:
-                class_loader.load_class(name)
-            else:
-                load_object(name)
-        except ValueError:
-            raise ValueError("Could not create a consistent full name for object '{}'".format(obj))
-
-    return name
 
 
 def load_object(fullname):
@@ -266,3 +214,32 @@ def load_module(fullname):
         raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
 
     return mod, remainder
+
+
+def wrap_dict(flat_dict, separator='.'):
+    sub_dicts = defaultdict(dict)
+    res = {}
+    for key, value in flat_dict.items():
+        if separator in key:
+            namespace, sub_key = key.split(separator, 1)
+            sub_dicts[namespace][sub_key] = value
+        else:
+            res[key] = value
+    for namespace, sub_dict in sub_dicts.items():
+        res[namespace] = wrap_dict(sub_dict)
+    return res
+
+
+def type_check(obj, expected_type):
+    if not isinstance(obj, expected_type):
+        raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
+
+
+def ensure_coroutine(fn):
+    if tornado.gen.is_coroutine_function(fn):
+        return fn
+    else:
+        @tornado.gen.coroutine
+        def wrapper(*args, **kwargs):
+            raise tornado.gen.Return(fn(*args, **kwargs))
+        return wrapper

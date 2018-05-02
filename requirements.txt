@@ -5,12 +5,11 @@ certifi==2018.1.18
 enum34==1.1.6; python_version < '3.4'
 frozendict==1.2
 future==0.16.0
-kiwipy==0.2.0.dev2
 pika==0.11.2
-plumpy==0.10.0.dev5
 portalocker==1.1.0
 PyYAML==3.12
 singledispatch==3.4.0.3
 six==1.11.0
 tornado==4.5.3
 typing==3.6.4
+-e git://github.com/muhrin/kiwipy.git@cf04a7ce1cf8f9df5425357893829156d687a7be#egg=kiwipy

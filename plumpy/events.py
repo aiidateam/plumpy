@@ -3,11 +3,18 @@ import inspect
 import reprlib
 import sys
 from tornado import ioloop
+import tornado.gen
 
 __all__ = ['new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete']
 
+# Get the current tornado event loop
 get_event_loop = ioloop.IOLoop.current
-new_event_loop = ioloop.IOLoop
+
+
+def new_event_loop():
+    loop = ioloop.IOLoop()
+    loop.make_current()
+    return loop
 
 
 def set_event_loop(loop):
@@ -75,7 +82,7 @@ def _format_callback(func, args, kwargs, suffix=''):
     return func_repr
 
 
-class Handle(object):
+class ProcessCallback(object):
     """Object returned by callback registration methods."""
 
     __slots__ = ('_callback', '_args', '_kwargs', '_process',
@@ -107,16 +114,27 @@ class Handle(object):
     def cancel(self):
         if not self._cancelled:
             self._cancelled = True
-            self._callback = None
-            self._args = None
+            self._done()
 
     def cancelled(self):
         return self._cancelled
 
-    def _run(self):
+    @tornado.gen.coroutine
+    def run(self):
         if not self._cancelled:
             try:
-                self._callback(*self._args, **self._kwargs)
-            except BaseException:
+                yield self._callback(*self._args, **self._kwargs)
+            except Exception:
                 exc_info = sys.exc_info()
-                self._process.callback_failed(self._callback, exc_info[1], exc_info[2])
+                self._process.callback_excepted(self._callback, exc_info[1], exc_info[2])
+            finally:
+                self._done()
+
+    def _done(self):
+        self._cleanup()
+
+    def _cleanup(self):
+        self._process = None
+        self._callback = None
+        self._args = None
+        self._kwargs = None

@@ -1,6 +1,6 @@
 from enum import Enum
 import unittest
-from plum.base import state_machine
+from plumpy.base import state_machine
 import time
 
 # Events
@@ -42,7 +42,7 @@ class Playing(state_machine.State):
         self._update_time()
 
     def play(self, track=None):
-        return state_machine.EventResponse.IGNORED
+        return False
 
     def _update_time(self):
         current_time = time.time()
@@ -68,9 +68,9 @@ class Paused(state_machine.State):
 
     def play(self, track=None):
         if track is not None:
-            self.transition_to(Playing, track)
+            self.state_machine.transition_to(Playing, track)
         else:
-            self.transition_to(self.playing_state)
+            self.state_machine.transition_to(self.playing_state)
 
 
 class Stopped(state_machine.State):
@@ -84,19 +84,26 @@ class Stopped(state_machine.State):
         return "[]"
 
     def play(self, track):
-        self.transition_to(Playing, track)
+        self.state_machine.transition_to(Playing, track)
 
 
 class CdPlayer(state_machine.StateMachine):
     STATES = (Stopped, Playing, Paused)
 
-    def on_entering(self, state):
-        super(CdPlayer, self).on_entering(state)
+    def __init__(self):
+        super(CdPlayer, self).__init__()
+        self.add_state_event_callback(
+            state_machine.StateEventHook.ENTERING_STATE,
+            lambda _s, _h, state: self.entering(state))
+        self.add_state_event_callback(
+            state_machine.StateEventHook.EXITING_STATE,
+            lambda _s, _h, _st: self.exiting())
+
+    def entering(self, state):
         print("Entering {}".format(state))
         print(self._state)
 
-    def on_exiting(self):
-        super(CdPlayer, self).on_exiting()
+    def exiting(self):
         print("Exiting {}".format(self.state))
         print(self._state)
 
@@ -129,7 +136,7 @@ class TestStateMachine(unittest.TestCase):
         cd_player.play()
         self.assertEqual(cd_player.state, PLAYING)
 
-        self.assertEqual(cd_player.play(), state_machine.EventResponse.IGNORED)
+        self.assertEqual(cd_player.play(), False)
 
         cd_player.stop()
         self.assertEqual(cd_player.state, STOPPED)

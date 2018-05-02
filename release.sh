@@ -1,7 +1,7 @@
 
 
 
-PACKAGE="plum"
+PACKAGE="plumpy"
 VERSION_FILE=${PACKAGE}/version.py
 
 version=$1

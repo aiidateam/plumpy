@@ -4,11 +4,11 @@ import unittest
 import uuid
 
 from kiwipy import rmq
-import plum.rmq
-import plum.test_utils
+import plumpy.rmq
+import plumpy.test_utils
 from test.utils import TestCaseWithLoop
 
-from plum import test_utils
+from plumpy import test_utils
 
 try:
     import pika
@@ -24,7 +24,7 @@ class TestTaskActions(TestCaseWithLoop):
     def setUp(self):
         super(TestTaskActions, self).setUp()
 
-        self.connector = plum.rmq.RmqConnector('amqp://guest:guest@localhost:5672/', loop=self.loop)
+        self.connector = plumpy.rmq.RmqConnector('amqp://guest:guest@localhost:5672/', loop=self.loop)
         exchange_name = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
         queue_name = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
 
@@ -35,12 +35,12 @@ class TestTaskActions(TestCaseWithLoop):
             testing_mode=True
         )
 
-        self.communicator.init()
+        self.communicator.connect()
 
         self._tmppath = tempfile.mkdtemp()
-        self.persister = plum.PicklePersister(self._tmppath)
+        self.persister = plumpy.PicklePersister(self._tmppath)
         # Add a launch task receiver
-        self.communicator.add_task_subscriber(plum.ProcessLauncher(self.loop, persister=self.persister))
+        self.communicator.add_task_subscriber(plumpy.ProcessLauncher(self.loop, persister=self.persister))
 
     def tearDown(self):
         # Close the connector before calling super because it will
@@ -51,28 +51,28 @@ class TestTaskActions(TestCaseWithLoop):
 
     def test_launch(self):
         # Add a launch task receiver
-        action = plum.LaunchProcessAction(plum.test_utils.DummyProcess)
+        action = plumpy.LaunchProcessAction(plumpy.test_utils.DummyProcess)
         action.execute(self.communicator)
         result = self.communicator.await(action, timeout=AWAIT_TIMEOUT)
         self.assertIsNotNone(result)
 
     def test_launch_nowait(self):
         # Launch, and don't wait, just get the pid
-        action = plum.LaunchProcessAction(plum.test_utils.DummyProcess, nowait=True)
+        action = plumpy.LaunchProcessAction(plumpy.test_utils.DummyProcess, nowait=True)
         action.execute(self.communicator)
         result = self.communicator.await(action, timeout=AWAIT_TIMEOUT)
         self.assertIsInstance(result, uuid.UUID)
 
     def test_execute_action(self):
         """ Test the process execute action """
-        action = plum.ExecuteProcessAction(test_utils.DummyProcessWithOutput)
+        action = plumpy.ExecuteProcessAction(test_utils.DummyProcessWithOutput)
         action.execute(self.communicator)
         result = self.communicator.await(action, timeout=AWAIT_TIMEOUT)
         self.assertEqual(result, test_utils.DummyProcessWithOutput.EXPECTED_OUTPUTS)
 
     def test_execute_action_nowait(self):
         """ Test the process execute action """
-        action = plum.ExecuteProcessAction(test_utils.DummyProcessWithOutput, nowait=True)
+        action = plumpy.ExecuteProcessAction(test_utils.DummyProcessWithOutput, nowait=True)
         action.execute(self.communicator)
         result = self.communicator.await(action, timeout=AWAIT_TIMEOUT)
         self.assertIsInstance(result, uuid.UUID)
@@ -83,11 +83,11 @@ class TestTaskActions(TestCaseWithLoop):
 
         launch_futures = []
         for _ in range(num_to_launch):
-            action = plum.LaunchProcessAction(test_utils.DummyProcessWithOutput)
+            action = plumpy.LaunchProcessAction(test_utils.DummyProcessWithOutput)
             action.execute(self.communicator)
             launch_futures.append(action)
 
-        results = self.communicator.await(plum.gather(*launch_futures), timeout=AWAIT_TIMEOUT)
+        results = self.communicator.await(plumpy.gather(*launch_futures), timeout=AWAIT_TIMEOUT)
         for result in results:
             self.assertIsInstance(result, uuid.UUID)
 
@@ -97,7 +97,7 @@ class TestTaskActions(TestCaseWithLoop):
         pid = process.pid
         del process
 
-        action = plum.ContinueProcessAction(pid)
+        action = plumpy.ContinueProcessAction(pid)
         action.execute(self.communicator)
         result = self.communicator.await(action, timeout=AWAIT_TIMEOUT)
         self.assertEqual(result, test_utils.DummyProcessWithOutput.EXPECTED_OUTPUTS)

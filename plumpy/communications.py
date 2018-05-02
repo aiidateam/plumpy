@@ -4,7 +4,7 @@ from future.utils import with_metaclass
 
 from . import futures
 
-__all__ = ['Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected']
+__all__ = ['Action', 'Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected']
 
 RemoteException = kiwipy.RemoteException
 DeliveryFailed = kiwipy.DeliveryFailed

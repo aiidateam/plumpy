@@ -1,26 +1,32 @@
 import collections
+import enum
 from future.utils import with_metaclass, raise_
-from enum import Enum
 import functools
 import inspect
 import logging
 import os
-import plum
+import plumpy
 import sys
+import traceback
+
 from .utils import call_with_super_check, super_check
 
-__all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed', 'EventResponse']
+__all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
 
 
-# Events to be ignored
-class EventResponse(Enum):
-    IGNORED = 0
-
-
 class StateMachineError(Exception):
     pass
+
+
+class StateEntryFailed(Exception):
+
+    def __init__(self, state=None, *args, **kwargs):
+        super(StateEntryFailed, self).__init__('failed to enter state')
+        self.state = state
+        self.args = args
+        self.kwargs = kwargs
 
 
 class InvalidStateError(Exception):
@@ -76,7 +82,7 @@ def event(from_states='*', to_states='*'):
                 )
 
             result = wrapped(self, *a, **kw)
-            if not (result == EventResponse.IGNORED or isinstance(result, plum.Future)):
+            if not (result is False or isinstance(result, plumpy.Future)):
                 if to_states != '*' and not \
                         any(isinstance(self._state, state)
                             for state in to_states):
@@ -128,7 +134,14 @@ class State(object):
     @super_check
     def enter(self):
         """ Entering the state """
-        call_with_super_check(self.state_machine.on_entering, self)
+        pass
+
+    def execute(self):
+        """
+        Execute the state, performing the actions that this state is responsible
+        for.  Return a state to transition to or None if finished.
+        """
+        pass
 
     @super_check
     def exit(self):
@@ -137,15 +150,40 @@ class State(object):
             raise InvalidStateError(
                 "Cannot exit a terminal state {}".format(self.LABEL)
             )
-        call_with_super_check(self.state_machine.on_exiting)
+        pass
 
-    def transition_to(self, state, *args, **kwargs):
-        """ A convenience method to transition to a new state from this state """
-        self.state_machine.transition_to(state, *args, **kwargs)
+    def create_state(self, state_label, *args, **kwargs):
+        return self.state_machine.create_state(state_label, *args, **kwargs)
+
+    def do_enter(self):
+        call_with_super_check(self.enter)
+        self.in_state = True
+
+    def do_exit(self):
+        call_with_super_check(self.exit)
+        self.in_state = False
+
+
+class StateEventHook(enum.Enum):
+    """
+    Hooks that can be used to register callback at various points in the state transition
+    procedure.  The callback will be passed a state instance whose meaning will differ depending
+    on the hook as commented below.
+    """
+    ENTERING_STATE = 0  # State passed will be the state that is being entered
+    ENTERED_STATE = 1  # State passed will be the last state that we entered from
+    EXITING_STATE = 2  # State passed will be the next state that will be entered (or None for terminal)
 
 
 class StateMachineMeta(type):
     def __call__(cls, *args, **kwargs):
+        """
+        Create the state machine and enter the initial state.
+
+        :param args: Any positional arguments to be passed to the constructor
+        :param kwargs: Any keyword arguments to be passed to the constructor
+        :return: An instance of the state machine
+        """
         inst = super(StateMachineMeta, cls).__call__(*args, **kwargs)
         inst.transition_to(inst.create_initial_state())
         call_with_super_check(inst.init)
@@ -154,11 +192,15 @@ class StateMachineMeta(type):
 
 class StateMachine(with_metaclass(StateMachineMeta, object)):
     STATES = None
-    STATES_MAP = None
-    sealed = False
+    _STATES_MAP = None
 
     _transitioning = False
     _transition_failing = False
+
+    @classmethod
+    def get_states_map(cls):
+        cls.__ensure_built()
+        return cls._STATES_MAP
 
     @classmethod
     def get_states(cls):
@@ -175,34 +217,39 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
     @classmethod
     def get_state_class(cls, label):
         cls.__ensure_built()
-        return cls.STATES_MAP[label]
+        return cls._STATES_MAP[label]
 
     @classmethod
     def __ensure_built(cls):
-        if cls.sealed:
-            return
+        try:
+            # Check if it's already been built (and therefore sealed)
+            if cls.__getattribute__(cls, 'sealed'):
+                return
+        except AttributeError:
+            pass
 
         cls.STATES = cls.get_states()
         assert isinstance(cls.STATES, collections.Iterable)
 
         # Build the states map
-        cls.STATES_MAP = {}
+        cls._STATES_MAP = {}
         for state_cls in cls.STATES:
             assert issubclass(state_cls, State)
             label = state_cls.LABEL
-            assert label not in cls.STATES_MAP, \
-                "Duplicate label '{}'".format(label)
-            cls.STATES_MAP[label] = state_cls
+            assert label not in cls._STATES_MAP, "Duplicate label '{}'".format(label)
+            cls._STATES_MAP[label] = state_cls
 
         cls.sealed = True
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self):
+        super(StateMachine, self).__init__()
         self.__ensure_built()
         self._state = None
         self._exception_handler = None
         self.set_debug((not sys.flags.ignore_environment
                         and bool(os.environ.get('PYTHONSMDEBUG'))))
         self._transitioning = False
+        self._event_callbacks = {}
 
     @super_check
     def init(self):
@@ -221,18 +268,25 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
             return None
         return self._state.LABEL
 
-    @super_check
-    def on_entering(self, state):
+    def add_state_event_callback(self, hook, callback):
         """
-        We are just about the enter the state with the given label
-        :param state: The state instance
-        """
-        pass
+        Add a callback to be called on a particular state event hook.
+        The callback should have form fn(state_machine, hook, state)
 
-    @super_check
-    def on_exiting(self):
-        """ We're just about the exit the state in self._state"""
-        pass
+        :param hook: The state event hook
+        :param callback: The callback function
+        """
+        self._event_callbacks.setdefault(hook, []).append(callback)
+
+    def remove_state_event_callback(self, hook, callback):
+        try:
+            self._event_callbacks[hook].remove(callback)
+        except (KeyError, ValueError):
+            raise ValueError("Callback not set for hook '{}'".format(hook))
+
+    def _fire_state_event(self, hook, state):
+        for callback in self._event_callbacks.get(hook, []):
+            callback(self, hook, state)
 
     def on_terminated(self):
         """ Called when a terminal state is entered """
@@ -247,23 +301,21 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
         try:
             self._transitioning = True
 
-            if not isinstance(new_state, State):
-                state_cls = self._ensure_state_class(new_state)
-                new_state = state_cls(self, *args, **kwargs)
+            # Make sure we have a state instance
+            new_state = self._create_state_instance(new_state, *args, **kwargs)
             label = new_state.LABEL
+            self._exit_current_state(new_state)
 
-            if self._state is None:
-                assert label == self.initial_state_label()
-            else:
-                assert label in self._state.ALLOWED, \
-                    "Cannot transition from {} to {}".format(
-                        self._state.LABEL, label)
-                call_with_super_check(self._state.exit)
-                self._state.in_state = False
+            try:
+                self._enter_next_state(new_state)
+            except StateEntryFailed as exception:
+                new_state = exception.state
+                # Make sure we have a state instance
+                new_state = self._create_state_instance(new_state, *exception.args, **exception.kwargs)
+                label = new_state.LABEL
+                self._exit_current_state(new_state)
+                self._enter_next_state(new_state)
 
-            call_with_super_check(new_state.enter)
-            self._state = new_state
-            new_state.in_state = True
             if self._state.is_terminal():
                 self.on_terminated()
         except Exception as exc:
@@ -292,11 +344,50 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
     def set_debug(self, enabled):
         self._debug = enabled
 
+    def create_state(self, state_label, *args, **kwargs):
+        try:
+            return self.get_states_map()[state_label](self, *args, **kwargs)
+        except KeyError:
+            raise ValueError("{} is not a valid state".format(state_label))
+
+    def _exit_current_state(self, next_state):
+        """ Exit the given state """
+
+        # If we're just being constructed we may not have a state yet to exit,
+        # in which case check the new state is the initial state
+        if self._state is None:
+            if next_state.label != self.initial_state_label():
+                raise RuntimeError("Cannot enter state '{}' as the initial state".format(next_state))
+            return  # Nothing to exit
+
+        if next_state.LABEL not in self._state.ALLOWED:
+            raise RuntimeError(
+                "Cannot transition from {} to {}".format(self._state.LABEL, next_state.label))
+        self._fire_state_event(StateEventHook.EXITING_STATE, next_state)
+        self._state.do_exit()
+
+    def _enter_next_state(self, next_state):
+        last_state = self._state
+        self._fire_state_event(StateEventHook.ENTERING_STATE, next_state)
+        # Enter the new state
+        next_state.do_enter()
+        self._state = next_state
+        self._fire_state_event(StateEventHook.ENTERED_STATE, last_state)
+
+    def _create_state_instance(self, state, *args, **kwargs):
+        if isinstance(state, State):
+            # It's already a state instance
+            return state
+
+        # OK, have to create it
+        state_cls = self._ensure_state_class(state)
+        return state_cls(self, *args, **kwargs)
+
     def _ensure_state_class(self, state):
         if inspect.isclass(state) and issubclass(state, State):
             return state
         else:
             try:
-                return self.STATES_MAP[state]
+                return self.get_states_map()[state]
             except KeyError:
                 raise ValueError("{} is not a valid state".format(state))

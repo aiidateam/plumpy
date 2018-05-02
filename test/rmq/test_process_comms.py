@@ -2,10 +2,10 @@ import unittest
 import uuid
 
 from kiwipy import rmq
-import plum.rmq
-import plum.test_utils
+import plumpy.rmq
+import plumpy.test_utils
 from test.utils import TestCaseWithLoop
-from plum import test_utils
+from plumpy import test_utils
 
 try:
     import pika
@@ -29,7 +29,7 @@ class TestProcessReceiver(TestCaseWithLoop):
             testing_mode=True,
         )
 
-        self.communicator.init()
+        self.communicator.connect()
 
     def tearDown(self):
         # Close the connector before calling super because it will
@@ -39,66 +39,67 @@ class TestProcessReceiver(TestCaseWithLoop):
         super(TestProcessReceiver, self).tearDown()
 
     def test_pause(self):
-        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        proc.play()
+        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        proc.loop().add_callback(proc.step_until_terminated)
         # Send a pause message
-        result = self.communicator.rpc_send_and_wait(proc.pid, plum.PAUSE_MSG)
+        result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.PAUSE_MSG)
 
-        self.assertEqual(proc.state, plum.ProcessState.PAUSED)
+        self.assertTrue(proc.paused)
 
     def test_play(self):
-        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a play message
-        result = self.communicator.rpc_send_and_wait(proc.pid, plum.PLAY_MSG)
+        result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.PLAY_MSG)
+        self.assertTrue(result)
 
-        self.assertEqual(proc.state, plum.ProcessState.WAITING)
+        self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
 
-    def test_cancel(self):
-        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        # Send a cancel message
-        result = self.communicator.rpc_send_and_wait(proc.pid, plum.CANCEL_MSG)
+    def test_kill(self):
+        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Send a kill message
+        result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.KILL_MSG)
 
-        self.assertEqual(proc.state, plum.ProcessState.CANCELLED)
+        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
 
     def test_status(self):
-        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a status message
-        status = self.communicator.rpc_send_and_wait(proc.pid, plum.STATUS_MSG)
+        status = self.communicator.rpc_send_and_wait(proc.pid, plumpy.STATUS_MSG)
 
         self.assertIsNotNone(status)
 
     def test_pause_action(self):
-        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        proc.play()
+        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        proc.loop().add_callback(proc.step_until_terminated)
         # Send a pause message
-        action = plum.PauseAction(proc.pid)
+        action = plumpy.PauseAction(proc.pid)
         action.execute(self.communicator)
         self.communicator.await(action, timeout=AWAIT_TIMEOUT)
 
-        self.assertEqual(proc.state, plum.ProcessState.PAUSED)
+        self.assertTrue(proc.paused)
 
     def test_play_action(self):
-        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a play message
-        action = plum.PlayAction(proc.pid)
+        action = plumpy.PlayAction(proc.pid)
         action.execute(self.communicator)
         self.communicator.await(action, timeout=AWAIT_TIMEOUT)
 
-        self.assertEqual(proc.state, plum.ProcessState.WAITING)
+        self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
 
-    def test_cancel_action(self):
-        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        # Send a cancel message
-        action = plum.CancelAction(proc.pid)
+    def test_kill_action(self):
+        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Send a kill message
+        action = plumpy.KillAction(proc.pid)
         action.execute(self.communicator)
         self.communicator.await(action, timeout=AWAIT_TIMEOUT)
 
-        self.assertEqual(proc.state, plum.ProcessState.CANCELLED)
+        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
 
     def test_status(self):
-        proc = plum.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a status message
-        action = plum.StatusAction(proc.pid)
+        action = plumpy.StatusAction(proc.pid)
         action.execute(self.communicator)
         status = self.communicator.await(action, timeout=AWAIT_TIMEOUT)
         self.assertIsNotNone(status)

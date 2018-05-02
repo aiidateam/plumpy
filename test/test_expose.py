@@ -1,7 +1,6 @@
 from . import utils
-from plum.port import InputPort, PortNamespace
-from plum.process import Process
-from plum.test_utils import NewLoopProcess
+from plumpy.ports import InputPort, PortNamespace
+from plumpy.test_utils import NewLoopProcess
 
 class TestExposeProcess(utils.TestCaseWithLoop):
 

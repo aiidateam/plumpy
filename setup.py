@@ -4,10 +4,10 @@ from setuptools import setup
 
 __author__ = "Martin Uhrin"
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__contributors__ = "Sebastiaan Huber"
+__contributors__ = "Sebastiaan Huber, Leopold Talirz, Dominik Gresch"
 
 about = {}
-with open('plum/version.py') as f:
+with open('plumpy/version.py') as f:
     exec (f.read(), about)
 
 setup(
@@ -43,8 +43,8 @@ setup(
     extras_require={
         ':python_version<"3.4"': ['enum34'],
         ':python_version<"3.2"': ['backports.tempfile'],
-        'dev': ['pytest', 'ipython', 'twine']
+        'dev': ['pytest', 'ipython', 'twine', 'pytest-cov']
     },
-    packages=['plum', 'plum/base', 'plum/rmq'],
+    packages=['plumpy', 'plumpy/base', 'plumpy/rmq'],
     test_suite='test'
 )

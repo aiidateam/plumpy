@@ -1,13 +1,14 @@
 import functools
 
+from . import loaders
 from . import communications
 from . import futures
-from . import utils
+from . import persistence
 
-__all__ = ['ProcessReceiver', 'PAUSE_MSG', 'PLAY_MSG', 'CANCEL_MSG', 'STATUS_MSG',
-           'ProcessAction', 'PlayAction', 'PauseAction', 'CancelAction', 'StatusAction',
+__all__ = ['PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
+           'ProcessAction', 'PlayAction', 'PauseAction', 'KillAction', 'StatusAction',
            'LaunchProcessAction', 'ContinueProcessAction', 'ExecuteProcessAction',
-           'ProcessLauncher']
+           'ProcessLauncher', 'create_continue_body', 'create_launch_body']
 
 INTENT_KEY = 'intent'
 
@@ -15,42 +16,14 @@ INTENT_KEY = 'intent'
 class Intent(object):
     PLAY = 'play'
     PAUSE = 'pause'
-    CANCEL = 'cancel'
+    KILL = 'kill'
     STATUS = 'status'
 
 
 PAUSE_MSG = {INTENT_KEY: Intent.PAUSE}
 PLAY_MSG = {INTENT_KEY: Intent.PLAY}
-CANCEL_MSG = {INTENT_KEY: Intent.CANCEL}
+KILL_MSG = {INTENT_KEY: Intent.KILL}
 STATUS_MSG = {INTENT_KEY: Intent.STATUS}
-
-
-class ProcessReceiver(object):
-    """
-    Responsible for receiving messages and translating them to actions
-    on the process.
-    """
-
-    def __init__(self, process):
-        """
-        :param process: :class:`plum.Process`
-        """
-        self._process = process
-
-    def __call__(self, msg):
-        intent = msg['intent']
-        if intent == Intent.PLAY:
-            return self._process.play()
-        elif intent == Intent.PAUSE:
-            return self._process.pause()
-        elif intent == Intent.CANCEL:
-            return self._process.cancel(msg=msg.get('msg', None))
-        elif intent == Intent.STATUS:
-            status_info = {}
-            self._process.get_status_info(status_info)
-            return status_info
-        else:
-            raise RuntimeError("Unknown intent")
 
 
 class ProcessAction(communications.Action):
@@ -85,9 +58,9 @@ class StatusAction(ProcessAction):
         super(StatusAction, self).__init__(pid, STATUS_MSG)
 
 
-class CancelAction(ProcessAction):
+class KillAction(ProcessAction):
     def __init__(self, pid):
-        super(CancelAction, self).__init__(pid, CANCEL_MSG)
+        super(KillAction, self).__init__(pid, KILL_MSG)
 
 
 TASK_KEY = 'task'
@@ -107,10 +80,13 @@ CONTINUE_TASK = 'continue'
 
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, play=True,
-                       persist=False, nowait=True):
+                       persist=False, nowait=True, loader=None):
+    if loader is None:
+        loader = loaders.get_object_loader()
+
     msg_body = {
         TASK_KEY: LAUNCH_TASK,
-        PROCESS_CLASS_KEY: utils.class_name(process_class),
+        PROCESS_CLASS_KEY: loader.identify_object(process_class),
         PLAY_KEY: play,
         PERSIST_KEY: persist,
         NOWAIT_KEY: nowait,
@@ -165,35 +141,34 @@ class ContinueProcessAction(TaskAction):
 
 
 class ExecuteProcessAction(communications.Action):
-    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False):
+    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
         super(ExecuteProcessAction, self).__init__()
         self._launch_action = LaunchProcessAction(
-            process_class, init_args, init_kwargs, play=False, persist=True)
+            process_class, init_args, init_kwargs, play=False, persist=True, loader=loader)
         self._nowait = nowait
 
     def get_launch_future(self):
         return self._launch_action
 
     def execute(self, publisher):
-        self._launch_action.add_done_callback(
-            functools.partial(self._on_launch_done, publisher))
+        self._launch_action.add_done_callback(functools.partial(self._on_launch_done, publisher))
         self._launch_action.execute(publisher)
 
     def _on_launch_done(self, publisher, launch_future):
-        # The result of the launch future is the PID of the process
         if launch_future.cancelled():
-            self.cancel()
+            self.kill()
         elif launch_future.exception() is not None:
             self.set_exception(launch_future.exception())
         else:
             # Action the continue task
-            continue_action = ContinueProcessAction(launch_future.result(), play=True, nowait=self._nowait)
+            continue_action = ContinueProcessAction(launch_future.result(), play=True)
+            continue_action.execute(publisher)
+
             if self._nowait:
-                continue_action.add_done_callback(
-                    lambda x: self.set_result(launch_future.result()))
+                # The result of the launch future is the PID of the process
+                self.set_result(launch_future.result())
             else:
                 futures.chain(continue_action, self)
-            continue_action.execute(publisher)
 
 
 class ProcessLauncher(object):
@@ -218,16 +193,16 @@ class ProcessLauncher(object):
     }
     """
 
-    def __init__(self,
-                 loop=None,
-                 persister=None,
-                 unbunble_args=(),
-                 unbunble_kwargs=None,
-                 ):
+    def __init__(self, loop=None, persister=None, load_context=None, loader=None):
         self._loop = loop
         self._persister = persister
-        self._unbundle_args = unbunble_args
-        self._unbundle_kwargs = unbunble_kwargs if unbunble_kwargs is not None else {}
+        self._load_context = load_context if load_context is not None else persistence.LoadSaveContext()
+
+        if loader is not None:
+            self._loader = loader
+            self._load_context = self._load_context.copyextend(loader=loader)
+        else:
+            self._loader = loaders.get_object_loader()
 
     def __call__(self, task):
         """
@@ -246,14 +221,15 @@ class ProcessLauncher(object):
         if task[PERSIST_KEY] and not self._persister:
             raise communications.TaskRejected("Cannot persist process, no persister")
 
-        proc_class = utils.load_object(task[PROCESS_CLASS_KEY])
+        proc_class = self._loader.load_object(task[PROCESS_CLASS_KEY])
         args = task.get(ARGS_KEY, ())
         kwargs = task.get(KWARGS_KEY, {})
         proc = proc_class(*args, **kwargs)
         if task[PERSIST_KEY]:
             self._persister.save_checkpoint(proc)
         if task[PLAY_KEY]:
-            proc.play()
+            loop = proc.loop()
+            loop.add_callback(proc.step_until_terminated)
 
         if task[NOWAIT_KEY]:
             return proc.pid
@@ -266,9 +242,10 @@ class ProcessLauncher(object):
 
         tag = task.get(TAG_KEY, None)
         saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
-        proc = saved_state.unbundle(*self._unbundle_args, **self._unbundle_kwargs)
-        proc.play()
-        if task[NOWAIT_KEY]:
-            return True
-        else:
-            return proc.future()
+        proc = saved_state.unbundle(self._load_context)
+
+        # Call start in case it's not started yet
+        loop = proc.loop()
+        loop.add_callback(proc.step_until_terminated)
+
+        return proc.future()
