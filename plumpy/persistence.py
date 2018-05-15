@@ -61,6 +61,7 @@ class Persister(with_metaclass(ABCMeta, object)):
         :param process: :class:`plumpy.Process`
         :param tag: optional checkpoint identifier to allow distinguishing
             multiple checkpoints for the same process
+        :raises: :class:`plumpy.PersistenceError` Raised if there was a problem saving the checkpoint
         """
         pass
 
@@ -74,6 +75,7 @@ class Persister(with_metaclass(ABCMeta, object)):
             a specific sub checkpoint for the corresponding process
         :return: a bundle with the process state
         :rtype: :class:`plumpy.Bundle`
+        :raises: :class:`plumpy.PersistenceError` Raised if there was a problem loading the checkpoint
         """
         pass
 
