@@ -1,4 +1,4 @@
-__all__ = ['KilledError', 'UnsuccessfulResult', 'InvalidStateError']
+__all__ = ['KilledError', 'UnsuccessfulResult', 'InvalidStateError', 'PersistenceError']
 
 
 class KilledError(Exception):
@@ -34,3 +34,7 @@ class UnsuccessfulResult(object):
 
     def __init__(self, result=None):
         self.result = result
+
+
+class PersistenceError(Exception):
+    pass
