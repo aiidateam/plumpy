@@ -4,6 +4,7 @@ from . import loaders
 from . import communications
 from . import futures
 from . import persistence
+from . import exceptions
 
 __all__ = ['PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
            'ProcessAction', 'PlayAction', 'PauseAction', 'KillAction', 'StatusAction',
@@ -241,7 +242,12 @@ class ProcessLauncher(object):
             raise communications.TaskRejected("Cannot continue process, no persister")
 
         tag = task.get(TAG_KEY, None)
-        saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
+
+        try:
+            saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
+        except exceptions.PersistenceError as exception:
+            raise communications.TaskRejected("Cannot continue process: {}".format(exception))
+
         proc = saved_state.unbundle(self._load_context)
 
         # Call start in case it's not started yet
