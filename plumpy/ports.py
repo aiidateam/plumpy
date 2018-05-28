@@ -258,6 +258,7 @@ class PortNamespace(collections.MutableMapping, Port):
                 'default': self.default,
                 'dynamic': self.dynamic,
                 'valid_type': str(self.valid_type),
+                'help': self.help,
             }
         }
 
