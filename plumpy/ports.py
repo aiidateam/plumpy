@@ -292,13 +292,14 @@ class PortNamespace(collections.MutableMapping, Port):
         else:
             return self[port_name]
 
-    def create_port_namespace(self, name):
+    def create_port_namespace(self, name, **kwargs):
         """
         Create and return a new PortNamespace in this PortNamespace. If the name is namespaced, the sub PortNamespaces
         will be created recursively, except if one of the namespaces is already occupied at any level by
         a Port in which case a ValueError will be thrown
 
         :param name: name (potentially namespaced) of the port to create and return
+        :param kwargs: constructor arguments that will be used *only* for the construction of the terminal PortNamespace
         :returns: PortNamespace
         :raises: ValueError if any sub namespace is occupied by a non-PortNamespace port
         """
@@ -314,11 +315,19 @@ class PortNamespace(collections.MutableMapping, Port):
         if port_name in self and not isinstance(self[port_name], PortNamespace):
             raise ValueError("the name '{}' in '{}' already contains a Port".format(port_name, self.name))
 
+        # If this is True, the (sub) port namespace does not yet exist, so we create it
         if port_name not in self:
-            self[port_name] = self.__class__(port_name)
+
+            # If there still is a `namespace`, we create a sub namespace, *without* the constructor arguments
+            if namespace:
+                self[port_name] = self.__class__(port_name)
+
+            # Otherwise it is the terminal port and we construct *with* the keyword arugments
+            else:
+                self[port_name] = self.__class__(port_name, **kwargs)
 
         if namespace:
-            return self[port_name].create_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace))
+            return self[port_name].create_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace), **kwargs)
         else:
             return self[port_name]
 
