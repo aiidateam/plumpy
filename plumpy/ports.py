@@ -36,13 +36,12 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         :returns: a dictionary of the stringified ValueSpec attributes
         """
         description = {
-            'name': '{}'.format(self.name)
+            'name': '{}'.format(self.name),
+            'required': str(self.required),
         }
 
         if self.valid_type:
             description['valid_type'] = '{}'.format(self.valid_type)
-        if self.required:
-            description['required'] = '{}'.format(self.required)
         if self.help:
             description['help'] = '{}'.format(self.help.strip())
 
@@ -87,8 +86,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
     def validate(self, value):
         if value is UNSPECIFIED:
             if self._required:
-                return False, "required value was not provided for '{}'". \
-                    format(self.name)
+                return False, "required value was not provided for '{}'".format(self.name)
         else:
             if self._valid_type is not None and \
                     not isinstance(value, self._valid_type):
@@ -258,6 +256,7 @@ class PortNamespace(collections.MutableMapping, Port):
                 'default': self.default,
                 'dynamic': self.dynamic,
                 'valid_type': str(self.valid_type),
+                'required': str(self.required),
                 'help': self.help,
             }
         }
@@ -396,10 +395,15 @@ class PortNamespace(collections.MutableMapping, Port):
             if not is_valid:
                 return is_valid, message
 
-        # Validate all input ports explicitly specified in this port namespace
-        is_valid, message = self.validate_ports(port_values)
-        if not is_valid:
+        # If the namespace is not required and there are no port_values specified, consider it valid
+        if not port_values and not self.required:
             return is_valid, message
+
+        # In all other cases, validate all input ports explicitly specified in this port namespace
+        else:
+            is_valid, message = self.validate_ports(port_values)
+            if not is_valid:
+                return is_valid, message
 
         # If any port_values remain, validate against the dynamic properties of the namespace
         is_valid, message = self.validate_dynamic_ports(port_values)
