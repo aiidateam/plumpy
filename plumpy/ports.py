@@ -241,7 +241,17 @@ class PortNamespace(collections.MutableMapping, Port):
 
     @valid_type.setter
     def valid_type(self, valid_type):
-        self.dynamic = True
+        """
+        Will set the valid_type for the PortNamespace. If the valid_type is None, the dynamic property
+        will be set to False, in all other cases dynamic will be set to True
+
+        :param valid_type: a tuple or single valid type that the namespace accepts
+        """
+        if valid_type is None:
+            self.dynamic = False
+        else:
+            self.dynamic = True
+
         self._valid_type = valid_type
 
     def get_description(self):
