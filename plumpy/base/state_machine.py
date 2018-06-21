@@ -21,7 +21,6 @@ class StateMachineError(Exception):
 
 
 class StateEntryFailed(Exception):
-
     def __init__(self, state=None, *args, **kwargs):
         super(StateEntryFailed, self).__init__('failed to enter state')
         self.state = state
@@ -56,12 +55,12 @@ class TransitionFailed(Exception):
 def event(from_states='*', to_states='*'):
     if from_states != '*':
         if inspect.isclass(from_states):
-            from_states = (from_states,)
+            from_states = (from_states, )
         if not all(issubclass(state, State) for state in from_states):
             raise TypeError()
     if to_states != '*':
         if inspect.isclass(to_states):
-            to_states = (to_states,)
+            to_states = (to_states, )
         if not all(issubclass(state, State) for state in to_states):
             raise TypeError()
 
@@ -76,10 +75,8 @@ def event(from_states='*', to_states='*'):
                     not any(isinstance(self._state, state)
                             for state in from_states):
                 raise EventError(
-                    evt_label,
-                    "Event {} invalid in state {}".format(
-                        evt_label, initial.LABEL)
-                )
+                    evt_label, "Event {} invalid in state {}".format(
+                        evt_label, initial.LABEL))
 
             result = wrapped(self, *a, **kw)
             if not (result is False or isinstance(result, plumpy.Future)):
@@ -87,13 +84,14 @@ def event(from_states='*', to_states='*'):
                         any(isinstance(self._state, state)
                             for state in to_states):
                     if self._state == initial:
-                        raise EventError(evt_label, "Machine did not transition")
+                        raise EventError(evt_label,
+                                         "Machine did not transition")
                     else:
                         raise EventError(
                             evt_label,
                             "Event produced invalid state transition from "
-                            "{} to {}".format(initial.LABEL, self._state.LABEL)
-                        )
+                            "{} to {}".format(initial.LABEL,
+                                              self._state.LABEL))
 
             return result
 
@@ -147,9 +145,8 @@ class State(object):
     def exit(self):
         """ Exiting the state """
         if self.is_terminal():
-            raise InvalidStateError(
-                "Cannot exit a terminal state {}".format(self.LABEL)
-            )
+            raise InvalidStateError("Cannot exit a terminal state {}".format(
+                self.LABEL))
         pass
 
     def create_state(self, state_label, *args, **kwargs):
@@ -236,7 +233,8 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
         for state_cls in cls.STATES:
             assert issubclass(state_cls, State)
             label = state_cls.LABEL
-            assert label not in cls._STATES_MAP, "Duplicate label '{}'".format(label)
+            assert label not in cls._STATES_MAP, "Duplicate label '{}'".format(
+                label)
             cls._STATES_MAP[label] = state_cls
 
         cls.sealed = True
@@ -311,7 +309,8 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
             except StateEntryFailed as exception:
                 new_state = exception.state
                 # Make sure we have a state instance
-                new_state = self._create_state_instance(new_state, *exception.args, **exception.kwargs)
+                new_state = self._create_state_instance(
+                    new_state, *exception.args, **exception.kwargs)
                 label = new_state.LABEL
                 self._exit_current_state(new_state)
                 self._enter_next_state(new_state)
@@ -323,7 +322,8 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
             if self._transition_failing:
                 raise
             self._transition_failing = True
-            self.transition_failed(initial_state_label, label, *sys.exc_info()[1:])
+            self.transition_failed(initial_state_label, label,
+                                   *sys.exc_info()[1:])
         finally:
             self._transition_failing = False
             self._transitioning = False
@@ -357,12 +357,14 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
         # in which case check the new state is the initial state
         if self._state is None:
             if next_state.label != self.initial_state_label():
-                raise RuntimeError("Cannot enter state '{}' as the initial state".format(next_state))
+                raise RuntimeError(
+                    "Cannot enter state '{}' as the initial state".format(
+                        next_state))
             return  # Nothing to exit
 
         if next_state.LABEL not in self._state.ALLOWED:
-            raise RuntimeError(
-                "Cannot transition from {} to {}".format(self._state.LABEL, next_state.label))
+            raise RuntimeError("Cannot transition from {} to {}".format(
+                self._state.LABEL, next_state.label))
         self._fire_state_event(StateEventHook.EXITING_STATE, next_state)
         self._state.do_exit()
 
