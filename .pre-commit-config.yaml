@@ -1,0 +1,22 @@
+# yet another python formatter
+- repo: git://github.com/pre-commit/mirrors-yapf
+  sha: v0.19.0
+  hooks:
+  - id: yapf
+    language: system
+    # begin multiline string
+    # (?x) -> multiline regex, ^ -> beginning of file path
+    # must match the whole path, therefore
+    # the .*.py (.* matches everything)
+    # $ -> end of file path, to add a directory, give full/path/.*
+    files: >-
+      (?x)^(
+        plumpy/*.py
+      )$
+
+- repo: git://github.com/pre-commit/pre-commit-hooks
+  sha: v1.1.1
+  hooks:
+  - id: check-yaml
+
+

@@ -4,13 +4,17 @@ from . import loaders
 from . import communications
 from . import futures
 from . import persistence
+from . import exceptions
 
-__all__ = ['PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
-           'ProcessAction', 'PlayAction', 'PauseAction', 'KillAction', 'StatusAction',
-           'LaunchProcessAction', 'ContinueProcessAction', 'ExecuteProcessAction',
-           'ProcessLauncher', 'create_continue_body', 'create_launch_body']
+__all__ = [
+    'PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG', 'ProcessAction',
+    'PlayAction', 'PauseAction', 'KillAction', 'StatusAction',
+    'LaunchProcessAction', 'ContinueProcessAction', 'ExecuteProcessAction',
+    'ProcessLauncher', 'create_continue_body', 'create_launch_body'
+]
 
 INTENT_KEY = 'intent'
+MESSAGE_KEY = 'message'
 
 
 class Intent(object):
@@ -59,7 +63,9 @@ class StatusAction(ProcessAction):
 
 
 class KillAction(ProcessAction):
-    def __init__(self, pid):
+    def __init__(self, pid, msg=None):
+        if msg is not None:
+            KILL_MSG[MESSAGE_KEY] = msg
         super(KillAction, self).__init__(pid, KILL_MSG)
 
 
@@ -79,8 +85,13 @@ LAUNCH_TASK = 'launch'
 CONTINUE_TASK = 'continue'
 
 
-def create_launch_body(process_class, init_args=None, init_kwargs=None, play=True,
-                       persist=False, nowait=True, loader=None):
+def create_launch_body(process_class,
+                       init_args=None,
+                       init_kwargs=None,
+                       play=True,
+                       persist=False,
+                       nowait=True,
+                       loader=None):
     if loader is None:
         loader = loaders.get_object_loader()
 
@@ -128,7 +139,8 @@ class LaunchProcessAction(TaskAction):
         Calls through to create_launch_body to create the message and so has
         the same signature.
         """
-        super(LaunchProcessAction, self).__init__(create_launch_body(*args, **kwargs))
+        super(LaunchProcessAction, self).__init__(
+            create_launch_body(*args, **kwargs))
 
 
 class ContinueProcessAction(TaskAction):
@@ -137,21 +149,33 @@ class ContinueProcessAction(TaskAction):
         Calls through to create_continue_body to create the message and so
         has the same signature.
         """
-        super(ContinueProcessAction, self).__init__(create_continue_body(*args, **kwargs))
+        super(ContinueProcessAction, self).__init__(
+            create_continue_body(*args, **kwargs))
 
 
 class ExecuteProcessAction(communications.Action):
-    def __init__(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
+    def __init__(self,
+                 process_class,
+                 init_args=None,
+                 init_kwargs=None,
+                 nowait=False,
+                 loader=None):
         super(ExecuteProcessAction, self).__init__()
         self._launch_action = LaunchProcessAction(
-            process_class, init_args, init_kwargs, play=False, persist=True, loader=loader)
+            process_class,
+            init_args,
+            init_kwargs,
+            play=False,
+            persist=True,
+            loader=loader)
         self._nowait = nowait
 
     def get_launch_future(self):
         return self._launch_action
 
     def execute(self, publisher):
-        self._launch_action.add_done_callback(functools.partial(self._on_launch_done, publisher))
+        self._launch_action.add_done_callback(
+            functools.partial(self._on_launch_done, publisher))
         self._launch_action.execute(publisher)
 
     def _on_launch_done(self, publisher, launch_future):
@@ -161,7 +185,8 @@ class ExecuteProcessAction(communications.Action):
             self.set_exception(launch_future.exception())
         else:
             # Action the continue task
-            continue_action = ContinueProcessAction(launch_future.result(), play=True)
+            continue_action = ContinueProcessAction(
+                launch_future.result(), play=True)
             continue_action.execute(publisher)
 
             if self._nowait:
@@ -193,10 +218,15 @@ class ProcessLauncher(object):
     }
     """
 
-    def __init__(self, loop=None, persister=None, load_context=None, loader=None):
+    def __init__(self,
+                 loop=None,
+                 persister=None,
+                 load_context=None,
+                 loader=None):
         self._loop = loop
         self._persister = persister
-        self._load_context = load_context if load_context is not None else persistence.LoadSaveContext()
+        self._load_context = load_context if load_context is not None else persistence.LoadSaveContext(
+        )
 
         if loader is not None:
             self._loader = loader
@@ -219,7 +249,8 @@ class ProcessLauncher(object):
 
     def _launch(self, task):
         if task[PERSIST_KEY] and not self._persister:
-            raise communications.TaskRejected("Cannot persist process, no persister")
+            raise communications.TaskRejected(
+                "Cannot persist process, no persister")
 
         proc_class = self._loader.load_object(task[PROCESS_CLASS_KEY])
         args = task.get(ARGS_KEY, ())
@@ -238,10 +269,17 @@ class ProcessLauncher(object):
 
     def _continue(self, task):
         if not self._persister:
-            raise communications.TaskRejected("Cannot continue process, no persister")
+            raise communications.TaskRejected(
+                "Cannot continue process, no persister")
 
         tag = task.get(TAG_KEY, None)
-        saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
+
+        try:
+            saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
+        except exceptions.PersistenceError as exception:
+            raise communications.TaskRejected(
+                "Cannot continue process: {}".format(exception))
+
         proc = saved_state.unbundle(self._load_context)
 
         # Call start in case it's not started yet

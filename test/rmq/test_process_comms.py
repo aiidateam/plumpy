@@ -88,15 +88,18 @@ class TestProcessReceiver(TestCaseWithLoop):
         self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
 
     def test_kill_action(self):
+        KILL_MESSAGE = 'you dead son'
+
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a kill message
-        action = plumpy.KillAction(proc.pid)
+        action = plumpy.KillAction(proc.pid, KILL_MESSAGE)
         action.execute(self.communicator)
         self.communicator.await(action, timeout=AWAIT_TIMEOUT)
 
         self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
+        self.assertEqual(KILL_MESSAGE, proc.killed_msg())
 
-    def test_status(self):
+    def test_status_action(self):
         proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a status message
         action = plumpy.StatusAction(proc.pid)

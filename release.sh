@@ -28,7 +28,6 @@ git checkout -b $relbranch
 git add ${VERSION_FILE}
 git commit -m "Release ${version}"
 
-git tag -a $tag -m "Version $version"
 
 
 # Merge into master
@@ -41,14 +40,15 @@ git merge --no-ff $relbranch
 
 git branch -d $relbranch
 
-# Push everything
+# Tag the thing
+git tag -a $tag -m "Version $version"
 
+# Push everything
 git push origin master
 git push origin $tag
 
 
 # Release on pypi
-
 rm -r dist
 rm -r build
 rm -r *.egg-info

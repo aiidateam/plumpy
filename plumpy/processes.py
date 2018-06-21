@@ -70,15 +70,13 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
 
 # Make ProcessStateMachineMeta instances (classes) YAML - able
 yaml.representer.Representer.add_representer(
-    ProcessStateMachineMeta,
-    yaml.representer.Representer.represent_name
-)
+    ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
 
 
 @persistence.auto_persist('_pid', '_CREATION_TIME', '_future', '_paused_flag')
-class Process(with_metaclass(ProcessStateMachineMeta,
-                             StateMachine,
-                             persistence.Savable)):
+class Process(
+        with_metaclass(ProcessStateMachineMeta, StateMachine,
+                       persistence.Savable)):
     """
     The Process class is the base for any unit of work in plumpy.
 
@@ -210,7 +208,12 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         base.call_with_super_check(process.init)
         return process
 
-    def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
+    def __init__(self,
+                 inputs=None,
+                 pid=None,
+                 logger=None,
+                 loop=None,
+                 communicator=None):
         """
         The signature of the constructor should not be changed by subclassing
         processes.
@@ -238,7 +241,8 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         self._pausing = None  # If pausing, this will be a future
 
         # Input/output
-        self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
+        self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(
+            inputs)
         self._pid = pid
         self._parsed_inputs = None
         self._outputs = {}
@@ -259,12 +263,15 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         self._terminated_callbacks = []
 
         if self._communicator is not None:
-            self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+            self._communicator.add_rpc_subscriber(
+                self.message_receive, identifier=str(self.pid))
         if not self._future.done():
+
             def try_killing(future):
                 if future.cancelled():
                     if not self.kill('Killed by future being cancelled'):
-                        self.logger.warning("Failed to kill process on future cancel")
+                        self.logger.warning(
+                            "Failed to kill process on future cancel")
 
             self._future.add_done_callback(try_killing)
 
@@ -393,7 +400,8 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         try:
             return self._state.successful
         except AttributeError:
-            raise exceptions.InvalidStateError('process is not in the finished state')
+            raise exceptions.InvalidStateError(
+                'process is not in the finished state')
 
     def killed(self):
         return self.state == process_states.ProcessState.KILLED
@@ -430,7 +438,7 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         (this needn't be a method).  If it raises an exception it will cause
         the process to fail.
         """
-        args = (callback,) + args
+        args = (callback, ) + args
         handle = events.ProcessCallback(self, self._run_task, args, kwargs)
         self._loop.add_callback(handle.run)
         return handle
@@ -458,11 +466,14 @@ class Process(with_metaclass(ProcessStateMachineMeta,
             yield
         except Exception:
             if not self._state.is_terminal():
-                self.transition_to(process_states.ProcessState.EXCEPTED, *sys.exc_info()[1:])
+                self.transition_to(process_states.ProcessState.EXCEPTED,
+                                   *sys.exc_info()[1:])
             else:
                 raise
         finally:
-            assert Process.current() is self
+            assert Process.current() is self, \
+                "Somehow, the process at the top of the stack is not me, " \
+                "but another process! ({} != {})".format(self, Process.current())
             _process_stack().pop()
 
     @coroutine
@@ -501,13 +512,16 @@ class Process(with_metaclass(ProcessStateMachineMeta,
 
         # Inputs/outputs
         if self.raw_inputs is not None:
-            out_state[BundleKeys.INPUTS_RAW] = self.encode_input_args(self.raw_inputs)
+            out_state[BundleKeys.INPUTS_RAW] = self.encode_input_args(
+                self.raw_inputs)
 
         if self.inputs is not None:
-            out_state[BundleKeys.INPUTS_PARSED] = self.encode_input_args(self.inputs)
+            out_state[BundleKeys.INPUTS_PARSED] = self.encode_input_args(
+                self.inputs)
 
         if self.outputs:
-            out_state[BundleKeys.OUTPUTS] = self.encode_input_args(self.outputs)
+            out_state[BundleKeys.OUTPUTS] = self.encode_input_args(
+                self.outputs)
 
     @protected
     def load_instance_state(self, saved_state, load_context):
@@ -542,13 +556,15 @@ class Process(with_metaclass(ProcessStateMachineMeta,
 
         # Inputs/outputs
         try:
-            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS_RAW])
+            decoded = self.decode_input_args(
+                saved_state[BundleKeys.INPUTS_RAW])
             self._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._raw_inputs = None
 
         try:
-            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS_PARSED])
+            decoded = self.decode_input_args(
+                saved_state[BundleKeys.INPUTS_PARSED])
             self._parsed_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._parsed_inputs = None
@@ -606,7 +622,8 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         elif state_label == process_states.ProcessState.WAITING:
             call_with_super_check(self.on_wait, state.data)
         elif state_label == process_states.ProcessState.FINISHED:
-            call_with_super_check(self.on_finish, state.result, state.successful)
+            call_with_super_check(self.on_finish, state.result,
+                                  state.successful)
         elif state_label == process_states.ProcessState.KILLED:
             call_with_super_check(self.on_kill, state.msg)
         elif state_label == process_states.ProcessState.EXCEPTED:
@@ -632,12 +649,12 @@ class Process(with_metaclass(ProcessStateMachineMeta,
                 self._communicator.broadcast_send(
                     body=None,
                     sender=self.pid,
-                    subject='state_changed.{}.{}'.format(from_label, self.state.value)
-                )
+                    subject='state_changed.{}.{}'.format(
+                        from_label, self.state.value))
             except ConnectionClosed:
                 self.logger.info(
-                    'no connection available to broadcast state change from {} to {}'.format(
-                        from_label, self.state.value))
+                    'no connection available to broadcast state change from {} to {}'.
+                    format(from_label, self.state.value))
 
     def on_exiting(self):
         state = self.state
@@ -654,7 +671,8 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         # Input/output
         self._check_inputs(self._raw_inputs)
         raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
-        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
+        self._parsed_inputs = self.create_input_args(self.spec().inputs,
+                                                     raw_inputs)
 
         # Set up a process ID
         self._uuid = uuid.uuid4()
@@ -683,11 +701,11 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         pass
 
     def on_output_emitted(self, output_port, value, dynamic):
-        self.__event_helper.fire_event(ProcessListener.on_output_emitted,
-                                       self, output_port, value, dynamic)
+        self.__event_helper.fire_event(ProcessListener.on_output_emitted, self,
+                                       output_port, value, dynamic)
 
     @super_check
-    def on_wait(self, data):
+    def on_wait(self, awaitables):
         """ Entering the WAITING state """
         pass
 
@@ -717,14 +735,16 @@ class Process(with_metaclass(ProcessStateMachineMeta,
             try:
                 self._check_outputs()
             except ValueError:
-                raise StateEntryFailed(process_states.ProcessState.FINISHED, result, False)
+                raise StateEntryFailed(process_states.ProcessState.FINISHED,
+                                       result, False)
 
         self.future().set_result(self.outputs)
 
     @super_check
     def on_finished(self):
         """ Entered the FINISHED state """
-        self._fire_event(ProcessListener.on_process_finished, self.future().result())
+        self._fire_event(ProcessListener.on_process_finished,
+                         self.future().result())
 
     @super_check
     def on_except(self, exc_info):
@@ -732,11 +752,12 @@ class Process(with_metaclass(ProcessStateMachineMeta,
 
     @super_check
     def on_excepted(self):
-        self._fire_event(ProcessListener.on_process_excepted, str(self.future().exception()))
+        self._fire_event(ProcessListener.on_process_excepted,
+                         str(self.future().exception()))
 
     @super_check
     def on_kill(self, msg):
-        self.future().set_exception(exceptions.KilledError())
+        self.future().set_exception(exceptions.KilledError(msg))
 
     @super_check
     def on_killed(self):
@@ -761,7 +782,7 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         elif intent == process_comms.Intent.PAUSE:
             result = self.pause()
         elif intent == process_comms.Intent.KILL:
-            result = self.kill(msg=msg.get('msg', None))
+            result = self.kill(msg=msg.get(process_comms.MESSAGE_KEY, None))
         elif intent == process_comms.Intent.STATUS:
             status_info = {}
             self.get_status_info(status_info)
@@ -783,12 +804,14 @@ class Process(with_metaclass(ProcessStateMachineMeta,
 
     # region State related methods
 
-    def transition_excepted(self, initial_state, final_state, exception, trace):
+    def transition_excepted(self, initial_state, final_state, exception,
+                            trace):
         # If we are creating, then reraise instead of failing.
         if final_state == process_states.ProcessState.CREATED:
             raise_(type(exception), exception, trace)
         else:
-            self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
+            self.transition_to(process_states.ProcessState.EXCEPTED, exception,
+                               trace)
 
     def pause(self):
         """
@@ -844,7 +867,8 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         :param exception: The exception that caused the failure
         :param trace_back: Optional exception traceback
         """
-        self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace_back)
+        self.transition_to(process_states.ProcessState.EXCEPTED, exception,
+                           trace_back)
 
     def kill(self, msg=None):
         """
@@ -877,7 +901,8 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         # endregion
 
     def create_initial_state(self):
-        return self.get_state_class(process_states.ProcessState.CREATED)(self, self.run)
+        return self.get_state_class(process_states.ProcessState.CREATED)(
+            self, self.run)
 
     def recreate_state(self, saved_state):
         """
@@ -979,7 +1004,8 @@ class Process(with_metaclass(ProcessStateMachineMeta,
         port_name = namespace.pop()
 
         if namespace:
-            port_namespace = self.spec().outputs.get_port(namespace_separator.join(namespace))
+            port_namespace = self.spec().outputs.get_port(
+                namespace_separator.join(namespace))
         else:
             port_namespace = self.spec().outputs
 
@@ -1017,7 +1043,9 @@ class Process(with_metaclass(ProcessStateMachineMeta,
                 if port.has_default():
                     port_value = port.default
                 elif port.required:
-                    raise ValueError('Value not supplied for required inputs port {}'.format(name))
+                    raise ValueError(
+                        'Value not supplied for required inputs port {}'.
+                        format(name))
                 else:
                     continue
             else:
@@ -1029,16 +1057,6 @@ class Process(with_metaclass(ProcessStateMachineMeta,
                 result[name] = port_value
 
         return utils.AttributesFrozendict(result)
-
-    def exposed_inputs(self, process_class, namespace=None):
-        """
-        Gather a dictionary of the inputs that were exposed for a given Process
-        class under an optional namespace.
-
-        :param process_class: Process class whose inputs to try and retrieve
-        :param namespace: PortNamespace in which to look for the inputs
-        """
-        return self.spec().exposed_inputs(self.inputs, process_class, namespace)
 
     @protected
     def encode_input_args(self, inputs):
@@ -1085,7 +1103,8 @@ class Process(with_metaclass(ProcessStateMachineMeta,
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
-        wrapped = utils.wrap_dict(self._outputs, separator=self.spec().namespace_separator)
+        wrapped = utils.wrap_dict(
+            self._outputs, separator=self.spec().namespace_separator)
         for name, port in self.spec().outputs.items():
             valid, msg = port.validate(wrapped.get(name, ports.UNSPECIFIED))
             if not valid:

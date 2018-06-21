@@ -1,4 +1,7 @@
-__all__ = ['KilledError', 'UnsuccessfulResult', 'InvalidStateError', 'PersistenceError']
+__all__ = [
+    'KilledError', 'UnsuccessfulResult', 'InvalidStateError',
+    'PersistenceError'
+]
 
 
 class KilledError(Exception):
