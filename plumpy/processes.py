@@ -1030,16 +1030,6 @@ class Process(with_metaclass(ProcessStateMachineMeta,
 
         return utils.AttributesFrozendict(result)
 
-    def exposed_inputs(self, process_class, namespace=None):
-        """
-        Gather a dictionary of the inputs that were exposed for a given Process
-        class under an optional namespace.
-
-        :param process_class: Process class whose inputs to try and retrieve
-        :param namespace: PortNamespace in which to look for the inputs
-        """
-        return self.spec().exposed_inputs(self.inputs, process_class, namespace)
-
     @protected
     def encode_input_args(self, inputs):
         """

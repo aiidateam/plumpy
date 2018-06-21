@@ -243,3 +243,20 @@ def ensure_coroutine(fn):
         def wrapper(*args, **kwargs):
             raise tornado.gen.Return(fn(*args, **kwargs))
         return wrapper
+
+
+def is_mutable_property(cls, attribute):
+    """
+    Determine whether the given attribute is a mutable property of cls. That is to say that
+    the attribute corresponds to a property whose fset attribute is not None.
+
+    :param cls: the class
+    :param attribute: the attribute
+    :returns: True if the attribute is a mutable property of cls
+    """
+    try:
+        attr = getattr(cls, attribute)
+    except AttributeError:
+        return False
+
+    return isinstance(attr, property) and attr.fset is not None

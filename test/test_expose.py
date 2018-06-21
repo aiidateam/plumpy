@@ -1,6 +1,8 @@
 from . import utils
-from plumpy.ports import InputPort, PortNamespace
+from plumpy.ports import PortNamespace
+from plumpy.process_spec import ProcessSpec
 from plumpy.test_utils import NewLoopProcess
+
 
 class TestExposeProcess(utils.TestCaseWithLoop):
 
@@ -100,7 +102,6 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 spec.input('c', valid_type=int, default=1)
                 spec.input('d', valid_type=int, default=2)
 
-
         inputs = ExcludeProcess.spec().inputs
 
         self.assertEquals(len(inputs), 3)
@@ -119,7 +120,6 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 spec.expose_inputs(BaseProcess, include=('b',))
                 spec.input('c', valid_type=int, default=1)
                 spec.input('d', valid_type=int, default=2)
-
 
         inputs = ExcludeProcess.spec().inputs
 
@@ -143,82 +143,170 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         with self.assertRaises(ValueError):
             ExcludeProcess.spec()
 
-    def test_exposed_inputs_unnamespaced(self):
+    def test_expose_ports_top_level(self):
         """
-        Test that exposed_inputs works as expected. We expose ExposeProcess, excluding 'c' but it is not namespace
-        and the WrappingProcess also defines an input 'c'. As a result, since there is no expose rule memory, the
-        excluded input 'c' will be returned by the exposed_inputs call
+        Verify that exposing a sub process in top level correctly overrides the parent's namespace
+        properties with that of the exposed process
         """
-        BaseProcess = self.BaseProcess
-        ExposeProcess = self.ExposeProcess
+        def validator_function(input):
+            pass
 
-        class WrappingProcess(NewLoopProcess):
-            @classmethod
-            def define(cls, spec):
-                super(WrappingProcess, cls).define(spec)
-                spec.expose_inputs(ExposeProcess, exclude=('c',))
-                spec.input('c', valid_type=int, default=3)
-                spec.input('e', valid_type=int, default=4)
+        # Define child process with all mutable properties of the inputs PortNamespace to a non-default value
+        # This way we can check if the defaults of the ParentProcessSpec will be properly overridden
+        ChildProcessSpec = ProcessSpec()
+        ChildProcessSpec.input('a', valid_type=int)
+        ChildProcessSpec.input('b', valid_type=str)
+        ChildProcessSpec.inputs.validator = validator_function
+        ChildProcessSpec.inputs.valid_type = bool
+        ChildProcessSpec.inputs.required = False
+        ChildProcessSpec.inputs.dynamic = True
+        ChildProcessSpec.inputs.default = True
+        ChildProcessSpec.inputs.help = 'testing'
 
-        inputs = {
-            'c': 1,
-            'e': 3,
-            'd': 2,
-            'base': {
-                'name' : {
-                    'space': {
-                        'a': 'h',
-                        'b': 'i',
-                    }
-                }
+        ParentProcessSpec = ProcessSpec()
+        ParentProcessSpec.input('c', valid_type=float)
+        ParentProcessSpec._expose_ports(
+            process_class=None,
+            source=ChildProcessSpec.inputs,
+            destination=ParentProcessSpec.inputs,
+            expose_memory=ParentProcessSpec._exposed_inputs,
+            namespace=None,
+            exclude=(),
+            include=None,
+            namespace_options={}
+        )
+
+        # Verify that all the ports are there
+        self.assertIn('a', ParentProcessSpec.inputs)
+        self.assertIn('b', ParentProcessSpec.inputs)
+        self.assertIn('c', ParentProcessSpec.inputs)
+
+        # Verify that all the port namespace attributes are copied over
+        self.assertEquals(ParentProcessSpec.inputs.validator, validator_function)
+        self.assertEquals(ParentProcessSpec.inputs.valid_type, bool)
+        self.assertEquals(ParentProcessSpec.inputs.required, False)
+        self.assertEquals(ParentProcessSpec.inputs.dynamic, True)
+        self.assertEquals(ParentProcessSpec.inputs.default, True)
+        self.assertEquals(ParentProcessSpec.inputs.help, 'testing')
+
+    def test_expose_ports_top_level_override(self):
+        """
+        Verify that exposing a sub process in top level correctly overrides the parent's namespace
+        properties with that of the exposed process, but that any valid property passed in the
+        namespace_options will be the end-all-be-all
+        """
+        def validator_function(input):
+            pass
+
+        # Define child process with all mutable properties of the inputs PortNamespace to a non-default value
+        # This way we can check if the defaults of the ParentProcessSpec will be properly overridden
+        ChildProcessSpec = ProcessSpec()
+        ChildProcessSpec.input('a', valid_type=int)
+        ChildProcessSpec.input('b', valid_type=str)
+        ChildProcessSpec.inputs.validator = validator_function
+        ChildProcessSpec.inputs.valid_type = bool
+        ChildProcessSpec.inputs.required = False
+        ChildProcessSpec.inputs.dynamic = True
+        ChildProcessSpec.inputs.default = True
+        ChildProcessSpec.inputs.help = 'testing'
+
+        ParentProcessSpec = ProcessSpec()
+        ParentProcessSpec.input('c', valid_type=float)
+        ParentProcessSpec._expose_ports(
+            process_class=None,
+            source=ChildProcessSpec.inputs,
+            destination=ParentProcessSpec.inputs,
+            expose_memory=ParentProcessSpec._exposed_inputs,
+            namespace=None,
+            exclude=(),
+            include=None,
+            namespace_options={
+                'validator': None,
+                'valid_type': None,
+                'required': True,
+                'dynamic': False,
+                'default': None,
+                'help': None,
             }
-        }
+        )
 
-        process = WrappingProcess(inputs=inputs)
-        exposed_inputs = process.exposed_inputs(ExposeProcess)
+        # Verify that all the ports are there
+        self.assertIn('a', ParentProcessSpec.inputs)
+        self.assertIn('b', ParentProcessSpec.inputs)
+        self.assertIn('c', ParentProcessSpec.inputs)
 
-        self.assertTrue('base' in exposed_inputs)
-        self.assertTrue('d' in exposed_inputs)
-        self.assertTrue('c' in exposed_inputs)
-        self.assertTrue('e' not in exposed_inputs)
+        # Verify that all the port namespace attributes correspond to the values passed in the namespace_options
+        self.assertEquals(ParentProcessSpec.inputs.validator, None)
+        self.assertEquals(ParentProcessSpec.inputs.valid_type, None)
+        self.assertEquals(ParentProcessSpec.inputs.required, True)
+        self.assertEquals(ParentProcessSpec.inputs.dynamic, False)
+        self.assertEquals(ParentProcessSpec.inputs.default, None)
+        self.assertEquals(ParentProcessSpec.inputs.help, None)
 
-    def test_exposed_inputs_namespaced(self):
+    def test_expose_ports_namespace(self):
         """
-        Test that exposed_inputs works as expected. In this example, the exposed inputs of ExposeProcess are properly
-        namespaces, which means that this time, the excluded 'c' input during the expose call, will not show up in
-        the inputs returned by exposed_inputs
+        Verify that exposing a sub process in a namespace correctly overrides the defaults of the new
+        namespace with the properties of the exposed port namespace
         """
-        BaseProcess = self.BaseProcess
-        ExposeProcess = self.ExposeProcess
+        def validator_function(input):
+            pass
 
-        class WrappingProcess(NewLoopProcess):
-            @classmethod
-            def define(cls, spec):
-                super(WrappingProcess, cls).define(spec)
-                spec.expose_inputs(ExposeProcess, namespace='wrap', exclude=('c',))
-                spec.input('c', valid_type=int, default=3)
-                spec.input('e', valid_type=int, default=4)
+        # Define child process with all mutable properties of the inputs PortNamespace to a non-default value
+        # This way we can check if the defaults of the ParentProcessSpec will be properly overridden
+        ChildProcessSpec = ProcessSpec()
+        ChildProcessSpec.input('a', valid_type=int)
+        ChildProcessSpec.input('b', valid_type=str)
+        ChildProcessSpec.inputs.validator = validator_function
+        ChildProcessSpec.inputs.valid_type = bool
+        ChildProcessSpec.inputs.required = False
+        ChildProcessSpec.inputs.dynamic = True
+        ChildProcessSpec.inputs.default = True
+        ChildProcessSpec.inputs.help = 'testing'
 
-        inputs = {
-            'c': 1,
-            'e': 3,
-            'wrap': {
-                'd': 2,
-                'base': {
-                    'name' : {
-                        'space': {
-                            'a': 'h',
-                            'b': 'i',
-                        }
-                    }
+        ParentProcessSpec = ProcessSpec()
+        ParentProcessSpec.input('c', valid_type=float)
+        ParentProcessSpec._expose_ports(
+            process_class=None,
+            source=ChildProcessSpec.inputs,
+            destination=ParentProcessSpec.inputs,
+            expose_memory=ParentProcessSpec._exposed_inputs,
+            namespace='namespace',
+            exclude=(),
+            include=None,
+            namespace_options={}
+        )
+
+        # Verify that all the ports are there
+        self.assertIn('a', ParentProcessSpec.inputs['namespace'])
+        self.assertIn('b', ParentProcessSpec.inputs['namespace'])
+        self.assertIn('c', ParentProcessSpec.inputs)
+
+        # Verify that all the port namespace attributes are copied over
+        self.assertEquals(ParentProcessSpec.inputs['namespace'].validator, validator_function)
+        self.assertEquals(ParentProcessSpec.inputs['namespace'].valid_type, bool)
+        self.assertEquals(ParentProcessSpec.inputs['namespace'].required, False)
+        self.assertEquals(ParentProcessSpec.inputs['namespace'].dynamic, True)
+        self.assertEquals(ParentProcessSpec.inputs['namespace'].default, True)
+        self.assertEquals(ParentProcessSpec.inputs['namespace'].help, 'testing')
+
+    def test_expose_ports_namespace_options_non_existent(self):
+        """
+        Verify that passing non-supported PortNamespace mutable properties in namespace_options
+        will raise a ValueError
+        """
+        ChildProcessSpec = ProcessSpec()
+        ParentProcessSpec = ProcessSpec()
+
+        with self.assertRaises(ValueError):
+            ParentProcessSpec._expose_ports(
+                process_class=None,
+                source=ChildProcessSpec.inputs,
+                destination=ParentProcessSpec.inputs,
+                expose_memory=ParentProcessSpec._exposed_inputs,
+                namespace=None,
+                exclude=(),
+                include=None,
+                namespace_options={
+                    'non_existent': None,
                 }
-            }
-        }
-
-        process = WrappingProcess(inputs=inputs)
-        exposed_inputs = process.exposed_inputs(ExposeProcess, namespace='wrap')
-
-        self.assertTrue('base' in exposed_inputs)
-        self.assertTrue('d' in exposed_inputs)
-        self.assertTrue('c' not in exposed_inputs)
-        self.assertTrue('e' not in exposed_inputs)
+            )
