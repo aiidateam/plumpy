@@ -18,7 +18,8 @@ class DummyProcess(processes.Process):
     EXPECTED_STATE_SEQUENCE = [
         process_states.ProcessState.CREATED,
         process_states.ProcessState.RUNNING,
-        process_states.ProcessState.FINISHED]
+        process_states.ProcessState.FINISHED
+    ]
 
     @utils.override
     def _run(self):
@@ -98,7 +99,8 @@ class NewLoopProcess(processes.Process):
 
 
 class EventsTesterMixin(object):
-    EVENTS = ("create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate")
+    EVENTS = ("create", "run", "finish", "emitted", "wait", "resume", "stop",
+              "terminate")
 
     called_events = []
 
@@ -125,7 +127,8 @@ class EventsTesterMixin(object):
 
     @utils.override
     def _on_output_emitted(self, output_port, value, dynamic):
-        super(EventsTesterMixin, self)._on_output_emitted(output_port, value, dynamic)
+        super(EventsTesterMixin, self)._on_output_emitted(
+            output_port, value, dynamic)
         self.called('emitted')
 
     @utils.override
@@ -306,22 +309,17 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
 
 # All the Processes that can be used
 TEST_PROCESSES = [
-    DummyProcess,
-    DummyProcessWithOutput,
-    DummyProcessWithDynamicOutput,
-    ThreeSteps]
+    DummyProcess, DummyProcessWithOutput, DummyProcessWithDynamicOutput,
+    ThreeSteps
+]
 
 TEST_WAITING_PROCESSES = [
-    ProcessWithCheckpoint,
-    TwoCheckpointNoFinish,
-    ExceptionProcess,
-    ProcessEventsTester,
-    ThreeStepsThenException]
+    ProcessWithCheckpoint, TwoCheckpointNoFinish, ExceptionProcess,
+    ProcessEventsTester, ThreeStepsThenException
+]
 
 TEST_EXCEPTION_PROCESSES = [
-    ExceptionProcess,
-    ThreeStepsThenException,
-    MissingOutputProcess
+    ExceptionProcess, ThreeStepsThenException, MissingOutputProcess
 ]
 
 
@@ -354,8 +352,10 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
                 break
 
             compare_dictionaries(
-                snapshots[-j], saver.snapshots[-j],
-                snapshots[-j], saver.snapshots[-j],
+                snapshots[-j],
+                saver.snapshots[-j],
+                snapshots[-j],
+                saver.snapshots[-j],
                 exclude={'exception'})
             j += 1
 
@@ -381,14 +381,16 @@ def compare_dictionaries(bundle1, bundle2, dict1, dict2, exclude=None):
 
 
 def compare_value(bundle1, bundle2, v1, v2, exclude=None):
-    if isinstance(v1, collections.Mapping) and isinstance(v2, collections.Mapping):
+    if isinstance(v1, collections.Mapping) and isinstance(
+            v2, collections.Mapping):
         compare_dictionaries(bundle1, bundle2, v1, v2, exclude)
     elif isinstance(v1, list) and isinstance(v2, list):
         for vv1, vv2 in zip(v1, v2):
             compare_value(bundle1, bundle2, vv1, vv2, exclude)
     else:
         if v1 != v2:
-            raise ValueError("Dict values mismatch for :\n{} != {}".format(v1, v2))
+            raise ValueError("Dict values mismatch for :\n{} != {}".format(
+                v1, v2))
 
 
 class TestPersister(persistence.Persister):

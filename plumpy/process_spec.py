@@ -31,8 +31,10 @@ class ProcessSpec(object):
         # Create the input and output port namespace
         self._ports.create_port_namespace(self.NAME_INPUTS_PORT_NAMESPACE)
         self._ports.create_port_namespace(self.NAME_OUTPUTS_PORT_NAMESPACE)
-        self._exposed_inputs = collections.defaultdict(lambda: collections.defaultdict(list))
-        self._exposed_outputs = collections.defaultdict(lambda: collections.defaultdict(list))
+        self._exposed_inputs = collections.defaultdict(
+            lambda: collections.defaultdict(list))
+        self._exposed_outputs = collections.defaultdict(
+            lambda: collections.defaultdict(list))
 
     def __str__(self):
         return json.dumps(self.get_description(), sort_keys=True, indent=4)
@@ -106,7 +108,8 @@ class ProcessSpec(object):
         :param kwargs: options for the port
         """
         if self.sealed:
-            raise RuntimeError('Cannot add an output port after the spec has been sealed')
+            raise RuntimeError(
+                'Cannot add an output port after the spec has been sealed')
 
         namespace = name.split(self.namespace_separator)
         port_name = namespace.pop()
@@ -144,7 +147,8 @@ class ProcessSpec(object):
         :param name: namespace of the new port namespace
         :param kwargs: keyword arguments for the PortNamespace constructor
         """
-        self._create_port(self.inputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
+        self._create_port(self.inputs, self.PORT_NAMESPACE_TYPE, name,
+                          **kwargs)
 
     def output_namespace(self, name, **kwargs):
         """
@@ -155,7 +159,8 @@ class ProcessSpec(object):
         :param name: namespace of the new port namespace
         :param kwargs: keyword arguments for the PortNamespace constructor
         """
-        self._create_port(self.outputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
+        self._create_port(self.outputs, self.PORT_NAMESPACE_TYPE, name,
+                          **kwargs)
 
     def has_input(self, name):
         """
@@ -193,7 +198,12 @@ class ProcessSpec(object):
         """
         return self.outputs.validate(outputs)
 
-    def expose_inputs(self, process_class, namespace=None, exclude=(), include=None, namespace_options={}):
+    def expose_inputs(self,
+                      process_class,
+                      namespace=None,
+                      exclude=(),
+                      include=None,
+                      namespace_options={}):
         """
         This method allows one to automatically add the inputs from another Process to this ProcessSpec.
         The optional namespace argument can be used to group the exposed inputs in a separated PortNamespace.
@@ -217,7 +227,12 @@ class ProcessSpec(object):
             namespace_options=namespace_options,
         )
 
-    def expose_outputs(self, process_class, namespace=None, exclude=(), include=None, namespace_options={}):
+    def expose_outputs(self,
+                       process_class,
+                       namespace=None,
+                       exclude=(),
+                       include=None,
+                       namespace_options={}):
         """
         This method allows one to automatically add the ouputs from another Process to this ProcessSpec.
         The optional namespace argument can be used to group the exposed outputs in a separated PortNamespace.
@@ -241,7 +256,14 @@ class ProcessSpec(object):
             namespace_options=namespace_options,
         )
 
-    def _expose_ports(self, process_class, source, destination, expose_memory, namespace, exclude, include,
+    def _expose_ports(self,
+                      process_class,
+                      source,
+                      destination,
+                      expose_memory,
+                      namespace,
+                      exclude,
+                      include,
                       namespace_options={}):
         """
         Expose ports from a source PortNamespace of the ProcessSpec of a Process class into the destination
@@ -266,5 +288,6 @@ class ProcessSpec(object):
         else:
             port_namespace = destination
 
-        absorbed_ports = port_namespace.absorb(source, exclude, include, namespace_options)
+        absorbed_ports = port_namespace.absorb(source, exclude, include,
+                                               namespace_options)
         expose_memory[namespace][process_class] = absorbed_ports

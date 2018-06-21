@@ -29,7 +29,8 @@ class EventHelper(object):
         self._listeners = set()
 
     def add_listener(self, listener):
-        assert isinstance(listener, self._listener_type), "Listener is not of right type"
+        assert isinstance(listener,
+                          self._listener_type), "Listener is not of right type"
         self._listeners.add(listener)
 
     def remove_listener(self, listener):
@@ -50,7 +51,8 @@ class EventHelper(object):
             try:
                 getattr(l, event_function.__name__)(*args, **kwargs)
             except Exception as e:
-                _LOGGER.error("Listener '{}' produced an exception:\n{}".format(l, e))
+                _LOGGER.error(
+                    "Listener '{}' produced an exception:\n{}".format(l, e))
 
 
 class ListenContext(object):
@@ -192,7 +194,8 @@ def load_object(fullname):
         try:
             obj = getattr(obj, name)
         except AttributeError:
-            raise ValueError("Could not load object corresponding to '{}'".format(fullname))
+            raise ValueError(
+                "Could not load object corresponding to '{}'".format(fullname))
 
     return obj
 
@@ -211,7 +214,8 @@ def load_module(fullname):
             remainder.appendleft(parts.pop())
 
     if mod is None:
-        raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
+        raise ValueError(
+            "Could not load a module corresponding to '{}'".format(fullname))
 
     return mod, remainder
 
@@ -232,16 +236,19 @@ def wrap_dict(flat_dict, separator='.'):
 
 def type_check(obj, expected_type):
     if not isinstance(obj, expected_type):
-        raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
+        raise TypeError("Got object of type '{}' when expecting '{}'".format(
+            type(obj), expected_type))
 
 
 def ensure_coroutine(fn):
     if tornado.gen.is_coroutine_function(fn):
         return fn
     else:
+
         @tornado.gen.coroutine
         def wrapper(*args, **kwargs):
             raise tornado.gen.Return(fn(*args, **kwargs))
+
         return wrapper
 
 

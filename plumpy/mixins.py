@@ -27,7 +27,8 @@ class ContextMixin(persistence.Savable):
             out_state[self.CONTEXT] = self._context.__dict__
 
     def load_instance_state(self, saved_state, load_context):
-        super(ContextMixin, self).load_instance_state(saved_state, load_context)
+        super(ContextMixin, self).load_instance_state(saved_state,
+                                                      load_context)
         try:
             self._context = AttributesDict(**saved_state[self.CONTEXT])
         except KeyError:
