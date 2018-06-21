@@ -705,7 +705,7 @@ class Process(
                                        output_port, value, dynamic)
 
     @super_check
-    def on_wait(self, data):
+    def on_wait(self, awaitables):
         """ Entering the WAITING state """
         pass
 
@@ -757,7 +757,7 @@ class Process(
 
     @super_check
     def on_kill(self, msg):
-        self.future().set_exception(exceptions.KilledError())
+        self.future().set_exception(exceptions.KilledError(msg))
 
     @super_check
     def on_killed(self):
@@ -782,7 +782,7 @@ class Process(
         elif intent == process_comms.Intent.PAUSE:
             result = self.pause()
         elif intent == process_comms.Intent.KILL:
-            result = self.kill(msg=msg.get('msg', None))
+            result = self.kill(msg=msg.get(process_comms.MESSAGE_KEY, None))
         elif intent == process_comms.Intent.STATUS:
             status_info = {}
             self.get_status_info(status_info)

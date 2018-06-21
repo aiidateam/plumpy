@@ -14,6 +14,7 @@ __all__ = [
 ]
 
 INTENT_KEY = 'intent'
+MESSAGE_KEY = 'message'
 
 
 class Intent(object):
@@ -62,7 +63,9 @@ class StatusAction(ProcessAction):
 
 
 class KillAction(ProcessAction):
-    def __init__(self, pid):
+    def __init__(self, pid, msg=None):
+        if msg is not None:
+            KILL_MSG[MESSAGE_KEY] = msg
         super(KillAction, self).__init__(pid, KILL_MSG)
 
 
