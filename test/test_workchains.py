@@ -395,7 +395,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
         @gen.coroutine
         def run_async(workchain):
-            yield utils.run_until_paused(workchain)
+            yield test_utils.run_until_paused(workchain)
             self.assertTrue(workchain.ctx.s1)
             self.assertFalse(workchain.ctx.s2)
 

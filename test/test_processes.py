@@ -6,7 +6,6 @@ from plumpy.utils import AttributesFrozendict
 from tornado import gen
 import tornado.gen
 
-from test.utils import run_until_waiting, run_until_paused
 from . import utils
 
 
@@ -251,7 +250,7 @@ class TestProcess(utils.TestCaseWithLoop):
 
         @gen.coroutine
         def async_test():
-            yield run_until_waiting(proc)
+            yield test_utils.run_until_waiting(proc)
             self.assertEqual(proc.state, ProcessState.WAITING)
 
             result = yield proc.pause()
@@ -288,6 +287,43 @@ class TestProcess(utils.TestCaseWithLoop):
 
         self.assertTrue(proc.after_kill)
         self.assertEqual(proc.state, ProcessState.KILLED)
+
+    def test_kill_when_paused_in_run(self):
+        class PauseProcess(Process):
+
+            def _run(self, **kwargs):
+                self.pause()
+                self.kill()
+
+        proc = PauseProcess()
+        with self.assertRaises(plumpy.KilledError):
+            proc.execute()
+
+        self.assertEqual(proc.state, ProcessState.KILLED)
+
+    def test_kill_when_paused(self):
+        proc = test_utils.WaitForSignalProcess()
+
+        @gen.coroutine
+        def run_async(proc):
+            yield test_utils.run_until_waiting(proc)
+
+            saved_state = plumpy.Bundle(proc)
+
+            result = yield proc.pause()
+            self.assertTrue(result)
+            self.assertTrue(proc.paused)
+
+            # Kill the process
+            proc.kill()
+
+            with self.assertRaises(plumpy.KilledError):
+                result = yield proc.future()
+
+            self.assertEqual(proc.state, ProcessState.KILLED)
+
+        self.loop.add_callback(proc.step_until_terminated)
+        self.loop.run_sync(lambda: run_async(proc))
 
     def test_run_multiple(self):
         # Create and play some processes
@@ -444,7 +480,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
     def test_running_save_instance_state(self):
         @gen.coroutine
         def run_async(nsync_comeback):
-            yield run_until_paused(nsync_comeback)
+            yield test_utils.run_until_paused(nsync_comeback)
 
             # Create a checkpoint
             bundle = plumpy.Bundle(nsync_comeback)
@@ -515,7 +551,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
 
         @gen.coroutine
         def test_restart_async(proc):
-            yield run_until_waiting(proc)
+            yield test_utils.run_until_waiting(proc)
 
             # Save the state of the process
             saved_state = plumpy.Bundle(proc)
@@ -538,7 +574,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
 
         @gen.coroutine
         def run_async(proc):
-            yield run_until_waiting(proc)
+            yield test_utils.run_until_waiting(proc)
 
             saved_state = plumpy.Bundle(proc)
 
