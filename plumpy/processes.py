@@ -73,10 +73,10 @@ yaml.representer.Representer.add_representer(
     ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
 
 
-@persistence.auto_persist('_pid', '_CREATION_TIME', '_future', '_paused_flag')
+@persistence.auto_persist('_pid', '_CREATION_TIME', '_future')
 class Process(
-        with_metaclass(ProcessStateMachineMeta, StateMachine,
-                       persistence.Savable)):
+    with_metaclass(ProcessStateMachineMeta, StateMachine,
+                   persistence.Savable)):
     """
     The Process class is the base for any unit of work in plumpy.
 
@@ -118,10 +118,10 @@ class Process(
     _spec_type = ProcessSpec
     # Default placeholders, will be populated in init()
     _waiting_callbacks = None
-    _paused_callbacks = None
     _terminated_callbacks = None
     _stepping = False
     _pausing = None
+    _paused = None
     _killing = None
 
     @classmethod
@@ -237,7 +237,7 @@ class Process(
 
         self._setup_event_hooks()
 
-        self._paused_flag = False
+        self._paused = None
         self._pausing = None  # If pausing, this will be a future
 
         # Input/output
@@ -259,7 +259,6 @@ class Process(
     def init(self):
         """ Any common initialisation stuff after create or load goes here """
         self._waiting_callbacks = []
-        self._paused_callbacks = []
         self._terminated_callbacks = []
 
         if self._communicator is not None:
@@ -337,25 +336,7 @@ class Process(
 
     @property
     def paused(self):
-        return self._paused
-
-    @property
-    def _paused(self):
-        return self._paused_flag
-
-    @_paused.setter
-    def _paused(self, paused):
-        if self._paused == paused:
-            return
-
-        self._pausing = None
-
-        # We are changing the paused state
-        self._paused_flag = paused
-        if self._paused_flag:
-            call_with_super_check(self.on_paused)
-        else:
-            call_with_super_check(self.on_playing)
+        return self._paused is not None
 
     def future(self):
         return self._future
@@ -438,7 +419,7 @@ class Process(
         (this needn't be a method).  If it raises an exception it will cause
         the process to fail.
         """
-        args = (callback, ) + args
+        args = (callback,) + args
         handle = events.ProcessCallback(self, self._run_task, args, kwargs)
         self._loop.add_callback(handle.run)
         return handle
@@ -600,12 +581,6 @@ class Process(
     def remove_on_waiting_callback(self, callback):
         self._waiting_callbacks.remove(callback)
 
-    def add_on_paused_callback(self, callback):
-        self._paused_callbacks.append(callback)
-
-    def remove_on_paused_callback(self, callback):
-        self._paused_callbacks.remove(callback)
-
     def add_on_terminated_callback(self, callback):
         self._terminated_callbacks.append(callback)
 
@@ -654,7 +629,7 @@ class Process(
             except ConnectionClosed:
                 self.logger.info(
                     'no connection available to broadcast state change from {} to {}'.
-                    format(from_label, self.state.value))
+                        format(from_label, self.state.value))
 
     def on_exiting(self):
         state = self.state
@@ -717,15 +692,35 @@ class Process(
             cb(self)
 
     @super_check
+    def on_pausing(self):
+        """ The process is being paused """
+        self._pausing = futures.Future()
+
+        def _paused(pausing_future):
+            if pausing_future.result():
+                call_with_super_check(self.on_paused)
+            else:
+                self._pausing = None
+
+        self._pausing.add_done_callback(_paused)
+
+    @super_check
     def on_paused(self):
         """ The process was paused """
+        # Either we entered paused directly or because we finished pausing
+        assert self._pausing is None or self._pausing.done()
+        self._pausing = None
+
+        # Create a future to represent the duration of the paused state
+        self._paused = futures.Future()
         self._fire_event(ProcessListener.on_process_paused)
-        for cb in self._paused_callbacks:
-            cb(self)
 
     @super_check
     def on_playing(self):
         """ The process was played """
+        # Done being paused
+        self._paused.set_result(True)
+        self._paused = None
         self._fire_event(ProcessListener.on_process_played)
 
     @super_check
@@ -819,22 +814,22 @@ class Process(
 
         :return: True paused, False otherwise
         """
-        if self._paused:
+        if self.paused:
             # Already paused
             return True
 
-        if self._pausing:
+        if self._pausing is not None:
             # Already pausing
             return self._pausing
 
         if self._stepping:
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
-            self._pausing = futures.Future()
-            self._state.interrupt(process_states.Interrupt.PAUSE)
+            call_with_super_check(self.on_pausing)
+            self._state.interrupt(process_states.PauseInterruption())
             return self._pausing
         else:
-            self._paused = True
+            call_with_super_check(self.on_paused)
             return True
 
     def play(self):
@@ -843,14 +838,14 @@ class Process(
 
         :return: True if playing, False otherwise
         """
-        if not self._paused:
-            if self._pausing:
+        if not self.paused:
+            if self._pausing is not None:
                 # Not going to pause after all
                 self._pausing.set_result(False)
                 self._pausing = None
             return True
 
-        self._paused = False
+        call_with_super_check(self.on_playing)
         return True
 
     @event(from_states=(process_states.Running, process_states.Waiting))
@@ -892,7 +887,7 @@ class Process(
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
             self._killing = futures.Future()
-            self._state.interrupt(process_states.Interrupt.KILL)
+            self._state.interrupt(process_states.KillInterruption())
             return self._killing
         else:
             self.transition_to(process_states.ProcessState.KILLED, msg)
@@ -929,29 +924,23 @@ class Process(
         :return: None if not terminated, otherwise `self.outputs`
         """
         if not self.has_terminated():
-            if self._paused:
-                self.play()
+            self.loop().run_sync(self.step_until_terminated)
 
-            loop = self._loop
-            loop.run_sync(self.step_until_terminated)
-
-        if self.has_terminated():
-            self.result()
-            return self.outputs
+        return self.future().result()
 
     @coroutine
     def step(self):
         assert not self.has_terminated(), "Cannot step, already terminated"
 
-        if self._paused:
-            return
+        if self.paused:
+            yield self._paused
 
         try:
             self._stepping = True
             interrupted = False
             try:
                 next_state = yield self._run_task(self._state.execute)
-            except process_states.KillInterruption:
+            except process_states.Interruption:
                 assert self._killing or self._pausing
                 interrupted = True
 
@@ -973,13 +962,12 @@ class Process(
 
             if self._pausing:
                 self._pausing.set_result(True)
-                self._paused = True
         finally:
             self._stepping = False
 
     @coroutine
     def step_until_terminated(self):
-        while not self.has_terminated() and not self._paused:
+        while not self.has_terminated():
             yield self.step()
 
     # endregion
@@ -1045,7 +1033,7 @@ class Process(
                 elif port.required:
                     raise ValueError(
                         'Value not supplied for required inputs port {}'.
-                        format(name))
+                            format(name))
                 else:
                     continue
             else:

@@ -44,13 +44,15 @@ class __NULL(object):
 NULL = __NULL()
 
 
-class Interrupt(Enum):
-    """ Interrupt a state with a reason code """
-    PAUSE = 0
-    KILL = 9
+class Interruption(Exception):
+    pass
 
 
-class KillInterruption(Exception):
+class KillInterruption(Interruption):
+    pass
+
+
+class PauseInterruption(Interruption):
     pass
 
 
@@ -211,10 +213,7 @@ class Running(State):
                                                      load_context)
 
     def interrupt(self, reason):
-        if self._running and reason is Interrupt.KILL:
-            raise KillInterruption()
-        else:
-            return False
+        return False
 
     @coroutine
     def execute(self):
@@ -227,7 +226,7 @@ class Running(State):
                     result = self.run_fn(*self.args, **self.kwargs)
                 finally:
                     self._running = False
-            except KillInterruption:
+            except Interruption:
                 # Let this bubble up to the caller
                 raise
             except Exception:
@@ -276,6 +275,8 @@ class Waiting(State):
 
     DONE_CALLBACK = 'DONE_CALLBACK'
 
+    _interruption = None
+
     def __str__(self):
         state_info = super(Waiting, self).__str__()
         if self.msg is not None:
@@ -303,23 +304,28 @@ class Waiting(State):
 
     def interrupt(self, reason):
         # This will cause the future in execute() to raise the exception
-        self._waiting_future.set_exception(KillInterruption())
-        # Reset the future for the next time
-        self._waiting_future = futures.Future()
+        self._waiting_future.set_exception(reason)
 
     @coroutine
     def execute(self):
-        result = yield self._waiting_future
+        try:
+            result = yield self._waiting_future
+        except Interruption:
+            # Deal with the interruption (by raising) but make sure our internal
+            # state is back to how it was before the interruption so that we can be
+            # re-executed
+            self._waiting_future = futures.Future()
+            raise
+
         if result == NULL:
-            next_state = self.create_state(ProcessState.RUNNING,
-                                           self.done_callback)
+            next_state = self.create_state(ProcessState.RUNNING, self.done_callback)
         else:
-            next_state = self.create_state(ProcessState.RUNNING,
-                                           self.done_callback, result)
+            next_state = self.create_state(ProcessState.RUNNING, self.done_callback, result)
 
         raise Return(next_state)
 
     def resume(self, value=NULL):
+        assert self._waiting_future is not None, "Not yet waiting"
         self._waiting_future.set_result(value)
 
 
@@ -394,6 +400,5 @@ class Killed(State):
         """
         super(Killed, self).__init__(process)
         self.msg = msg
-
 
 # endregion

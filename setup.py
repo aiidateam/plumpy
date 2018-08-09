@@ -36,7 +36,7 @@ setup(
         'frozendict',
         'portalocker',
         'pyyaml',
-        'tornado',
+        'tornado<5.0',
         'future',
         'kiwipy[rmq]>=0.2.1'
     ],

@@ -2,6 +2,8 @@ import functools
 import plumpy
 import unittest
 
+from plumpy import ProcessState
+
 
 class TestCase(unittest.TestCase):
     pass
@@ -35,3 +37,39 @@ def get_message_capture_fn(capture_list):
 def run_loop_with_timeout(loop, timeout=2.):
     loop.call_later(timeout, loop.stop)
     loop.start()
+
+
+def run_until_waiting(proc):
+    """ Set up a future that will be resolved on entering the WAITING state """
+    listener = plumpy.ProcessListener()
+    in_waiting = plumpy.Future()
+
+    if proc.state == ProcessState.WAITING:
+        in_waiting.set_result(True)
+    else:
+        def on_waiting(waiting_proc):
+            in_waiting.set_result(True)
+            proc.remove_process_listener(listener)
+
+        listener.on_process_waiting = on_waiting
+        proc.add_process_listener(listener)
+
+    return in_waiting
+
+
+def run_until_paused(proc):
+    """ Set up a future that will be resolved on entering the WAITING state """
+    listener = plumpy.ProcessListener()
+    paused = plumpy.Future()
+
+    if proc.paused:
+        paused.set_result(True)
+    else:
+        def on_paused(_paused_proc):
+            paused.set_result(True)
+            proc.remove_process_listener(listener)
+
+        listener.on_process_paused = on_paused
+        proc.add_process_listener(listener)
+
+    return paused

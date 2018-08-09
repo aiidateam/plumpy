@@ -3,8 +3,10 @@ import plumpy
 from past.builtins import basestring
 from plumpy import Process, ProcessState, test_utils, BundleKeys
 from plumpy.utils import AttributesFrozendict
+from tornado import gen
 import tornado.gen
 
+from test.utils import run_until_waiting, run_until_paused
 from . import utils
 
 
@@ -215,10 +217,12 @@ class TestProcess(utils.TestCaseWithLoop):
     def test_wait_continue(self):
         proc = test_utils.WaitForSignalProcess()
         # Wait - Execute the process and wait until it is waiting
-        proc.add_on_waiting_callback(lambda _: proc.pause())
-        proc.execute()
-        proc.resume()
-        proc.execute()
+
+        listener = plumpy.ProcessListener()
+        listener.on_process_waiting = lambda proc: proc.resume()
+
+        proc.add_process_listener(listener)
+        self.loop.run_sync(proc.step_until_terminated)
 
         # Check it's done
         self.assertTrue(proc.done())
@@ -242,28 +246,31 @@ class TestProcess(utils.TestCaseWithLoop):
         completes correctly when played again.
         """
         proc = test_utils.WaitForSignalProcess()
+        loop = self.loop
+        loop.add_callback(proc.step_until_terminated)
 
-        # Wait - Run the process and wait until it is waiting
-        proc.add_on_waiting_callback(lambda _: proc.pause())
-        proc.execute()
-        self.assertEqual(proc.state, ProcessState.WAITING)
+        @gen.coroutine
+        def async_test():
+            yield run_until_waiting(proc)
+            self.assertEqual(proc.state, ProcessState.WAITING)
 
-        result = proc.pause()
-        self.assertTrue(result)
-        self.assertTrue(proc.paused)
+            result = yield proc.pause()
+            self.assertTrue(result)
+            self.assertTrue(proc.paused)
 
-        result = proc.play()
-        self.assertTrue(result)
-        self.assertFalse(proc.paused)
+            result = proc.play()
+            self.assertTrue(result)
+            self.assertFalse(proc.paused)
 
-        proc.resume()
+            proc.resume()
+            # Wait until the process is terminated
+            yield proc.future()
 
-        # Run
-        proc.execute()
+            # Check it's done
+            self.assertTrue(proc.done())
+            self.assertEqual(proc.state, ProcessState.FINISHED)
 
-        # Check it's done
-        self.assertTrue(proc.done())
-        self.assertEqual(proc.state, ProcessState.FINISHED)
+        loop.run_sync(async_test)
 
     def test_kill_in_run(self):
         class KillProcess(Process):
@@ -271,13 +278,15 @@ class TestProcess(utils.TestCaseWithLoop):
 
             def _run(self, **kwargs):
                 self.kill()
+                # The following line should be executed because kill will not
+                # interrupt execution of a method call in the RUNNING state
                 self.after_kill = True
 
         proc = KillProcess()
         with self.assertRaises(plumpy.KilledError):
             proc.execute()
 
-        self.assertFalse(proc.after_kill)
+        self.assertTrue(proc.after_kill)
         self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_run_multiple(self):
@@ -327,6 +336,27 @@ class TestProcess(utils.TestCaseWithLoop):
 
         self.assertEquals(proc.result(), ERROR_CODE)
 
+    def test_pause_in_process(self):
+        """ Test that we can pause and cancel that by playing within the process """
+
+        test_case = self
+
+        class TestPausePlay(plumpy.Process):
+            def run(self):
+                fut = self.pause()
+                test_case.assertIsInstance(fut, plumpy.Future)
+
+        listener = plumpy.ProcessListener()
+        listener.on_process_paused = lambda _proc: self.loop.stop()
+
+        proc = TestPausePlay()
+        proc.add_process_listener(listener)
+
+        self.loop.add_callback(proc.step_until_terminated)
+        self.loop.start()
+        self.assertTrue(proc.paused)
+        self.assertEquals(plumpy.ProcessState.FINISHED, proc.state)
+
     def test_pause_play_in_process(self):
         """ Test that we can pause and cancel that by playing within the process """
 
@@ -340,7 +370,9 @@ class TestProcess(utils.TestCaseWithLoop):
                 test_case.assertTrue(result)
 
         proc = TestPausePlay()
-        proc.execute()
+
+        self.loop.run_sync(proc.step_until_terminated)
+        self.assertFalse(proc.paused)
         self.assertEquals(plumpy.ProcessState.FINISHED, proc.state)
 
     def test_process_stack(self):
@@ -410,18 +442,27 @@ class TestProcessSaving(utils.TestCaseWithLoop):
     maxDiff = None
 
     def test_running_save_instance_state(self):
-        proc = SavePauseProc()
-        proc.execute()
-        bundle = plumpy.Bundle(proc)
-        self.assertListEqual([SavePauseProc.run.__name__], proc.steps_ran)
-        proc.execute()
-        self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], proc.steps_ran)
+        @gen.coroutine
+        def run_async(nsync_comeback):
+            yield run_until_paused(nsync_comeback)
 
-        proc_unbundled = bundle.unbundle()
-        self.assertEqual(0, len(proc_unbundled.steps_ran))
-        proc_unbundled.execute()
+            # Create a checkpoint
+            bundle = plumpy.Bundle(nsync_comeback)
+            self.assertListEqual([SavePauseProc.run.__name__], nsync_comeback.steps_ran)
 
-        self.assertEqual([SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
+            nsync_comeback.play()
+            yield nsync_comeback.future()
+
+            self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], nsync_comeback.steps_ran)
+
+            proc_unbundled = bundle.unbundle()
+            self.assertEqual(0, len(proc_unbundled.steps_ran))
+            yield proc_unbundled.step_until_terminated()
+            self.assertEqual([SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
+
+        nsync = SavePauseProc()
+        self.loop.add_callback(nsync.step_until_terminated)
+        self.loop.run_sync(lambda: run_async(nsync))
 
     def test_created_bundle(self):
         """
@@ -469,42 +510,53 @@ class TestProcessSaving(utils.TestCaseWithLoop):
 
     def test_restart(self):
         proc = _RestartProcess()
-        proc.add_on_waiting_callback(lambda _: proc.pause())
-        proc.execute()
 
-        # Save the state of the process
-        saved_state = plumpy.Bundle(proc)
+        self.loop.add_callback(proc.step_until_terminated)
 
-        # Load a process from the saved state
-        proc = saved_state.unbundle()
-        self.assertEqual(proc.state, ProcessState.WAITING)
+        @gen.coroutine
+        def test_restart_async(proc):
+            yield run_until_waiting(proc)
 
-        # Now resume it
-        proc.resume()
-        result = proc.execute()
-        self.assertEqual(proc.outputs, {'finished': True})
+            # Save the state of the process
+            saved_state = plumpy.Bundle(proc)
+
+            # Load a process from the saved state
+            loaded_proc = saved_state.unbundle()
+            self.assertEqual(loaded_proc.state, ProcessState.WAITING)
+
+            # Now resume it
+            self.loop.add_callback(loaded_proc.step_until_terminated)
+            loaded_proc.resume()
+            yield loaded_proc.future()
+            self.assertEqual(loaded_proc.outputs, {'finished': True})
+
+        self.loop.run_sync(lambda: test_restart_async(proc))
 
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
         proc = test_utils.WaitForSignalProcess()
 
-        # Wait - Run the process until it enters the WAITING state
-        proc.add_on_waiting_callback(lambda _: proc.pause())
-        proc.execute()
+        @gen.coroutine
+        def run_async(proc):
+            yield run_until_waiting(proc)
 
-        saved_state = plumpy.Bundle(proc)
+            saved_state = plumpy.Bundle(proc)
 
-        # Run the process to the end
-        proc.resume()
-        result = proc.execute()
+            # Run the process to the end
+            proc.resume()
+            result1 = yield proc.future()
 
-        # Load from saved state and run again
-        proc = saved_state.unbundle(plumpy.LoadSaveContext(loop=self.loop))
-        proc.resume()
-        result2 = proc.execute()
+            # Load from saved state and run again
+            proc2 = saved_state.unbundle(plumpy.LoadSaveContext(loop=self.loop))
+            self.loop.add_callback(proc2.step_until_terminated)
+            proc2.resume()
+            result2 = yield proc2.future()
 
-        # Check results match
-        self.assertEqual(result, result2)
+            # Check results match
+            self.assertEqual(result1, result2)
+
+        self.loop.add_callback(proc.step_until_terminated)
+        self.loop.run_sync(lambda: run_async(proc))
 
     def test_killed(self):
         proc = test_utils.DummyProcess()
