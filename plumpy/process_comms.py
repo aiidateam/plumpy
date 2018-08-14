@@ -1,3 +1,4 @@
+import copy
 import functools
 
 from . import loaders
@@ -48,8 +49,13 @@ class ProcessAction(communications.Action):
 
 
 class PauseAction(ProcessAction):
-    def __init__(self, pid):
-        super(PauseAction, self).__init__(pid, PAUSE_MSG)
+    def __init__(self, pid, msg=None):
+        if msg is not None:
+            message = copy.copy(PAUSE_MSG)
+            message[MESSAGE_KEY] = msg
+        else:
+            message = PAUSE_MSG
+        super(PauseAction, self).__init__(pid, message)
 
 
 class PlayAction(ProcessAction):
@@ -65,8 +71,11 @@ class StatusAction(ProcessAction):
 class KillAction(ProcessAction):
     def __init__(self, pid, msg=None):
         if msg is not None:
-            KILL_MSG[MESSAGE_KEY] = msg
-        super(KillAction, self).__init__(pid, KILL_MSG)
+            message = copy.copy(KILL_MSG)
+            message[MESSAGE_KEY] = msg
+        else:
+            message = KILL_MSG
+        super(KillAction, self).__init__(pid, message)
 
 
 TASK_KEY = 'task'

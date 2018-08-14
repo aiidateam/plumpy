@@ -1,5 +1,7 @@
 import inspect
 from past.builtins import basestring
+from tornado import gen
+
 import plumpy
 from plumpy.workchains import *
 from plumpy.process_listener import ProcessListener
@@ -389,24 +391,31 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
     def test_if_block_persistence(self):
         wc = IfTest()
-        wc.execute()
-        self.assertTrue(wc.ctx.s1)
-        self.assertFalse(wc.ctx.s2)
+        self.loop.add_callback(wc.step_until_terminated)
 
-        # Now bundle the thing
-        bundle = plumpy.Bundle(wc)
+        @gen.coroutine
+        def run_async(workchain):
+            yield test_utils.run_until_paused(workchain)
+            self.assertTrue(workchain.ctx.s1)
+            self.assertFalse(workchain.ctx.s2)
 
-        # Load from saved tate
-        wc = bundle.unbundle()
-        self.assertTrue(wc.ctx.s1)
-        self.assertFalse(wc.ctx.s2)
+            # Now bundle the thing
+            bundle = plumpy.Bundle(workchain)
 
-        bundle2 = plumpy.Bundle(wc)
-        self.assertDictEqual(bundle, bundle2)
+            # Load from saved state
+            workchain2 = bundle.unbundle()
+            self.assertTrue(workchain2.ctx.s1)
+            self.assertFalse(workchain2.ctx.s2)
 
-        wc.execute()
-        self.assertTrue(wc.ctx.s1)
-        self.assertTrue(wc.ctx.s2)
+            bundle2 = plumpy.Bundle(workchain2)
+            self.assertDictEqual(bundle, bundle2)
+
+            workchain.play()
+            yield workchain.future()
+            self.assertTrue(workchain.ctx.s1)
+            self.assertTrue(workchain.ctx.s2)
+
+        self.loop.run_sync(lambda: run_async(wc))
 
     def test_to_context(self):
         val = 5

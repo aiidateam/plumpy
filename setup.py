@@ -36,9 +36,9 @@ setup(
         'frozendict',
         'portalocker',
         'pyyaml',
-        'tornado',
+        'tornado<5.0',
         'future',
-        'kiwipy[rmq]>=0.2.0'
+        'kiwipy[rmq]>=0.2.1'
     ],
     extras_require={
         ':python_version<"3.4"': ['enum34'],

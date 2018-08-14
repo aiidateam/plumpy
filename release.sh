@@ -34,14 +34,13 @@ git commit -m "Release ${version}"
 
 git checkout master
 git merge --no-ff $relbranch
+# Tag the thing
+git tag -a $tag -m "Version $version"
 
 git checkout $current_branch
 git merge --no-ff $relbranch
 
 git branch -d $relbranch
-
-# Tag the thing
-git tag -a $tag -m "Version $version"
 
 # Push everything
 git push origin master
