@@ -32,7 +32,10 @@ __all__ = [
     'Kill',
     'Stop',
     'Wait',
-    'Continue'
+    'Continue',
+    'Interruption',
+    'KillInterruption',
+    'PauseInterruption',
 ]
 
 
@@ -300,6 +303,8 @@ class Waiting(State):
         callback_name = saved_state.get(self.DONE_CALLBACK, None)
         if callback_name is not None:
             self.done_callback = getattr(self.process, callback_name)
+        else:
+            self.done_callback = None
         self._waiting_future = futures.Future()
 
     def interrupt(self, reason):
