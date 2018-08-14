@@ -271,6 +271,45 @@ class TestProcess(utils.TestCaseWithLoop):
 
         loop.run_sync(async_test)
 
+    def test_pause_play_status_messaging(self):
+        """
+        Test the setting of a processes' status through pause and play works correctly.
+
+        Any process can have its status set to a given message. When pausing, a pause message can be set for the
+        status, which should store the current status, which should be restored, once the process is played again.
+        """
+        PLAY_STATUS = 'process was played by Hans Klok'
+        PAUSE_STATUS = 'process was paused by Evel Knievel'
+
+        proc = test_utils.WaitForSignalProcess()
+        proc.set_status(PLAY_STATUS)
+        loop = self.loop
+        loop.add_callback(proc.step_until_terminated)
+
+        @gen.coroutine
+        def async_test():
+            yield test_utils.run_until_waiting(proc)
+            self.assertEqual(proc.state, ProcessState.WAITING)
+
+            result = yield proc.pause(PAUSE_STATUS)
+            self.assertTrue(result)
+            self.assertTrue(proc.paused)
+            self.assertEquals(proc.status, PAUSE_STATUS)
+
+            result = proc.play()
+            self.assertEquals(proc.status, PLAY_STATUS)
+            self.assertEquals(proc._pre_paused_status, None)
+
+            proc.resume()
+            # Wait until the process is terminated
+            yield proc.future()
+
+            # Check it's done
+            self.assertTrue(proc.done())
+            self.assertEqual(proc.state, ProcessState.FINISHED)
+
+        loop.run_sync(async_test)
+
     def test_kill_in_run(self):
         class KillProcess(Process):
             after_kill = False

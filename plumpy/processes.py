@@ -73,7 +73,7 @@ yaml.representer.Representer.add_representer(
     ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
 
 
-@persistence.auto_persist('_pid', '_CREATION_TIME', '_future')
+@persistence.auto_persist('_pid', '_CREATION_TIME', '_future', '_status', '_pre_paused_status')
 class Process(
     with_metaclass(ProcessStateMachineMeta, StateMachine,
                    persistence.Savable)):
@@ -237,6 +237,8 @@ class Process(
 
         self._setup_event_hooks()
 
+        self._status = None  # May hold a current status message
+        self._pre_paused_status = None  # Save status when a pause message replaces it, such that it can be restored
         self._paused = None
         self._pausing = None  # If pausing, this will be a future
 
@@ -333,6 +335,13 @@ class Process(
             return self._logger
         else:
             return _LOGGER
+
+    @property
+    def status(self):
+        return self._status
+
+    def set_status(self, status):
+        self._status = status
 
     @property
     def paused(self):
@@ -692,20 +701,20 @@ class Process(
             cb(self)
 
     @super_check
-    def on_pausing(self):
+    def on_pausing(self, msg=None):
         """ The process is being paused """
         self._pausing = futures.Future()
 
         def _paused(pausing_future):
             if pausing_future.result():
-                call_with_super_check(self.on_paused)
+                call_with_super_check(self.on_paused, msg)
             else:
                 self._pausing = None
 
         self._pausing.add_done_callback(_paused)
 
     @super_check
-    def on_paused(self):
+    def on_paused(self, msg=None):
         """ The process was paused """
         # Either we entered paused directly or because we finished pausing
         assert self._pausing is None or self._pausing.done()
@@ -713,6 +722,12 @@ class Process(
 
         # Create a future to represent the duration of the paused state
         self._paused = futures.Future()
+
+        # Save the current status and potentially overwrite it with the passed message
+        self._pre_paused_status = self.status
+        if msg is not None:
+            self.set_status(msg)
+
         self._fire_event(ProcessListener.on_process_paused)
 
     @super_check
@@ -721,6 +736,10 @@ class Process(
         # Done being paused
         self._paused.set_result(True)
         self._paused = None
+
+        self.set_status(self._pre_paused_status)
+        self._pre_paused_status = None
+
         self._fire_event(ProcessListener.on_process_played)
 
     @super_check
@@ -775,7 +794,7 @@ class Process(
         if intent == process_comms.Intent.PLAY:
             result = self.play()
         elif intent == process_comms.Intent.PAUSE:
-            result = self.pause()
+            result = self.pause(msg=msg.get(process_comms.MESSAGE_KEY, None))
         elif intent == process_comms.Intent.KILL:
             result = self.kill(msg=msg.get(process_comms.MESSAGE_KEY, None))
         elif intent == process_comms.Intent.STATUS:
@@ -808,10 +827,12 @@ class Process(
             self.transition_to(process_states.ProcessState.EXCEPTED, exception,
                                trace)
 
-    def pause(self):
+    def pause(self, msg=None):
         """
         Pause the process.  Returns True if after this call the process is paused, False otherwise
 
+        :param msg: an optional message to set as the status. The current status will be saved in the private
+            `_pre_paused_status attribute`, such that it can be restored when the process is played again.
         :return: True paused, False otherwise
         """
         if self.paused:
@@ -825,11 +846,11 @@ class Process(
         if self._stepping:
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
-            call_with_super_check(self.on_pausing)
+            call_with_super_check(self.on_pausing, msg)
             self._state.interrupt(process_states.PauseInterruption())
             return self._pausing
         else:
-            call_with_super_check(self.on_paused)
+            call_with_super_check(self.on_paused, msg)
             return True
 
     def play(self):
