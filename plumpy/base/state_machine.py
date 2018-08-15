@@ -21,6 +21,9 @@ class StateMachineError(Exception):
 
 
 class StateEntryFailed(Exception):
+    """
+    Failed to enter a state, can provide the next state to go to via this exception
+    """
     def __init__(self, state=None, *args, **kwargs):
         super(StateEntryFailed, self).__init__('failed to enter state')
         self.state = state
