@@ -390,8 +390,7 @@ class Process(
         try:
             return self._state.successful
         except AttributeError:
-            raise exceptions.InvalidStateError(
-                'process is not in the finished state')
+            raise exceptions.InvalidStateError('process is not in the finished state')
 
     def killed(self):
         return self.state == process_states.ProcessState.KILLED
@@ -400,7 +399,7 @@ class Process(
         if isinstance(self._state, process_states.Killed):
             return self._state.msg
         else:
-            raise exceptions.InvalidStateError("Has not been killed")
+            raise exceptions.InvalidStateError('Has not been killed')
 
     def exception(self):
         if isinstance(self._state, process_states.Excepted):
@@ -775,7 +774,9 @@ class Process(
 
     @super_check
     def on_killed(self):
-        self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
+        message = self.killed_msg()
+        self.set_status(message)
+        self._fire_event(ProcessListener.on_process_killed, message)
 
     def on_terminated(self):
         super(Process, self).on_terminated()
@@ -908,7 +909,7 @@ class Process(
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
             self._killing = futures.Future()
-            self._state.interrupt(process_states.KillInterruption())
+            self._state.interrupt(process_states.KillInterruption(msg))
             return self._killing
         else:
             self.transition_to(process_states.ProcessState.KILLED, msg)
@@ -959,14 +960,16 @@ class Process(
         try:
             self._stepping = True
             interrupted = False
+            kill_msg = None
             try:
                 next_state = yield self._run_task(self._state.execute)
-            except process_states.Interruption:
+            except process_states.Interruption as exception:
                 assert self._killing or self._pausing
+                kill_msg = str(exception) or None
                 interrupted = True
 
             if self._killing:
-                self.transition_to(process_states.ProcessState.KILLED, None)
+                self.transition_to(process_states.ProcessState.KILLED, kill_msg)
                 self._killing.set_result(True)
                 self._killing = None
 
