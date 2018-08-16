@@ -967,7 +967,13 @@ class Process(
             except Exception:
                 # Transition to the excepted state
                 exc_info = sys.exc_info()
-                next_state = self.transition_to(process_states.Excepted, exc_info[1], exc_info[2])
+                self.transition_to(process_states.Excepted, exc_info[1], exc_info[2])
+                if self._killing:
+                    self._killing.set_result(False)
+                    self._killing = None
+                if self._pausing:
+                    self._pausing.set_result(False)
+                    self._pausing = None
             else:
                 # No exception, so deal with possible transitions
                 if self._killing:
