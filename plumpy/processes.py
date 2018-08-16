@@ -959,11 +959,13 @@ class Process(
             self._stepping = True
             interrupted = False
             kill_msg = None
+
             try:
                 try:
                     next_state = yield self._run_task(self._state.execute)
-                except process_states.Interruption:
+                except process_states.Interruption as exception:
                     assert self._killing or self._pausing
+                    kill_msg = str(exception)
                     interrupted = True
             except KeyboardInterrupt:
                 raise
