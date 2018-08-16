@@ -11,7 +11,8 @@ import time
 import sys
 import threading
 import tornado.concurrent
-from tornado.gen import coroutine, Return
+from tornado import concurrent, gen
+from tornado.gen import Return
 import tornado.stack_context
 import uuid
 import yaml
@@ -453,19 +454,13 @@ class Process(
         _process_stack().append(self)
         try:
             yield
-        except Exception:
-            if not self._state.is_terminal():
-                self.transition_to(process_states.ProcessState.EXCEPTED,
-                                   *sys.exc_info()[1:])
-            else:
-                raise
         finally:
             assert Process.current() is self, \
                 "Somehow, the process at the top of the stack is not me, " \
                 "but another process! ({} != {})".format(self, Process.current())
             _process_stack().pop()
 
-    @coroutine
+    @gen.coroutine
     def _run_task(self, fn, *args, **kwargs):
         """
         This method should be used to run all Process related functions and coroutines.
@@ -481,7 +476,7 @@ class Process(
         result = yield tornado.stack_context.run_with_stack_context(
             tornado.stack_context.StackContext(self._process_scope),
             functools.partial(coro, *args, **kwargs))
-        raise Return(result)
+        raise gen.Return(result)
 
     # endregion
 
@@ -836,6 +831,9 @@ class Process(
             `_pre_paused_status attribute`, such that it can be restored when the process is played again.
         :return: True paused, False otherwise
         """
+        if self.has_terminated():
+            return False
+
         if self.paused:
             # Already paused
             return True
@@ -950,7 +948,7 @@ class Process(
 
         return self.future().result()
 
-    @coroutine
+    @gen.coroutine
     def step(self):
         assert not self.has_terminated(), "Cannot step, already terminated"
 
@@ -962,34 +960,49 @@ class Process(
             interrupted = False
             kill_msg = None
             try:
-                next_state = yield self._run_task(self._state.execute)
-            except process_states.Interruption as exception:
-                assert self._killing or self._pausing
-                kill_msg = str(exception) or None
-                interrupted = True
+                try:
+                    next_state = yield self._run_task(self._state.execute)
+                except process_states.Interruption:
+                    assert self._killing or self._pausing
+                    interrupted = True
+            except KeyboardInterrupt:
+                raise
+            except Exception:
+                # Transition to the excepted state
+                exc_info = sys.exc_info()
+                try:
+                    self.transition_to(process_states.Excepted, exc_info[1], exc_info[2])
+                finally:
+                    if self._killing:
+                        self._killing.set_result(False)
+                        self._killing = None
+                    if self._pausing:
+                        self._pausing.set_result(False)
+                        self._pausing = None
+            else:
+                # No exception, so deal with possible transitions
+                if self._killing:
+                    self.transition_to(process_states.ProcessState.KILLED, kill_msg)
+                    self._killing.set_result(True)
+                    self._killing = None
 
-            if self._killing:
-                self.transition_to(process_states.ProcessState.KILLED, kill_msg)
-                self._killing.set_result(True)
-                self._killing = None
+                    # If we were also pausing, then kill takes precedence and
+                    # the pause is abandoned
+                    if self._pausing:
+                        self._pausing.set_result(False)
+                        self._pausing = None
+                elif not interrupted:
+                    # If it wasn't interrupted and we're not killing the process
+                    # then transition to the next state and below we deal with the
+                    # case that the process may have been externally paused
+                    self.transition_to(next_state)
 
-                # If we were also pausing, then kill takes precedence and
-                # the pause is abandoned
                 if self._pausing:
-                    self._pausing.set_result(False)
-                    self._pausing = None
-            elif not interrupted:
-                # If it wasn't interrupted and we're not killing the process
-                # then transition to the next state and below we deal with the
-                # case that the process may have been externally paused
-                self.transition_to(next_state)
-
-            if self._pausing:
-                self._pausing.set_result(True)
+                    self._pausing.set_result(True)
         finally:
             self._stepping = False
 
-    @coroutine
+    @gen.coroutine
     def step_until_terminated(self):
         while not self.has_terminated():
             yield self.step()
