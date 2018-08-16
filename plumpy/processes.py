@@ -391,8 +391,7 @@ class Process(
         try:
             return self._state.successful
         except AttributeError:
-            raise exceptions.InvalidStateError(
-                'process is not in the finished state')
+            raise exceptions.InvalidStateError('process is not in the finished state')
 
     def killed(self):
         return self.state == process_states.ProcessState.KILLED
@@ -401,7 +400,7 @@ class Process(
         if isinstance(self._state, process_states.Killed):
             return self._state.msg
         else:
-            raise exceptions.InvalidStateError("Has not been killed")
+            raise exceptions.InvalidStateError('Has not been killed')
 
     def exception(self):
         if isinstance(self._state, process_states.Excepted):
@@ -770,7 +769,9 @@ class Process(
 
     @super_check
     def on_killed(self):
-        self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
+        message = self.killed_msg()
+        self.set_status(message)
+        self._fire_event(ProcessListener.on_process_killed, message)
 
     def on_terminated(self):
         super(Process, self).on_terminated()
@@ -903,9 +904,10 @@ class Process(
             return self._killing
 
         if self._stepping:
-            # Try interrupting the state
-            self._killing = concurrent.Future()
-            self._state.interrupt(process_states.KillInterruption())
+            # Ask the step function to pause by setting this flag and giving the
+            # caller back a future
+            self._killing = futures.Future()
+            self._state.interrupt(process_states.KillInterruption(msg))
             return self._killing
         else:
             self.transition_to(process_states.ProcessState.KILLED, msg)
@@ -956,6 +958,7 @@ class Process(
         try:
             self._stepping = True
             interrupted = False
+            kill_msg = None
             try:
                 try:
                     next_state = yield self._run_task(self._state.execute)
@@ -967,17 +970,19 @@ class Process(
             except Exception:
                 # Transition to the excepted state
                 exc_info = sys.exc_info()
-                self.transition_to(process_states.Excepted, exc_info[1], exc_info[2])
-                if self._killing:
-                    self._killing.set_result(False)
-                    self._killing = None
-                if self._pausing:
-                    self._pausing.set_result(False)
-                    self._pausing = None
+                try:
+                    self.transition_to(process_states.Excepted, exc_info[1], exc_info[2])
+                finally:
+                    if self._killing:
+                        self._killing.set_result(False)
+                        self._killing = None
+                    if self._pausing:
+                        self._pausing.set_result(False)
+                        self._pausing = None
             else:
                 # No exception, so deal with possible transitions
                 if self._killing:
-                    self.transition_to(process_states.ProcessState.KILLED, None)
+                    self.transition_to(process_states.ProcessState.KILLED, kill_msg)
                     self._killing.set_result(True)
                     self._killing = None
 
