@@ -35,3 +35,9 @@ class NullHandler(logging.Handler):
 
 
 logging.getLogger("plumpy").addHandler(NullHandler())
+
+try:
+    import functools
+    from functools import singledispatch
+except ImportError:
+    from singledispatch import singledispatch

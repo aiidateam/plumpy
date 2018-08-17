@@ -10,9 +10,7 @@ import logging
 import time
 import sys
 import threading
-import tornado.concurrent
 from tornado import concurrent, gen
-from tornado.gen import Return
 import tornado.stack_context
 import uuid
 import yaml
@@ -121,9 +119,10 @@ class Process(
     _waiting_callbacks = None
     _terminated_callbacks = None
     _stepping = False
-    _pausing = None
+    _pausing = None  # type: futures.Future
     _paused = None
     _killing = None
+    _interrupt_action = None
 
     @classmethod
     def current(cls):
@@ -241,7 +240,6 @@ class Process(
         self._status = None  # May hold a current status message
         self._pre_paused_status = None  # Save status when a pause message replaces it, such that it can be restored
         self._paused = None
-        self._pausing = None  # If pausing, this will be a future
 
         # Input/output
         self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(
@@ -525,7 +523,6 @@ class Process(
         else:
             self._loop = events.get_event_loop()
 
-        self._pausing = None  # If pausing, this will be a future
         self._state = self.recreate_state(saved_state['_state'])
 
         if 'communicator' in load_context:
@@ -697,21 +694,11 @@ class Process(
     @super_check
     def on_pausing(self, msg=None):
         """ The process is being paused """
-        self._pausing = futures.Future()
-
-        def _paused(pausing_future):
-            if pausing_future.result():
-                call_with_super_check(self.on_paused, msg)
-            else:
-                self._pausing = None
-
-        self._pausing.add_done_callback(_paused)
+        pass
 
     @super_check
     def on_paused(self, msg=None):
         """ The process was paused """
-        # Either we entered paused directly or because we finished pausing
-        assert self._pausing is None or self._pausing.done()
         self._pausing = None
 
         # Create a future to represent the duration of the paused state
@@ -765,13 +752,13 @@ class Process(
 
     @super_check
     def on_kill(self, msg):
+        self.set_status(msg)
         self.future().set_exception(exceptions.KilledError(msg))
 
     @super_check
     def on_killed(self):
-        message = self.killed_msg()
-        self.set_status(message)
-        self._fire_event(ProcessListener.on_process_killed, message)
+        self._killing = None
+        self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
 
     def on_terminated(self):
         super(Process, self).on_terminated()
@@ -845,12 +832,65 @@ class Process(
         if self._stepping:
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
-            call_with_super_check(self.on_pausing, msg)
-            self._state.interrupt(process_states.PauseInterruption())
-            return self._pausing
+            interrupt_exception = process_states.PauseInterruption(msg)
+            self._set_interrupt_action_from_exception(interrupt_exception)
+            self._pausing = self._interrupt_action
+            # Try to interrupt the state
+            self._state.interrupt(interrupt_exception)
+            return self._interrupt_action
         else:
-            call_with_super_check(self.on_paused, msg)
-            return True
+            return self._do_pause(msg)
+
+    def _do_pause(self, state_msg, next_state=None):
+        """ Carry out the pause procedure, optionally transitioning to the next state first"""
+        try:
+            if next_state is not None:
+                self.transition_to(next_state)
+            call_with_super_check(self.on_pausing, state_msg)
+            call_with_super_check(self.on_paused, state_msg)
+        finally:
+            self._pausing = None
+
+        return True
+
+    def _create_interrupt_action(self, exception):
+        """
+        Create an interrupt action from the corresponding interrupt exception
+        :param exception: The interrupt exception
+        :type exception: :class:`plumpy.InterruptException`
+        :return: The interrupt action
+        :rtype: :class:`plumpy.CancellableAction`
+        """
+        if isinstance(exception, process_states.PauseInterruption):
+            do_pause = functools.partial(self._do_pause, str(exception))
+            return futures.CancellableAction(do_pause, cookie=exception)
+
+        elif isinstance(exception, process_states.KillInterruption):
+            def do_kill(_next_state):
+                try:
+                    # Ignore the next state
+                    self.transition_to(process_states.ProcessState.KILLED, str(exception))
+                    return True
+                finally:
+                    self._killing = None
+
+            return futures.CancellableAction(do_kill, cookie=exception)
+        else:
+            raise ValueError("Got unknown interruption type '{}'".format(type(exception)))
+
+    def _set_interrupt_action(self, new_action):
+        """
+        Set the interrupt action cancelling the current one if it exists
+        :param new_action: The new interrupt action to set
+        """
+        if self._interrupt_action is not None:
+            self._interrupt_action.cancel()
+        self._interrupt_action = new_action
+
+    def _set_interrupt_action_from_exception(self, interrupt_exception):
+        """ Set an interrupt action from the corresponding interrupt exception """
+        action = self._create_interrupt_action(interrupt_exception)
+        self._set_interrupt_action(action)
 
     def play(self):
         """
@@ -861,8 +901,9 @@ class Process(
         if not self.paused:
             if self._pausing is not None:
                 # Not going to pause after all
-                self._pausing.set_result(False)
+                self._pausing.cancel()
                 self._pausing = None
+                self._set_interrupt_action(None)
             return True
 
         call_with_super_check(self.on_playing)
@@ -906,9 +947,11 @@ class Process(
         if self._stepping:
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
-            self._killing = futures.Future()
-            self._state.interrupt(process_states.KillInterruption(msg))
-            return self._killing
+            interrupt_exception = process_states.KillInterruption(msg)
+            self._set_interrupt_action_from_exception(interrupt_exception)
+            self._killing = self._interrupt_action
+            self._state.interrupt(interrupt_exception)
+            return self._interrupt_action
         else:
             self.transition_to(process_states.ProcessState.KILLED, msg)
             return True
@@ -957,52 +1000,37 @@ class Process(
 
         try:
             self._stepping = True
-            interrupted = False
-            kill_msg = None
-
+            next_state = None
             try:
-                try:
-                    next_state = yield self._run_task(self._state.execute)
-                except process_states.Interruption as exception:
-                    assert self._killing or self._pausing
-                    kill_msg = str(exception)
-                    interrupted = True
+                next_state = yield self._run_task(self._state.execute)
+            except process_states.Interruption as exception:
+                # If the interruption was caused by a call to a Process method then there should
+                # be an interrupt action ready to be executed, so just check if the cookie matches
+                # that of the exception i.e. if it is the _same_ interruption.  If not cancel and
+                # build the interrupt action below
+                if self._interrupt_action is not None:
+                    if self._interrupt_action.cookie is not exception:
+                        self._set_interrupt_action_from_exception(exception)
+                else:
+                    self._set_interrupt_action_from_exception(exception)
+
             except KeyboardInterrupt:
                 raise
             except Exception:
-                # Transition to the excepted state
+                # Overwrite the next state to go to excepted directly
                 exc_info = sys.exc_info()
-                try:
-                    self.transition_to(process_states.Excepted, exc_info[1], exc_info[2])
-                finally:
-                    if self._killing:
-                        self._killing.set_result(False)
-                        self._killing = None
-                    if self._pausing:
-                        self._pausing.set_result(False)
-                        self._pausing = None
+                next_state = self.create_state(process_states.ProcessState.EXCEPTED, exc_info[1], exc_info[2])
+                self._set_interrupt_action(None)
+
+            if self._interrupt_action:
+                self._interrupt_action.run(next_state)
             else:
-                # No exception, so deal with possible transitions
-                if self._killing:
-                    self.transition_to(process_states.ProcessState.KILLED, kill_msg)
-                    self._killing.set_result(True)
-                    self._killing = None
+                # Everything nominal so transition to the next state
+                self.transition_to(next_state)
 
-                    # If we were also pausing, then kill takes precedence and
-                    # the pause is abandoned
-                    if self._pausing:
-                        self._pausing.set_result(False)
-                        self._pausing = None
-                elif not interrupted:
-                    # If it wasn't interrupted and we're not killing the process
-                    # then transition to the next state and below we deal with the
-                    # case that the process may have been externally paused
-                    self.transition_to(next_state)
-
-                if self._pausing:
-                    self._pausing.set_result(True)
         finally:
             self._stepping = False
+            self._set_interrupt_action(None)
 
     @gen.coroutine
     def step_until_terminated(self):

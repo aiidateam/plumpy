@@ -1,7 +1,6 @@
 from builtins import str
 from enum import Enum
 import sys
-import tornado.concurrent
 from tornado.gen import coroutine, Return
 import traceback
 import yaml

@@ -1,11 +1,11 @@
 import kiwipy
 from functools import partial
-import tornado.concurrent
+import uuid
 
 __all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError']
 
 CancelledError = kiwipy.CancelledError
-
+InvalidStateError = kiwipy.InvalidStateError
 Future = kiwipy.Future
 
 
@@ -80,3 +80,29 @@ class _GatheringFuture(Future):
             self._nfinished += 1
             if self._nfinished == self._nchildren:
                 self.set_result(self._result)
+
+
+class CancellableAction(Future):
+    def __init__(self, action, cookie=None):
+        super(CancellableAction, self).__init__()
+        self._action = action
+        self._cookie = cookie
+
+    @property
+    def cookie(self):
+        """ A cookie that can be used to correlate the actions with something """
+        return self._cookie
+
+    def set_result(self, result):
+        return super(CancellableAction, self).set_result(result)
+
+    def run(self, *args, **kwargs):
+        if self.done():
+            raise InvalidStateError("Action has already been ran")
+
+        try:
+            self.set_result(self._action(*args, **kwargs))
+        except Exception as exc:
+            self.set_exception(exc)
+        finally:
+            self._action = None
