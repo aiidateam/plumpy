@@ -29,7 +29,6 @@ git add ${VERSION_FILE}
 git commit -m "Release ${version}"
 
 
-
 # Merge into master
 
 git checkout master
@@ -38,14 +37,13 @@ git merge --no-ff $relbranch
 git tag -a $tag -m "Version $version"
 
 git checkout $current_branch
-git merge --no-ff $relbranch
+git merge master
 
 git branch -d $relbranch
 
 # Push everything
-git push origin master
-git push origin $tag
-
+git push --tags origin master
+git push origin $current_branch
 
 # Release on pypi
 rm -r dist

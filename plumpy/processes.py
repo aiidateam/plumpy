@@ -72,7 +72,7 @@ yaml.representer.Representer.add_representer(
     ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
 
 
-@persistence.auto_persist('_pid', '_CREATION_TIME', '_future', '_status', '_pre_paused_status')
+@persistence.auto_persist('_pid', '_CREATION_TIME', '_future', '_paused', '_status', '_pre_paused_status')
 class Process(
     with_metaclass(ProcessStateMachineMeta, StateMachine,
                    persistence.Savable)):
@@ -513,7 +513,7 @@ class Process(
         self._setup_event_hooks()
 
         # Runtime variables, set initial states
-        self._future = futures.Future()
+        self._future = persistence.SavableFuture()
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = None
         self._communicator = None
@@ -702,7 +702,7 @@ class Process(
         self._pausing = None
 
         # Create a future to represent the duration of the paused state
-        self._paused = futures.Future()
+        self._paused = persistence.SavableFuture()
 
         # Save the current status and potentially overwrite it with the passed message
         self._pre_paused_status = self.status
