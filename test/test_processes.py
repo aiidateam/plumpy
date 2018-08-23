@@ -531,6 +531,10 @@ class TestProcessSaving(utils.TestCaseWithLoop):
             self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], nsync_comeback.steps_ran)
 
             proc_unbundled = bundle.unbundle()
+
+            # At bundle time the Process was paused, the future of which will be persisted to the bundle.
+            # As a result the process, recreated from that bundle, will also be paused and will have to be played
+            proc_unbundled.play()
             self.assertEqual(0, len(proc_unbundled.steps_ran))
             yield proc_unbundled.step_until_terminated()
             self.assertEqual([SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
