@@ -24,6 +24,9 @@ setup(
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
     keywords='workflow multithreaded rabbitmq',
     # Abstract dependencies.  Concrete versions are listed in
@@ -38,13 +41,25 @@ setup(
         'pyyaml',
         'tornado<5.0',
         'future',
-        'kiwipy[rmq]>=0.2.1'
+        'kiwipy[rmq]>=0.3.0b1',
+        'enum34; python_version<"3.4"',
+        'backports.tempfile; python_version<"3.2"',
     ],
     extras_require={
-        ':python_version<"3.4"': ['enum34'],
-        ':python_version<"3.2"': ['backports.tempfile'],
-        'dev': ['pytest', 'ipython', 'twine', 'pytest-cov', 'pre-commit', 'yapf']
+        'dev': [
+            'pip',
+            'pytest',
+            'ipython',
+            'twine',
+            'pytest-cov',
+            'pre-commit',
+            'shortuuid',
+            'yapf',
+            'prospector',
+            'pylint<2; python_version<"3"',
+            'pylint; python_version>="3"',
+        ]
     },
-    packages=['plumpy', 'plumpy/base', 'plumpy/rmq'],
+    packages=['plumpy', 'plumpy/base'],
     test_suite='test'
 )

@@ -1,6 +1,8 @@
-import unittest
+from kiwipy import rmq
+from tornado import testing
+
 import plumpy
-from plumpy import test_utils
+from plumpy import communications, test_utils, process_comms
 
 
 class Process(plumpy.Process):
@@ -22,19 +24,27 @@ class CustomObjectLoader(plumpy.DefaultObjectLoader):
             return super(CustomObjectLoader, self).identify_object(obj)
 
 
-class TestProcessLauncher(unittest.TestCase):
+class TestProcessLauncher(testing.AsyncTestCase):
+    def setUp(self):
+        super(TestProcessLauncher, self).setUp()
+        self.loop = self.io_loop
+
+    @testing.gen_test
     def test_continue(self):
-        loop = plumpy.new_event_loop()
         persister = plumpy.InMemoryPersister()
-        load_context = plumpy.LoadSaveContext(loop=loop)
+        load_context = plumpy.LoadSaveContext(loop=self.loop)
         launcher = plumpy.ProcessLauncher(persister=persister, load_context=load_context)
 
-        process = test_utils.DummyProcess()
+        process = test_utils.DummyProcess(loop=self.loop)
+        pid = process.pid
         persister.save_checkpoint(process)
+        del process
+        process = None
 
-        future = launcher._continue(plumpy.create_continue_body(process.pid))
-        result = loop.run_sync(lambda: future)
+        result = yield launcher._continue(None, **plumpy.create_continue_body(pid)[process_comms.TASK_ARGS])
+        self.assertEqual(test_utils.DummyProcess.EXPECTED_OUTPUTS, result)
 
+    @testing.gen_test
     def test_loader_is_used(self):
         """ Make sure that the provided class loader is used by the process launcher """
         loader = CustomObjectLoader()
@@ -42,5 +52,6 @@ class TestProcessLauncher(unittest.TestCase):
         persister = plumpy.InMemoryPersister(loader=loader)
         persister.save_checkpoint(proc)
         launcher = plumpy.ProcessLauncher(persister=persister, loader=loader)
+
         continue_task = plumpy.create_continue_body(proc.pid)
-        launcher._continue(continue_task)
+        yield launcher._continue(None, **continue_task[process_comms.TASK_ARGS])

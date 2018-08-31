@@ -18,6 +18,7 @@ import yaml
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import protected
+from . import communications
 from . import exceptions
 from . import futures
 from . import base
@@ -208,12 +209,7 @@ class Process(
         base.call_with_super_check(process.init)
         return process
 
-    def __init__(self,
-                 inputs=None,
-                 pid=None,
-                 logger=None,
-                 loop=None,
-                 communicator=None):
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         """
         The signature of the constructor should not be changed by subclassing
         processes.
@@ -254,7 +250,10 @@ class Process(
         self._future = persistence.SavableFuture()
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = logger
-        self._communicator = communicator
+        if communicator is None:
+            self._communicator = None
+        else:
+            self._communicator = communications.CommunicatorWrapper(communicator)
 
     @base.super_check
     def init(self):
@@ -263,8 +262,8 @@ class Process(
         self._terminated_callbacks = []
 
         if self._communicator is not None:
-            self._communicator.add_rpc_subscriber(
-                self.message_receive, identifier=str(self.pid))
+            self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+            
         if not self._future.done():
 
             def try_killing(future):
@@ -526,7 +525,7 @@ class Process(
         self._state = self.recreate_state(saved_state['_state'])
 
         if 'communicator' in load_context:
-            self._communicator = load_context.communicator
+            self._communicator = communications.CommunicatorWrapper(load_context.communicator)
 
         if 'logger' in load_context:
             self._logger = load_context.logger
@@ -743,7 +742,7 @@ class Process(
 
     @super_check
     def on_except(self, exc_info):
-        self.future().set_exc_info(exc_info)
+        self.future().set_exception(exc_info[1])
 
     @super_check
     def on_excepted(self):
@@ -770,8 +769,8 @@ class Process(
 
     # endregion
 
-    @tornado.gen.coroutine
-    def message_receive(self, msg):
+    @gen.coroutine
+    def message_receive(self, _comm, msg):
         intent = msg[process_comms.INTENT_KEY]
 
         if intent == process_comms.Intent.PLAY:
@@ -790,7 +789,7 @@ class Process(
         if isinstance(result, futures.Future):
             result = yield result
 
-        raise tornado.gen.Return(result)
+        raise gen.Return(result)
 
     def close(self):
         """
@@ -978,8 +977,8 @@ class Process(
     # region Execution related methods
 
     def run(self):
-        return self._run()
-
+        pass
+    
     def execute(self):
         """
         Execute the process.  This will return if the process terminates or is paused.

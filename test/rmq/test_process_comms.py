@@ -1,110 +1,94 @@
+import shortuuid
+from tornado import testing
 import unittest
-import uuid
 
 from kiwipy import rmq
-import plumpy.rmq
-import plumpy.test_utils
-from test.utils import TestCaseWithLoop
-from plumpy import test_utils
+import plumpy
+from plumpy import process_comms, test_utils
 
 try:
     import pika
 except ImportError:
     pika = None
 
-AWAIT_TIMEOUT = 1.
+AWAIT_TIMEOUT = testing.get_async_test_timeout()
 
 
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
-class TestProcessReceiver(TestCaseWithLoop):
+class TestProcessReceiver(testing.AsyncTestCase):
     def setUp(self):
         super(TestProcessReceiver, self).setUp()
 
-        self.connector = rmq.RmqConnector('amqp://guest:guest@localhost:5672/', loop=self.loop)
-        exchange_name = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
+        self.loop = self.io_loop
 
-        self.communicator = rmq.RmqCommunicator(
-            self.connector,
-            exchange_name=exchange_name,
-            testing_mode=True,
+        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+
+        self.communicator = rmq.connect(
+            connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
+            message_exchange=message_exchange,
+            task_exchange=task_exchange,
+            task_queue=task_queue,
+            testing_mode=True
         )
 
-        self.communicator.connect()
+        self.process_controller = process_comms.RemoteProcessController(self.communicator)
 
     def tearDown(self):
         # Close the connector before calling super because it will
         # close the loop
-        self.communicator.disconnect()
-        self.connector.disconnect()
+        self.communicator.stop()
         super(TestProcessReceiver, self).tearDown()
 
+    @testing.gen_test
     def test_pause(self):
-        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
+        proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Run the process in the background
         proc.loop().add_callback(proc.step_until_terminated)
         # Send a pause message
-        result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.PAUSE_MSG)
+        result = yield self.process_controller.pause_process(proc.pid)
 
-        self.assertTrue(proc.paused)
-
-    def test_play(self):
-        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        # Send a play message
-        result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.PLAY_MSG)
+        # Check that it all went well
         self.assertTrue(result)
-
-        self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
-
-    def test_kill(self):
-        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        # Send a kill message
-        result = self.communicator.rpc_send_and_wait(proc.pid, plumpy.KILL_MSG)
-
-        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
-
-    def test_status(self):
-        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        # Send a status message
-        status = self.communicator.rpc_send_and_wait(proc.pid, plumpy.STATUS_MSG)
-
-        self.assertIsNotNone(status)
-
-    def test_pause_action(self):
-        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        proc.loop().add_callback(proc.step_until_terminated)
-        # Send a pause message
-        action = plumpy.PauseAction(proc.pid)
-        action.execute(self.communicator)
-        self.communicator.await(action, timeout=AWAIT_TIMEOUT)
-
         self.assertTrue(proc.paused)
 
-    def test_play_action(self):
-        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
+    @testing.gen_test
+    def test_play(self):
+        proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Run the process in the background
+        proc.loop().add_callback(proc.step_until_terminated)
+        self.assertTrue(proc.pause())
+
         # Send a play message
-        action = plumpy.PlayAction(proc.pid)
-        action.execute(self.communicator)
-        self.communicator.await(action, timeout=AWAIT_TIMEOUT)
+        result = yield self.process_controller.play_process(proc.pid)
 
-        self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
+        # Check that all is as we expect
+        self.assertTrue(result)
+        self.assertEqual(proc.state, plumpy.ProcessState.WAITING)
 
-    def test_kill_action(self):
-        KILL_MESSAGE = 'you dead son'
+    @testing.gen_test
+    def test_kill(self):
+        proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Run the process in the event loop
+        self.loop.add_callback(proc.step_until_terminated)
 
-        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
-        # Send a kill message
-        action = plumpy.KillAction(proc.pid, KILL_MESSAGE)
-        action.execute(self.communicator)
-        self.communicator.await(action, timeout=AWAIT_TIMEOUT)
+        # Send a kill message and wait for it to be done
+        result = yield self.process_controller.kill_process(proc.pid)
 
+        # Check the outcome
+        self.assertTrue(result)
         self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
-        self.assertEqual(KILL_MESSAGE, proc.killed_msg())
 
-    def test_status_action(self):
-        proc = plumpy.test_utils.WaitForSignalProcess(communicator=self.communicator)
+    @testing.gen_test
+    def test_status(self):
+        proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Run the process in the background
+        proc.loop().add_callback(proc.step_until_terminated)
+
         # Send a status message
-        action = plumpy.StatusAction(proc.pid)
-        action.execute(self.communicator)
-        status = self.communicator.await(action, timeout=AWAIT_TIMEOUT)
+        status = yield self.process_controller.get_status(proc.pid)
+
         self.assertIsNotNone(status)
 
     def test_broadcast(self):

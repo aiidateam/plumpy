@@ -58,7 +58,7 @@ def override(check=False):
                 except AttributeError:
                     raise RuntimeError(
                         "Function {} does not override a superclass method".
-                        format(func))
+                            format(func))
 
                 return func(self, *args, **kwargs)
         else:
@@ -67,3 +67,11 @@ def override(check=False):
         return wrapped_fn
 
     return wrap
+
+
+class __NULL(object):
+    def __eq__(self, other):
+        return isinstance(other, self.__class__)
+
+
+NULL = __NULL()

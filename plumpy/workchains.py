@@ -3,6 +3,7 @@
 import abc
 import collections
 import inspect
+import plumpy.lang
 import re
 import sys
 
@@ -78,7 +79,7 @@ class Waiting(process_states.Waiting):
             self._waiting_future.set_exception(e)
         else:
             if not self._awaiting:
-                self._waiting_future.set_result(process_states.NULL)
+                self._waiting_future.set_result(plumpy.lang.NULL)
 
 
 class WorkChain(mixins.ContextMixin, processes.Process):

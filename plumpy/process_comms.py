@@ -1,16 +1,14 @@
 import copy
-import functools
+from kiwipy import rmq
+from tornado import gen
 
 from . import loaders
 from . import communications
-from . import futures
 from . import persistence
 from . import exceptions
 
 __all__ = [
-    'PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG', 'ProcessAction',
-    'PlayAction', 'PauseAction', 'KillAction', 'StatusAction',
-    'LaunchProcessAction', 'ContinueProcessAction', 'ExecuteProcessAction',
+    'PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
     'ProcessLauncher', 'create_continue_body', 'create_launch_body'
 ]
 
@@ -30,61 +28,13 @@ PLAY_MSG = {INTENT_KEY: Intent.PLAY}
 KILL_MSG = {INTENT_KEY: Intent.KILL}
 STATUS_MSG = {INTENT_KEY: Intent.STATUS}
 
-
-class ProcessAction(communications.Action):
-    """ Generic process action """
-
-    def __init__(self, pid, msg):
-        """
-        :param pid: The process ID
-        :param msg: The action message to deliver to the process
-        """
-        super(ProcessAction, self).__init__()
-        self._pid = pid
-        self._msg = msg
-
-    def execute(self, publisher):
-        future = publisher.rpc_send(self._pid, self._msg)
-        futures.chain(future, self)
-
-
-class PauseAction(ProcessAction):
-    def __init__(self, pid, msg=None):
-        if msg is not None:
-            message = copy.copy(PAUSE_MSG)
-            message[MESSAGE_KEY] = msg
-        else:
-            message = PAUSE_MSG
-        super(PauseAction, self).__init__(pid, message)
-
-
-class PlayAction(ProcessAction):
-    def __init__(self, pid):
-        super(PlayAction, self).__init__(pid, PLAY_MSG)
-
-
-class StatusAction(ProcessAction):
-    def __init__(self, pid):
-        super(StatusAction, self).__init__(pid, STATUS_MSG)
-
-
-class KillAction(ProcessAction):
-    def __init__(self, pid, msg=None):
-        if msg is not None:
-            message = copy.copy(KILL_MSG)
-            message[MESSAGE_KEY] = msg
-        else:
-            message = KILL_MSG
-        super(KillAction, self).__init__(pid, message)
-
-
 TASK_KEY = 'task'
-PLAY_KEY = 'play'
+TASK_ARGS = 'args'
 PERSIST_KEY = 'persist'
 # Launch
 PROCESS_CLASS_KEY = 'process_class'
-ARGS_KEY = 'args'
-KWARGS_KEY = 'kwargs'
+ARGS_KEY = 'init_args'
+KWARGS_KEY = 'init_kwargs'
 NOWAIT_KEY = 'nowait'
 # Continue
 PID_KEY = 'pid'
@@ -92,117 +42,122 @@ TAG_KEY = 'tag'
 # Task types
 LAUNCH_TASK = 'launch'
 CONTINUE_TASK = 'continue'
+CREATE_TASK = 'create'
 
 
-def create_launch_body(process_class,
-                       init_args=None,
-                       init_kwargs=None,
-                       play=True,
-                       persist=False,
-                       nowait=True,
+def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=False, nowait=True,
                        loader=None):
     if loader is None:
         loader = loaders.get_object_loader()
 
     msg_body = {
         TASK_KEY: LAUNCH_TASK,
-        PROCESS_CLASS_KEY: loader.identify_object(process_class),
-        PLAY_KEY: play,
-        PERSIST_KEY: persist,
-        NOWAIT_KEY: nowait,
+        TASK_ARGS: {
+            PROCESS_CLASS_KEY: loader.identify_object(process_class),
+            PERSIST_KEY: persist,
+            NOWAIT_KEY: nowait,
+            ARGS_KEY: init_args,
+            KWARGS_KEY: init_kwargs
+        }
     }
-    if init_args:
-        msg_body[ARGS_KEY] = init_args
-    if init_kwargs:
-        msg_body[KWARGS_KEY] = init_kwargs
     return msg_body
 
 
-def create_continue_body(pid, tag=None, play=True, nowait=False):
+def create_continue_body(pid, tag=None, nowait=False):
     msg_body = {
         TASK_KEY: CONTINUE_TASK,
-        PID_KEY: pid,
-        PLAY_KEY: play,
-        NOWAIT_KEY: nowait,
+        TASK_ARGS: {
+            PID_KEY: pid,
+            NOWAIT_KEY: nowait,
+            TAG_KEY: tag
+        }
     }
-    if tag is not None:
-        msg_body[TAG_KEY] = tag
     return msg_body
 
 
-class TaskAction(communications.Action):
-    """ Action a task """
+def create_create_body(process_class, init_args=None, init_kwargs=None, persist=False, loader=None):
+    if loader is None:
+        loader = loaders.get_object_loader()
 
-    def __init__(self, body):
-        super(TaskAction, self).__init__()
-        self._body = body
-
-    def execute(self, publisher):
-        future = publisher.task_send(self._body)
-        futures.chain(future, self)
-
-
-class LaunchProcessAction(TaskAction):
-    def __init__(self, *args, **kwargs):
-        """
-        Calls through to create_launch_body to create the message and so has
-        the same signature.
-        """
-        super(LaunchProcessAction, self).__init__(
-            create_launch_body(*args, **kwargs))
+    msg_body = {
+        TASK_KEY: CREATE_TASK,
+        TASK_ARGS: {
+            PROCESS_CLASS_KEY: loader.identify_object(process_class),
+            PERSIST_KEY: persist,
+            ARGS_KEY: init_args,
+            KWARGS_KEY: init_kwargs
+        }
+    }
+    return msg_body
 
 
-class ContinueProcessAction(TaskAction):
-    def __init__(self, *args, **kwargs):
-        """
-        Calls through to create_continue_body to create the message and so
-        has the same signature.
-        """
-        super(ContinueProcessAction, self).__init__(
-            create_continue_body(*args, **kwargs))
+class RemoteProcessController(object):
+    def __init__(self, communicator):
+        self._communicator = communicator
 
+    @gen.coroutine
+    def get_status(self, pid):
+        status_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, STATUS_MSG))
+        result = yield rmq.kiwi_to_tornado_future(status_future)
+        raise gen.Return(result)
 
-class ExecuteProcessAction(communications.Action):
-    def __init__(self,
-                 process_class,
-                 init_args=None,
-                 init_kwargs=None,
-                 nowait=False,
-                 loader=None):
-        super(ExecuteProcessAction, self).__init__()
-        self._launch_action = LaunchProcessAction(
-            process_class,
-            init_args,
-            init_kwargs,
-            play=False,
-            persist=True,
-            loader=loader)
-        self._nowait = nowait
+    @gen.coroutine
+    def pause_process(self, pid):
+        play_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, PAUSE_MSG))
+        result = yield rmq.kiwi_to_tornado_future(play_future)
+        raise gen.Return(result)
 
-    def get_launch_future(self):
-        return self._launch_action
+    @gen.coroutine
+    def play_process(self, pid):
+        play_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, PLAY_MSG))
+        result = yield rmq.kiwi_to_tornado_future(play_future)
+        raise gen.Return(result)
 
-    def execute(self, publisher):
-        self._launch_action.add_done_callback(
-            functools.partial(self._on_launch_done, publisher))
-        self._launch_action.execute(publisher)
+    @gen.coroutine
+    def kill_process(self, pid, msg=None):
+        message = copy.copy(KILL_MSG)
+        if msg is not None:
+            message[MESSAGE_KEY] = msg
 
-    def _on_launch_done(self, publisher, launch_future):
-        if launch_future.cancelled():
-            self.kill()
-        elif launch_future.exception() is not None:
-            self.set_exception(launch_future.exception())
-        else:
-            # Action the continue task
-            continue_action = ContinueProcessAction(
-                launch_future.result(), play=True)
-            continue_action.execute(publisher)
+        # Wait for the communication to go through
+        kill_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, message))
+        # Now wait for the kill to be enacted
+        result = yield rmq.kiwi_to_tornado_future(kill_future)
 
-            if self._nowait:
-                # The result of the launch future is the PID of the process
-                self.set_result(launch_future.result())
-            else:
-                futures.chain(continue_action, self)
+        raise gen.Return(result)
+
+    @gen.coroutine
+    def continue_process(self, pid, tag=None, nowait=False):
+        message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
+        # Wait for the communication to go through
+        continue_future = yield rmq.kiwi_to_tornado_future(self._communicator.task_send(message))
+        # Now wait for the result of the task
+        result = yield rmq.kiwi_to_tornado_future(continue_future)
+
+        raise gen.Return(result)
+
+    @gen.coroutine
+    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False,
+                       loader=None):
+        message = create_launch_body(process_class, init_args, init_kwargs, persist, nowait, loader)
+
+        launch_future = yield rmq.kiwi_to_tornado_future(self._communicator.task_send(message))
+        result = yield rmq.kiwi_to_tornado_future(launch_future)
+
+        raise gen.Return(result)
+
+    @gen.coroutine
+    def execute_process(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
+        message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
+
+        create_future = yield rmq.kiwi_to_tornado_future(self._communicator.task_send(message))
+        pid = yield rmq.kiwi_to_tornado_future(create_future)
+
+        message = create_continue_body(pid, nowait=nowait)
+        continue_future = yield rmq.kiwi_to_tornado_future(self._communicator.task_send(message))
+        result = yield rmq.kiwi_to_tornado_future(continue_future)
+
+        raise gen.Return(result)
 
 
 class ProcessLauncher(object):
@@ -227,15 +182,10 @@ class ProcessLauncher(object):
     }
     """
 
-    def __init__(self,
-                 loop=None,
-                 persister=None,
-                 load_context=None,
-                 loader=None):
+    def __init__(self, loop=None, persister=None, load_context=None, loader=None):
         self._loop = loop
         self._persister = persister
-        self._load_context = load_context if load_context is not None else persistence.LoadSaveContext(
-        )
+        self._load_context = load_context if load_context is not None else persistence.LoadSaveContext()
 
         if loader is not None:
             self._loader = loader
@@ -243,56 +193,74 @@ class ProcessLauncher(object):
         else:
             self._loader = loaders.get_object_loader()
 
-    def __call__(self, task):
+    @gen.coroutine
+    def __call__(self, communicator, task):
         """
         Receive a task.
         :param task: The task message
         """
         task_type = task[TASK_KEY]
         if task_type == LAUNCH_TASK:
-            return self._launch(task)
+            raise gen.Return((yield self._launch(communicator, **task.get(TASK_ARGS, {}))))
         elif task_type == CONTINUE_TASK:
-            return self._continue(task)
+            raise gen.Return((yield self._continue(communicator, **task.get(TASK_ARGS, {}))))
+        elif task_type == CREATE_TASK:
+            raise gen.Return((yield self._create(communicator, **task.get(TASK_ARGS, {}))))
         else:
             raise communications.TaskRejected
 
-    def _launch(self, task):
-        if task[PERSIST_KEY] and not self._persister:
-            raise communications.TaskRejected(
-                "Cannot persist process, no persister")
+    @gen.coroutine
+    def _launch(self, _communicator, process_class, persist, nowait, init_args=None, init_kwargs=None):
+        if persist and not self._persister:
+            raise communications.TaskRejected("Cannot persist process, no persister")
 
-        proc_class = self._loader.load_object(task[PROCESS_CLASS_KEY])
-        args = task.get(ARGS_KEY, ())
-        kwargs = task.get(KWARGS_KEY, {})
-        proc = proc_class(*args, **kwargs)
-        if task[PERSIST_KEY]:
+        if init_args is None:
+            init_args = ()
+        if init_kwargs is None:
+            init_kwargs = {}
+
+        proc_class = self._loader.load_object(process_class)
+        proc = proc_class(*init_args, **init_kwargs)
+        if persist:
             self._persister.save_checkpoint(proc)
-        if task[PLAY_KEY]:
-            loop = proc.loop()
-            loop.add_callback(proc.step_until_terminated)
 
-        if task[NOWAIT_KEY]:
-            return proc.pid
-        else:
-            return proc.future()
+        if nowait:
+            raise gen.Return(proc.pid)
 
-    def _continue(self, task):
+        yield proc.step_until_terminated()
+        raise gen.Return(proc.future().result())
+
+    @gen.coroutine
+    def _continue(self, _communicator, pid, nowait, tag=None):
         if not self._persister:
-            raise communications.TaskRejected(
-                "Cannot continue process, no persister")
-
-        tag = task.get(TAG_KEY, None)
+            raise communications.TaskRejected("Cannot continue process, no persister")
 
         try:
-            saved_state = self._persister.load_checkpoint(task[PID_KEY], tag)
+            saved_state = self._persister.load_checkpoint(pid, tag)
         except exceptions.PersistenceError as exception:
-            raise communications.TaskRejected(
-                "Cannot continue process: {}".format(exception))
+            raise communications.TaskRejected("Cannot continue process: {}".format(exception))
 
         proc = saved_state.unbundle(self._load_context)
 
-        # Call start in case it's not started yet
-        loop = proc.loop()
-        loop.add_callback(proc.step_until_terminated)
+        if nowait:
+            raise gen.Return(proc.pid)
 
-        return proc.future()
+        yield proc.step_until_terminated()
+        raise gen.Return(proc.future().result())
+
+    @gen.coroutine
+    def _create(self, _communicator, process_class, persist, init_args=None, init_kwargs=None):
+        if persist and not self._persister:
+            raise communications.TaskRejected("Cannot persist process, no persister")
+
+        if init_args is None:
+            init_args = ()
+        if init_kwargs is None:
+            init_kwargs = {}
+
+        proc_class = self._loader.load_object(process_class)
+        proc = proc_class(*init_args, **init_kwargs)
+        if persist:
+            self._persister.save_checkpoint(proc)
+
+        raise gen.Return(proc.pid)

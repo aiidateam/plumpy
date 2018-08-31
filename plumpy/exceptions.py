@@ -23,11 +23,6 @@ class LockError(Exception):
 class ProcessExcepted(Exception):
     pass
 
-
-class Interrupted(Exception):
-    pass
-
-
 class InvalidStateError(Exception):
     pass
 
