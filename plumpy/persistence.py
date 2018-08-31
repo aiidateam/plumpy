@@ -590,14 +590,14 @@ class SavableFuture(futures.Future, Savable):
             out_state[self.EXCEPTION] = self.exception()
 
     def load_instance_state(self, saved_state, load_context):
-        super(SavableFuture, self).load_instance_state(saved_state,
-                                                       load_context)
+        super(SavableFuture, self).load_instance_state(saved_state, load_context)
         try:
             exception = saved_state[self.EXCEPTION]
             self._exc_info = (type(exception), exception, None)
         except KeyError:
             self._exc_info = None
 
-        self._log_traceback = False
-        self._tb_logger = None
+        self._log_traceback = False  # Used for Python >= 3.4
+        self._tb_logger = None  # Used for Python <= 3.3
+
         self._callbacks = []

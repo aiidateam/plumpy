@@ -1,6 +1,7 @@
-from builtins import str
 from enum import Enum
 import sys
+
+from plumpy.lang import NULL
 from tornado.gen import coroutine, Return
 import traceback
 import yaml
@@ -36,14 +37,6 @@ __all__ = [
     'KillInterruption',
     'PauseInterruption',
 ]
-
-
-class __NULL(object):
-    def __eq__(self, other):
-        return isinstance(other, self.__class__)
-
-
-NULL = __NULL()
 
 
 class Interruption(Exception):

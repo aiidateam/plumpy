@@ -3,7 +3,7 @@ import plumpy
 from past.builtins import basestring
 from plumpy import Process, ProcessState, test_utils, BundleKeys
 from plumpy.utils import AttributesFrozendict
-from tornado import gen
+from tornado import gen, testing
 import tornado.gen
 
 from . import utils
@@ -13,9 +13,6 @@ class ForgetToCallParent(plumpy.Process):
     def __init__(self, forget_on):
         super(ForgetToCallParent, self).__init__()
         self.forget_on = forget_on
-
-    def _run(self):
-        pass
 
     def on_create(self):
         if self.forget_on != 'create':
@@ -38,7 +35,11 @@ class ForgetToCallParent(plumpy.Process):
             super(ForgetToCallParent, self).on_kill(msg)
 
 
-class TestProcess(utils.TestCaseWithLoop):
+class TestProcess(testing.AsyncTestCase):
+    def setUp(self):
+        super(TestProcess, self).setUp()
+        self.loop = self.io_loop
+
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
@@ -57,17 +58,13 @@ class TestProcess(utils.TestCaseWithLoop):
 
     def test_dynamic_inputs(self):
         class NoDynamic(Process):
-            def _run(self, **kwargs):
-                pass
+            pass
 
         class WithDynamic(Process):
             @classmethod
             def define(cls, spec):
                 super(WithDynamic, cls).define(spec)
                 spec.inputs.dynamic = True
-
-            def _run(self, **kwargs):
-                pass
 
         with self.assertRaises(ValueError):
             NoDynamic(inputs={'a': 5}).execute()
@@ -81,9 +78,6 @@ class TestProcess(utils.TestCaseWithLoop):
             def define(cls, spec):
                 super(Proc, cls).define(spec)
                 spec.input('a')
-
-            def _run(self):
-                pass
 
         p = Proc({'a': 5})
 
@@ -198,7 +192,7 @@ class TestProcess(utils.TestCaseWithLoop):
 
     def test_logging(self):
         class LoggerTester(Process):
-            def _run(self, **kwargs):
+            def run(self, **kwargs):
                 self.logger.info("Test")
 
         # TODO: Test giving a custom logger to see if it gets used
@@ -314,7 +308,7 @@ class TestProcess(utils.TestCaseWithLoop):
         class KillProcess(Process):
             after_kill = False
 
-            def _run(self, **kwargs):
+            def run(self, **kwargs):
                 self.kill()
                 # The following line should be executed because kill will not
                 # interrupt execution of a method call in the RUNNING state
@@ -330,7 +324,7 @@ class TestProcess(utils.TestCaseWithLoop):
     def test_kill_when_paused_in_run(self):
         class PauseProcess(Process):
 
-            def _run(self, **kwargs):
+            def run(self, **kwargs):
                 self.pause()
                 self.kill()
 
@@ -364,17 +358,21 @@ class TestProcess(utils.TestCaseWithLoop):
         self.loop.add_callback(proc.step_until_terminated)
         self.loop.run_sync(lambda: run_async(proc))
 
+    @testing.gen_test
     def test_run_multiple(self):
         # Create and play some processes
         procs = []
-        for proc_class in test_utils.TEST_PROCESSES + test_utils.TEST_EXCEPTION_PROCESSES:
+        for proc_class in test_utils.TEST_PROCESSES:
             proc = proc_class(loop=self.loop)
             self.loop.add_callback(proc.step_until_terminated)
             procs.append(proc)
 
         # Check that they all run
-        gathered = plumpy.gather(*[proc.future() for proc in procs])
-        plumpy.run_until_complete(gathered, self.loop)
+        futures = [proc.future() for proc in procs]
+        yield futures
+
+        for future, proc_class in zip(futures, test_utils.TEST_PROCESSES):
+            self.assertDictEqual(proc_class.EXPECTED_OUTPUTS, future.result())
 
     def test_invalid_output(self):
         class InvalidOutput(plumpy.Process):
@@ -403,7 +401,7 @@ class TestProcess(utils.TestCaseWithLoop):
             def define(cls, spec):
                 super(Proc, cls).define(spec)
 
-            def _run(self):
+            def run(self):
                 return plumpy.UnsuccessfulResult(ERROR_CODE)
 
         proc = Proc()
@@ -786,8 +784,8 @@ class TestProcessEvents(utils.TestCaseWithLoop):
 
         messages = []
 
-        def on_broadcast_receive(**msg):
-            messages.append(msg)
+        def on_broadcast_receive(_comm, body, sender, subject, correlation_id):
+            messages.append({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
         communicator.add_broadcast_subscriber(on_broadcast_receive)
         proc = test_utils.DummyProcess(communicator=communicator)

@@ -7,7 +7,7 @@ class TestCase(unittest.TestCase):
     pass
 
 
-class TestCaseWithLoop(TestCase):
+class TestCaseWithLoop(unittest.TestCase):
     def setUp(self):
         super(TestCaseWithLoop, self).setUp()
         self.loop = plumpy.new_event_loop()
