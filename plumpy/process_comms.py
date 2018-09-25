@@ -1,15 +1,18 @@
 import copy
-from kiwipy import rmq
 from tornado import gen
+import kiwipy
+from kiwipy import rmq
 
 from . import loaders
 from . import communications
+from . import futures
 from . import persistence
 from . import exceptions
 
 __all__ = [
     'PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
-    'ProcessLauncher', 'create_continue_body', 'create_launch_body'
+    'ProcessLauncher', 'create_continue_body', 'create_launch_body',
+    'RemoteProcessThreadController', 'RemoteProcessController'
 ]
 
 INTENT_KEY = 'intent'
@@ -92,6 +95,11 @@ def create_create_body(process_class, init_args=None, init_kwargs=None, persist=
 
 
 class RemoteProcessController(object):
+    """
+    Control remote processes using coroutines that will send messages and wait
+    (in a non-blocking way) for their response
+    """
+
     def __init__(self, communicator):
         self._communicator = communicator
 
@@ -158,6 +166,53 @@ class RemoteProcessController(object):
         result = yield rmq.kiwi_to_tornado_future(continue_future)
 
         raise gen.Return(result)
+
+
+class RemoteProcessThreadController(object):
+    def __init__(self, communicator):
+        self._communicator = communicator
+
+    def get_status(self, pid):
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, STATUS_MSG), self._communicator)
+
+    def pause_process(self, pid):
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PAUSE_MSG), self._communicator)
+
+    def play_process(self, pid):
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PLAY_MSG), self._communicator)
+
+    def kill_process(self, pid, msg=None):
+        message = copy.copy(KILL_MSG)
+        if msg is not None:
+            message[MESSAGE_KEY] = msg
+
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message), self._communicator)
+
+    def continue_process(self, pid, tag=None, nowait=False):
+        message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
+        return futures.unwrap_kiwi_future(self._communicator.task_send(message), self._communicator)
+
+    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False,
+                       loader=None):
+        message = create_launch_body(process_class, init_args, init_kwargs, persist, nowait, loader)
+        return futures.unwrap_kiwi_future(self._communicator.task_send(message), self._communicator)
+
+    def execute_process(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
+        message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
+
+        execute_future = self._communicator.create_future()
+        create_future = futures.unwrap_kiwi_future(self._communicator.task_send(message), self._communicator)
+
+        def on_created(_):
+            try:
+                pid = create_future.result()
+                continue_future = self.continue_process(pid, nowait=nowait)
+                kiwipy.chain(continue_future, execute_future)
+            except Exception as exception:
+                execute_future.set_exception(exception)
+
+        create_future.add_done_callback(on_created)
+        return execute_future
 
 
 class ProcessLauncher(object):
