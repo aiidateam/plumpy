@@ -15,9 +15,9 @@ AWAIT_TIMEOUT = testing.get_async_test_timeout()
 
 
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
-class TestProcessReceiver(testing.AsyncTestCase):
+class TestRemoteProcessController(testing.AsyncTestCase):
     def setUp(self):
-        super(TestProcessReceiver, self).setUp()
+        super(TestRemoteProcessController, self).setUp()
 
         self.loop = self.io_loop
 
@@ -39,7 +39,7 @@ class TestProcessReceiver(testing.AsyncTestCase):
         # Close the connector before calling super because it will
         # close the loop
         self.communicator.stop()
-        super(TestProcessReceiver, self).tearDown()
+        super(TestRemoteProcessController, self).tearDown()
 
     @testing.gen_test
     def test_pause(self):
@@ -109,3 +109,88 @@ class TestProcessReceiver(testing.AsyncTestCase):
 
         for i, message in enumerate(messages):
             self.assertEqual(message['subject'], expected_subjects[i])
+
+
+
+@unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
+class TestRemoteProcessThreadController(testing.AsyncTestCase):
+    def setUp(self):
+        super(TestRemoteProcessThreadController, self).setUp()
+
+        self.loop = self.io_loop
+
+        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+
+        self.communicator = rmq.connect(
+            connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
+            message_exchange=message_exchange,
+            task_exchange=task_exchange,
+            task_queue=task_queue,
+            testing_mode=True
+        )
+
+        self.process_controller = process_comms.RemoteProcessThreadController(self.communicator)
+
+    def tearDown(self):
+        # Close the connector before calling super because it will
+        # close the loop
+        self.communicator.stop()
+        super(TestRemoteProcessThreadController, self).tearDown()
+
+    @testing.gen_test
+    def test_pause(self):
+        proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Send a pause message
+        pause_future = self.process_controller.pause_process(proc.pid)
+        # Let the process respond to the request
+        yield
+        result = pause_future.result(timeout=AWAIT_TIMEOUT)
+
+        # Check that it all went well
+        self.assertTrue(result)
+        self.assertTrue(proc.paused)
+
+    @testing.gen_test
+    def test_play(self):
+        proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
+        self.assertTrue(proc.pause())
+
+        # Send a play message
+        play_future = self.process_controller.pause_process(proc.pid)
+        yield
+        # Allow the process to respond to the request
+        result = play_future.result(timeout=AWAIT_TIMEOUT)
+
+        # Check that all is as we expect
+        self.assertTrue(result)
+        self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
+
+    @testing.gen_test
+    def test_kill(self):
+        proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
+
+        # Send a play message
+        kill_future = self.process_controller.kill_process(proc.pid)
+        yield
+        # Allow the process to respond to the request
+        result = kill_future.result(timeout=AWAIT_TIMEOUT)
+
+        # Check the outcome
+        self.assertTrue(result)
+        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
+
+    @testing.gen_test
+    def test_status(self):
+        proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
+        # Run the process in the background
+        proc.loop().add_callback(proc.step_until_terminated)
+
+        # Send a status message
+        status_future = self.process_controller.get_status(proc.pid)
+        # Let the process respond
+        yield
+        status = status_future.result(timeout=AWAIT_TIMEOUT)
+
+        self.assertIsNotNone(status)
