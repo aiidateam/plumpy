@@ -110,8 +110,12 @@ class RemoteProcessController(object):
         raise gen.Return(result)
 
     @gen.coroutine
-    def pause_process(self, pid):
-        play_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, PAUSE_MSG))
+    def pause_process(self, pid, msg=None):
+        message = copy.copy(PAUSE_MSG)
+        if msg is not None:
+            message[MESSAGE_KEY] = msg
+
+        play_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, message))
         result = yield rmq.kiwi_to_tornado_future(play_future)
         raise gen.Return(result)
 
@@ -175,8 +179,12 @@ class RemoteProcessThreadController(object):
     def get_status(self, pid):
         return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, STATUS_MSG), self._communicator)
 
-    def pause_process(self, pid):
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PAUSE_MSG), self._communicator)
+    def pause_process(self, pid, msg=None):
+        message = copy.copy(PAUSE_MSG)
+        if msg is not None:
+            message[MESSAGE_KEY] = msg
+
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message), self._communicator)
 
     def play_process(self, pid):
         return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PLAY_MSG), self._communicator)
