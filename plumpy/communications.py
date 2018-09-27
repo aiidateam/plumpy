@@ -39,7 +39,7 @@ def convert_to_comm(communicator, loop, to_convert):
         def task_done(task):
             try:
                 result = task.result()
-                if isinstance(result, concurrent.Future):
+                if concurrent.is_future(result):
                     result = plum_to_kiwi_future(communicator, result)
                 kiwi_future.set_result(result)
             except Exception as exception:

@@ -43,9 +43,8 @@ class CancellableAction(Future):
             raise InvalidStateError("Action has already been ran")
 
         try:
-            self.set_result(self._action(*args, **kwargs))
-        except Exception as exc:
-            self.set_exception(exc)
+            with kiwipy.capture_exceptions(self):
+                self.set_result(self._action(*args, **kwargs))
         finally:
             self._action = None
 
