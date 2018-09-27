@@ -68,6 +68,8 @@ class CommunicatorWrapper(kiwipy.Communicator):
         :param loop: The tornado event loop to schedule callbacks on
         :type loop: :class:`tornado.ioloop.IOLoop`
         """
+        assert communicator is not None
+
         self._communicator = communicator
         self._loop = loop or ioloop.IOLoop.current()
         self._subscribers = {}

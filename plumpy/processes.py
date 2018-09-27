@@ -253,7 +253,7 @@ class Process(
         if communicator is None:
             self._communicator = None
         else:
-            self._communicator = communications.CommunicatorWrapper(communicator)
+            self._communicator = communications.CommunicatorWrapper(communicator, self._loop)
 
     @base.super_check
     def init(self):
@@ -524,8 +524,8 @@ class Process(
 
         self._state = self.recreate_state(saved_state['_state'])
 
-        if 'communicator' in load_context:
-            self._communicator = communications.CommunicatorWrapper(load_context.communicator)
+        if 'communicator' in load_context and load_context.communicator is not None:
+            self._communicator = communications.CommunicatorWrapper(load_context.communicator, self._loop)
 
         if 'logger' in load_context:
             self._logger = load_context.logger
