@@ -280,6 +280,7 @@ class ProcessLauncher(object):
             self._persister.save_checkpoint(proc)
 
         if nowait:
+            self._loop.add_callback(proc.step_until_terminated)
             raise gen.Return(proc.pid)
 
         yield proc.step_until_terminated()
@@ -298,6 +299,7 @@ class ProcessLauncher(object):
         proc = saved_state.unbundle(self._load_context)
 
         if nowait:
+            self._loop.add_callback(proc.step_until_terminated)
             raise gen.Return(proc.pid)
 
         yield proc.step_until_terminated()
