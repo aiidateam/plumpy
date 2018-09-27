@@ -263,7 +263,7 @@ class Process(
 
         if self._communicator is not None:
             self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
-            
+
         if not self._future.done():
 
             def try_killing(future):
@@ -786,7 +786,8 @@ class Process(
         else:
             raise RuntimeError("Unknown intent")
 
-        if isinstance(result, futures.Future):
+        if concurrent.is_future(result):
+            # Wait for the process to actually finish
             result = yield result
 
         raise gen.Return(result)
@@ -978,7 +979,7 @@ class Process(
 
     def run(self):
         pass
-    
+
     def execute(self):
         """
         Execute the process.  This will return if the process terminates or is paused.
