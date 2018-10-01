@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 import collections
 import copy
 import json
@@ -21,12 +22,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
     properties like whether it is required, valid types, the help string, etc.
     """
 
-    def __init__(self,
-                 name,
-                 valid_type=None,
-                 help=None,
-                 required=True,
-                 validator=None):
+    def __init__(self, name, valid_type=None, help=None, required=True, validator=None):
         self._name = name
         self._valid_type = valid_type
         self._help = help
@@ -93,8 +89,7 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
     def validate(self, value):
         if value is UNSPECIFIED:
             if self._required:
-                return False, "required value was not provided for '{}'".format(
-                    self.name)
+                return False, "required value was not provided for '{}'".format(self.name)
         else:
             if self._valid_type is not None and \
                     not isinstance(value, self._valid_type):
@@ -134,13 +129,7 @@ class InputPort(Port):
         else:
             return False
 
-    def __init__(self,
-                 name,
-                 valid_type=None,
-                 help=None,
-                 default=UNSPECIFIED,
-                 required=True,
-                 validator=None):
+    def __init__(self, name, valid_type=None, help=None, default=UNSPECIFIED, required=True, validator=None):
         super(InputPort, self).__init__(
             name,
             valid_type=valid_type,
@@ -149,9 +138,8 @@ class InputPort(Port):
             validator=validator)
 
         if required is not InputPort.required_override(required, default):
-            _LOGGER.info(
-                "the required attribute for the input port '{}' was overridden "
-                "because a default was specified".format(name))
+            _LOGGER.info("the required attribute for the input port '{}' was overridden "
+                         "because a default was specified".format(name))
 
         if default is not UNSPECIFIED:
             default_valid, msg = self.validate(default)
@@ -188,6 +176,7 @@ class InputPort(Port):
 
 
 class OutputPort(Port):
+
     def __init__(self, name, valid_type=None, required=True, help=None):
         super(OutputPort, self).__init__(name, valid_type, help=help)
         self._required = required
@@ -209,11 +198,7 @@ class PortNamespace(collections.MutableMapping, Port):
                  default=UNSPECIFIED,
                  dynamic=False):
         super(PortNamespace, self).__init__(
-            name=name,
-            help=help,
-            required=required,
-            validator=validator,
-            valid_type=valid_type)
+            name=name, help=help, required=required, validator=validator, valid_type=valid_type)
         self._ports = {}
         self._default = default
         self._dynamic = dynamic
@@ -312,8 +297,7 @@ class PortNamespace(collections.MutableMapping, Port):
         :raises: ValueError if port or namespace does not exist
         """
         if not isinstance(name, string_types):
-            raise ValueError('name has to be a string type, not {}'.format(
-                type(name)))
+            raise ValueError('name has to be a string type, not {}'.format(type(name)))
 
         if not name:
             raise ValueError('name cannot be an empty string')
@@ -322,13 +306,10 @@ class PortNamespace(collections.MutableMapping, Port):
         port_name = namespace.pop(0)
 
         if port_name not in self:
-            raise ValueError(
-                "port '{}' does not exist in port namespace '{}'".format(
-                    port_name, self.name))
+            raise ValueError("port '{}' does not exist in port namespace '{}'".format(port_name, self.name))
 
         if namespace:
-            return self[port_name].get_port(
-                self.NAMESPACE_SEPARATOR.join(namespace))
+            return self[port_name].get_port(self.NAMESPACE_SEPARATOR.join(namespace))
         else:
             return self[port_name]
 
@@ -344,8 +325,7 @@ class PortNamespace(collections.MutableMapping, Port):
         :raises: ValueError if any sub namespace is occupied by a non-PortNamespace port
         """
         if not isinstance(name, string_types):
-            raise ValueError('name has to be a string type, not {}'.format(
-                type(name)))
+            raise ValueError('name has to be a string type, not {}'.format(type(name)))
 
         if not name:
             raise ValueError('name cannot be an empty string')
@@ -353,11 +333,8 @@ class PortNamespace(collections.MutableMapping, Port):
         namespace = name.split(self.NAMESPACE_SEPARATOR)
         port_name = namespace.pop(0)
 
-        if port_name in self and not isinstance(self[port_name],
-                                                PortNamespace):
-            raise ValueError(
-                "the name '{}' in '{}' already contains a Port".format(
-                    port_name, self.name))
+        if port_name in self and not isinstance(self[port_name], PortNamespace):
+            raise ValueError("the name '{}' in '{}' already contains a Port".format(port_name, self.name))
 
         # If this is True, the (sub) port namespace does not yet exist, so we create it
         if port_name not in self:
@@ -371,16 +348,11 @@ class PortNamespace(collections.MutableMapping, Port):
                 self[port_name] = self.__class__(port_name, **kwargs)
 
         if namespace:
-            return self[port_name].create_port_namespace(
-                self.NAMESPACE_SEPARATOR.join(namespace), **kwargs)
+            return self[port_name].create_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace), **kwargs)
         else:
             return self[port_name]
 
-    def absorb(self,
-               port_namespace,
-               exclude=(),
-               include=None,
-               namespace_options={}):
+    def absorb(self, port_namespace, exclude=(), include=None, namespace_options={}):
         """
         Absorb another PortNamespace instance into oneself, including all its mutable properties and ports.
         Mutable properties of self will be overwritten with those of the port namespace that is to be absorbed.
@@ -396,8 +368,7 @@ class PortNamespace(collections.MutableMapping, Port):
         :return: list of the names of the ports that were absorbed
         """
         if not isinstance(port_namespace, PortNamespace):
-            raise ValueError(
-                'port_namespace has to be an instance of PortNamespace')
+            raise ValueError('port_namespace has to be an instance of PortNamespace')
 
         # Overload mutable attributes of PortNamespace unless overridden by value in namespace_options
         for attr in dir(port_namespace):
@@ -408,14 +379,12 @@ class PortNamespace(collections.MutableMapping, Port):
                     setattr(self, attr, getattr(port_namespace, attr))
 
         if namespace_options:
-            raise ValueError(
-                'the namespace_options {}, is not a supported PortNamespace property'.
-                format(', '.join(namespace_options.keys())))
+            raise ValueError('the namespace_options {}, is not a supported PortNamespace property'.format(', '.join(
+                list(namespace_options.keys()))))
 
         absorbed_ports = []
 
-        for port_name, port in self._filter_ports(
-                port_namespace.items(), exclude=exclude, include=include):
+        for port_name, port in self._filter_ports(list(port_namespace.items()), exclude=exclude, include=include):
             self[port_name] = copy.deepcopy(port)
             absorbed_ports.append(port_name)
 
@@ -491,8 +460,7 @@ class PortNamespace(collections.MutableMapping, Port):
         is_valid, message = True, None
 
         for name, port in self._ports.items():
-            is_valid, message = port.validate(
-                port_values.pop(name, UNSPECIFIED))
+            is_valid, message = port.validate(port_values.pop(name, UNSPECIFIED))
             if not is_valid:
                 return is_valid, message
 
@@ -511,8 +479,7 @@ class PortNamespace(collections.MutableMapping, Port):
         is_valid, message = True, None
 
         if port_values and not self.dynamic:
-            return False, 'Unexpected ports {}, for a non dynamic namespace'.format(
-                port_values)
+            return False, 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
 
         if self._valid_type is not None:
             valid_type = self._valid_type

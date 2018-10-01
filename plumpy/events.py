@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import functools
 import inspect
 import reprlib
@@ -5,9 +6,7 @@ import sys
 from tornado import ioloop
 import tornado.gen
 
-__all__ = [
-    'new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete'
-]
+__all__ = ['new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete']
 
 # Get the current tornado event loop
 get_event_loop = ioloop.IOLoop.current
@@ -87,8 +86,7 @@ def _format_callback(func, args, kwargs, suffix=''):
 class ProcessCallback(object):
     """Object returned by callback registration methods."""
 
-    __slots__ = ('_callback', '_args', '_kwargs', '_process', '_cancelled',
-                 '_repr', '__weakref__')
+    __slots__ = ('_callback', '_args', '_kwargs', '_process', '_cancelled', '_repr', '__weakref__')
 
     def __init__(self, process, callback, args, kwargs):
         self._process = process
@@ -103,9 +101,7 @@ class ProcessCallback(object):
         if self._cancelled:
             info.append('cancelled')
         if self._callback is not None:
-            info.append(
-                _format_callback_source(self._callback, self._args,
-                                        self._kwargs))
+            info.append(_format_callback_source(self._callback, self._args, self._kwargs))
         return info
 
     def __repr__(self):
@@ -129,8 +125,7 @@ class ProcessCallback(object):
                 yield self._callback(*self._args, **self._kwargs)
             except Exception:
                 exc_info = sys.exc_info()
-                self._process.callback_excepted(self._callback, exc_info[1],
-                                                exc_info[2])
+                self._process.callback_excepted(self._callback, exc_info[1], exc_info[2])
             finally:
                 self._done()
 

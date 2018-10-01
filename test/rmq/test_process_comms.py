@@ -1,8 +1,9 @@
+from __future__ import absolute_import
 import shortuuid
 from tornado import testing
 import unittest
 
-from kiwipy import rmq
+import kiwipy.rmq
 import plumpy
 from plumpy import process_comms, test_utils
 
@@ -16,6 +17,7 @@ AWAIT_TIMEOUT = testing.get_async_test_timeout()
 
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
 class TestRemoteProcessController(testing.AsyncTestCase):
+
     def setUp(self):
         super(TestRemoteProcessController, self).setUp()
 
@@ -25,13 +27,12 @@ class TestRemoteProcessController(testing.AsyncTestCase):
         task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
         task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
 
-        self.communicator = rmq.connect(
+        self.communicator = kiwipy.rmq.connect(
             connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
             message_exchange=message_exchange,
             task_exchange=task_exchange,
             task_queue=task_queue,
-            testing_mode=True
-        )
+            testing_mode=True)
 
         self.process_controller = process_comms.RemoteProcessController(self.communicator)
 
@@ -104,16 +105,15 @@ class TestRemoteProcessController(testing.AsyncTestCase):
         expected_subjects = []
         for i, state in enumerate(test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
             from_state = test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
-            expected_subjects.append(
-                "state_changed.{}.{}".format(from_state, state.value))
+            expected_subjects.append("state_changed.{}.{}".format(from_state, state.value))
 
         for i, message in enumerate(messages):
             self.assertEqual(message['subject'], expected_subjects[i])
 
 
-
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
 class TestRemoteProcessThreadController(testing.AsyncTestCase):
+
     def setUp(self):
         super(TestRemoteProcessThreadController, self).setUp()
 
@@ -123,13 +123,12 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
         task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
 
-        self.communicator = rmq.connect(
+        self.communicator = kiwipy.rmq.connect(
             connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
             message_exchange=message_exchange,
             task_exchange=task_exchange,
             task_queue=task_queue,
-            testing_mode=True
-        )
+            testing_mode=True)
 
         self.process_controller = process_comms.RemoteProcessThreadController(self.communicator)
 
@@ -145,8 +144,7 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         # Send a pause message
         pause_future = self.process_controller.pause_process(proc.pid)
         # Let the process respond to the request
-        yield
-        result = pause_future.result(timeout=AWAIT_TIMEOUT)
+        result = yield process_comms.kiwi_to_tornado_future(pause_future)
 
         # Check that it all went well
         self.assertTrue(result)
@@ -159,9 +157,8 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
 
         # Send a play message
         play_future = self.process_controller.pause_process(proc.pid)
-        yield
         # Allow the process to respond to the request
-        result = play_future.result(timeout=AWAIT_TIMEOUT)
+        result = yield process_comms.kiwi_to_tornado_future(play_future)
 
         # Check that all is as we expect
         self.assertTrue(result)
@@ -173,9 +170,8 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
 
         # Send a play message
         kill_future = self.process_controller.kill_process(proc.pid)
-        yield
         # Allow the process to respond to the request
-        result = kill_future.result(timeout=AWAIT_TIMEOUT)
+        result = yield process_comms.kiwi_to_tornado_future(kill_future)
 
         # Check the outcome
         self.assertTrue(result)
@@ -190,7 +186,6 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         # Send a status message
         status_future = self.process_controller.get_status(proc.pid)
         # Let the process respond
-        yield
-        status = status_future.result(timeout=AWAIT_TIMEOUT)
+        status = yield process_comms.kiwi_to_tornado_future(status_future)
 
         self.assertIsNotNone(status)

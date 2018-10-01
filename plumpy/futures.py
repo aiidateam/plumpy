@@ -1,30 +1,41 @@
+"""
+Module containing future related methods and classes
+"""
+
+from __future__ import absolute_import
 import kiwipy
 from tornado import concurrent, gen, ioloop
 
 __all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError', 'create_task']
 
 CancelledError = kiwipy.CancelledError
-InvalidStateError = kiwipy.InvalidStateError
 
-copy_future = kiwipy.copy_future
-chain = kiwipy.chain
-gather = lambda *args: gen.multi(args)
+
+class InvalidStateError(Exception):
+    """Exception for when a future or action is in an invalid state"""
+    pass
+
+
+copy_future = kiwipy.copy_future  # pylint: disable=invalid-name
+chain = kiwipy.chain  # pylint: disable=invalid-name
+gather = lambda *args: gen.multi(args)  # pylint: disable=invalid-name
 
 
 class Future(concurrent.Future):
     _cancelled = False
 
-    def result(self, timeout=None):
+    def result(self):
         if self._cancelled:
             raise CancelledError()
 
-        return super(Future, self).result(timeout)
+        return super(Future, self).result()
 
-    def remove_done_callback(self, fn):
-        self._callbacks.remove(fn)
+    def remove_done_callback(self, callback):
+        self._callbacks.remove(callback)
 
 
 class CancellableAction(Future):
+
     def __init__(self, action, cookie=None):
         super(CancellableAction, self).__init__()
         self._action = action
@@ -34,9 +45,6 @@ class CancellableAction(Future):
     def cookie(self):
         """ A cookie that can be used to correlate the actions with something """
         return self._cookie
-
-    def set_result(self, result):
-        return super(CancellableAction, self).set_result(result)
 
     def run(self, *args, **kwargs):
         if self.done():
@@ -65,17 +73,15 @@ def create_task(coro, loop=None):
     future = concurrent.Future()
 
     @gen.coroutine
-    def do():
-        try:
+    def run_task():
+        with kiwipy.capture_exceptions(future):
             future.set_result((yield coro()))
-        except Exception as exception:
-            future.set_exception(exception)
 
-    loop.add_callback(do)
+    loop.add_callback(run_task)
     return future
 
 
-def unwrap_kiwi_future(future, communicator):
+def unwrap_kiwi_future(future):
     """
     Create a kiwi future that represents the final results of a nested series of futures,
     meaning that if the futures provided itself resolves to a future the returned
@@ -88,17 +94,18 @@ def unwrap_kiwi_future(future, communicator):
     :return: the unwrapping future
     :rtype: :class:`kiwipy.Future`
     """
-    unwrapping = communicator.create_future()
+    unwrapping = kiwipy.Future()
 
     def unwrap(fut):
-        try:
-            result = fut.result()
-            if isinstance(result, kiwipy.Future):
-                result.add_done_callback(unwrap)
-            else:
-                unwrapping.set_result(result)
-        except Exception as exception:  # pylint: disable=broad-except
-            unwrapping.set_exception(exception)
+        if fut.cancelled():
+            unwrapping.cancel()
+        else:
+            with kiwipy.capture_exceptions(unwrapping):
+                result = fut.result()
+                if isinstance(result, kiwipy.Future):
+                    result.add_done_callback(unwrap)
+                else:
+                    unwrapping.set_result(result)
 
     future.add_done_callback(unwrap)
     return unwrapping

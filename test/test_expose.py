@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from . import utils
 from plumpy.ports import PortNamespace
 from plumpy.process_spec import ProcessSpec
@@ -10,6 +11,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         super(TestExposeProcess, self).setUp()
 
         class BaseProcess(NewLoopProcess):
+
             @classmethod
             def define(cls, spec):
                 super(BaseProcess, cls).define(spec)
@@ -19,6 +21,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 spec.inputs.valid_type = str
 
         class ExposeProcess(NewLoopProcess):
+
             @classmethod
             def define(cls, spec):
                 super(ExposeProcess, cls).define(spec)
@@ -47,11 +50,11 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         self.assertTrue(isinstance(exposed_inputs, PortNamespace))
 
         # Verify that own ports are left untouched (should be three ports, 'c', 'd' and 'base')
-        self.assertEquals(len(inputs), 3)
+        self.assertEqual(len(inputs), 3)
         self.assertTrue('c' in inputs)
         self.assertTrue('d' in inputs)
-        self.assertEquals(inputs['c'].default, 1)
-        self.assertEquals(inputs['d'].default, 2)
+        self.assertEqual(inputs['c'].default, 1)
+        self.assertEqual(inputs['d'].default, 2)
 
     def test_expose_ports(self):
         """
@@ -59,16 +62,16 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         """
         exposed_inputs = self.ExposeProcess.spec().inputs.get_port('base.name.space')
 
-        self.assertEquals(len(exposed_inputs), 2)
+        self.assertEqual(len(exposed_inputs), 2)
         self.assertTrue('a' in exposed_inputs)
         self.assertTrue('b' in exposed_inputs)
-        self.assertEquals(exposed_inputs['a'].default, 'a')
-        self.assertEquals(exposed_inputs['b'].default, 'b')
+        self.assertEqual(exposed_inputs['a'].default, 'a')
+        self.assertEqual(exposed_inputs['b'].default, 'b')
 
         # Change the default of base process port and verify they don't change the exposed port
         self.BaseProcess.spec().inputs['a'].default = 'c'
-        self.assertEquals(self.BaseProcess.spec().inputs['a'].default, 'c')
-        self.assertEquals(exposed_inputs['a'].default, 'a')
+        self.assertEqual(self.BaseProcess.spec().inputs['a'].default, 'c')
+        self.assertEqual(exposed_inputs['a'].default, 'a')
 
     def test_expose_attributes(self):
         """
@@ -77,16 +80,16 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         inputs = self.ExposeProcess.spec().inputs
         exposed_inputs = self.ExposeProcess.spec().inputs.get_port('base.name.space')
 
-        self.assertEquals(self.BaseProcess.spec().inputs.valid_type, str)
-        self.assertEquals(exposed_inputs.valid_type, str)
-        self.assertEquals(inputs.valid_type, int)
+        self.assertEqual(self.BaseProcess.spec().inputs.valid_type, str)
+        self.assertEqual(exposed_inputs.valid_type, str)
+        self.assertEqual(inputs.valid_type, int)
 
         # Now change the valid type of the BaseProcess inputs and verify it does not affect ExposeProcess
         self.BaseProcess.spec().inputs.valid_type = float
 
-        self.assertEquals(self.BaseProcess.spec().inputs.valid_type, float)
-        self.assertEquals(exposed_inputs.valid_type, str)
-        self.assertEquals(inputs.valid_type, int)
+        self.assertEqual(self.BaseProcess.spec().inputs.valid_type, float)
+        self.assertEqual(exposed_inputs.valid_type, str)
+        self.assertEqual(inputs.valid_type, int)
 
     def test_expose_exclude(self):
         """
@@ -95,6 +98,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         BaseProcess = self.BaseProcess
 
         class ExcludeProcess(NewLoopProcess):
+
             @classmethod
             def define(cls, spec):
                 super(ExcludeProcess, cls).define(spec)
@@ -104,7 +108,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
         inputs = ExcludeProcess.spec().inputs
 
-        self.assertEquals(len(inputs), 3)
+        self.assertEqual(len(inputs), 3)
         self.assertTrue('a' not in inputs)
 
     def test_expose_include(self):
@@ -114,6 +118,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         BaseProcess = self.BaseProcess
 
         class ExcludeProcess(NewLoopProcess):
+
             @classmethod
             def define(cls, spec):
                 super(ExcludeProcess, cls).define(spec)
@@ -123,7 +128,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
         inputs = ExcludeProcess.spec().inputs
 
-        self.assertEquals(len(inputs), 3)
+        self.assertEqual(len(inputs), 3)
         self.assertTrue('a' not in inputs)
 
     def test_expose_exclude_include_mutually_exclusive(self):
@@ -133,6 +138,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         BaseProcess = self.BaseProcess
 
         class ExcludeProcess(NewLoopProcess):
+
             @classmethod
             def define(cls, spec):
                 super(ExcludeProcess, cls).define(spec)
@@ -148,6 +154,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         Verify that exposing a sub process in top level correctly overrides the parent's namespace
         properties with that of the exposed process
         """
+
         def validator_function(input):
             pass
 
@@ -173,8 +180,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
             namespace=None,
             exclude=(),
             include=None,
-            namespace_options={}
-        )
+            namespace_options={})
 
         # Verify that all the ports are there
         self.assertIn('a', ParentProcessSpec.inputs)
@@ -182,12 +188,12 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         self.assertIn('c', ParentProcessSpec.inputs)
 
         # Verify that all the port namespace attributes are copied over
-        self.assertEquals(ParentProcessSpec.inputs.validator, validator_function)
-        self.assertEquals(ParentProcessSpec.inputs.valid_type, bool)
-        self.assertEquals(ParentProcessSpec.inputs.required, False)
-        self.assertEquals(ParentProcessSpec.inputs.dynamic, True)
-        self.assertEquals(ParentProcessSpec.inputs.default, True)
-        self.assertEquals(ParentProcessSpec.inputs.help, 'testing')
+        self.assertEqual(ParentProcessSpec.inputs.validator, validator_function)
+        self.assertEqual(ParentProcessSpec.inputs.valid_type, bool)
+        self.assertEqual(ParentProcessSpec.inputs.required, False)
+        self.assertEqual(ParentProcessSpec.inputs.dynamic, True)
+        self.assertEqual(ParentProcessSpec.inputs.default, True)
+        self.assertEqual(ParentProcessSpec.inputs.help, 'testing')
 
     def test_expose_ports_top_level_override(self):
         """
@@ -195,6 +201,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         properties with that of the exposed process, but that any valid property passed in the
         namespace_options will be the end-all-be-all
         """
+
         def validator_function(input):
             pass
 
@@ -227,8 +234,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 'dynamic': False,
                 'default': None,
                 'help': None,
-            }
-        )
+            })
 
         # Verify that all the ports are there
         self.assertIn('a', ParentProcessSpec.inputs)
@@ -236,18 +242,19 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         self.assertIn('c', ParentProcessSpec.inputs)
 
         # Verify that all the port namespace attributes correspond to the values passed in the namespace_options
-        self.assertEquals(ParentProcessSpec.inputs.validator, None)
-        self.assertEquals(ParentProcessSpec.inputs.valid_type, None)
-        self.assertEquals(ParentProcessSpec.inputs.required, True)
-        self.assertEquals(ParentProcessSpec.inputs.dynamic, False)
-        self.assertEquals(ParentProcessSpec.inputs.default, None)
-        self.assertEquals(ParentProcessSpec.inputs.help, None)
+        self.assertEqual(ParentProcessSpec.inputs.validator, None)
+        self.assertEqual(ParentProcessSpec.inputs.valid_type, None)
+        self.assertEqual(ParentProcessSpec.inputs.required, True)
+        self.assertEqual(ParentProcessSpec.inputs.dynamic, False)
+        self.assertEqual(ParentProcessSpec.inputs.default, None)
+        self.assertEqual(ParentProcessSpec.inputs.help, None)
 
     def test_expose_ports_namespace(self):
         """
         Verify that exposing a sub process in a namespace correctly overrides the defaults of the new
         namespace with the properties of the exposed port namespace
         """
+
         def validator_function(input):
             pass
 
@@ -273,8 +280,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
             namespace='namespace',
             exclude=(),
             include=None,
-            namespace_options={}
-        )
+            namespace_options={})
 
         # Verify that all the ports are there
         self.assertIn('a', ParentProcessSpec.inputs['namespace'])
@@ -282,12 +288,12 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         self.assertIn('c', ParentProcessSpec.inputs)
 
         # Verify that all the port namespace attributes are copied over
-        self.assertEquals(ParentProcessSpec.inputs['namespace'].validator, validator_function)
-        self.assertEquals(ParentProcessSpec.inputs['namespace'].valid_type, bool)
-        self.assertEquals(ParentProcessSpec.inputs['namespace'].required, False)
-        self.assertEquals(ParentProcessSpec.inputs['namespace'].dynamic, True)
-        self.assertEquals(ParentProcessSpec.inputs['namespace'].default, True)
-        self.assertEquals(ParentProcessSpec.inputs['namespace'].help, 'testing')
+        self.assertEqual(ParentProcessSpec.inputs['namespace'].validator, validator_function)
+        self.assertEqual(ParentProcessSpec.inputs['namespace'].valid_type, bool)
+        self.assertEqual(ParentProcessSpec.inputs['namespace'].required, False)
+        self.assertEqual(ParentProcessSpec.inputs['namespace'].dynamic, True)
+        self.assertEqual(ParentProcessSpec.inputs['namespace'].default, True)
+        self.assertEqual(ParentProcessSpec.inputs['namespace'].help, 'testing')
 
     def test_expose_ports_namespace_options_non_existent(self):
         """
@@ -308,5 +314,4 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 include=None,
                 namespace_options={
                     'non_existent': None,
-                }
-            )
+                })

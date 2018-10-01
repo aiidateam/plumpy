@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from abc import ABCMeta, abstractmethod
 import collections
 import copy
@@ -15,16 +16,15 @@ from . import base
 from .base import super_check
 
 __all__ = [
-    'Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable',
-    'SavableFuture', 'LoadSaveContext', 'PersistedCheckpoint',
-    'InMemoryPersister'
+    'Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable', 'SavableFuture', 'LoadSaveContext',
+    'PersistedCheckpoint', 'InMemoryPersister'
 ]
 
-PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint',
-                                             ['pid', 'tag'])
+PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
 
 class Bundle(dict):
+
     @classmethod
     def from_dict(cls, *args, **kwargs):
         self = Bundle.__new__(*args, **kwargs)
@@ -57,6 +57,7 @@ class Bundle(dict):
 
 
 class Persister(with_metaclass(ABCMeta, object)):
+
     @abstractmethod
     def save_checkpoint(self, process, tag=None):
         """
@@ -127,8 +128,7 @@ class Persister(with_metaclass(ABCMeta, object)):
         pass
 
 
-PersistedPickle = collections.namedtuple('PersistedPickle',
-                                         ['checkpoint', 'bundle'])
+PersistedPickle = collections.namedtuple('PersistedPickle', ['checkpoint', 'bundle'])
 _PICKLE_SUFFIX = 'pickle'
 
 
@@ -151,9 +151,7 @@ class PicklePersister(Persister):
         try:
             PicklePersister.ensure_pickle_directory(pickle_directory)
         except OSError as exception:
-            raise ValueError(
-                'failed to create the pickle directory at {}'.format(
-                    pickle_directory))
+            raise ValueError('failed to create the pickle directory at {}'.format(pickle_directory))
 
         self._pickle_directory = pickle_directory
 
@@ -201,8 +199,7 @@ class PicklePersister(Persister):
         Returns the full filepath of the pickle for the given process id
         and optional checkpoint tag
         """
-        return os.path.join(self._pickle_directory,
-                            PicklePersister.pickle_filename(pid, tag))
+        return os.path.join(self._pickle_directory, PicklePersister.pickle_filename(pid, tag))
 
     def save_checkpoint(self, process, tag=None):
         """
@@ -298,8 +295,7 @@ class InMemoryPersister(with_metaclass(ABCMeta, object)):
         self._save_context = LoadSaveContext(loader=loader)
 
     def save_checkpoint(self, process, tag=None):
-        self._checkpoints.setdefault(process.pid, {})[tag] = Bundle(
-            process, self._save_context)
+        self._checkpoints.setdefault(process.pid, {})[tag] = Bundle(process, self._save_context)
 
     def load_checkpoint(self, pid, tag=None):
         return self._checkpoints[pid][tag]
@@ -328,6 +324,7 @@ class InMemoryPersister(with_metaclass(ABCMeta, object)):
 
 
 def auto_persist(*members):
+
     def wrapped(savable):
         if savable._auto_persist is None:
             savable._auto_persist = set()
@@ -360,8 +357,7 @@ def _ensure_object_loader(context, saved_state):
         # 2) Try getting from saved_state
         default_loader = loaders.get_object_loader()
         try:
-            loader_identifier = Savable.get_custom_meta(
-                saved_state, META__OBJECT_LOADER)
+            loader_identifier = Savable.get_custom_meta(saved_state, META__OBJECT_LOADER)
         except ValueError:
             # 3) Fall back to default
             loader = default_loader
@@ -372,6 +368,7 @@ def _ensure_object_loader(context, saved_state):
 
 
 class LoadSaveContext(object):
+
     def __init__(self, loader=None, **kwargs):
         self._values = dict(**kwargs)
         self.loader = loader
@@ -455,8 +452,7 @@ class Savable(object):
         """
         load_context = _ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
-        base.call_with_super_check(obj.load_instance_state, saved_state,
-                                   load_context)
+        base.call_with_super_check(obj.load_instance_state, saved_state, load_context)
         return obj
 
     @super_check
@@ -482,18 +478,14 @@ class Savable(object):
         default_loader = loaders.get_object_loader()
         # If the user has specified a class loader, then save it in the saved state
         if save_context.loader is not None:
-            loader_class = default_loader.identify_object(
-                save_context.loader.__class__)
-            Savable.set_custom_meta(out_state, META__OBJECT_LOADER,
-                                    loader_class)
+            loader_class = default_loader.identify_object(save_context.loader.__class__)
+            Savable.set_custom_meta(out_state, META__OBJECT_LOADER, loader_class)
             loader = save_context.loader
         else:
             loader = default_loader
 
-        Savable._set_class_name(out_state,
-                                loader.identify_object(self.__class__))
-        base.call_with_super_check(self.save_instance_state, out_state,
-                                   save_context)
+        Savable._set_class_name(out_state, loader.identify_object(self.__class__))
+        base.call_with_super_check(self.save_instance_state, out_state, save_context)
         return out_state
 
     def save_members(self, members, out_state):
@@ -513,8 +505,7 @@ class Savable(object):
 
     def load_members(self, members, saved_state, load_context=None):
         for member in members:
-            setattr(self, member,
-                    self._get_value(saved_state, member, load_context))
+            setattr(self, member, self._get_value(saved_state, member, load_context))
 
     def _ensure_persist_configured(self):
         if not self._persist_configured:
@@ -525,8 +516,7 @@ class Savable(object):
 
     @staticmethod
     def set_custom_meta(out_state, name, value):
-        user_dict = Savable._get_create_meta(out_state).setdefault(
-            META__USER, {})
+        user_dict = Savable._get_create_meta(out_state).setdefault(META__USER, {})
         user_dict[name] = value
 
     @staticmethod
@@ -550,8 +540,7 @@ class Savable(object):
 
     @staticmethod
     def _set_meta_type(out_state, name, type_spec):
-        type_dict = Savable._get_create_meta(out_state).setdefault(
-            META__TYPES, {})
+        type_dict = Savable._get_create_meta(out_state).setdefault(META__TYPES, {})
         type_dict[name] = type_spec
 
     @staticmethod

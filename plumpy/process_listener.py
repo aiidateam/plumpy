@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from abc import ABCMeta
 
 from future.utils import with_metaclass
@@ -7,6 +8,7 @@ __all__ = ['ProcessListener']
 
 
 class ProcessListener(with_metaclass(ABCMeta, object)):
+
     def on_process_created(self, process):
         """
         Called when the process has been started

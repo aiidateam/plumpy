@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from collections import deque, defaultdict
 import importlib
 import inspect
@@ -11,6 +12,7 @@ import frozendict
 
 from . import lang
 from plumpy.settings import check_protected, check_override
+from six.moves import range
 
 __all__ = []
 
@@ -22,6 +24,7 @@ _default_loop = None
 
 
 class EventHelper(object):
+
     def __init__(self, listener_type):
         assert listener_type is not None, "Must provide valid listener type"
 
@@ -29,8 +32,7 @@ class EventHelper(object):
         self._listeners = set()
 
     def add_listener(self, listener):
-        assert isinstance(listener,
-                          self._listener_type), "Listener is not of right type"
+        assert isinstance(listener, self._listener_type), "Listener is not of right type"
         self._listeners.add(listener)
 
     def remove_listener(self, listener):
@@ -51,8 +53,7 @@ class EventHelper(object):
             try:
                 getattr(l, event_function.__name__)(*args, **kwargs)
             except Exception as e:
-                _LOGGER.error(
-                    "Listener '{}' produced an exception:\n{}".format(l, e))
+                _LOGGER.error("Listener '{}' produced an exception:\n{}".format(l, e))
 
 
 class ListenContext(object):
@@ -85,6 +86,7 @@ class ListenContext(object):
 
 
 class ThreadSafeCounter(object):
+
     def __init__(self):
         self.lock = threading.Lock()
         self.counter = 0
@@ -104,6 +106,7 @@ class ThreadSafeCounter(object):
 
 
 class AttributesFrozendict(frozendict.frozendict):
+
     def __init__(self, *args, **kwargs):
         super(AttributesFrozendict, self).__init__(*args, **kwargs)
         self._initialised = True
@@ -121,8 +124,7 @@ class AttributesFrozendict(frozendict.frozendict):
         try:
             return self[attr]
         except KeyError:
-            errmsg = "'{}' object has no attribute '{}'".format(
-                self.__class__.__name__, attr)
+            errmsg = "'{}' object has no attribute '{}'".format(self.__class__.__name__, attr)
             raise AttributeError(errmsg)
 
     def __dir__(self):
@@ -130,7 +132,7 @@ class AttributesFrozendict(frozendict.frozendict):
         So we get tab completion.
         :return: The keys of the dict
         """
-        return self.keys()
+        return list(self.keys())
 
 
 class SimpleNamespace(object):
@@ -151,6 +153,7 @@ class SimpleNamespace(object):
 
 
 class AttributesDict(SimpleNamespace):
+
     def __setitem__(self, key, value):
         setattr(self, key, value)
 
@@ -194,8 +197,7 @@ def load_object(fullname):
         try:
             obj = getattr(obj, name)
         except AttributeError:
-            raise ValueError(
-                "Could not load object corresponding to '{}'".format(fullname))
+            raise ValueError("Could not load object corresponding to '{}'".format(fullname))
 
     return obj
 
@@ -214,8 +216,7 @@ def load_module(fullname):
             remainder.appendleft(parts.pop())
 
     if mod is None:
-        raise ValueError(
-            "Could not load a module corresponding to '{}'".format(fullname))
+        raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
 
     return mod, remainder
 
@@ -236,8 +237,7 @@ def wrap_dict(flat_dict, separator='.'):
 
 def type_check(obj, expected_type):
     if not isinstance(obj, expected_type):
-        raise TypeError("Got object of type '{}' when expecting '{}'".format(
-            type(obj), expected_type))
+        raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
 
 
 def ensure_coroutine(fn):

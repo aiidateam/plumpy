@@ -1,7 +1,8 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import copy
-from tornado import gen
+from tornado import gen, ioloop, concurrent
 import kiwipy
-from kiwipy import rmq
 
 from . import loaders
 from . import communications
@@ -10,9 +11,15 @@ from . import persistence
 from . import exceptions
 
 __all__ = [
-    'PAUSE_MSG', 'PLAY_MSG', 'KILL_MSG', 'STATUS_MSG',
-    'ProcessLauncher', 'create_continue_body', 'create_launch_body',
-    'RemoteProcessThreadController', 'RemoteProcessController'
+    'PAUSE_MSG',
+    'PLAY_MSG',
+    'KILL_MSG',
+    'STATUS_MSG',
+    'ProcessLauncher',
+    'create_continue_body',
+    'create_launch_body',
+    'RemoteProcessThreadController',
+    'RemoteProcessController',
 ]
 
 INTENT_KEY = 'intent'
@@ -48,8 +55,7 @@ CONTINUE_TASK = 'continue'
 CREATE_TASK = 'create'
 
 
-def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=False, nowait=True,
-                       loader=None):
+def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=False, nowait=True, loader=None):
     if loader is None:
         loader = loaders.get_object_loader()
 
@@ -67,14 +73,7 @@ def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=
 
 
 def create_continue_body(pid, tag=None, nowait=False):
-    msg_body = {
-        TASK_KEY: CONTINUE_TASK,
-        TASK_ARGS: {
-            PID_KEY: pid,
-            NOWAIT_KEY: nowait,
-            TAG_KEY: tag
-        }
-    }
+    msg_body = {TASK_KEY: CONTINUE_TASK, TASK_ARGS: {PID_KEY: pid, NOWAIT_KEY: nowait, TAG_KEY: tag}}
     return msg_body
 
 
@@ -94,6 +93,27 @@ def create_create_body(process_class, init_args=None, init_kwargs=None, persist=
     return msg_body
 
 
+def kiwi_to_tornado_future(kiwi_future, loop=None):
+    loop = loop or ioloop.IOLoop.current()  # type: :class:`tornado.ioloop.IOLoop`
+
+    tornado_future = concurrent.Future()
+
+    def done(done_future):
+        if done_future.cancelled():
+            tornado_future.cancel()
+
+        with kiwipy.capture_exceptions(tornado_future):
+            result = done_future.result()
+            if isinstance(result, kiwipy.Future):
+                result = kiwi_to_tornado_future(result, loop)
+
+            tornado_future.set_result(result)
+
+    print(('loop: {}'.format(loop)))
+    loop.add_future(kiwi_future, done)
+    return tornado_future
+
+
 class RemoteProcessController(object):
     """
     Control remote processes using coroutines that will send messages and wait
@@ -105,24 +125,20 @@ class RemoteProcessController(object):
 
     @gen.coroutine
     def get_status(self, pid):
-        status_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, STATUS_MSG))
-        result = yield rmq.kiwi_to_tornado_future(status_future)
+        status_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, STATUS_MSG))
+        result = yield status_future
         raise gen.Return(result)
 
     @gen.coroutine
-    def pause_process(self, pid, msg=None):
-        message = copy.copy(PAUSE_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
-
-        play_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, message))
-        result = yield rmq.kiwi_to_tornado_future(play_future)
+    def pause_process(self, pid):
+        pause_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, PAUSE_MSG))
+        result = yield pause_future
         raise gen.Return(result)
 
     @gen.coroutine
     def play_process(self, pid):
-        play_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, PLAY_MSG))
-        result = yield rmq.kiwi_to_tornado_future(play_future)
+        play_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, PLAY_MSG))
+        result = yield play_future
         raise gen.Return(result)
 
     @gen.coroutine
@@ -132,9 +148,9 @@ class RemoteProcessController(object):
             message[MESSAGE_KEY] = msg
 
         # Wait for the communication to go through
-        kill_future = yield rmq.kiwi_to_tornado_future(self._communicator.rpc_send(pid, message))
+        kill_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, message))
         # Now wait for the kill to be enacted
-        result = yield rmq.kiwi_to_tornado_future(kill_future)
+        result = yield kill_future
 
         raise gen.Return(result)
 
@@ -142,19 +158,18 @@ class RemoteProcessController(object):
     def continue_process(self, pid, tag=None, nowait=False):
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
-        continue_future = yield rmq.kiwi_to_tornado_future(self._communicator.task_send(message))
+        continue_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
         # Now wait for the result of the task
-        result = yield rmq.kiwi_to_tornado_future(continue_future)
+        result = yield continue_future
 
         raise gen.Return(result)
 
     @gen.coroutine
-    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False,
-                       loader=None):
+    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False, loader=None):
         message = create_launch_body(process_class, init_args, init_kwargs, persist, nowait, loader)
 
-        launch_future = yield rmq.kiwi_to_tornado_future(self._communicator.task_send(message))
-        result = yield rmq.kiwi_to_tornado_future(launch_future)
+        launch_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        result = yield launch_future
 
         raise gen.Return(result)
 
@@ -162,54 +177,50 @@ class RemoteProcessController(object):
     def execute_process(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
-        create_future = yield rmq.kiwi_to_tornado_future(self._communicator.task_send(message))
-        pid = yield rmq.kiwi_to_tornado_future(create_future)
+        create_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        pid = yield create_future
 
         message = create_continue_body(pid, nowait=nowait)
-        continue_future = yield rmq.kiwi_to_tornado_future(self._communicator.task_send(message))
-        result = yield rmq.kiwi_to_tornado_future(continue_future)
+        continue_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        result = yield continue_future
 
         raise gen.Return(result)
 
 
 class RemoteProcessThreadController(object):
+
     def __init__(self, communicator):
         self._communicator = communicator
 
     def get_status(self, pid):
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, STATUS_MSG), self._communicator)
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, STATUS_MSG))
 
-    def pause_process(self, pid, msg=None):
-        message = copy.copy(PAUSE_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
-
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message), self._communicator)
+    def pause_process(self, pid):
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PAUSE_MSG))
 
     def play_process(self, pid):
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PLAY_MSG), self._communicator)
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PLAY_MSG))
 
     def kill_process(self, pid, msg=None):
         message = copy.copy(KILL_MSG)
         if msg is not None:
             message[MESSAGE_KEY] = msg
 
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message), self._communicator)
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message))
 
     def continue_process(self, pid, tag=None, nowait=False):
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
-        return futures.unwrap_kiwi_future(self._communicator.task_send(message), self._communicator)
+        return futures.unwrap_kiwi_future(self._communicator.task_send(message))
 
-    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False,
-                       loader=None):
+    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False, loader=None):
         message = create_launch_body(process_class, init_args, init_kwargs, persist, nowait, loader)
-        return futures.unwrap_kiwi_future(self._communicator.task_send(message), self._communicator)
+        return futures.unwrap_kiwi_future(self._communicator.task_send(message))
 
     def execute_process(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
-        execute_future = self._communicator.create_future()
-        create_future = futures.unwrap_kiwi_future(self._communicator.task_send(message), self._communicator)
+        execute_future = kiwipy.Future()
+        create_future = futures.unwrap_kiwi_future(self._communicator.task_send(message))
 
         def on_created(_):
             try:
@@ -288,7 +299,6 @@ class ProcessLauncher(object):
             self._persister.save_checkpoint(proc)
 
         if nowait:
-            self._loop.add_callback(proc.step_until_terminated)
             raise gen.Return(proc.pid)
 
         yield proc.step_until_terminated()
@@ -307,7 +317,6 @@ class ProcessLauncher(object):
         proc = saved_state.unbundle(self._load_context)
 
         if nowait:
-            self._loop.add_callback(proc.step_until_terminated)
             raise gen.Return(proc.pid)
 
         yield proc.step_until_terminated()
