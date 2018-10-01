@@ -67,8 +67,7 @@ def create_task(coro, loop=None):
     :return: the future representing the outcome of the coroutine
     :rtype: :class:`tornado.concurrent.Future`
     """
-    if loop is None:
-        loop = ioloop.IOLoop.current()
+    loop = loop or ioloop.IOLoop.current()
 
     future = concurrent.Future()
 
