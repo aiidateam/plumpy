@@ -1,12 +1,14 @@
+"""Plumpy tests"""
+
+from __future__ import absolute_import
 import logging
 import tempfile
 import os
 
-testfile = os.path.join(tempfile.gettempdir(), 'plumpy_unittest.log')
+LOGFILE = os.path.join(tempfile.gettempdir(), 'plumpy_unittest.log')
 try:
-    os.remove(testfile)
+    os.remove(LOGFILE)
 except OSError:
     pass
-print("Logging test to '{}'".format(testfile))
 FORMAT = "[%(filename)s:%(lineno)s - %(funcName)s()] %(message)s"
-logging.basicConfig(filename=testfile, level=logging.DEBUG, format=FORMAT)
+logging.basicConfig(filename=LOGFILE, level=logging.DEBUG, format=FORMAT)

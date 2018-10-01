@@ -1,7 +1,10 @@
+"""Module for process level communication functions and classes"""
+
 from __future__ import absolute_import
 from __future__ import print_function
 import copy
-from tornado import gen, ioloop, concurrent
+
+from tornado import gen
 import kiwipy
 
 from . import loaders
@@ -93,27 +96,6 @@ def create_create_body(process_class, init_args=None, init_kwargs=None, persist=
     return msg_body
 
 
-def kiwi_to_tornado_future(kiwi_future, loop=None):
-    loop = loop or ioloop.IOLoop.current()  # type: :class:`tornado.ioloop.IOLoop`
-
-    tornado_future = concurrent.Future()
-
-    def done(done_future):
-        if done_future.cancelled():
-            tornado_future.cancel()
-
-        with kiwipy.capture_exceptions(tornado_future):
-            result = done_future.result()
-            if isinstance(result, kiwipy.Future):
-                result = kiwi_to_tornado_future(result, loop)
-
-            tornado_future.set_result(result)
-
-    print(('loop: {}'.format(loop)))
-    loop.add_future(kiwi_future, done)
-    return tornado_future
-
-
 class RemoteProcessController(object):
     """
     Control remote processes using coroutines that will send messages and wait
@@ -125,19 +107,19 @@ class RemoteProcessController(object):
 
     @gen.coroutine
     def get_status(self, pid):
-        status_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, STATUS_MSG))
+        status_future = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, STATUS_MSG))
         result = yield status_future
         raise gen.Return(result)
 
     @gen.coroutine
     def pause_process(self, pid):
-        pause_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, PAUSE_MSG))
+        pause_future = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, PAUSE_MSG))
         result = yield pause_future
         raise gen.Return(result)
 
     @gen.coroutine
     def play_process(self, pid):
-        play_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, PLAY_MSG))
+        play_future = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, PLAY_MSG))
         result = yield play_future
         raise gen.Return(result)
 
@@ -148,7 +130,7 @@ class RemoteProcessController(object):
             message[MESSAGE_KEY] = msg
 
         # Wait for the communication to go through
-        kill_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, message))
+        kill_future = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, message))
         # Now wait for the kill to be enacted
         result = yield kill_future
 
@@ -158,7 +140,7 @@ class RemoteProcessController(object):
     def continue_process(self, pid, tag=None, nowait=False):
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
-        continue_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        continue_future = yield communications.kiwi_to_plum_future(self._communicator.task_send(message))
         # Now wait for the result of the task
         result = yield continue_future
 
@@ -168,7 +150,7 @@ class RemoteProcessController(object):
     def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False, loader=None):
         message = create_launch_body(process_class, init_args, init_kwargs, persist, nowait, loader)
 
-        launch_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        launch_future = yield communications.kiwi_to_plum_future(self._communicator.task_send(message))
         result = yield launch_future
 
         raise gen.Return(result)
@@ -177,11 +159,11 @@ class RemoteProcessController(object):
     def execute_process(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
-        create_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        create_future = yield communications.kiwi_to_plum_future(self._communicator.task_send(message))
         pid = yield create_future
 
         message = create_continue_body(pid, nowait=nowait)
-        continue_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        continue_future = yield communications.kiwi_to_plum_future(self._communicator.task_send(message))
         result = yield continue_future
 
         raise gen.Return(result)
