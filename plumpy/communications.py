@@ -1,13 +1,11 @@
+from __future__ import absolute_import
 import kiwipy
 import functools
 from tornado import concurrent, ioloop
 
 from . import futures
 
-__all__ = [
-    'Action', 'Communicator', 'RemoteException', 'DeliveryFailed',
-    'TaskRejected'
-]
+__all__ = ['Action', 'Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected']
 
 RemoteException = kiwipy.RemoteException
 DeliveryFailed = kiwipy.DeliveryFailed
@@ -16,12 +14,13 @@ Communicator = kiwipy.Communicator
 
 
 class Action(kiwipy.Future):
+
     def execute(self, publisher):
         pass
 
 
 def plum_to_kiwi_future(communicator, plum_future):
-    kiwi_future = communicator.create_future()
+    kiwi_future = kiwipy.Future()
     futures.chain(plum_future, kiwi_future)
     return kiwi_future
 
@@ -33,8 +32,9 @@ def kiwi_to_plum_future(kiwi_future):
 
 
 def convert_to_comm(communicator, loop, to_convert):
+
     def converted(_comm, msg):
-        kiwi_future = communicator.create_future()
+        kiwi_future = kiwipy.Future()
 
         def task_done(task):
             try:

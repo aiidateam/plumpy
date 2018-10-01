@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from setuptools import setup
 
 __author__ = "Martin Uhrin"
@@ -8,7 +9,7 @@ __contributors__ = "Sebastiaan Huber, Leopold Talirz, Dominik Gresch"
 
 about = {}
 with open('plumpy/version.py') as f:
-    exec (f.read(), about)
+    exec(f.read(), about)
 
 setup(
     name="plumpy",
@@ -39,9 +40,9 @@ setup(
         'frozendict',
         'portalocker',
         'pyyaml',
-        'tornado<5.0',
+        'tornado>=4.1, <5.0',
         'future',
-        'kiwipy[rmq]>=0.3.0b1',
+        'kiwipy[rmq]>=0.3.1',
         'enum34; python_version<"3.4"',
         'backports.tempfile; python_version<"3.2"',
     ],
@@ -61,5 +62,4 @@ setup(
         ]
     },
     packages=['plumpy', 'plumpy/base'],
-    test_suite='test'
-)
+    test_suite='test')

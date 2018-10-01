@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import tempfile
 
 if getattr(tempfile, 'TemporaryDirectory', None) is None:
@@ -43,7 +44,7 @@ class TestPicklePersister(TestCaseWithLoop):
 
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertEquals(set(retrieved_checkpoints), set(checkpoints))
+            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
     def test_get_checkpoints_with_tags(self):
         """
@@ -65,7 +66,7 @@ class TestPicklePersister(TestCaseWithLoop):
 
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertEquals(set(retrieved_checkpoints), set(checkpoints))
+            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
     def test_get_process_checkpoints(self):
         """
@@ -89,7 +90,7 @@ class TestPicklePersister(TestCaseWithLoop):
 
             retrieved_checkpoints = persister.get_process_checkpoints(process_a.pid)
 
-            self.assertEquals(set(retrieved_checkpoints), set(checkpoints))
+            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
     def test_delete_process_checkpoints(self):
         """
@@ -112,14 +113,14 @@ class TestPicklePersister(TestCaseWithLoop):
             checkpoints = [checkpoint_a1, checkpoint_a2]
             retrieved_checkpoints = persister.get_process_checkpoints(process_a.pid)
 
-            self.assertEquals(set(retrieved_checkpoints), set(checkpoints))
+            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
             persister.delete_process_checkpoints(process_a.pid)
 
             checkpoints = []
             retrieved_checkpoints = persister.get_process_checkpoints(process_a.pid)
 
-            self.assertEquals(set(retrieved_checkpoints), set(checkpoints))
+            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
     def test_delete_checkpoint(self):
         """
@@ -144,18 +145,18 @@ class TestPicklePersister(TestCaseWithLoop):
             checkpoints = [checkpoint_a1, checkpoint_a2, checkpoint_b1, checkpoint_b2]
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertEquals(set(retrieved_checkpoints), set(checkpoints))
+            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
             persister.delete_checkpoint(process_a.pid, tag='2')
 
             checkpoints = [checkpoint_a1, checkpoint_b1, checkpoint_b2]
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertEquals(set(retrieved_checkpoints), set(checkpoints))
+            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
             persister.delete_checkpoint(process_b.pid, tag='1')
 
             checkpoints = [checkpoint_a1, checkpoint_b2]
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertEquals(set(retrieved_checkpoints), set(checkpoints))
+            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
