@@ -29,7 +29,19 @@ def plum_to_kiwi_future(plum_future):
     :rtype: :class:`kiwipy.Future`
     """
     kiwi_future = kiwipy.Future()
-    futures.chain(plum_future, kiwi_future)
+
+    def on_done(_plum_future):
+        with kiwipy.capture_exceptions(kiwi_future):
+            if plum_future.cancelled():
+                kiwi_future.cancel()
+            else:
+                result = plum_future.result()
+                # Did we get another future?  In which case convert it too
+                if concurrent.is_future(result):
+                    result = plum_to_kiwi_future(result)
+                kiwi_future.set_result(result)
+
+    plum_future.add_done_callback(on_done)
     return kiwi_future
 
 
@@ -76,21 +88,9 @@ def convert_to_comm(callback, loop=None):
     loop = loop or ioloop.IOLoop.current()
 
     def converted(communicator, msg):
-        kiwi_future = kiwipy.Future()
-
-        def task_done(task):
-            with kiwipy.capture_exceptions(kiwi_future):
-                result = task.result()
-                if concurrent.is_future(result):
-                    result = plum_to_kiwi_future(result)
-                kiwi_future.set_result(result)
-
         msg_fn = functools.partial(callback, communicator, msg)
         task_future = futures.create_task(msg_fn, loop)
-        # Schedule a callback on the loop when the task is done
-        loop.add_future(task_future, task_done)
-
-        return kiwi_future
+        return plum_to_kiwi_future(task_future)
 
     return converted
 

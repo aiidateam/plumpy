@@ -54,7 +54,7 @@ class BundleKeys(object):
 
 
 # Use thread-local storage for the stack
-_thread_local = threading.local()  # pylint_ disable=invalid-name
+_thread_local = threading.local()  # pylint: disable=invalid-name
 
 
 def _process_stack():
@@ -248,11 +248,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         self._future = persistence.SavableFuture()
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = logger
-        if communicator is None:
-            self._communicator = None
-        else:
-            # wrap the communicator so all callbacks are scheduled on our loop
-            self._communicator = communications.wrap_communicator(communicator, self._loop)
+        self._communicator = communicator
 
     @base.super_check
     def init(self):
@@ -323,8 +319,8 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         """
         if self._logger is not None:
             return self._logger
-        else:
-            return _LOGGER
+
+        return _LOGGER
 
     @property
     def status(self):
@@ -343,7 +339,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
     def launch(self, process_class, inputs=None, pid=None, logger=None):
         process = process_class(
             inputs=inputs, pid=pid, logger=logger, loop=self.loop(), communicator=self._communicator)
-        self.call_soon_external(process.step_until_terminated)
+        self.create_background_task(process.step_until_terminated)
         return process
 
     # region State introspection methods
@@ -361,12 +357,12 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         """
         if isinstance(self._state, process_states.Finished):
             return self._state.result
-        elif isinstance(self._state, process_states.Killed):
+        if isinstance(self._state, process_states.Killed):
             raise exceptions.KilledError()
-        elif isinstance(self._state, process_states.Excepted):
+        if isinstance(self._state, process_states.Excepted):
             raise self._state.exception
-        else:
-            raise exceptions.InvalidStateError
+
+        raise exceptions.InvalidStateError
 
     def successful(self):
         """
@@ -418,14 +414,17 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         self._loop.add_callback(handle.run)
         return handle
 
-    def call_soon_external(self, callback, *args, **kwargs):
+    def create_background_task(self, callback):
         """
-        Schedule a callback to an external method.  If there is an
-        exception in the callback it will not cause the process to fail.
-        """
-        self._loop.add_callback(callback, *args, **kwargs)
+        Create a task that corresponds to a callback scheduled on our event loop
 
-    def callback_excepted(self, callback, exception, trace):
+        :param callback: the callback to schedule, can be a function or coroutine
+        :return: a future corresponding to the result of this task
+        :rtype: :class:`plumpy.Future`
+        """
+        return futures.create_task(callback, loop=self._loop)
+
+    def callback_excepted(self, _callback, exception, trace):
         if self.state != process_states.ProcessState.EXCEPTED:
             self.fail(exception, trace)
 
@@ -446,18 +445,18 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
             _process_stack().pop()
 
     @gen.coroutine
-    def _run_task(self, fn, *args, **kwargs):
+    def _run_task(self, callback, *args, **kwargs):
         """
         This method should be used to run all Process related functions and coroutines.
         If there is an exception the process will enter the EXCEPTED state.
 
-        :param fn: A function or coroutine
+        :param callback: A function or coroutine
         :param args: Optional positional arguments passed to fn
         :param kwargs:  Optional keyword arguments passed to fn
         :return: The value as returned by fn
         """
         # Make sure execute is a coroutine
-        coro = utils.ensure_coroutine(fn)
+        coro = utils.ensure_coroutine(callback)
         result = yield tornado.stack_context.run_with_stack_context(
             tornado.stack_context.StackContext(self._process_scope), functools.partial(coro, *args, **kwargs))
         raise gen.Return(result)
@@ -508,9 +507,8 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
 
         self._state = self.recreate_state(saved_state['_state'])
 
-        if 'communicator' in load_context and load_context.communicator is not None:
-            # wrap the communicator so all callbacks are scheduled on our loop
-            self._communicator = communications.wrap_communicator(load_context.communicator, self._loop)
+        if 'communicator' in load_context:
+            self._communicator = load_context['communicator']
 
         if 'logger' in load_context:
             self._logger = load_context.logger
@@ -592,8 +590,8 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
                 self._communicator.broadcast_send(
                     body=None, sender=self.pid, subject='state_changed.{}.{}'.format(from_label, self.state.value))
             except ConnectionClosed:
-                self.logger.info('no connection available to broadcast state change from {} to {}'.format(
-                    from_label, self.state.value))
+                self.logger.info('no connection available to broadcast state change from %s to %s', from_label,
+                                 self.state.value)
 
     def on_exiting(self):
         state = self.state
@@ -722,7 +720,8 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
 
     # endregion
 
-    @gen.coroutine
+    # region Communication
+
     def message_receive(self, _comm, msg):
         """
         Coroutine called when the process receives a message from the communicator
@@ -737,23 +736,44 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         intent = msg[process_comms.INTENT_KEY]
 
         if intent == process_comms.Intent.PLAY:
-            result = self.play()
-        elif intent == process_comms.Intent.PAUSE:
-            result = self.pause(msg=msg.get(process_comms.MESSAGE_KEY, None))
-        elif intent == process_comms.Intent.KILL:
-            result = self.kill(msg=msg.get(process_comms.MESSAGE_KEY, None))
-        elif intent == process_comms.Intent.STATUS:
+            return self._schedule_rpc(self.play)
+        if intent == process_comms.Intent.PAUSE:
+            return self._schedule_rpc(self.pause, msg=msg.get(process_comms.MESSAGE_KEY, None))
+        if intent == process_comms.Intent.KILL:
+            return self._schedule_rpc(self.kill, msg=msg.get(process_comms.MESSAGE_KEY, None))
+        if intent == process_comms.Intent.STATUS:
             status_info = {}
             self.get_status_info(status_info)
-            result = status_info
-        else:
-            raise RuntimeError("Unknown intent")
+            return status_info
 
-        if concurrent.is_future(result):
-            # Wait for the process to actually finish
-            result = yield result
+        # Didn't match any known intents
+        raise RuntimeError("Unknown intent")
 
-        raise gen.Return(result)
+    def _schedule_rpc(self, callback, *args, **kwargs):
+        """
+        Schedule a call to a callback as a result of an RPC communication call, this will return
+        a future that resolves to the final result (even after one or more layer of futures being
+        returned) of the callback.
+
+        :param callback: the callback function or coroutine
+        :param args: the positional arguments to the callback
+        :param kwargs: the keyword arguments to the callback
+        :return: a kiwi future that resolves to the outcome of the callback
+        :rtype: :class:`kiwipy.Future`
+        """
+
+        @gen.coroutine
+        def run_callback():
+            result = yield gen.coroutine(callback)(*args, **kwargs)
+            while concurrent.is_future(result):
+                result = yield result
+            raise gen.Return(result)
+
+        # Schedule the task and give back a kiwi future
+        task = self.create_background_task(run_callback)
+        return communications.plum_to_kiwi_future(task)
+
+    # endregion
 
     def close(self):
         """
