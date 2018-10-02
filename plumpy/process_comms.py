@@ -30,6 +30,7 @@ MESSAGE_KEY = 'message'
 
 
 class Intent(object):
+    # pylint: disable=too-few-public-methods
     PLAY = 'play'
     PAUSE = 'pause'
     KILL = 'kill'
@@ -59,6 +60,18 @@ CREATE_TASK = 'create'
 
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=False, nowait=True, loader=None):
+    """
+    Create a message body for the launch action
+
+    :param process_class: the class of the process to launch
+    :param init_args: any initialisation positional arguments
+    :param init_kwargs: any initialisation keyword arguments
+    :param persist: persist this process if True, otherwise don't
+    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
+    :param loader: the loader to use to load the persisted process
+    :return: a dictionary with the body of the message to launch the process
+    :rtype: dict
+    """
     if loader is None:
         loader = loaders.get_object_loader()
 
@@ -76,11 +89,29 @@ def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=
 
 
 def create_continue_body(pid, tag=None, nowait=False):
+    """
+    Create a message body to continue an existing process
+    :param pid: the pid of the existing process
+    :param tag: the optional persistence tag
+    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
+    :return: a dictionary with the body of the message to continue the process
+    :rtype: dict
+    """
     msg_body = {TASK_KEY: CONTINUE_TASK, TASK_ARGS: {PID_KEY: pid, NOWAIT_KEY: nowait, TAG_KEY: tag}}
     return msg_body
 
 
 def create_create_body(process_class, init_args=None, init_kwargs=None, persist=False, loader=None):
+    """
+    Create a message body to create a new process
+    :param process_class: the class of the process to launch
+    :param init_args: any initialisation positional arguments
+    :param init_kwargs: any initialisation keyword arguments
+    :param persist: persist this process if True, otherwise don't
+    :param loader: the loader to use to load the persisted process
+    :return: a dictionary with the body of the message to launch the process
+    :rtype: dict
+    """
     if loader is None:
         loader = loaders.get_object_loader()
 
@@ -107,8 +138,7 @@ class RemoteProcessController(object):
 
     @gen.coroutine
     def get_status(self, pid):
-        status_future = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, STATUS_MSG))
-        result = yield status_future
+        result = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, STATUS_MSG))
         raise gen.Return(result)
 
     @gen.coroutine
@@ -184,7 +214,7 @@ class RemoteProcessThreadController(object):
     def pause_process(self, pid, msg=None):
         message = copy.copy(PAUSE_MSG)
         if msg is not None:
-            messagePAUSE_MSG[MESSAGE_KEY] = msg
+            message[MESSAGE_KEY] = msg
 
         return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message))
 
