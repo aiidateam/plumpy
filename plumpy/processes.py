@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
+"""The main Process module"""
 
 from __future__ import absolute_import
 import abc
 import contextlib
 import functools
-from future.utils import with_metaclass, raise_
-from pika.exceptions import ConnectionClosed
 import copy
 import logging
 import time
 import sys
 import threading
+import uuid
+
+from future.utils import with_metaclass, raise_
+from pika.exceptions import ConnectionClosed
 from tornado import concurrent, gen
 import tornado.stack_context
-import uuid
 import yaml
 
 from .process_listener import ProcessListener
@@ -45,13 +47,14 @@ class BundleKeys(object):
 
     See :func:`save_instance_state` and :func:`load_instance_state`.
     """
+    # pylint: disable=too-few-public-methods
     INPUTS_RAW = 'INPUTS_RAW'
     INPUTS_PARSED = 'INPUTS_PARSED'
     OUTPUTS = 'OUTPUTS'
 
 
 # Use thread-local storage for the stack
-_thread_local = threading.local()
+_thread_local = threading.local()  # pylint_ disable=invalid-name
 
 
 def _process_stack():
@@ -115,8 +118,6 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
     # Static class stuff ######################
     _spec_type = ProcessSpec
     # Default placeholders, will be populated in init()
-    _waiting_callbacks = None
-    _terminated_callbacks = None
     _stepping = False
     _pausing = None  # type: futures.Future
     _paused = None
@@ -127,8 +128,8 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
     def current(cls):
         if _process_stack():
             return _process_stack()[-1]
-        else:
-            return None
+
+        return None
 
     @classmethod
     def get_states(cls):
@@ -169,7 +170,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         return cls.__name__
 
     @classmethod
-    def define(cls, spec):
+    def define(cls, _spec):
         cls.__called = True
 
     @classmethod
@@ -250,14 +251,12 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         if communicator is None:
             self._communicator = None
         else:
-            self._communicator = communications.CommunicatorWrapper(communicator, self._loop)
+            # wrap the communicator so all callbacks are scheduled on our loop
+            self._communicator = communications.wrap_communicator(communicator, self._loop)
 
     @base.super_check
     def init(self):
         """ Any common initialisation stuff after create or load goes here """
-        self._waiting_callbacks = []
-        self._terminated_callbacks = []
-
         if self._communicator is not None:
             self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
 
@@ -510,13 +509,13 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         self._state = self.recreate_state(saved_state['_state'])
 
         if 'communicator' in load_context and load_context.communicator is not None:
-            self._communicator = communications.CommunicatorWrapper(load_context.communicator, self._loop)
+            # wrap the communicator so all callbacks are scheduled on our loop
+            self._communicator = communications.wrap_communicator(load_context.communicator, self._loop)
 
         if 'logger' in load_context:
             self._logger = load_context.logger
 
-        # Need to call this here as things downstream may rely on us having the
-        # runtime variable above
+        # Need to call this here as things downstream may rely on us having the runtime variable above
         super(Process, self).load_instance_state(saved_state, load_context)
 
         # Inputs/outputs
@@ -551,23 +550,11 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
     def set_logger(self, logger):
         self._logger = logger
 
-    # region Events
-
     @protected
     def log_with_pid(self, level, msg):
         self.logger.log(level, "{}: {}".format(self.pid, msg))
 
-    def add_on_waiting_callback(self, callback):
-        self._waiting_callbacks.append(callback)
-
-    def remove_on_waiting_callback(self, callback):
-        self._waiting_callbacks.remove(callback)
-
-    def add_on_terminated_callback(self, callback):
-        self._terminated_callbacks.append(callback)
-
-    def remove_on_terminated_callback(self, callback):
-        self._terminated_callbacks.remove(callback)
+    # region Events
 
     def on_entering(self, state):
         # Map these onto direct functions that the subclass can implement
@@ -663,8 +650,6 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
     def on_waiting(self):
         """ Entered the WAITING state """
         self._fire_event(ProcessListener.on_process_waiting)
-        for cb in self._waiting_callbacks:
-            cb(self)
 
     @super_check
     def on_pausing(self, msg=None):
@@ -732,11 +717,6 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         self._killing = None
         self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
 
-    def on_terminated(self):
-        super(Process, self).on_terminated()
-        for cb in self._terminated_callbacks:
-            self.call_soon_external(cb, self)
-
     def _fire_event(self, evt, *args, **kwargs):
         self.__event_helper.fire_event(evt, self, *args, **kwargs)
 
@@ -744,6 +724,16 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
 
     @gen.coroutine
     def message_receive(self, _comm, msg):
+        """
+        Coroutine called when the process receives a message from the communicator
+
+        :param _comm: the communicator that sent the message
+        :type _comm: :class:`kiwipy.Communicator`
+        :param msg: the message
+        :return: the outcome of processing the message, the return value will be sent back as a response to the sender
+        """
+        self.logger.debug("Message '%s' received with communicator '%s'", msg, _comm)
+
         intent = msg[process_comms.INTENT_KEY]
 
         if intent == process_comms.Intent.PLAY:
@@ -774,7 +764,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
 
     # region State related methods
 
-    def transition_excepted(self, initial_state, final_state, exception, trace):
+    def transition_excepted(self, _initial_state, final_state, exception, trace):
         # If we are creating, then reraise instead of failing.
         if final_state == process_states.ProcessState.CREATED:
             raise_(type(exception), exception, trace)
@@ -809,8 +799,8 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
             # Try to interrupt the state
             self._state.interrupt(interrupt_exception)
             return self._interrupt_action
-        else:
-            return self._do_pause(msg)
+
+        return self._do_pause(msg)
 
     def _do_pause(self, state_msg, next_state=None):
         """ Carry out the pause procedure, optionally transitioning to the next state first"""
@@ -836,7 +826,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
             do_pause = functools.partial(self._do_pause, str(exception))
             return futures.CancellableAction(do_pause, cookie=exception)
 
-        elif isinstance(exception, process_states.KillInterruption):
+        if isinstance(exception, process_states.KillInterruption):
 
             def do_kill(_next_state):
                 try:
@@ -847,8 +837,8 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
                     self._killing = None
 
             return futures.CancellableAction(do_kill, cookie=exception)
-        else:
-            raise ValueError("Got unknown interruption type '{}'".format(type(exception)))
+
+        raise ValueError("Got unknown interruption type '{}'".format(type(exception)))
 
     def _set_interrupt_action(self, new_action):
         """
@@ -883,9 +873,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
 
     @event(from_states=(process_states.Running, process_states.Waiting))
     def resume(self, *args):
-        """
-        Start running the process again
-        """
+        """Start running the process again"""
         return self._state.resume(*args)
 
     @event(to_states=process_states.Excepted)
@@ -923,9 +911,9 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
             self._killing = self._interrupt_action
             self._state.interrupt(interrupt_exception)
             return self._interrupt_action
-        else:
-            self.transition_to(process_states.ProcessState.KILLED, msg)
-            return True
+
+        self.transition_to(process_states.ProcessState.KILLED, msg)
+        return True
 
         # endregion
 
@@ -1090,6 +1078,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         :param inputs: A mapping of the inputs as passed to the process
         :return: The encoded inputs
         """
+        # pylint: disable=no-self-use
         return copy.deepcopy(inputs)
 
     @protected
@@ -1102,6 +1091,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         :param encoded:
         :return: The decoded input args
         """
+        # pylint: disable=no-self-use
         return copy.deepcopy(encoded)
 
     def get_status_info(self, out_status_info):
@@ -1112,10 +1102,6 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
             'state': self.state,
             'state_info': str(self._state)
         })
-
-    # region State entry/exit events
-
-    # endregion
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements

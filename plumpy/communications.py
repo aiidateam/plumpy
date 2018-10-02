@@ -1,14 +1,16 @@
 """Module for general kiwipy communication methods"""
 
 from __future__ import absolute_import
-import kiwipy
 import functools
+
+import kiwipy
 from tornado import concurrent, ioloop
 
 from . import futures
 
 __all__ = [
-    'Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'kiwi_to_plum_future', 'plum_to_kiwi_future'
+    'Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'kiwi_to_plum_future', 'plum_to_kiwi_future',
+    'wrap_communicator'
 ]
 
 RemoteException = kiwipy.RemoteException
@@ -61,7 +63,7 @@ def kiwi_to_plum_future(kiwi_future, loop=None):
     return tornado_future
 
 
-def convert_to_comm(loop, callback):
+def convert_to_comm(callback, loop=None):
     """
     Take a callback function and converted it to one that will schedule a callback
     on the given even loop and return a kiwi future representing the future outcome
@@ -71,6 +73,7 @@ def convert_to_comm(loop, callback):
     :param callback: the function to convert
     :return: a new callback function that returns a future
     """
+    loop = loop or ioloop.IOLoop.current()
 
     def converted(communicator, msg):
         kiwi_future = kiwipy.Future()
@@ -84,18 +87,39 @@ def convert_to_comm(loop, callback):
 
         msg_fn = functools.partial(callback, communicator, msg)
         task_future = futures.create_task(msg_fn, loop)
-        task_future.add_done_callback(task_done)
+        # Schedule a callback on the loop when the task is done
+        loop.add_future(task_future, task_done)
 
         return kiwi_future
 
     return converted
 
 
-class CommunicatorWrapper(kiwipy.Communicator):
+def wrap_communicator(communicator, loop=None):
     """
-    This wrapper takes a kiwipy Communicator and schedules and messages on a given
-    event loop passing back an appropriate kiwipy future that will be resolved with
-    the result of the callback.
+    Wrap a communicator such that all callbacks made to any subscribers are scheduled on the
+    given event loop.
+
+    If the communicator is already an equivalent communicator wrapper then it will not be
+    wrapped again.
+
+    :param communicator: the communicator to wrap
+    :type communicator: :class:`kiwipy.Communicator`
+    :param loop: the event loop to schedule callbacks on
+    :type loop: :class:`tornado.ioloop.IOLoop`
+    :return: a communicator wrapper
+    :rtype: :class:`plumpy.LoopCommunicator`
+    """
+    if isinstance(communicator, LoopCommunicator) and communicator.loop() is loop:
+        return communicator
+
+    return LoopCommunicator(communicator, loop)
+
+
+class LoopCommunicator(kiwipy.Communicator):
+    """
+    This wrapper takes a kiwipy Communicator and schedules any subscriber messages on a given
+    event loop.
     """
 
     def __init__(self, communicator, loop=None):
@@ -111,15 +135,18 @@ class CommunicatorWrapper(kiwipy.Communicator):
         self._loop = loop or ioloop.IOLoop.current()
         self._subscribers = {}
 
+    def loop(self):
+        return self._loop
+
     def add_rpc_subscriber(self, subscriber, identifier):
-        converted = convert_to_comm(self._loop, subscriber)
+        converted = convert_to_comm(subscriber, self._loop)
         self._communicator.add_rpc_subscriber(converted, identifier)
 
     def remove_rpc_subscriber(self, identifier):
         self._communicator.remove_rpc_subscriber(identifier)
 
     def add_task_subscriber(self, subscriber):
-        converted = convert_to_comm(self._loop, subscriber)
+        converted = convert_to_comm(subscriber, self._loop)
         self._communicator.add_task_subscriber(converted)
         self._subscribers[subscriber] = converted
 
@@ -127,7 +154,7 @@ class CommunicatorWrapper(kiwipy.Communicator):
         self._communicator.remove_task_subscriber(self._subscribers.pop(subscriber))
 
     def add_broadcast_subscriber(self, subscriber):
-        converted = convert_to_comm(self._loop, subscriber)
+        converted = convert_to_comm(subscriber, self._loop)
         self._communicator.add_broadcast_subscriber(converted)
         self._subscribers[subscriber] = converted
 

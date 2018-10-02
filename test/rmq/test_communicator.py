@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from functools import partial
 import shutil
 import tempfile
@@ -10,6 +11,7 @@ from kiwipy import rmq
 import plumpy.test_utils
 
 from plumpy import communications, process_comms, test_utils
+from six.moves import range
 
 try:
     import pika
@@ -21,6 +23,7 @@ AWAIT_TIMEOUT = testing.get_async_test_timeout()
 
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
 class TestTaskActions(testing.AsyncTestCase):
+
     def setUp(self):
         super(TestTaskActions, self).setUp()
         self.loop = self.io_loop
@@ -32,9 +35,8 @@ class TestTaskActions(testing.AsyncTestCase):
             connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
             message_exchange=exchange_name,
             task_queue=queue_name,
-            testing_mode=True
-        )
-        self.communicator = communications.CommunicatorWrapper(self.rmq_communicator, self.loop)
+            testing_mode=True)
+        self.communicator = communications.LoopCommunicator(self.rmq_communicator, self.loop)
 
         self._tmppath = tempfile.mkdtemp()
         self.persister = plumpy.PicklePersister(self._tmppath)
