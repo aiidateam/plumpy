@@ -4,15 +4,14 @@ from __future__ import absolute_import
 import abc
 import collections
 import inspect
-import plumpy.lang
 import re
-import sys
+import six
 
+from . import lang
 from . import mixins
 from . import persistence
 from . import processes
 from . import process_states
-import six
 
 __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
 
@@ -76,11 +75,11 @@ class Waiting(process_states.Waiting):
         key = self._awaiting.pop(awaitable)
         try:
             self.process.ctx[key] = awaitable.result()
-        except Exception as e:
-            self._waiting_future.set_exception(e)
+        except Exception as exception:
+            self._waiting_future.set_exception(exception)
         else:
             if not self._awaiting:
-                self._waiting_future.set_result(plumpy.lang.NULL)
+                self._waiting_future.set_result(lang.NULL)
 
 
 class WorkChain(mixins.ContextMixin, processes.Process):
@@ -152,13 +151,14 @@ class WorkChain(mixins.ContextMixin, processes.Process):
 
             if self._awaitables:
                 return process_states.Wait(self._do_step, 'Waiting before next step', self._awaitables)
-            else:
-                return process_states.Continue(self._do_step)
+
+            return process_states.Continue(self._do_step)
         else:
             return return_value
 
 
-class Stepper(six.with_metaclass(abc.ABCMeta, persistence.Savable)):
+@six.add_metaclass(abc.ABCMeta)
+class Stepper(persistence.Savable):
 
     def __init__(self, workchain):
         self._workchain = workchain
@@ -179,7 +179,8 @@ class Stepper(six.with_metaclass(abc.ABCMeta, persistence.Savable)):
         pass
 
 
-class _Instruction(six.with_metaclass(abc.ABCMeta, object)):
+@six.add_metaclass(abc.ABCMeta)
+class _Instruction(object):
     """
     This class represents an instruction in a workchain. To step through the
     step you need to get a stepper by calling ``create_stepper()`` from which
@@ -402,8 +403,8 @@ class _IfStepper(Stepper):
 
             if self.finished():
                 return True, None
-            else:
-                self._child_stepper = self._if_instruction[self._pos].body.create_stepper(self._workchain)
+
+            self._child_stepper = self._if_instruction[self._pos].body.create_stepper(self._workchain)
 
         finished, retval = self._child_stepper.step()
         if finished:
@@ -558,6 +559,7 @@ class _While(_Conditional, _Instruction, collections.Sequence):
 class _PropagateReturn(BaseException):
 
     def __init__(self, exit_code):
+        super(_PropagateReturn, self).__init__()
         self.exit_code = exit_code
 
 
@@ -665,6 +667,6 @@ def _ensure_instruction(command):
     # There is only a single instruction
     if isinstance(command, _Instruction):
         return command
-    else:
-        # It must be a direct function call
-        return _FunctionCall(command)
+
+    # It must be a direct function call
+    return _FunctionCall(command)

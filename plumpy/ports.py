@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
+import abc
 import collections
 import copy
 import json
 import logging
-from abc import ABCMeta
-from future.utils import with_metaclass
-from six import string_types
+import six
 
 from plumpy.utils import is_mutable_property
 
@@ -16,7 +15,8 @@ UNSPECIFIED = ()
 __all__ = ['UNSPECIFIED', 'ValueSpec']
 
 
-class ValueSpec(with_metaclass(ABCMeta, object)):
+@six.add_metaclass(abc.ABCMeta)
+class ValueSpec(object):
     """
     Specifications relating to a general input/output value including
     properties like whether it is required, valid types, the help string, etc.
@@ -108,7 +108,8 @@ class ValueSpec(with_metaclass(ABCMeta, object)):
         return True, None
 
 
-class Port(with_metaclass(ABCMeta, ValueSpec)):
+@six.add_metaclass(abc.ABCMeta)
+class Port(ValueSpec):
     pass
 
 
@@ -296,7 +297,7 @@ class PortNamespace(collections.MutableMapping, Port):
         :returns: Port
         :raises: ValueError if port or namespace does not exist
         """
-        if not isinstance(name, string_types):
+        if not isinstance(name, six.string_types):
             raise ValueError('name has to be a string type, not {}'.format(type(name)))
 
         if not name:
@@ -324,7 +325,7 @@ class PortNamespace(collections.MutableMapping, Port):
         :returns: PortNamespace
         :raises: ValueError if any sub namespace is occupied by a non-PortNamespace port
         """
-        if not isinstance(name, string_types):
+        if not isinstance(name, six.string_types):
             raise ValueError('name has to be a string type, not {}'.format(type(name)))
 
         if not name:

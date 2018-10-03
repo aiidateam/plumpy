@@ -1,14 +1,13 @@
 from __future__ import absolute_import
 import collections
 import enum
-from future.utils import with_metaclass, raise_
 import functools
 import inspect
 import logging
 import os
 import plumpy
 import sys
-import traceback
+import six
 
 from .utils import call_with_super_check, super_check
 
@@ -101,8 +100,8 @@ def event(from_states='*', to_states='*'):
 
     if inspect.isfunction(from_states):
         return wrapper(from_states)
-    else:
-        return wrapper
+
+    return wrapper
 
 
 class State(object):
@@ -189,7 +188,8 @@ class StateMachineMeta(type):
         return inst
 
 
-class StateMachine(with_metaclass(StateMachineMeta, object)):
+@six.add_metaclass(StateMachineMeta)
+class StateMachine(object):
     STATES = None
     _STATES_MAP = None
 
@@ -205,8 +205,8 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
     def get_states(cls):
         if cls.STATES is not None:
             return cls.STATES
-        else:
-            raise RuntimeError("States not defined")
+
+        raise RuntimeError("States not defined")
 
     @classmethod
     def initial_state_label(cls):
@@ -334,7 +334,7 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
         :param exception: The transition failed exception
         :type exception: :class:`Exception`
         """
-        raise_(type(exception), exception, trace)
+        six.reraise(type(exception), exception, trace)
 
     def get_debug(self):
         return self._debug
@@ -383,8 +383,8 @@ class StateMachine(with_metaclass(StateMachineMeta, object)):
     def _ensure_state_class(self, state):
         if inspect.isclass(state) and issubclass(state, State):
             return state
-        else:
-            try:
-                return self.get_states_map()[state]
-            except KeyError:
-                raise ValueError("{} is not a valid state".format(state))
+
+        try:
+            return self.get_states_map()[state]
+        except KeyError:
+            raise ValueError("{} is not a valid state".format(state))

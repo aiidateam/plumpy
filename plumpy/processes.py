@@ -8,11 +8,11 @@ import functools
 import copy
 import logging
 import time
+import six
 import sys
 import threading
 import uuid
 
-from future.utils import with_metaclass, raise_
 from pika.exceptions import ConnectionClosed
 from tornado import concurrent, gen
 import tornado.stack_context
@@ -76,8 +76,9 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
 yaml.representer.Representer.add_representer(ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
 
 
+@six.add_metaclass(ProcessStateMachineMeta)
 @persistence.auto_persist('_pid', '_CREATION_TIME', '_future', '_paused', '_status', '_pre_paused_status')
-class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.Savable)):
+class Process(StateMachine, persistence.Savable):
     """
     The Process class is the base for any unit of work in plumpy.
 
@@ -787,7 +788,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
     def transition_excepted(self, _initial_state, final_state, exception, trace):
         # If we are creating, then reraise instead of failing.
         if final_state == process_states.ProcessState.CREATED:
-            raise_(type(exception), exception, trace)
+            six.reraise(type(exception), exception, trace)
         else:
             self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
 
