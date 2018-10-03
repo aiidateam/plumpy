@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 import abc
 import collections
 import inspect
+import plumpy.lang
 import re
 import sys
 
@@ -10,15 +12,15 @@ from . import mixins
 from . import persistence
 from . import processes
 from . import process_states
+import six
 
-__all__ = [
-    'WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec'
-]
+__all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
 
 ToContext = dict
 
 
 class WorkChainSpec(processes.ProcessSpec):
+
     def __init__(self):
         super(WorkChainSpec, self).__init__()
         self._outline = None
@@ -78,7 +80,7 @@ class Waiting(process_states.Waiting):
             self._waiting_future.set_exception(e)
         else:
             if not self._awaiting:
-                self._waiting_future.set_result(process_states.NULL)
+                self._waiting_future.set_result(plumpy.lang.NULL)
 
 
 class WorkChain(mixins.ContextMixin, processes.Process):
@@ -96,18 +98,8 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         states_map[process_states.ProcessState.WAITING] = Waiting
         return states_map
 
-    def __init__(self,
-                 inputs=None,
-                 pid=None,
-                 logger=None,
-                 loop=None,
-                 communicator=None):
-        super(WorkChain, self).__init__(
-            inputs=inputs,
-            pid=pid,
-            logger=logger,
-            loop=loop,
-            communicator=communicator)
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
+        super(WorkChain, self).__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
         self._stepper = None
         self._awaitables = {}
 
@@ -129,8 +121,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         self._stepper = None
         stepper_state = saved_state.get(self._STEPPER_STATE, None)
         if stepper_state is not None:
-            self._stepper = self.spec().get_outline().recreate_stepper(
-                stepper_state, self)
+            self._stepper = self.spec().get_outline().recreate_stepper(stepper_state, self)
 
     def to_context(self, **kwargs):
         """
@@ -154,24 +145,20 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         except _PropagateReturn as exception:
             finished, return_value = True, exception.exit_code
 
-        if not finished and (return_value is None
-                             or isinstance(return_value, ToContext)):
+        if not finished and (return_value is None or isinstance(return_value, ToContext)):
 
             if isinstance(return_value, ToContext):
                 self.to_context(**return_value)
 
             if self._awaitables:
-                return process_states.Wait(self._do_step,
-                                           'Waiting before next step',
-                                           self._awaitables)
+                return process_states.Wait(self._do_step, 'Waiting before next step', self._awaitables)
             else:
                 return process_states.Continue(self._do_step)
         else:
             return return_value
 
 
-class Stepper(persistence.Savable):
-    __metaclass__ = abc.ABCMeta
+class Stepper(six.with_metaclass(abc.ABCMeta, persistence.Savable)):
 
     def __init__(self, workchain):
         self._workchain = workchain
@@ -192,13 +179,12 @@ class Stepper(persistence.Savable):
         pass
 
 
-class _Instruction(object):
+class _Instruction(six.with_metaclass(abc.ABCMeta, object)):
     """
     This class represents an instruction in a workchain. To step through the
     step you need to get a stepper by calling ``create_stepper()`` from which
     you can call the :class:`~Stepper.step()` method.
     """
-    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def create_stepper(self, workchain):
@@ -224,18 +210,17 @@ class _Instruction(object):
 
 
 class _FunctionStepper(Stepper):
+
     def __init__(self, workchain, fn):
         super(_FunctionStepper, self).__init__(workchain)
         self._fn = fn
 
     def save_instance_state(self, out_state, save_context):
-        super(_FunctionStepper, self).save_instance_state(
-            out_state, save_context)
+        super(_FunctionStepper, self).save_instance_state(out_state, save_context)
         out_state['_fn'] = self._fn.__name__
 
     def load_instance_state(self, saved_state, load_context):
-        super(_FunctionStepper, self).load_instance_state(
-            saved_state, load_context)
+        super(_FunctionStepper, self).load_instance_state(saved_state, load_context)
         self._fn = getattr(self._workchain.__class__, saved_state['_fn'])
 
     def step(self):
@@ -246,12 +231,12 @@ class _FunctionStepper(Stepper):
 
 
 class _FunctionCall(_Instruction):
+
     def __init__(self, func):
         try:
             args = inspect.getargspec(func)[0]
         except TypeError:
-            raise TypeError("func is not a function, got {}".format(
-                type(func)))
+            raise TypeError("func is not a function, got {}".format(type(func)))
         if len(args) != 1:
             raise TypeError("Step must take one argument only: self")
 
@@ -261,8 +246,7 @@ class _FunctionCall(_Instruction):
         return _FunctionStepper(workchain, self._fn)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = persistence.LoadSaveContext(
-            workchain=workchain, func_spec=self)
+        load_context = persistence.LoadSaveContext(workchain=workchain, func_spec=self)
         return _FunctionStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
@@ -279,6 +263,7 @@ STEPPER_STATE = 'stepper_state'
 
 @persistence.auto_persist('_pos')
 class _BlockStepper(Stepper):
+
     def __init__(self, block, workchain):
         super(_BlockStepper, self).__init__(workchain)
         self._block = block
@@ -286,8 +271,7 @@ class _BlockStepper(Stepper):
         self._child_stepper = self._block[0].create_stepper(self._workchain)
 
     def step(self):
-        assert not self.finished(
-        ), "Can't call step after the block is finished"
+        assert not self.finished(), "Can't call step after the block is finished"
 
         finished, result = self._child_stepper.step()
         if finished:
@@ -301,8 +285,7 @@ class _BlockStepper(Stepper):
         if self.finished():
             self._child_stepper = None
         else:
-            self._child_stepper = self._block[self._pos].create_stepper(
-                self._workchain)
+            self._child_stepper = self._block[self._pos].create_stepper(self._workchain)
 
     def finished(self):
         return self._pos == len(self._block)
@@ -313,14 +296,12 @@ class _BlockStepper(Stepper):
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
     def load_instance_state(self, saved_state, load_context):
-        super(_BlockStepper, self).load_instance_state(saved_state,
-                                                       load_context)
+        super(_BlockStepper, self).load_instance_state(saved_state, load_context)
         self._block = load_context.block_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
         if stepper_state is not None:
-            self._child_stepper = self._block[self._pos].recreate_stepper(
-                stepper_state, self._workchain)
+            self._child_stepper = self._block[self._pos].recreate_stepper(stepper_state, self._workchain)
 
     def __str__(self):
         return str(self._pos) + ':' + str(self._child_stepper)
@@ -352,14 +333,11 @@ class _Block(_Instruction, collections.Sequence):
         return _BlockStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = persistence.LoadSaveContext(
-            workchain=workchain, block_instruction=self)
+        load_context = persistence.LoadSaveContext(workchain=workchain, block_instruction=self)
         return _BlockStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
-        return [
-            instruction.get_description() for instruction in self._instruction
-        ]
+        return [instruction.get_description() for instruction in self._instruction]
 
 
 class _Conditional(object):
@@ -403,6 +381,7 @@ class _Conditional(object):
 
 @persistence.auto_persist('_pos')
 class _IfStepper(Stepper):
+
     def __init__(self, if_instruction, workchain):
         super(_IfStepper, self).__init__(workchain)
         self._if_instruction = if_instruction
@@ -424,8 +403,7 @@ class _IfStepper(Stepper):
             if self.finished():
                 return True, None
             else:
-                self._child_stepper = self._if_instruction[
-                    self._pos].body.create_stepper(self._workchain)
+                self._child_stepper = self._if_instruction[self._pos].body.create_stepper(self._workchain)
 
         finished, retval = self._child_stepper.step()
         if finished:
@@ -448,9 +426,7 @@ class _IfStepper(Stepper):
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
         if stepper_state is not None:
-            self._child_stepper = self._if_instruction[
-                self._pos].body.recreate_stepper(stepper_state,
-                                                 self._workchain)
+            self._child_stepper = self._if_instruction[self._pos].body.recreate_stepper(stepper_state, self._workchain)
 
     def __str__(self):
         s = str(self._if_instruction[self._pos])
@@ -461,6 +437,7 @@ class _IfStepper(Stepper):
 
 
 class _If(_Instruction, collections.Sequence):
+
     def __init__(self, condition):
         super(_If, self).__init__()
         self._ifs = [_Conditional(self, condition, label=if_.__name__)]
@@ -482,8 +459,7 @@ class _If(_Instruction, collections.Sequence):
         return self
 
     def elif_(self, condition):
-        self._ifs.append(
-            _Conditional(self, condition, label=self.elif_.__name__))
+        self._ifs.append(_Conditional(self, condition, label=self.elif_.__name__))
         return self._ifs[-1]
 
     def else_(self, *commands):
@@ -500,24 +476,21 @@ class _If(_Instruction, collections.Sequence):
         return _IfStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = persistence.LoadSaveContext(
-            workchain=workchain, if_instruction=self)
+        load_context = persistence.LoadSaveContext(workchain=workchain, if_instruction=self)
         return _IfStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
         description = collections.OrderedDict()
 
-        description['if({})'.format(self._ifs[
-            0].predicate.__name__)] = self._ifs[0].body.get_description()
+        description['if({})'.format(self._ifs[0].predicate.__name__)] = self._ifs[0].body.get_description()
         for conditional in self._ifs[1:]:
-            description['elif({})'.format(
-                conditional.predicate.__name__
-            )] = conditional.body.get_description()
+            description['elif({})'.format(conditional.predicate.__name__)] = conditional.body.get_description()
 
         return description
 
 
 class _WhileStepper(Stepper):
+
     def __init__(self, while_instruction, workchain):
         super(_WhileStepper, self).__init__(workchain)
         self._while_instruction = while_instruction
@@ -528,8 +501,7 @@ class _WhileStepper(Stepper):
         if self._child_stepper is None:
             # Should we go into the loop body?
             if self._while_instruction.is_true(self._workchain):
-                self._child_stepper = self._while_instruction.body.create_stepper(
-                    self._workchain)
+                self._child_stepper = self._while_instruction.body.create_stepper(self._workchain)
             else:  # Nope...we're done
                 return True, None
 
@@ -545,14 +517,12 @@ class _WhileStepper(Stepper):
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
     def load_instance_state(self, saved_state, load_context):
-        super(_WhileStepper, self).load_instance_state(saved_state,
-                                                       load_context)
+        super(_WhileStepper, self).load_instance_state(saved_state, load_context)
         self._while_instruction = load_context.while_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
         if stepper_state is not None:
-            self._child_stepper = self._while_instruction.body.recreate_stepper(
-                stepper_state, self._workchain)
+            self._child_stepper = self._while_instruction.body.recreate_stepper(stepper_state, self._workchain)
 
     def __str__(self):
         s = str(self._while_instruction)
@@ -563,6 +533,7 @@ class _WhileStepper(Stepper):
 
 
 class _While(_Conditional, _Instruction, collections.Sequence):
+
     def __init__(self, predicate):
         super(_While, self).__init__(self, predicate, label=while_.__name__)
 
@@ -577,23 +548,21 @@ class _While(_Conditional, _Instruction, collections.Sequence):
         return _WhileStepper(self, workchain)
 
     def recreate_stepper(self, saved_state, workchain):
-        load_context = persistence.LoadSaveContext(
-            workchain=workchain, while_instruction=self)
+        load_context = persistence.LoadSaveContext(workchain=workchain, while_instruction=self)
         return _WhileStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
-        return {
-            "while({})".format(self.predicate.__name__):
-            self.body.get_description()
-        }
+        return {"while({})".format(self.predicate.__name__): self.body.get_description()}
 
 
 class _PropagateReturn(BaseException):
+
     def __init__(self, exit_code):
         self.exit_code = exit_code
 
 
 class _ReturnStepper(Stepper):
+
     def __init__(self, return_instruction, workchain):
         super(_ReturnStepper, self).__init__(workchain)
         self._return_instruction = return_instruction

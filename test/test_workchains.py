@@ -1,5 +1,6 @@
+from __future__ import absolute_import
 import inspect
-from past.builtins import basestring
+import six
 from tornado import gen
 
 import plumpy
@@ -23,27 +24,19 @@ class Wf(WorkChain):
         spec.outputs.dynamic = True
         spec.outline(
             cls.s1,
-            if_(cls.isA)(
-                cls.s2
-            ).elif_(cls.isB)(
-                cls.s3
-            ).else_(
-                cls.s4
-            ),
+            if_(cls.isA)(cls.s2).elif_(cls.isB)(cls.s3).else_(cls.s4),
             cls.s5,
-            while_(cls.ltN)(
-                cls.s6
-            ),
+            while_(cls.ltN)(cls.s6),
         )
 
     def on_create(self):
         super(Wf, self).on_create()
         # Reset the finished step
         self.finished_steps = {
-            k: False for k in
-            [self.s1.__name__, self.s2.__name__, self.s3.__name__,
-             self.s4.__name__, self.s5.__name__, self.s6.__name__,
-             self.isA.__name__, self.isB.__name__, self.ltN.__name__]
+            k: False for k in [
+                self.s1.__name__, self.s2.__name__, self.s3.__name__, self.s4.__name__, self.s5.__name__, self.s6.
+                __name__, self.isA.__name__, self.isB.__name__, self.ltN.__name__
+            ]
         }
 
     def s1(self):
@@ -85,15 +78,11 @@ class Wf(WorkChain):
 
 
 class IfTest(WorkChain):
+
     @classmethod
     def define(cls, spec):
         super(IfTest, cls).define(spec)
-        spec.outline(
-            if_(cls.condition)(
-                cls.step1,
-                cls.step2
-            )
-        )
+        spec.outline(if_(cls.condition)(cls.step1, cls.step2))
 
     def on_create(self, *args, **kwargs):
         super(IfTest, self).on_create(*args, **kwargs)
@@ -112,6 +101,7 @@ class IfTest(WorkChain):
 
 
 class DummyWc(WorkChain):
+
     @classmethod
     def define(cls, spec):
         super(DummyWc, cls).define(spec)
@@ -122,6 +112,7 @@ class DummyWc(WorkChain):
 
 
 class TestContext(unittest.TestCase):
+
     def test_attributes(self):
         wc = DummyWc()
         wc.ctx.new_attr = 5
@@ -172,7 +163,9 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 self.assertTrue(finished, "Step {} was not called by workflow".format(step))
 
     def test_incorrect_outline(self):
+
         class Wf(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(Wf, cls).define(spec)
@@ -183,7 +176,9 @@ class TestWorkchain(utils.TestCaseWithLoop):
             Wf.spec()
 
     def test_same_input_node(self):
+
         class Wf(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(Wf, cls).define(spec)
@@ -204,6 +199,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         B = "b"
 
         class ReturnA(plumpy.Process):
+
             @classmethod
             def define(cls, spec):
                 super(ReturnA, cls).define(spec)
@@ -213,6 +209,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 self.out('res', A)
 
         class ReturnB(plumpy.Process):
+
             @classmethod
             def define(cls, spec):
                 super(ReturnB, cls).define(spec)
@@ -222,6 +219,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 self.out('res', B)
 
         class Wf(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(Wf, cls).define(spec)
@@ -244,7 +242,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         Wf().execute()
 
     def test_str(self):
-        self.assertIsInstance(str(Wf.spec()), basestring)
+        self.assertIsInstance(str(Wf.spec()), six.string_types)
 
     def test_malformed_outline(self):
         """
@@ -296,13 +294,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 spec.input('success', valid_type=bool, required=False)
                 spec.outline(
                     cls.step_one,
-                    if_(cls.do_success)(
-                        return_
-                    ).elif_(cls.do_failed)(
-                        return_(cls.FAILED_CODE)
-                    ).else_(
-                        cls.default
-                    ),
+                    if_(cls.do_success)(return_).elif_(cls.do_failed)(return_(cls.FAILED_CODE)).else_(cls.default),
                 )
 
             def step_one(self):
@@ -337,10 +329,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
             def define(cls, spec):
                 super(WcWithReturn, cls).define(spec)
                 spec.input('success', valid_type=bool, required=False)
-                spec.outline(
-                    cls.step_one,
-                    cls.after
-                )
+                spec.outline(cls.step_one, cls.after)
 
             def step_one(self):
                 if 'success' not in self.inputs:
@@ -364,7 +353,9 @@ class TestWorkchain(utils.TestCaseWithLoop):
             workchain.execute()
 
     def test_tocontext_schedule_workchain(self):
+
         class MainWorkChain(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(MainWorkChain, cls).define(spec)
@@ -378,6 +369,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 assert self.ctx.subwc.out.value == 5
 
         class SubWorkChain(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(SubWorkChain, cls).define(spec)
@@ -421,6 +413,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         val = 5
 
         class SimpleWc(plumpy.Process):
+
             @classmethod
             def define(cls, spec):
                 super(SimpleWc, cls).define(spec)
@@ -430,6 +423,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 self.out('_return', val)
 
         class Workchain(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(Workchain, cls).define(spec)
@@ -450,6 +444,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         """Test running a workchain with nested outputs."""
 
         class TestWorkChain(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(TestWorkChain, cls).define(spec)
@@ -466,6 +461,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         my_exception = RuntimeError("Should not be reached")
 
         class Workchain(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(Workchain, cls).define(spec)
@@ -492,6 +488,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         """Check status information provided by steppers"""
 
         class Wf(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(Wf, cls).define(spec)
@@ -502,13 +499,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                         cls.chill,
                         cls.chill,
                     ),
-                    if_(cls.do_step)(
-                        cls.chill,
-                    ).elif_(cls.do_step)(
-                        cls.chill,
-                    ).else_(
-                        cls.chill
-                    ),
+                    if_(cls.do_step)(cls.chill,).elif_(cls.do_step)(cls.chill,).else_(cls.chill),
                 )
 
             def check_n(self):
@@ -529,13 +520,12 @@ class TestWorkchain(utils.TestCaseWithLoop):
                     return False
 
         class StatusCollector(ProcessListener):
+
             def __init__(self):
                 self.stepper_strings = []
 
             def on_process_running(self, process):
-                self.stepper_strings.append(
-                    str(process._stepper)
-                )
+                self.stepper_strings.append(str(process._stepper))
 
         collector = StatusCollector()
 
@@ -543,10 +533,11 @@ class TestWorkchain(utils.TestCaseWithLoop):
         wf.add_process_listener(collector)
         wf.execute()
 
-        stepper_strings = ['0:check_n', '1:while_(do_step)',
-                           '1:while_(do_step)(1:chill)', '1:while_(do_step)',
-                           '1:while_(do_step)(1:chill)', '1:while_(do_step)',
-                           '1:while_(do_step)(1:chill)', '1:while_(do_step)', '2:if_(do_step)']
+        stepper_strings = [
+            '0:check_n', '1:while_(do_step)', '1:while_(do_step)(1:chill)', '1:while_(do_step)',
+            '1:while_(do_step)(1:chill)', '1:while_(do_step)', '1:while_(do_step)(1:chill)', '1:while_(do_step)',
+            '2:if_(do_step)'
+        ]
         self.assertListEqual(collector.stepper_strings, stepper_strings)
 
 
@@ -562,6 +553,7 @@ class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
         test_class = self
 
         class Wf(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(Wf, cls).define(spec)
@@ -586,7 +578,7 @@ class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
                 test_class.assertIn('a', self.inputs)
                 test_class.assertIn('b', self.inputs)
                 test_class.assertNotIn('c', self.inputs)
-                test_class.assertEquals(self.inputs['a'], 1)
+                test_class.assertEqual(self.inputs['a'], 1)
 
         workchain = Wf(inputs=dict(a=1, b=2))
         workchain.execute()
@@ -598,6 +590,7 @@ class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
         test_class = self
 
         class Wf(WorkChain):
+
             @classmethod
             def define(cls, spec):
                 super(Wf, cls).define(spec)
@@ -621,7 +614,7 @@ class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
                 test_class.assertIn('one', self.inputs.subspace)
                 test_class.assertIn('two', self.inputs.subspace)
                 test_class.assertNotIn('four', self.inputs.subspace)
-                test_class.assertEquals(self.inputs.subspace['one'], 1)
+                test_class.assertEqual(self.inputs.subspace['one'], 1)
 
         workchain = Wf(inputs=dict(subspace={'one': 1, 'two': 2}))
         workchain.execute()

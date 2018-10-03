@@ -1,6 +1,8 @@
-from builtins import str
+from __future__ import absolute_import
 from enum import Enum
 import sys
+
+from plumpy.lang import NULL
 from tornado.gen import coroutine, Return
 import traceback
 import yaml
@@ -38,14 +40,6 @@ __all__ = [
 ]
 
 
-class __NULL(object):
-    def __eq__(self, other):
-        return isinstance(other, self.__class__)
-
-
-NULL = __NULL()
-
-
 class Interruption(Exception):
     pass
 
@@ -67,6 +61,7 @@ class Command(persistence.Savable):
 
 @auto_persist('msg')
 class Kill(Command):
+
     def __init__(self, msg=None):
         self.msg = msg
 
@@ -77,6 +72,7 @@ class Pause(Command):
 
 @auto_persist('msg', 'data')
 class Wait(Command):
+
     def __init__(self, continue_fn=None, msg=None, data=None):
         self.continue_fn = continue_fn
         self.msg = msg
@@ -85,6 +81,7 @@ class Wait(Command):
 
 @auto_persist('result')
 class Stop(Command):
+
     def __init__(self, result, successful):
         self.result = result
         self.successful = successful
@@ -106,8 +103,7 @@ class Continue(Command):
     def load_instance_state(self, saved_state, load_context):
         super(Continue, self).load_instance_state(saved_state, load_context)
         try:
-            self.continue_fn = utils.load_function(
-                saved_state[self.CONTINUE_FN])
+            self.continue_fn = utils.load_function(saved_state[self.CONTINUE_FN])
         except ValueError:
             process = load_context.process
             self.continue_fn = getattr(process, saved_state[self.CONTINUE_FN])
@@ -132,6 +128,7 @@ class ProcessState(Enum):
 
 @auto_persist('in_state')
 class State(state_machine.State, persistence.Savable):
+
     @property
     def process(self):
         """
@@ -151,9 +148,7 @@ class State(state_machine.State, persistence.Savable):
 @auto_persist('args', 'kwargs')
 class Created(State):
     LABEL = ProcessState.CREATED
-    ALLOWED = {
-        ProcessState.RUNNING, ProcessState.KILLED, ProcessState.EXCEPTED
-    }
+    ALLOWED = {ProcessState.RUNNING, ProcessState.KILLED, ProcessState.EXCEPTED}
 
     RUN_FN = 'run_fn'
 
@@ -173,16 +168,14 @@ class Created(State):
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
 
     def execute(self):
-        return self.create_state(ProcessState.RUNNING, self.run_fn, *self.args,
-                                 **self.kwargs)
+        return self.create_state(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
 
 
 @auto_persist('args', 'kwargs')
 class Running(State):
     LABEL = ProcessState.RUNNING
     ALLOWED = {
-        ProcessState.RUNNING, ProcessState.WAITING, ProcessState.FINISHED,
-        ProcessState.KILLED, ProcessState.EXCEPTED
+        ProcessState.RUNNING, ProcessState.WAITING, ProcessState.FINISHED, ProcessState.KILLED, ProcessState.EXCEPTED
     }
 
     RUN_FN = 'run_fn'  # The key used to store the function to run
@@ -211,8 +204,7 @@ class Running(State):
         super(Running, self).load_instance_state(saved_state, load_context)
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
         if self.COMMAND in saved_state:
-            self._command = persistence.Savable.load(saved_state[self.COMMAND],
-                                                     load_context)
+            self._command = persistence.Savable.load(saved_state[self.COMMAND], load_context)
 
     def interrupt(self, reason):
         return False
@@ -232,8 +224,7 @@ class Running(State):
                 # Let this bubble up to the caller
                 raise
             except Exception:
-                excepted = self.create_state(ProcessState.EXCEPTED,
-                                             *sys.exc_info()[1:])
+                excepted = self.create_state(ProcessState.EXCEPTED, *sys.exc_info()[1:])
                 raise Return(excepted)
             else:
                 if not isinstance(result, Command):
@@ -250,19 +241,15 @@ class Running(State):
 
     def _action_command(self, command):
         if isinstance(command, Kill):
-            return self.create_state(ProcessState.FINISHED, command.result,
-                                     command.successful)
+            return self.create_state(ProcessState.FINISHED, command.result, command.successful)
         # elif isinstance(command, Pause):
         #     self.pause()
         elif isinstance(command, Stop):
-            return self.create_state(ProcessState.FINISHED, command.result,
-                                     command.successful)
+            return self.create_state(ProcessState.FINISHED, command.result, command.successful)
         elif isinstance(command, Wait):
-            return self.create_state(ProcessState.WAITING, command.continue_fn,
-                                     command.msg, command.data)
+            return self.create_state(ProcessState.WAITING, command.continue_fn, command.msg, command.data)
         elif isinstance(command, Continue):
-            return self.create_state(ProcessState.RUNNING, command.continue_fn,
-                                     *command.args)
+            return self.create_state(ProcessState.RUNNING, command.continue_fn, *command.args)
         else:
             raise ValueError("Unrecognised command")
 
@@ -271,8 +258,7 @@ class Running(State):
 class Waiting(State):
     LABEL = ProcessState.WAITING
     ALLOWED = {
-        ProcessState.RUNNING, ProcessState.WAITING, ProcessState.KILLED,
-        ProcessState.EXCEPTED, ProcessState.FINISHED
+        ProcessState.RUNNING, ProcessState.WAITING, ProcessState.KILLED, ProcessState.EXCEPTED, ProcessState.FINISHED
     }
 
     DONE_CALLBACK = 'DONE_CALLBACK'
@@ -352,15 +338,13 @@ class Excepted(State):
     def __str__(self):
         return "{} ({})".format(
             super(Excepted, self).__str__(),
-            traceback.format_exception_only(
-                type(self.exception), self.exception)[0])
+            traceback.format_exception_only(type(self.exception), self.exception)[0])
 
     def save_instance_state(self, out_state, save_context):
         super(Excepted, self).save_instance_state(out_state, save_context)
         out_state[self.EXC_VALUE] = yaml.dump(self.exception)
         if self.traceback is not None:
-            out_state[self.TRACEBACK] = "".join(
-                traceback.format_tb(self.traceback))
+            out_state[self.TRACEBACK] = "".join(traceback.format_tb(self.traceback))
 
     def load_instance_state(self, saved_state, load_context):
         super(Excepted, self).load_instance_state(saved_state, load_context)
@@ -404,5 +388,6 @@ class Killed(State):
         """
         super(Killed, self).__init__(process)
         self.msg = msg
+
 
 # endregion

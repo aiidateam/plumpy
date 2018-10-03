@@ -1,11 +1,9 @@
+from __future__ import absolute_import
 import abc
 from future.utils import with_metaclass
 import importlib
 
-__all__ = [
-    'ObjectLoader', 'DefaultObjectLoader', 'set_object_loader',
-    'get_object_loader'
-]
+__all__ = ['ObjectLoader', 'DefaultObjectLoader', 'set_object_loader', 'get_object_loader']
 
 
 class ObjectLoader(with_metaclass(abc.ABCMeta, object)):
@@ -50,16 +48,12 @@ class DefaultObjectLoader(ObjectLoader):
         try:
             mod = importlib.import_module(mod)
         except ImportError as e:
-            raise ValueError(
-                "module '{}' from identifier '{}' could not be loaded".format(
-                    mod, identifier))
+            raise ValueError("module '{}' from identifier '{}' could not be loaded".format(mod, identifier))
         else:
             try:
                 return getattr(mod, name)
             except AttributeError:
-                raise ValueError(
-                    "object '{}' form identifier '{}' could not be loaded".
-                    format(name, identifier))
+                raise ValueError("object '{}' form identifier '{}' could not be loaded".format(name, identifier))
 
     def identify_object(self, obj):
         identifier = "{}:{}".format(obj.__module__, obj.__name__)

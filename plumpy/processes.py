@@ -1,23 +1,27 @@
 # -*- coding: utf-8 -*-
+"""The main Process module"""
 
+from __future__ import absolute_import
 import abc
 import contextlib
 import functools
-from future.utils import with_metaclass, raise_
-from pika.exceptions import ConnectionClosed
 import copy
 import logging
 import time
 import sys
 import threading
+import uuid
+
+from future.utils import with_metaclass, raise_
+from pika.exceptions import ConnectionClosed
 from tornado import concurrent, gen
 import tornado.stack_context
-import uuid
 import yaml
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import protected
+from . import communications
 from . import exceptions
 from . import futures
 from . import base
@@ -43,13 +47,14 @@ class BundleKeys(object):
 
     See :func:`save_instance_state` and :func:`load_instance_state`.
     """
+    # pylint: disable=too-few-public-methods
     INPUTS_RAW = 'INPUTS_RAW'
     INPUTS_PARSED = 'INPUTS_PARSED'
     OUTPUTS = 'OUTPUTS'
 
 
 # Use thread-local storage for the stack
-_thread_local = threading.local()
+_thread_local = threading.local()  # pylint: disable=invalid-name
 
 
 def _process_stack():
@@ -68,14 +73,11 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
 
 
 # Make ProcessStateMachineMeta instances (classes) YAML - able
-yaml.representer.Representer.add_representer(
-    ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
+yaml.representer.Representer.add_representer(ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
 
 
 @persistence.auto_persist('_pid', '_CREATION_TIME', '_future', '_paused', '_status', '_pre_paused_status')
-class Process(
-    with_metaclass(ProcessStateMachineMeta, StateMachine,
-                   persistence.Savable)):
+class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.Savable)):
     """
     The Process class is the base for any unit of work in plumpy.
 
@@ -116,8 +118,6 @@ class Process(
     # Static class stuff ######################
     _spec_type = ProcessSpec
     # Default placeholders, will be populated in init()
-    _waiting_callbacks = None
-    _terminated_callbacks = None
     _stepping = False
     _pausing = None  # type: futures.Future
     _paused = None
@@ -128,8 +128,8 @@ class Process(
     def current(cls):
         if _process_stack():
             return _process_stack()[-1]
-        else:
-            return None
+
+        return None
 
     @classmethod
     def get_states(cls):
@@ -170,7 +170,7 @@ class Process(
         return cls.__name__
 
     @classmethod
-    def define(cls, spec):
+    def define(cls, _spec):
         cls.__called = True
 
     @classmethod
@@ -208,12 +208,7 @@ class Process(
         base.call_with_super_check(process.init)
         return process
 
-    def __init__(self,
-                 inputs=None,
-                 pid=None,
-                 logger=None,
-                 loop=None,
-                 communicator=None):
+    def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
         """
         The signature of the constructor should not be changed by subclassing
         processes.
@@ -242,8 +237,7 @@ class Process(
         self._paused = None
 
         # Input/output
-        self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(
-            inputs)
+        self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
         self._pid = pid
         self._parsed_inputs = None
         self._outputs = {}
@@ -259,32 +253,25 @@ class Process(
     @base.super_check
     def init(self):
         """ Any common initialisation stuff after create or load goes here """
-        self._waiting_callbacks = []
-        self._terminated_callbacks = []
-
         if self._communicator is not None:
-            self._communicator.add_rpc_subscriber(
-                self.message_receive, identifier=str(self.pid))
+            self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+
         if not self._future.done():
 
             def try_killing(future):
                 if future.cancelled():
                     if not self.kill('Killed by future being cancelled'):
-                        self.logger.warning(
-                            "Failed to kill process on future cancel")
+                        self.logger.warning("Failed to kill process on future cancel")
 
             self._future.add_done_callback(try_killing)
 
     def _setup_event_hooks(self):
-        self.add_state_event_callback(
-            state_machine.StateEventHook.ENTERING_STATE,
-            lambda _s, _h, state: self.on_entering(state))
-        self.add_state_event_callback(
-            state_machine.StateEventHook.ENTERED_STATE,
-            lambda _s, _h, from_state: self.on_entered(from_state))
-        self.add_state_event_callback(
-            state_machine.StateEventHook.EXITING_STATE,
-            lambda _s, _h, _state: self.on_exiting())
+        self.add_state_event_callback(state_machine.StateEventHook.ENTERING_STATE,
+                                      lambda _s, _h, state: self.on_entering(state))
+        self.add_state_event_callback(state_machine.StateEventHook.ENTERED_STATE,
+                                      lambda _s, _h, from_state: self.on_entered(from_state))
+        self.add_state_event_callback(state_machine.StateEventHook.EXITING_STATE,
+                                      lambda _s, _h, _state: self.on_exiting())
 
     @property
     def creation_time(self):
@@ -332,8 +319,8 @@ class Process(
         """
         if self._logger is not None:
             return self._logger
-        else:
-            return _LOGGER
+
+        return _LOGGER
 
     @property
     def status(self):
@@ -351,12 +338,8 @@ class Process(
 
     def launch(self, process_class, inputs=None, pid=None, logger=None):
         process = process_class(
-            inputs=inputs,
-            pid=pid,
-            logger=logger,
-            loop=self.loop(),
-            communicator=self._communicator)
-        self.call_soon_external(process.step_until_terminated)
+            inputs=inputs, pid=pid, logger=logger, loop=self.loop(), communicator=self._communicator)
+        self.create_background_task(process.step_until_terminated)
         return process
 
     # region State introspection methods
@@ -374,12 +357,12 @@ class Process(
         """
         if isinstance(self._state, process_states.Finished):
             return self._state.result
-        elif isinstance(self._state, process_states.Killed):
+        if isinstance(self._state, process_states.Killed):
             raise exceptions.KilledError()
-        elif isinstance(self._state, process_states.Excepted):
+        if isinstance(self._state, process_states.Excepted):
             raise self._state.exception
-        else:
-            raise exceptions.InvalidStateError
+
+        raise exceptions.InvalidStateError
 
     def successful(self):
         """
@@ -431,14 +414,17 @@ class Process(
         self._loop.add_callback(handle.run)
         return handle
 
-    def call_soon_external(self, callback, *args, **kwargs):
+    def create_background_task(self, callback):
         """
-        Schedule a callback to an external method.  If there is an
-        exception in the callback it will not cause the process to fail.
-        """
-        self._loop.add_callback(callback, *args, **kwargs)
+        Create a task that corresponds to a callback scheduled on our event loop
 
-    def callback_excepted(self, callback, exception, trace):
+        :param callback: the callback to schedule, can be a function or coroutine
+        :return: a future corresponding to the result of this task
+        :rtype: :class:`plumpy.Future`
+        """
+        return futures.create_task(callback, loop=self._loop)
+
+    def callback_excepted(self, _callback, exception, trace):
         if self.state != process_states.ProcessState.EXCEPTED:
             self.fail(exception, trace)
 
@@ -459,21 +445,20 @@ class Process(
             _process_stack().pop()
 
     @gen.coroutine
-    def _run_task(self, fn, *args, **kwargs):
+    def _run_task(self, callback, *args, **kwargs):
         """
         This method should be used to run all Process related functions and coroutines.
         If there is an exception the process will enter the EXCEPTED state.
 
-        :param fn: A function or coroutine
+        :param callback: A function or coroutine
         :param args: Optional positional arguments passed to fn
         :param kwargs:  Optional keyword arguments passed to fn
         :return: The value as returned by fn
         """
         # Make sure execute is a coroutine
-        coro = utils.ensure_coroutine(fn)
+        coro = utils.ensure_coroutine(callback)
         result = yield tornado.stack_context.run_with_stack_context(
-            tornado.stack_context.StackContext(self._process_scope),
-            functools.partial(coro, *args, **kwargs))
+            tornado.stack_context.StackContext(self._process_scope), functools.partial(coro, *args, **kwargs))
         raise gen.Return(result)
 
     # endregion
@@ -494,16 +479,13 @@ class Process(
 
         # Inputs/outputs
         if self.raw_inputs is not None:
-            out_state[BundleKeys.INPUTS_RAW] = self.encode_input_args(
-                self.raw_inputs)
+            out_state[BundleKeys.INPUTS_RAW] = self.encode_input_args(self.raw_inputs)
 
         if self.inputs is not None:
-            out_state[BundleKeys.INPUTS_PARSED] = self.encode_input_args(
-                self.inputs)
+            out_state[BundleKeys.INPUTS_PARSED] = self.encode_input_args(self.inputs)
 
         if self.outputs:
-            out_state[BundleKeys.OUTPUTS] = self.encode_input_args(
-                self.outputs)
+            out_state[BundleKeys.OUTPUTS] = self.encode_input_args(self.outputs)
 
     @protected
     def load_instance_state(self, saved_state, load_context):
@@ -531,21 +513,18 @@ class Process(
         if 'logger' in load_context:
             self._logger = load_context.logger
 
-        # Need to call this here as things downstream may rely on us having the
-        # runtime variable above
+        # Need to call this here as things downstream may rely on us having the runtime variable above
         super(Process, self).load_instance_state(saved_state, load_context)
 
         # Inputs/outputs
         try:
-            decoded = self.decode_input_args(
-                saved_state[BundleKeys.INPUTS_RAW])
+            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS_RAW])
             self._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._raw_inputs = None
 
         try:
-            decoded = self.decode_input_args(
-                saved_state[BundleKeys.INPUTS_PARSED])
+            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS_PARSED])
             self._parsed_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
             self._parsed_inputs = None
@@ -569,23 +548,11 @@ class Process(
     def set_logger(self, logger):
         self._logger = logger
 
-    # region Events
-
     @protected
     def log_with_pid(self, level, msg):
         self.logger.log(level, "{}: {}".format(self.pid, msg))
 
-    def add_on_waiting_callback(self, callback):
-        self._waiting_callbacks.append(callback)
-
-    def remove_on_waiting_callback(self, callback):
-        self._waiting_callbacks.remove(callback)
-
-    def add_on_terminated_callback(self, callback):
-        self._terminated_callbacks.append(callback)
-
-    def remove_on_terminated_callback(self, callback):
-        self._terminated_callbacks.remove(callback)
+    # region Events
 
     def on_entering(self, state):
         # Map these onto direct functions that the subclass can implement
@@ -597,8 +564,7 @@ class Process(
         elif state_label == process_states.ProcessState.WAITING:
             call_with_super_check(self.on_wait, state.data)
         elif state_label == process_states.ProcessState.FINISHED:
-            call_with_super_check(self.on_finish, state.result,
-                                  state.successful)
+            call_with_super_check(self.on_finish, state.result, state.successful)
         elif state_label == process_states.ProcessState.KILLED:
             call_with_super_check(self.on_kill, state.msg)
         elif state_label == process_states.ProcessState.EXCEPTED:
@@ -622,14 +588,10 @@ class Process(
             from_label = from_state.LABEL.value if from_state is not None else None
             try:
                 self._communicator.broadcast_send(
-                    body=None,
-                    sender=self.pid,
-                    subject='state_changed.{}.{}'.format(
-                        from_label, self.state.value))
+                    body=None, sender=self.pid, subject='state_changed.{}.{}'.format(from_label, self.state.value))
             except ConnectionClosed:
-                self.logger.info(
-                    'no connection available to broadcast state change from {} to {}'.
-                        format(from_label, self.state.value))
+                self.logger.info('no connection available to broadcast state change from %s to %s', from_label,
+                                 self.state.value)
 
     def on_exiting(self):
         state = self.state
@@ -646,8 +608,7 @@ class Process(
         # Input/output
         self._check_inputs(self._raw_inputs)
         raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
-        self._parsed_inputs = self.create_input_args(self.spec().inputs,
-                                                     raw_inputs)
+        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
 
         # Set up a process ID
         self._uuid = uuid.uuid4()
@@ -676,8 +637,7 @@ class Process(
         pass
 
     def on_output_emitted(self, output_port, value, dynamic):
-        self.__event_helper.fire_event(ProcessListener.on_output_emitted, self,
-                                       output_port, value, dynamic)
+        self.__event_helper.fire_event(ProcessListener.on_output_emitted, self, output_port, value, dynamic)
 
     @super_check
     def on_wait(self, awaitables):
@@ -688,8 +648,6 @@ class Process(
     def on_waiting(self):
         """ Entered the WAITING state """
         self._fire_event(ProcessListener.on_process_waiting)
-        for cb in self._waiting_callbacks:
-            cb(self)
 
     @super_check
     def on_pausing(self, msg=None):
@@ -730,25 +688,22 @@ class Process(
             try:
                 self._check_outputs()
             except ValueError:
-                raise StateEntryFailed(process_states.ProcessState.FINISHED,
-                                       result, False)
+                raise StateEntryFailed(process_states.ProcessState.FINISHED, result, False)
 
         self.future().set_result(self.outputs)
 
     @super_check
     def on_finished(self):
         """ Entered the FINISHED state """
-        self._fire_event(ProcessListener.on_process_finished,
-                         self.future().result())
+        self._fire_event(ProcessListener.on_process_finished, self.future().result())
 
     @super_check
     def on_except(self, exc_info):
-        self.future().set_exc_info(exc_info)
+        self.future().set_exception(exc_info[1])
 
     @super_check
     def on_excepted(self):
-        self._fire_event(ProcessListener.on_process_excepted,
-                         str(self.future().exception()))
+        self._fire_event(ProcessListener.on_process_excepted, str(self.future().exception()))
 
     @super_check
     def on_kill(self, msg):
@@ -760,37 +715,65 @@ class Process(
         self._killing = None
         self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
 
-    def on_terminated(self):
-        super(Process, self).on_terminated()
-        for cb in self._terminated_callbacks:
-            self.call_soon_external(cb, self)
-
     def _fire_event(self, evt, *args, **kwargs):
         self.__event_helper.fire_event(evt, self, *args, **kwargs)
 
     # endregion
 
-    @tornado.gen.coroutine
-    def message_receive(self, msg):
+    # region Communication
+
+    def message_receive(self, _comm, msg):
+        """
+        Coroutine called when the process receives a message from the communicator
+
+        :param _comm: the communicator that sent the message
+        :type _comm: :class:`kiwipy.Communicator`
+        :param msg: the message
+        :return: the outcome of processing the message, the return value will be sent back as a response to the sender
+        """
+        self.logger.debug("Message '%s' received with communicator '%s'", msg, _comm)
+
         intent = msg[process_comms.INTENT_KEY]
 
         if intent == process_comms.Intent.PLAY:
-            result = self.play()
-        elif intent == process_comms.Intent.PAUSE:
-            result = self.pause(msg=msg.get(process_comms.MESSAGE_KEY, None))
-        elif intent == process_comms.Intent.KILL:
-            result = self.kill(msg=msg.get(process_comms.MESSAGE_KEY, None))
-        elif intent == process_comms.Intent.STATUS:
+            return self._schedule_rpc(self.play)
+        if intent == process_comms.Intent.PAUSE:
+            return self._schedule_rpc(self.pause, msg=msg.get(process_comms.MESSAGE_KEY, None))
+        if intent == process_comms.Intent.KILL:
+            return self._schedule_rpc(self.kill, msg=msg.get(process_comms.MESSAGE_KEY, None))
+        if intent == process_comms.Intent.STATUS:
             status_info = {}
             self.get_status_info(status_info)
-            result = status_info
-        else:
-            raise RuntimeError("Unknown intent")
+            return status_info
 
-        if isinstance(result, futures.Future):
-            result = yield result
+        # Didn't match any known intents
+        raise RuntimeError("Unknown intent")
 
-        raise tornado.gen.Return(result)
+    def _schedule_rpc(self, callback, *args, **kwargs):
+        """
+        Schedule a call to a callback as a result of an RPC communication call, this will return
+        a future that resolves to the final result (even after one or more layer of futures being
+        returned) of the callback.
+
+        :param callback: the callback function or coroutine
+        :param args: the positional arguments to the callback
+        :param kwargs: the keyword arguments to the callback
+        :return: a kiwi future that resolves to the outcome of the callback
+        :rtype: :class:`kiwipy.Future`
+        """
+
+        @gen.coroutine
+        def run_callback():
+            result = yield gen.coroutine(callback)(*args, **kwargs)
+            while concurrent.is_future(result):
+                result = yield result
+            raise gen.Return(result)
+
+        # Schedule the task and give back a kiwi future
+        task = self.create_background_task(run_callback)
+        return communications.plum_to_kiwi_future(task)
+
+    # endregion
 
     def close(self):
         """
@@ -801,14 +784,12 @@ class Process(
 
     # region State related methods
 
-    def transition_excepted(self, initial_state, final_state, exception,
-                            trace):
+    def transition_excepted(self, _initial_state, final_state, exception, trace):
         # If we are creating, then reraise instead of failing.
         if final_state == process_states.ProcessState.CREATED:
             raise_(type(exception), exception, trace)
         else:
-            self.transition_to(process_states.ProcessState.EXCEPTED, exception,
-                               trace)
+            self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
 
     def pause(self, msg=None):
         """
@@ -838,8 +819,8 @@ class Process(
             # Try to interrupt the state
             self._state.interrupt(interrupt_exception)
             return self._interrupt_action
-        else:
-            return self._do_pause(msg)
+
+        return self._do_pause(msg)
 
     def _do_pause(self, state_msg, next_state=None):
         """ Carry out the pause procedure, optionally transitioning to the next state first"""
@@ -865,7 +846,8 @@ class Process(
             do_pause = functools.partial(self._do_pause, str(exception))
             return futures.CancellableAction(do_pause, cookie=exception)
 
-        elif isinstance(exception, process_states.KillInterruption):
+        if isinstance(exception, process_states.KillInterruption):
+
             def do_kill(_next_state):
                 try:
                     # Ignore the next state
@@ -875,8 +857,8 @@ class Process(
                     self._killing = None
 
             return futures.CancellableAction(do_kill, cookie=exception)
-        else:
-            raise ValueError("Got unknown interruption type '{}'".format(type(exception)))
+
+        raise ValueError("Got unknown interruption type '{}'".format(type(exception)))
 
     def _set_interrupt_action(self, new_action):
         """
@@ -911,9 +893,7 @@ class Process(
 
     @event(from_states=(process_states.Running, process_states.Waiting))
     def resume(self, *args):
-        """
-        Start running the process again
-        """
+        """Start running the process again"""
         return self._state.resume(*args)
 
     @event(to_states=process_states.Excepted)
@@ -923,8 +903,7 @@ class Process(
         :param exception: The exception that caused the failure
         :param trace_back: Optional exception traceback
         """
-        self.transition_to(process_states.ProcessState.EXCEPTED, exception,
-                           trace_back)
+        self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace_back)
 
     def kill(self, msg=None):
         """
@@ -952,15 +931,14 @@ class Process(
             self._killing = self._interrupt_action
             self._state.interrupt(interrupt_exception)
             return self._interrupt_action
-        else:
-            self.transition_to(process_states.ProcessState.KILLED, msg)
-            return True
+
+        self.transition_to(process_states.ProcessState.KILLED, msg)
+        return True
 
         # endregion
 
     def create_initial_state(self):
-        return self.get_state_class(process_states.ProcessState.CREATED)(
-            self, self.run)
+        return self.get_state_class(process_states.ProcessState.CREATED)(self, self.run)
 
     def recreate_state(self, saved_state):
         """
@@ -978,7 +956,7 @@ class Process(
     # region Execution related methods
 
     def run(self):
-        return self._run()
+        pass
 
     def execute(self):
         """
@@ -1059,8 +1037,7 @@ class Process(
         port_name = namespace.pop()
 
         if namespace:
-            port_namespace = self.spec().outputs.get_port(
-                namespace_separator.join(namespace))
+            port_namespace = self.spec().outputs.get_port(namespace_separator.join(namespace))
         else:
             port_namespace = self.spec().outputs
 
@@ -1098,9 +1075,7 @@ class Process(
                 if port.has_default():
                     port_value = port.default
                 elif port.required:
-                    raise ValueError(
-                        'Value not supplied for required inputs port {}'.
-                            format(name))
+                    raise ValueError('Value not supplied for required inputs port {}'.format(name))
                 else:
                     continue
             else:
@@ -1123,6 +1098,7 @@ class Process(
         :param inputs: A mapping of the inputs as passed to the process
         :return: The encoded inputs
         """
+        # pylint: disable=no-self-use
         return copy.deepcopy(inputs)
 
     @protected
@@ -1135,6 +1111,7 @@ class Process(
         :param encoded:
         :return: The decoded input args
         """
+        # pylint: disable=no-self-use
         return copy.deepcopy(encoded)
 
     def get_status_info(self, out_status_info):
@@ -1146,10 +1123,6 @@ class Process(
             'state_info': str(self._state)
         })
 
-    # region State entry/exit events
-
-    # endregion
-
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
         valid, msg = self.spec().validate_inputs(inputs)
@@ -1158,8 +1131,7 @@ class Process(
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
-        wrapped = utils.wrap_dict(
-            self._outputs, separator=self.spec().namespace_separator)
+        wrapped = utils.wrap_dict(self._outputs, separator=self.spec().namespace_separator)
         for name, port in self.spec().outputs.items():
             valid, msg = port.validate(wrapped.get(name, ports.UNSPECIFIED))
             if not valid:

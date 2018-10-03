@@ -1,88 +1,41 @@
-import kiwipy
-from functools import partial
-import uuid
+"""
+Module containing future related methods and classes
+"""
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError']
+from __future__ import absolute_import
+import kiwipy
+from tornado import concurrent, gen, ioloop
+
+__all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError', 'create_task']
 
 CancelledError = kiwipy.CancelledError
-InvalidStateError = kiwipy.InvalidStateError
-Future = kiwipy.Future
 
 
-def copy_future(source, target):
-    """ Copy the status of future a to b unless b is already done in
-    which case return
-
-    :param source: The source future
-    :type source: :class:`Future`
-    :param target: The target future
-    :type target: :class:`Future`
-    """
-
-    if target.done():
-        return
-
-    if source.cancelled():
-        target.cancel()
-    else:
-        if source.exc_info() is not None:
-            target.set_exc_info(source.exc_info())
-        else:
-            target.set_result(source.result())
+class InvalidStateError(Exception):
+    """Exception for when a future or action is in an invalid state"""
+    pass
 
 
-def chain(a, b):
-    """Chain two futures together so that when one completes, so does the other.
-
-    The result (success or failure) of ``a`` will be copied to ``b``, unless
-    ``b`` has already been completed or killed by the time ``a`` finishes.
-    """
-
-    a.add_done_callback(lambda first: copy_future(first, b))
+copy_future = kiwipy.copy_future  # pylint: disable=invalid-name
+chain = kiwipy.chain  # pylint: disable=invalid-name
+gather = lambda *args: gen.multi(args)  # pylint: disable=invalid-name
 
 
-def gather(*args):
-    if not args:
-        future = Future()
-        future.set_result([])
-        return future
-    return _GatheringFuture(*args)
+class Future(concurrent.Future):
+    _cancelled = False
 
+    def result(self):
+        if self._cancelled:
+            raise CancelledError()
 
-class _GatheringFuture(Future):
-    def __init__(self, *args):
-        super(_GatheringFuture, self).__init__()
-        self._children = list(args)
-        self._nchildren = len(self._children)
-        self._nfinished = 0
-        self._result = [None] * self._nchildren
+        return super(Future, self).result()
 
-        for i, future in enumerate(self._children):
-            future.add_done_callback(partial(self._completed, i))
-
-    def kill(self):
-        for child in self._children:
-            child.cancel()
-
-    def _completed(self, i, future):
-        if self.cancelled():
-            return
-
-        if future.cancelled():
-            self.cancel()
-        else:
-            if future.exception() is not None:
-                self._result[i] = future.exception()
-            else:
-                self._result[i] = future.result()
-
-            # Check if we're all done
-            self._nfinished += 1
-            if self._nfinished == self._nchildren:
-                self.set_result(self._result)
+    def remove_done_callback(self, callback):
+        self._callbacks.remove(callback)
 
 
 class CancellableAction(Future):
+
     def __init__(self, action, cookie=None):
         super(CancellableAction, self).__init__()
         self._action = action
@@ -93,16 +46,65 @@ class CancellableAction(Future):
         """ A cookie that can be used to correlate the actions with something """
         return self._cookie
 
-    def set_result(self, result):
-        return super(CancellableAction, self).set_result(result)
-
     def run(self, *args, **kwargs):
         if self.done():
             raise InvalidStateError("Action has already been ran")
 
         try:
-            self.set_result(self._action(*args, **kwargs))
-        except Exception as exc:
-            self.set_exception(exc)
+            with kiwipy.capture_exceptions(self):
+                self.set_result(self._action(*args, **kwargs))
         finally:
             self._action = None
+
+
+def create_task(coro, loop=None):
+    """
+    Schedule a call to a coroutine in the event loop and wrap the outcome
+    in a future.
+
+    :param coro: the coroutine to schedule
+    :param loop: the event loop to schedule it in
+    :return: the future representing the outcome of the coroutine
+    :rtype: :class:`tornado.concurrent.Future`
+    """
+    loop = loop or ioloop.IOLoop.current()
+
+    future = concurrent.Future()
+
+    @gen.coroutine
+    def run_task():
+        with kiwipy.capture_exceptions(future):
+            future.set_result((yield coro()))
+
+    loop.add_callback(run_task)
+    return future
+
+
+def unwrap_kiwi_future(future):
+    """
+    Create a kiwi future that represents the final results of a nested series of futures,
+    meaning that if the futures provided itself resolves to a future the returned
+    future will not resolve to a value until the final chain of futures is not a future
+    but a concrete value.  If at any point in the chain a future resolves to an exception
+    then the returned future will also resolve to that exception.
+
+    :param future: the future to unwrap
+    :type future: :class:`kiwipy.Future`
+    :return: the unwrapping future
+    :rtype: :class:`kiwipy.Future`
+    """
+    unwrapping = kiwipy.Future()
+
+    def unwrap(fut):
+        if fut.cancelled():
+            unwrapping.cancel()
+        else:
+            with kiwipy.capture_exceptions(unwrapping):
+                result = fut.result()
+                if isinstance(result, kiwipy.Future):
+                    result.add_done_callback(unwrap)
+                else:
+                    unwrapping.set_result(result)
+
+    future.add_done_callback(unwrap)
+    return unwrapping

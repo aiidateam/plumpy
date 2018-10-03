@@ -1,21 +1,23 @@
+from __future__ import absolute_import
 import kiwipy
 import plumpy
-from past.builtins import basestring
 from plumpy import Process, ProcessState, test_utils, BundleKeys
 from plumpy.utils import AttributesFrozendict
-from tornado import gen
+from tornado import gen, testing
 import tornado.gen
+
+import six
+from six.moves import range
+from six.moves import zip
 
 from . import utils
 
 
 class ForgetToCallParent(plumpy.Process):
+
     def __init__(self, forget_on):
         super(ForgetToCallParent, self).__init__()
         self.forget_on = forget_on
-
-    def _run(self):
-        pass
 
     def on_create(self):
         if self.forget_on != 'create':
@@ -38,7 +40,12 @@ class ForgetToCallParent(plumpy.Process):
             super(ForgetToCallParent, self).on_kill(msg)
 
 
-class TestProcess(utils.TestCaseWithLoop):
+class TestProcess(testing.AsyncTestCase):
+
+    def setUp(self):
+        super(TestProcess, self).setUp()
+        self.loop = self.io_loop
+
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
@@ -56,18 +63,16 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertIs(p.spec(), Proc.spec())
 
     def test_dynamic_inputs(self):
+
         class NoDynamic(Process):
-            def _run(self, **kwargs):
-                pass
+            pass
 
         class WithDynamic(Process):
+
             @classmethod
             def define(cls, spec):
                 super(WithDynamic, cls).define(spec)
                 spec.inputs.dynamic = True
-
-            def _run(self, **kwargs):
-                pass
 
         with self.assertRaises(ValueError):
             NoDynamic(inputs={'a': 5}).execute()
@@ -76,14 +81,13 @@ class TestProcess(utils.TestCaseWithLoop):
         proc.execute()
 
     def test_inputs(self):
+
         class Proc(Process):
+
             @classmethod
             def define(cls, spec):
                 super(Proc, cls).define(spec)
                 spec.input('a')
-
-            def _run(self):
-                pass
 
         p = Proc({'a': 5})
 
@@ -93,7 +97,9 @@ class TestProcess(utils.TestCaseWithLoop):
             p.raw_inputs.b
 
     def test_inputs_default(self):
+
         class Proc(test_utils.DummyProcess):
+
             @classmethod
             def define(cls, spec):
                 super(Proc, cls).define(spec)
@@ -109,7 +115,9 @@ class TestProcess(utils.TestCaseWithLoop):
 
     def test_inputs_default_that_evaluate_to_false(self):
         for def_val in (True, False, 0, 1):
+
             class Proc(test_utils.DummyProcess):
+
                 @classmethod
                 def define(cls, spec):
                     super(Proc, cls).define(spec)
@@ -154,11 +162,11 @@ class TestProcess(utils.TestCaseWithLoop):
 
         # Test using integer as pid
         process = test_utils.DummyProcessWithOutput(pid=5)
-        self.assertEquals(process.pid, 5)
+        self.assertEqual(process.pid, 5)
 
         # Test using string as pid
         process = test_utils.DummyProcessWithOutput(pid='a')
-        self.assertEquals(process.pid, 'a')
+        self.assertEqual(process.pid, 'a')
 
     def test_exception(self):
         proc = test_utils.ExceptionProcess()
@@ -167,6 +175,7 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertEqual(proc.state, ProcessState.EXCEPTED)
 
     def test_get_description(self):
+
         class ProcWithoutSpec(Process):
             pass
 
@@ -194,11 +203,13 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertTrue('spec' in desc_with_spec)
         self.assertTrue('description' in desc_with_spec)
         self.assertIsInstance(desc_with_spec['spec'], dict)
-        self.assertIsInstance(desc_with_spec['description'], basestring)
+        self.assertIsInstance(desc_with_spec['description'], six.string_types)
 
     def test_logging(self):
+
         class LoggerTester(Process):
-            def _run(self, **kwargs):
+
+            def run(self, **kwargs):
                 self.logger.info("Test")
 
         # TODO: Test giving a custom logger to see if it gets used
@@ -294,11 +305,11 @@ class TestProcess(utils.TestCaseWithLoop):
             result = yield proc.pause(PAUSE_STATUS)
             self.assertTrue(result)
             self.assertTrue(proc.paused)
-            self.assertEquals(proc.status, PAUSE_STATUS)
+            self.assertEqual(proc.status, PAUSE_STATUS)
 
             result = proc.play()
-            self.assertEquals(proc.status, PLAY_STATUS)
-            self.assertEquals(proc._pre_paused_status, None)
+            self.assertEqual(proc.status, PLAY_STATUS)
+            self.assertIsNone(proc._pre_paused_status)
 
             proc.resume()
             # Wait until the process is terminated
@@ -311,10 +322,11 @@ class TestProcess(utils.TestCaseWithLoop):
         loop.run_sync(async_test)
 
     def test_kill_in_run(self):
+
         class KillProcess(Process):
             after_kill = False
 
-            def _run(self, **kwargs):
+            def run(self, **kwargs):
                 self.kill()
                 # The following line should be executed because kill will not
                 # interrupt execution of a method call in the RUNNING state
@@ -328,9 +340,10 @@ class TestProcess(utils.TestCaseWithLoop):
         self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_kill_when_paused_in_run(self):
+
         class PauseProcess(Process):
 
-            def _run(self, **kwargs):
+            def run(self, **kwargs):
                 self.pause()
                 self.kill()
 
@@ -364,20 +377,26 @@ class TestProcess(utils.TestCaseWithLoop):
         self.loop.add_callback(proc.step_until_terminated)
         self.loop.run_sync(lambda: run_async(proc))
 
+    @testing.gen_test
     def test_run_multiple(self):
         # Create and play some processes
         procs = []
-        for proc_class in test_utils.TEST_PROCESSES + test_utils.TEST_EXCEPTION_PROCESSES:
+        for proc_class in test_utils.TEST_PROCESSES:
             proc = proc_class(loop=self.loop)
             self.loop.add_callback(proc.step_until_terminated)
             procs.append(proc)
 
         # Check that they all run
-        gathered = plumpy.gather(*[proc.future() for proc in procs])
-        plumpy.run_until_complete(gathered, self.loop)
+        futures = [proc.future() for proc in procs]
+        yield futures
+
+        for future, proc_class in zip(futures, test_utils.TEST_PROCESSES):
+            self.assertDictEqual(proc_class.EXPECTED_OUTPUTS, future.result())
 
     def test_invalid_output(self):
+
         class InvalidOutput(plumpy.Process):
+
             def run(self):
                 self.out("invalid", 5)
 
@@ -393,23 +412,24 @@ class TestProcess(utils.TestCaseWithLoop):
 
         proc.execute()
 
-        self.assertEquals(proc.successful(), False)
+        self.assertFalse(proc.successful())
 
     def test_unsuccessful_result(self):
         ERROR_CODE = 256
 
         class Proc(Process):
+
             @classmethod
             def define(cls, spec):
                 super(Proc, cls).define(spec)
 
-            def _run(self):
+            def run(self):
                 return plumpy.UnsuccessfulResult(ERROR_CODE)
 
         proc = Proc()
         proc.execute()
 
-        self.assertEquals(proc.result(), ERROR_CODE)
+        self.assertEqual(proc.result(), ERROR_CODE)
 
     def test_pause_in_process(self):
         """ Test that we can pause and cancel that by playing within the process """
@@ -417,6 +437,7 @@ class TestProcess(utils.TestCaseWithLoop):
         test_case = self
 
         class TestPausePlay(plumpy.Process):
+
             def run(self):
                 fut = self.pause()
                 test_case.assertIsInstance(fut, plumpy.Future)
@@ -430,7 +451,7 @@ class TestProcess(utils.TestCaseWithLoop):
         self.loop.add_callback(proc.step_until_terminated)
         self.loop.start()
         self.assertTrue(proc.paused)
-        self.assertEquals(plumpy.ProcessState.FINISHED, proc.state)
+        self.assertEqual(plumpy.ProcessState.FINISHED, proc.state)
 
     def test_pause_play_in_process(self):
         """ Test that we can pause and cancel that by playing within the process """
@@ -438,6 +459,7 @@ class TestProcess(utils.TestCaseWithLoop):
         test_case = self
 
         class TestPausePlay(plumpy.Process):
+
             def run(self):
                 fut = self.pause()
                 test_case.assertIsInstance(fut, plumpy.Future)
@@ -448,12 +470,13 @@ class TestProcess(utils.TestCaseWithLoop):
 
         self.loop.run_sync(proc.step_until_terminated)
         self.assertFalse(proc.paused)
-        self.assertEquals(plumpy.ProcessState.FINISHED, proc.state)
+        self.assertEqual(plumpy.ProcessState.FINISHED, proc.state)
 
     def test_process_stack(self):
         test_case = self
 
         class StackTest(plumpy.Process):
+
             def run(self):
                 test_case.assertIs(self, Process.current())
 
@@ -470,11 +493,13 @@ class TestProcess(utils.TestCaseWithLoop):
             test_case.assertIs(process, Process.current())
 
         class StackTest(plumpy.Process):
+
             def run(self):
                 test_case.assertIs(self, Process.current())
                 test_nested(self)
 
         class ParentProcess(plumpy.Process):
+
             def run(self):
                 test_case.assertIs(self, Process.current())
                 StackTest().execute()
@@ -486,7 +511,9 @@ class TestProcess(utils.TestCaseWithLoop):
         self.loop.run_sync(tornado.gen.coroutine(lambda: (yield tornado.gen.multi(to_run))))
 
     def test_call_soon(self):
+
         class CallSoon(plumpy.Process):
+
             def run(self):
                 self.call_soon(self.do_except)
 
@@ -517,6 +544,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
     maxDiff = None
 
     def test_running_save_instance_state(self):
+
         @gen.coroutine
         def run_async(nsync_comeback):
             yield test_utils.run_until_paused(nsync_comeback)
@@ -571,10 +599,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
             saver = test_utils.ProcessSaver(proc)
             saver.capture()
             self.assertEqual(proc.state, ProcessState.FINISHED)
-            self.assertTrue(
-                test_utils.check_process_against_snapshots(
-                    self.loop, proc_class, saver.snapshots)
-            )
+            self.assertTrue(test_utils.check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
 
     def test_saving_each_step_interleaved(self):
         for ProcClass in test_utils.TEST_PROCESSES:
@@ -582,10 +607,7 @@ class TestProcessSaving(utils.TestCaseWithLoop):
             saver = test_utils.ProcessSaver(proc)
             saver.capture()
 
-            self.assertTrue(
-                test_utils.check_process_against_snapshots(
-                    self.loop, ProcClass, saver.snapshots)
-            )
+            self.assertTrue(test_utils.check_process_against_snapshots(self.loop, ProcClass, saver.snapshots))
 
     def test_restart(self):
         proc = _RestartProcess()
@@ -679,7 +701,7 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
         # Test that the input node is in the inputs of the process
         input_value = proc.inputs.some.name.space.a
         self.assertTrue(isinstance(input_value, int))
-        self.assertEquals(input_value, 5)
+        self.assertEqual(input_value, 5)
 
     def test_namespaced_process_inputs(self):
         """
@@ -693,8 +715,8 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
                 super(NameSpacedProcess, cls).define(spec)
                 spec.input('some.name.space.a', valid_type=int)
                 spec.input('test', valid_type=int, default=6)
-                spec.input('label', valid_type=basestring, required=False)
-                spec.input('description', valid_type=basestring, required=False)
+                spec.input('label', valid_type=six.string_types, required=False)
+                spec.input('description', valid_type=six.string_types, required=False)
                 spec.input('store_provenance', valid_type=bool, default=True)
 
         proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})
@@ -736,6 +758,7 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
 
 
 class TestProcessEvents(utils.TestCaseWithLoop):
+
     def setUp(self):
         super(TestProcessEvents, self).setUp()
         self.proc = test_utils.DummyProcessWithOutput()
@@ -745,9 +768,7 @@ class TestProcessEvents(utils.TestCaseWithLoop):
 
     def test_basic_events(self):
         events_tester = test_utils.ProcessListenerTester(
-            process=self.proc,
-            expected_events=('running', 'output_emitted', 'finished'),
-            done_callback=self.loop.stop)
+            process=self.proc, expected_events=('running', 'output_emitted', 'finished'), done_callback=self.loop.stop)
         self.loop.add_callback(self.proc.step_until_terminated)
 
         utils.run_loop_with_timeout(self.loop)
@@ -764,8 +785,11 @@ class TestProcessEvents(utils.TestCaseWithLoop):
 
     def test_excepted(self):
         proc = test_utils.ExceptionProcess()
-        events_tester = test_utils.ProcessListenerTester(proc, ('excepted', 'running', 'output_emitted',),
-                                                         self.loop.stop)
+        events_tester = test_utils.ProcessListenerTester(proc, (
+            'excepted',
+            'running',
+            'output_emitted',
+        ), self.loop.stop)
         with self.assertRaises(RuntimeError):
             proc.execute()
 
@@ -786,8 +810,8 @@ class TestProcessEvents(utils.TestCaseWithLoop):
 
         messages = []
 
-        def on_broadcast_receive(**msg):
-            messages.append(msg)
+        def on_broadcast_receive(_comm, body, sender, subject, correlation_id):
+            messages.append({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
         communicator.add_broadcast_subscriber(on_broadcast_receive)
         proc = test_utils.DummyProcess(communicator=communicator)
@@ -796,14 +820,14 @@ class TestProcessEvents(utils.TestCaseWithLoop):
         expected_subjects = []
         for i, state in enumerate(test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
             from_state = test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
-            expected_subjects.append(
-                "state_changed.{}.{}".format(from_state, state.value))
+            expected_subjects.append("state_changed.{}.{}".format(from_state, state.value))
 
         for i, message in enumerate(messages):
             self.assertEqual(message['subject'], expected_subjects[i])
 
 
 class _RestartProcess(test_utils.WaitForSignalProcess):
+
     @classmethod
     def define(cls, spec):
         super(_RestartProcess, cls).define(spec)

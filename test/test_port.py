@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from .utils import TestCase
 
 from plumpy.ports import InputPort, PortNamespace
@@ -48,7 +49,6 @@ class TestPortNamespace(TestCase):
 
         self.assertTrue(self.port_namespace.dynamic)
         self.assertEqual(self.port_namespace.valid_type, (str, int))
-
 
     def test_port_namespace_get_port(self):
         """
@@ -105,15 +105,15 @@ class TestPortNamespace(TestCase):
         Setting a valid type for a PortNamespace should automatically mark it as dynamic. Conversely, setting
         the valid_type equal to None should revert dynamic to False
         """
-        self.assertEquals(self.port_namespace.dynamic, False)
-        self.assertEquals(self.port_namespace.valid_type, None)
+        self.assertFalse(self.port_namespace.dynamic)
+        self.assertIsNone(self.port_namespace.valid_type)
 
         self.port_namespace.valid_type = int
 
-        self.assertEquals(self.port_namespace.dynamic, True)
-        self.assertEquals(self.port_namespace.valid_type, int)
+        self.assertTrue(self.port_namespace.dynamic)
+        self.assertEqual(self.port_namespace.valid_type, int)
 
         self.port_namespace.valid_type = None
 
-        self.assertEquals(self.port_namespace.dynamic, False)
-        self.assertEquals(self.port_namespace.valid_type, None)
+        self.assertFalse(self.port_namespace.dynamic)
+        self.assertIsNone(self.port_namespace.valid_type)
