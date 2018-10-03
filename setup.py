@@ -42,7 +42,7 @@ setup(
         'pyyaml',
         'tornado>=4.1, <5.0',
         'future',
-        'kiwipy[rmq]>=0.3.1',
+        'kiwipy[rmq]>=0.3.2',
         'enum34; python_version<"3.4"',
         'backports.tempfile; python_version<"3.2"',
     ],
