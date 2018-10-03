@@ -6,6 +6,7 @@ import errno
 import fnmatch
 import inspect
 import os
+import yaml
 import pickle
 from future.utils import with_metaclass
 
@@ -55,6 +56,18 @@ class Bundle(dict):
         """
         return Savable.load(self, load_context)
 
+_BUNDLE_TAG = u'!plumpy:Bundle'
+def _bundle_representer(dumper, node):
+    return dumper.represent_mapping(_BUNDLE_TAG, node)
+
+def _bundle_constructor(loader, data):
+    result = Bundle.__new__(Bundle)
+    yield result
+    mapping = loader.construct_mapping(data)
+    result.update(mapping)
+
+yaml.add_representer(Bundle, _bundle_representer)
+yaml.add_constructor(_BUNDLE_TAG, _bundle_constructor)
 
 class Persister(with_metaclass(ABCMeta, object)):
 
