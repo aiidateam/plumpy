@@ -508,7 +508,7 @@ class Process(with_metaclass(ProcessStateMachineMeta, StateMachine, persistence.
         self._state = self.recreate_state(saved_state['_state'])
 
         if 'communicator' in load_context:
-            self._communicator = load_context['communicator']
+            self._communicator = load_context.communicator
 
         if 'logger' in load_context:
             self._logger = load_context.logger
