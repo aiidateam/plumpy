@@ -3,8 +3,9 @@
 from __future__ import absolute_import
 import functools
 
-import kiwipy
 from tornado import concurrent, ioloop
+
+import kiwipy
 
 from . import futures
 
@@ -161,8 +162,8 @@ class LoopCommunicator(kiwipy.Communicator):
     def remove_broadcast_subscriber(self, subscriber):
         self._communicator.remove_task_subscriber(self._subscribers.pop(subscriber))
 
-    def task_send(self, msg):
-        return self._communicator.task_send(msg)
+    def task_send(self, task, no_reply=False):
+        return self._communicator.task_send(task, no_reply)
 
     def rpc_send(self, recipient_id, msg):
         return self._communicator.rpc_send(recipient_id, msg)
