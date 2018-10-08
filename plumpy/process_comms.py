@@ -29,7 +29,8 @@ INTENT_KEY = 'intent'
 MESSAGE_KEY = 'message'
 
 
-class Intent(object):
+class Intent(object):  # pylint: disable=useless-object-inheritance
+    """Intent constants for a process message"""
     # pylint: disable=too-few-public-methods
     PLAY = 'play'
     PAUSE = 'pause'
@@ -127,7 +128,7 @@ def create_create_body(process_class, init_args=None, init_kwargs=None, persist=
     return msg_body
 
 
-class RemoteProcessController(object):
+class RemoteProcessController(object):  # pylint: disable=useless-object-inheritance
     """
     Control remote processes using coroutines that will send messages and wait
     (in a non-blocking way) for their response
@@ -138,7 +139,12 @@ class RemoteProcessController(object):
 
     @gen.coroutine
     def get_status(self, pid):
-        result = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, STATUS_MSG))
+        """
+        Get the status of a process with the given PID
+        :param pid: the process id
+        :return: the status response from the process
+        """
+        result = yield self._communicator.rpc_send(pid, STATUS_MSG)
         raise gen.Return(result)
 
     @gen.coroutine
@@ -147,13 +153,13 @@ class RemoteProcessController(object):
         if msg is not None:
             message[MESSAGE_KEY] = msg
 
-        pause_future = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, message))
+        pause_future = yield self._communicator.rpc_send(pid, message)
         result = yield pause_future
         raise gen.Return(result)
 
     @gen.coroutine
     def play_process(self, pid):
-        play_future = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, PLAY_MSG))
+        play_future = yield self._communicator.rpc_send(pid, PLAY_MSG)
         result = yield play_future
         raise gen.Return(result)
 
@@ -164,7 +170,7 @@ class RemoteProcessController(object):
             message[MESSAGE_KEY] = msg
 
         # Wait for the communication to go through
-        kill_future = yield communications.kiwi_to_plum_future(self._communicator.rpc_send(pid, message))
+        kill_future = yield self._communicator.rpc_send(pid, message)
         # Now wait for the kill to be enacted
         result = yield kill_future
 
@@ -174,7 +180,7 @@ class RemoteProcessController(object):
     def continue_process(self, pid, tag=None, nowait=False):
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
-        continue_future = yield communications.kiwi_to_plum_future(self._communicator.task_send(message))
+        continue_future = yield self._communicator.task_send(message)
         # Now wait for the result of the task
         result = yield continue_future
 
@@ -184,7 +190,7 @@ class RemoteProcessController(object):
     def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False, loader=None):
         message = create_launch_body(process_class, init_args, init_kwargs, persist, nowait, loader)
 
-        launch_future = yield communications.kiwi_to_plum_future(self._communicator.task_send(message))
+        launch_future = yield self._communicator.task_send(message)
         result = yield launch_future
 
         raise gen.Return(result)
@@ -193,17 +199,17 @@ class RemoteProcessController(object):
     def execute_process(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
-        create_future = yield communications.kiwi_to_plum_future(self._communicator.task_send(message))
+        create_future = yield self._communicator.task_send(message)
         pid = yield create_future
 
         message = create_continue_body(pid, nowait=nowait)
-        continue_future = yield communications.kiwi_to_plum_future(self._communicator.task_send(message))
+        continue_future = yield self._communicator.task_send(message)
         result = yield continue_future
 
         raise gen.Return(result)
 
 
-class RemoteProcessThreadController(object):
+class RemoteProcessThreadController(object):  # pylint: disable=useless-object-inheritance
 
     def __init__(self, communicator):
         self._communicator = communicator
@@ -243,18 +249,16 @@ class RemoteProcessThreadController(object):
         create_future = futures.unwrap_kiwi_future(self._communicator.task_send(message))
 
         def on_created(_):
-            try:
+            with kiwipy.capture_exceptions(execute_future):
                 pid = create_future.result()
                 continue_future = self.continue_process(pid, nowait=nowait)
                 kiwipy.chain(continue_future, execute_future)
-            except Exception as exception:
-                execute_future.set_exception(exception)
 
         create_future.add_done_callback(on_created)
         return execute_future
 
 
-class ProcessLauncher(object):
+class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
     """
     Takes incoming task messages and uses them to launch processes.
 

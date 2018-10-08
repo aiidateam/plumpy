@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 
-import shortuuid
 import unittest
 
+import shortuuid
 from tornado import testing
 import kiwipy.rmq
 
@@ -147,7 +147,7 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         # Send a pause message
         pause_future = self.process_controller.pause_process(proc.pid)
         # Let the process respond to the request
-        result = yield plumpy.kiwi_to_plum_future(pause_future)
+        result = yield pause_future
 
         # Check that it all went well
         self.assertTrue(result)
@@ -161,7 +161,7 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         # Send a play message
         play_future = self.process_controller.pause_process(proc.pid)
         # Allow the process to respond to the request
-        result = yield plumpy.kiwi_to_plum_future(play_future)
+        result = yield play_future
 
         # Check that all is as we expect
         self.assertTrue(result)
@@ -174,7 +174,7 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         # Send a play message
         kill_future = self.process_controller.kill_process(proc.pid)
         # Allow the process to respond to the request
-        result = yield plumpy.kiwi_to_plum_future(kill_future)
+        result = yield kill_future
 
         # Check the outcome
         self.assertTrue(result)
@@ -189,6 +189,6 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         # Send a status message
         status_future = self.process_controller.get_status(proc.pid)
         # Let the process respond
-        status = yield plumpy.kiwi_to_plum_future(status_future)
+        status = yield status_future
 
         self.assertIsNotNone(status)

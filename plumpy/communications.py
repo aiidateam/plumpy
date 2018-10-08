@@ -10,8 +10,7 @@ import kiwipy
 from . import futures
 
 __all__ = [
-    'Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'kiwi_to_plum_future', 'plum_to_kiwi_future',
-    'wrap_communicator'
+    'Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'plum_to_kiwi_future', 'wrap_communicator'
 ]
 
 RemoteException = kiwipy.RemoteException
@@ -44,36 +43,6 @@ def plum_to_kiwi_future(plum_future):
 
     plum_future.add_done_callback(on_done)
     return kiwi_future
-
-
-def kiwi_to_plum_future(kiwi_future, loop=None):
-    """
-    Return a plum future that resolves to the outcome of the kiwi future
-
-    :param kiwi_future: the kiwi future
-    :type kiwi_future: :class:`kiwipy.Future`
-    :param loop: the event loop to schedule the callback on
-    :type loop: :class:`tornado.ioloop.IOLoop`
-    :return: the tornado future
-    :rtype: :class:`plumpy.Future`
-    """
-    loop = loop or ioloop.IOLoop.current()
-
-    tornado_future = futures.Future()
-
-    def done(done_future):
-        if done_future.cancelled():
-            tornado_future.cancel()
-
-        with kiwipy.capture_exceptions(tornado_future):
-            result = done_future.result()
-            if isinstance(result, kiwipy.Future):
-                result = kiwi_to_plum_future(result, loop)
-
-            tornado_future.set_result(result)
-
-    loop.add_future(kiwi_future, done)
-    return tornado_future
 
 
 def convert_to_comm(callback, loop=None):
