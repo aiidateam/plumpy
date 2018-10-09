@@ -38,8 +38,6 @@ setup(
     # for a useful dicussion
     install_requires=[
         'frozendict',
-        'portalocker',
-        'pyyaml',
         'tornado>=4.1, <5.0',
         'kiwipy[rmq]>=0.3.4',
         'enum34; python_version<"3.4"',
