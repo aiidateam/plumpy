@@ -1,14 +1,16 @@
+"""Test utilities"""
+
 from __future__ import absolute_import
 import collections
 from collections import namedtuple
+from six.moves import range
+from six.moves import zip
 
 import plumpy
 from . import processes
 from . import process_states
 from . import persistence
 from . import utils
-from six.moves import range
-from six.moves import zip
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -206,47 +208,34 @@ class ThreeStepsThenException(ThreeSteps):
 
 class ProcessListenerTester(plumpy.ProcessListener):
 
-    def __init__(self, process, expected_events, done_callback):
+    def __init__(self, process, expected_events):
         process.add_process_listener(self)
         self.expected_events = set(expected_events)
-        self._done_callback = done_callback
         self.called = set()
 
     def on_process_created(self, process):
         self.called.add('created')
-        self._check_done()
 
     def on_process_running(self, process):
         self.called.add('running')
-        self._check_done()
 
-    def on_process_waiting(self, process, data):
+    def on_process_waiting(self, process):
         self.called.add('waiting')
-        self._check_done()
 
     def on_process_paused(self, process):
         self.called.add('paused')
-        self._check_done()
 
     def on_output_emitted(self, process, output_port, value, dynamic):
         self.called.add('output_emitted')
-        self._check_done()
 
     def on_process_finished(self, process, outputs):
         self.called.add('finished')
-        self._check_done()
 
     def on_process_excepted(self, process, reason):
         self.called.add('excepted')
-        self._check_done()
 
     def on_process_killed(self, process, msg):
         self.called.add('killed')
-        self._check_done()
-
-    def _check_done(self):
-        if self.called == self.expected_events:
-            self._done_callback()
 
 
 class Saver(object):
@@ -417,7 +406,7 @@ def run_until_waiting(proc):
         in_waiting.set_result(True)
     else:
 
-        def on_waiting(waiting_proc):
+        def on_waiting(_waiting_proc):
             in_waiting.set_result(True)
             proc.remove_process_listener(listener)
 
