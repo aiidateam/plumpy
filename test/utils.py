@@ -1,6 +1,11 @@
-import functools
-import plumpy
+"""Utilities for tests"""
+
+from __future__ import absolute_import
 import unittest
+
+from tornado import testing
+
+import plumpy
 
 
 class TestCase(unittest.TestCase):
@@ -8,6 +13,8 @@ class TestCase(unittest.TestCase):
 
 
 class TestCaseWithLoop(unittest.TestCase):
+    """Test case with an event loop"""
+
     def setUp(self):
         super(TestCaseWithLoop, self).setUp()
         self.loop = plumpy.new_event_loop()
@@ -19,19 +26,14 @@ class TestCaseWithLoop(unittest.TestCase):
         plumpy.set_event_loop(None)
 
 
-def get_message(receive_list, loop, subject, to, body, sender_id):
-    receive_list.append({
-        'subject': subject,
-        'to': to,
-        'body': body,
-        'sender_id': sender_id
-    })
-
-
-def get_message_capture_fn(capture_list):
-    return functools.partial(get_message, capture_list)
-
-
 def run_loop_with_timeout(loop, timeout=2.):
     loop.call_later(timeout, loop.stop)
     loop.start()
+
+
+class AsyncTestCase(testing.AsyncTestCase):
+    """Out custom version of the async test case from tornado"""
+
+    def setUp(self):
+        super(AsyncTestCase, self).setUp()
+        self.loop = self.io_loop

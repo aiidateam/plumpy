@@ -1,24 +1,18 @@
+"""Process tests"""
 from __future__ import absolute_import
-import kiwipy
-import plumpy
-from plumpy import Process, ProcessState, test_utils, BundleKeys
-from plumpy.utils import AttributesFrozendict
 from tornado import gen, testing
-import tornado.gen
-
 import six
 from six.moves import range
 from six.moves import zip
 
+import kiwipy
+
+import plumpy
+from plumpy import Process, ProcessState, test_utils, BundleKeys
+from plumpy.utils import AttributesFrozendict
 from . import utils
 
-
-class AsyncTestCase(testing.AsyncTestCase):
-    """Out custom version of the async test case from tornado"""
-
-    def setUp(self):
-        super(AsyncTestCase, self).setUp()
-        self.loop = self.io_loop
+# pylint: disable=missing-docstring, invalid-name
 
 
 class ForgetToCallParent(plumpy.Process):
@@ -48,15 +42,15 @@ class ForgetToCallParent(plumpy.Process):
             super(ForgetToCallParent, self).on_kill(msg)
 
 
-class TestProcess(AsyncTestCase):
+class TestProcess(utils.AsyncTestCase):
 
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
         """
-        dp = test_utils.DummyProcess()
+        proc = test_utils.DummyProcess()
         self.assertIsNot(test_utils.DummyProcess.spec(), Process.spec())
-        self.assertIs(dp.spec(), test_utils.DummyProcess.spec())
+        self.assertIs(proc.spec(), test_utils.DummyProcess.spec())
 
         class Proc(test_utils.DummyProcess):
             pass
@@ -512,7 +506,7 @@ class TestProcess(AsyncTestCase):
         for _ in range(100):
             to_run.append(ParentProcess().step_until_terminated())
 
-        self.loop.run_sync(tornado.gen.coroutine(lambda: (yield tornado.gen.multi(to_run))))
+        self.loop.run_sync(gen.coroutine(lambda: (yield gen.multi(to_run))))
 
     def test_call_soon(self):
 
@@ -544,7 +538,7 @@ class SavePauseProc(plumpy.Process):
         self.steps_ran.append(self.step2.__name__)
 
 
-class TestProcessSaving(AsyncTestCase):
+class TestProcessSaving(utils.AsyncTestCase):
     maxDiff = None
 
     @testing.gen_test
@@ -742,9 +736,9 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
         original_inputs = [1, 2, 3, 4]
 
         inputs = {'name': {'space': {str(l): l for l in original_inputs}}}
-        p = DummyDynamicProcess(inputs=inputs)
+        proc = DummyDynamicProcess(inputs=inputs)
 
-        for label, value in p.inputs['name']['space'].items():
+        for label, value in proc.inputs['name']['space'].items():
             self.assertTrue(label in inputs['name']['space'])
             self.assertEqual(int(label), value)
             original_inputs.remove(value)
@@ -753,7 +747,7 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
         self.assertFalse(original_inputs)
 
 
-class TestProcessEvents(AsyncTestCase):
+class TestProcessEvents(utils.AsyncTestCase):
 
     def setUp(self):
         super(TestProcessEvents, self).setUp()

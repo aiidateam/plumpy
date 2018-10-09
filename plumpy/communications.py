@@ -57,8 +57,8 @@ def convert_to_comm(callback, loop=None):
     """
     loop = loop or ioloop.IOLoop.current()
 
-    def converted(communicator, msg):
-        msg_fn = functools.partial(callback, communicator, msg)
+    def converted(communicator, *args, **kwargs):
+        msg_fn = functools.partial(callback, communicator, *args, **kwargs)
         task_future = futures.create_task(msg_fn, loop)
         return plum_to_kiwi_future(task_future)
 
@@ -139,6 +139,3 @@ class LoopCommunicator(kiwipy.Communicator):
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         return self._communicator.broadcast_send(body, sender, subject, correlation_id)
-
-    def wait_for(self, future, timeout=None):
-        return self._communicator.wait_for(future, timeout)
