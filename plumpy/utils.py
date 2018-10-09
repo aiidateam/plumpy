@@ -49,11 +49,12 @@ class EventHelper(object):
         if event_function is None:
             raise ValueError("Must provide valid event method")
 
-        for l in self.listeners:
+        # Make a copy of the list for iteration just in case it changes in a callback
+        for listener in list(self.listeners):
             try:
-                getattr(l, event_function.__name__)(*args, **kwargs)
+                getattr(listener, event_function.__name__)(*args, **kwargs)
             except Exception as e:
-                _LOGGER.error("Listener '{}' produced an exception:\n{}".format(l, e))
+                _LOGGER.error("Listener '{}' produced an exception:\n{}".format(listener, e))
 
 
 class ListenContext(object):

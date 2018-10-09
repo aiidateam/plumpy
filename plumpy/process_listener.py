@@ -1,13 +1,12 @@
 from __future__ import absolute_import
-from abc import ABCMeta
-
-from future.utils import with_metaclass
-from builtins import str
+import abc
+import six
 
 __all__ = ['ProcessListener']
 
 
-class ProcessListener(with_metaclass(ABCMeta, object)):
+@six.add_metaclass(abc.ABCMeta)
+class ProcessListener(object):
 
     def on_process_created(self, process):
         """

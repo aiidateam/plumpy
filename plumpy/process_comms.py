@@ -1,7 +1,10 @@
+"""Module for process level communication functions and classes"""
+
 from __future__ import absolute_import
 from __future__ import print_function
 import copy
-from tornado import gen, ioloop, concurrent
+
+from tornado import gen
 import kiwipy
 
 from . import loaders
@@ -26,7 +29,9 @@ INTENT_KEY = 'intent'
 MESSAGE_KEY = 'message'
 
 
-class Intent(object):
+class Intent(object):  # pylint: disable=useless-object-inheritance
+    """Intent constants for a process message"""
+    # pylint: disable=too-few-public-methods
     PLAY = 'play'
     PAUSE = 'pause'
     KILL = 'kill'
@@ -56,6 +61,18 @@ CREATE_TASK = 'create'
 
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=False, nowait=True, loader=None):
+    """
+    Create a message body for the launch action
+
+    :param process_class: the class of the process to launch
+    :param init_args: any initialisation positional arguments
+    :param init_kwargs: any initialisation keyword arguments
+    :param persist: persist this process if True, otherwise don't
+    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
+    :param loader: the loader to use to load the persisted process
+    :return: a dictionary with the body of the message to launch the process
+    :rtype: dict
+    """
     if loader is None:
         loader = loaders.get_object_loader()
 
@@ -73,11 +90,29 @@ def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=
 
 
 def create_continue_body(pid, tag=None, nowait=False):
+    """
+    Create a message body to continue an existing process
+    :param pid: the pid of the existing process
+    :param tag: the optional persistence tag
+    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
+    :return: a dictionary with the body of the message to continue the process
+    :rtype: dict
+    """
     msg_body = {TASK_KEY: CONTINUE_TASK, TASK_ARGS: {PID_KEY: pid, NOWAIT_KEY: nowait, TAG_KEY: tag}}
     return msg_body
 
 
 def create_create_body(process_class, init_args=None, init_kwargs=None, persist=False, loader=None):
+    """
+    Create a message body to create a new process
+    :param process_class: the class of the process to launch
+    :param init_args: any initialisation positional arguments
+    :param init_kwargs: any initialisation keyword arguments
+    :param persist: persist this process if True, otherwise don't
+    :param loader: the loader to use to load the persisted process
+    :return: a dictionary with the body of the message to launch the process
+    :rtype: dict
+    """
     if loader is None:
         loader = loaders.get_object_loader()
 
@@ -93,28 +128,7 @@ def create_create_body(process_class, init_args=None, init_kwargs=None, persist=
     return msg_body
 
 
-def kiwi_to_tornado_future(kiwi_future, loop=None):
-    loop = loop or ioloop.IOLoop.current()  # type: :class:`tornado.ioloop.IOLoop`
-
-    tornado_future = concurrent.Future()
-
-    def done(done_future):
-        if done_future.cancelled():
-            tornado_future.cancel()
-
-        with kiwipy.capture_exceptions(tornado_future):
-            result = done_future.result()
-            if isinstance(result, kiwipy.Future):
-                result = kiwi_to_tornado_future(result, loop)
-
-            tornado_future.set_result(result)
-
-    print(('loop: {}'.format(loop)))
-    loop.add_future(kiwi_future, done)
-    return tornado_future
-
-
-class RemoteProcessController(object):
+class RemoteProcessController(object):  # pylint: disable=useless-object-inheritance
     """
     Control remote processes using coroutines that will send messages and wait
     (in a non-blocking way) for their response
@@ -125,19 +139,27 @@ class RemoteProcessController(object):
 
     @gen.coroutine
     def get_status(self, pid):
-        status_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, STATUS_MSG))
-        result = yield status_future
+        """
+        Get the status of a process with the given PID
+        :param pid: the process id
+        :return: the status response from the process
+        """
+        result = yield self._communicator.rpc_send(pid, STATUS_MSG)
         raise gen.Return(result)
 
     @gen.coroutine
-    def pause_process(self, pid):
-        pause_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, PAUSE_MSG))
+    def pause_process(self, pid, msg=None):
+        message = copy.copy(PAUSE_MSG)
+        if msg is not None:
+            message[MESSAGE_KEY] = msg
+
+        pause_future = yield self._communicator.rpc_send(pid, message)
         result = yield pause_future
         raise gen.Return(result)
 
     @gen.coroutine
     def play_process(self, pid):
-        play_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, PLAY_MSG))
+        play_future = yield self._communicator.rpc_send(pid, PLAY_MSG)
         result = yield play_future
         raise gen.Return(result)
 
@@ -148,7 +170,7 @@ class RemoteProcessController(object):
             message[MESSAGE_KEY] = msg
 
         # Wait for the communication to go through
-        kill_future = yield kiwi_to_tornado_future(self._communicator.rpc_send(pid, message))
+        kill_future = yield self._communicator.rpc_send(pid, message)
         # Now wait for the kill to be enacted
         result = yield kill_future
 
@@ -158,7 +180,7 @@ class RemoteProcessController(object):
     def continue_process(self, pid, tag=None, nowait=False):
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
-        continue_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        continue_future = yield self._communicator.task_send(message)
         # Now wait for the result of the task
         result = yield continue_future
 
@@ -168,7 +190,7 @@ class RemoteProcessController(object):
     def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False, loader=None):
         message = create_launch_body(process_class, init_args, init_kwargs, persist, nowait, loader)
 
-        launch_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        launch_future = yield self._communicator.task_send(message)
         result = yield launch_future
 
         raise gen.Return(result)
@@ -177,17 +199,17 @@ class RemoteProcessController(object):
     def execute_process(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
-        create_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        create_future = yield self._communicator.task_send(message)
         pid = yield create_future
 
         message = create_continue_body(pid, nowait=nowait)
-        continue_future = yield kiwi_to_tornado_future(self._communicator.task_send(message))
+        continue_future = yield self._communicator.task_send(message)
         result = yield continue_future
 
         raise gen.Return(result)
 
 
-class RemoteProcessThreadController(object):
+class RemoteProcessThreadController(object):  # pylint: disable=useless-object-inheritance
 
     def __init__(self, communicator):
         self._communicator = communicator
@@ -195,8 +217,12 @@ class RemoteProcessThreadController(object):
     def get_status(self, pid):
         return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, STATUS_MSG))
 
-    def pause_process(self, pid):
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PAUSE_MSG))
+    def pause_process(self, pid, msg=None):
+        message = copy.copy(PAUSE_MSG)
+        if msg is not None:
+            message[MESSAGE_KEY] = msg
+
+        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message))
 
     def play_process(self, pid):
         return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PLAY_MSG))
@@ -223,18 +249,16 @@ class RemoteProcessThreadController(object):
         create_future = futures.unwrap_kiwi_future(self._communicator.task_send(message))
 
         def on_created(_):
-            try:
+            with kiwipy.capture_exceptions(execute_future):
                 pid = create_future.result()
                 continue_future = self.continue_process(pid, nowait=nowait)
                 kiwipy.chain(continue_future, execute_future)
-            except Exception as exception:
-                execute_future.set_exception(exception)
 
         create_future.add_done_callback(on_created)
         return execute_future
 
 
-class ProcessLauncher(object):
+class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
     """
     Takes incoming task messages and uses them to launch processes.
 
@@ -299,6 +323,7 @@ class ProcessLauncher(object):
             self._persister.save_checkpoint(proc)
 
         if nowait:
+            self._loop.add_callback(proc.step_until_terminated)
             raise gen.Return(proc.pid)
 
         yield proc.step_until_terminated()
@@ -317,6 +342,7 @@ class ProcessLauncher(object):
         proc = saved_state.unbundle(self._load_context)
 
         if nowait:
+            self._loop.add_callback(proc.step_until_terminated)
             raise gen.Return(proc.pid)
 
         yield proc.step_until_terminated()

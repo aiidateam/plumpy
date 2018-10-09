@@ -26,7 +26,7 @@ echo Releasing version $version
 
 git checkout -b $relbranch 
 git add ${VERSION_FILE}
-git commit -m "Release ${version}"
+git commit --no-verify -m "Release ${version}"
 
 
 # Merge into master

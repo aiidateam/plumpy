@@ -15,7 +15,7 @@ setup(
     name="plumpy",
     version=about['__version__'],
     description='A python workflow library',
-    long_description=open('README.md').read(),
+    long_description=open('README.rst').read(),
     url='https://github.com/muhrin/plumpy.git',
     author='Martin Uhrin',
     author_email='martin.uhrin@gmail.com',
@@ -41,10 +41,10 @@ setup(
         'portalocker',
         'pyyaml',
         'tornado>=4.1, <5.0',
-        'future',
-        'kiwipy[rmq]>=0.3.1',
+        'kiwipy[rmq]>=0.3.4',
         'enum34; python_version<"3.4"',
         'backports.tempfile; python_version<"3.2"',
+        'six',
     ],
     extras_require={
         'dev': [
