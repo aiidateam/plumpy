@@ -60,7 +60,7 @@ CONTINUE_TASK = 'continue'
 CREATE_TASK = 'create'
 
 
-def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=False, nowait=True, loader=None):
+def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=False, loader=None, nowait=True):
     """
     Create a message body for the launch action
 
@@ -68,8 +68,8 @@ def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=
     :param init_args: any initialisation positional arguments
     :param init_kwargs: any initialisation keyword arguments
     :param persist: persist this process if True, otherwise don't
-    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
     :param loader: the loader to use to load the persisted process
+    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
     :return: a dictionary with the body of the message to launch the process
     :rtype: dict
     """
@@ -177,35 +177,43 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
         raise gen.Return(result)
 
     @gen.coroutine
-    def continue_process(self, pid, tag=None, nowait=False):
+    def continue_process(self, pid, tag=None, nowait=False, no_reply=False):
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
-        continue_future = yield self._communicator.task_send(message)
+        continue_future = yield self._communicator.task_send(message, no_reply=no_reply)
+
+        if no_reply:
+            return
+
         # Now wait for the result of the task
         result = yield continue_future
-
         raise gen.Return(result)
 
     @gen.coroutine
-    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False, loader=None):
-        message = create_launch_body(process_class, init_args, init_kwargs, persist, nowait, loader)
+    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, loader=None, nowait=False, no_reply=False):
+        message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
+        launch_future = yield self._communicator.task_send(message, no_reply=no_reply)
 
-        launch_future = yield self._communicator.task_send(message)
+        if no_reply:
+            return
+
         result = yield launch_future
-
         raise gen.Return(result)
 
     @gen.coroutine
-    def execute_process(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
+    def execute_process(self, process_class, init_args=None, init_kwargs=None, loader=None, nowait=False, no_reply=False):
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         create_future = yield self._communicator.task_send(message)
         pid = yield create_future
 
         message = create_continue_body(pid, nowait=nowait)
-        continue_future = yield self._communicator.task_send(message)
-        result = yield continue_future
+        continue_future = yield self._communicator.task_send(message, no_reply=no_reply)
 
+        if no_reply:
+            return
+
+        result = yield continue_future
         raise gen.Return(result)
 
 
@@ -234,15 +242,15 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
 
         return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message))
 
-    def continue_process(self, pid, tag=None, nowait=False):
+    def continue_process(self, pid, tag=None, nowait=False, no_reply=False):
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
-        return futures.unwrap_kiwi_future(self._communicator.task_send(message))
+        return self.task_send(message, no_reply=no_reply)
 
-    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, nowait=False, loader=None):
-        message = create_launch_body(process_class, init_args, init_kwargs, persist, nowait, loader)
-        return futures.unwrap_kiwi_future(self._communicator.task_send(message))
+    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, loader=None, nowait=False, no_reply=False):
+        message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
+        return self.task_send(message, no_reply=no_reply)
 
-    def execute_process(self, process_class, init_args=None, init_kwargs=None, nowait=False, loader=None):
+    def execute_process(self, process_class, init_args=None, init_kwargs=None, loader=None, nowait=False, no_reply=False):
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         execute_future = kiwipy.Future()
@@ -251,11 +259,17 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
         def on_created(_):
             with kiwipy.capture_exceptions(execute_future):
                 pid = create_future.result()
-                continue_future = self.continue_process(pid, nowait=nowait)
+                continue_future = self.continue_process(pid, nowait=nowait, no_reply=no_reply)
                 kiwipy.chain(continue_future, execute_future)
 
         create_future.add_done_callback(on_created)
         return execute_future
+
+    def task_send(self, message, no_reply=False):
+        if no_reply:
+            return self._communicator.task_send(message, no_reply=no_reply)
+        else:
+            return futures.unwrap_kiwi_future(self._communicator.task_send(message, no_reply=no_reply))
 
 
 class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
