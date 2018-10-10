@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 import uuid
+import shortuuid
 
 from kiwipy import rmq
 from six.moves import range
@@ -27,12 +28,14 @@ class CommunicatorTestCase(AsyncTestCase):
 
     def setUp(self):
         super(CommunicatorTestCase, self).setUp()
-        exchange_name = "{}.{}".format(self.__class__.__name__, uuid.uuid4())
-        queue_name = "{}.{}.tasks".format(self.__class__.__name__, uuid.uuid4())
+        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        queue_name = "{}.{}.tasks".format(self.__class__.__name__, shortuuid.uuid())
 
         self.rmq_communicator = rmq.connect(
             connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-            message_exchange=exchange_name,
+            message_exchange=message_exchange,
+            task_exchange=task_exchange,
             task_queue=queue_name,
             testing_mode=True)
         self.communicator = communications.LoopCommunicator(self.rmq_communicator, self.loop)
