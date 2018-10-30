@@ -18,6 +18,8 @@ from tornado import concurrent, gen
 import tornado.stack_context
 import yaml
 
+import kiwipy
+
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import protected
@@ -255,7 +257,11 @@ class Process(StateMachine, persistence.Savable):
     def init(self):
         """ Any common initialisation stuff after create or load goes here """
         if self._communicator is not None:
-            self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+            try:
+                self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+            except kiwipy.TimeoutError:
+                self.logger.exception("Failed to add RPC subscriber to process<{}> so it won't respond to RPCs".format(
+                    self.pid))
 
         if not self._future.done():
 
