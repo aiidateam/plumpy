@@ -22,19 +22,40 @@ gather = lambda *args: gen.multi(args)  # pylint: disable=invalid-name
 
 
 class Future(concurrent.Future):
+    """
+    Plumpy future.  This subclasses tornado's futures to allow for cancellation.
+    """
     _cancelled = False
 
-    def result(self):
+    def result(self, timeout=None):
         if self._cancelled:
             raise CancelledError()
 
-        return super(Future, self).result()
+        return super(Future, self).result(timeout)
+
+    def cancel(self):
+        """Cancel the future and schedule callbacks.
+        If the future is already done or cancelled, return False.  Otherwise,
+        change the future's state to cancelled, schedule the callbacks and
+        return True.
+        """
+        if self.done():
+            return False
+        self._cancelled = True
+        self._set_done()
+        return True
+
+    def cancelled(self):
+        return self._cancelled
 
     def remove_done_callback(self, callback):
         self._callbacks.remove(callback)
 
 
 class CancellableAction(Future):
+    """
+    An action that can be launched and potentially cancelled
+    """
 
     def __init__(self, action, cookie=None):
         super(CancellableAction, self).__init__()
@@ -47,6 +68,11 @@ class CancellableAction(Future):
         return self._cookie
 
     def run(self, *args, **kwargs):
+        """
+        Runt he action
+        :param args: the positional arguments to the action
+        :param kwargs: the keyword arguments to the action
+        """
         if self.done():
             raise InvalidStateError("Action has already been ran")
 
