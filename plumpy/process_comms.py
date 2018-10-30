@@ -149,6 +149,13 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
 
     @gen.coroutine
     def pause_process(self, pid, msg=None):
+        """
+        Pause the process
+
+        :param pid: the pid of the process to pause
+        :param msg: optional pause message
+        :return: True if paused, False otherwise
+        """
         message = copy.copy(PAUSE_MSG)
         if msg is not None:
             message[MESSAGE_KEY] = msg
@@ -159,12 +166,25 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
 
     @gen.coroutine
     def play_process(self, pid):
+        """
+        Play the process
+
+        :param pid: the pid of the process to play
+        :return: True if played, False otherwise
+        """
         play_future = yield self._communicator.rpc_send(pid, PLAY_MSG)
         result = yield play_future
         raise gen.Return(result)
 
     @gen.coroutine
     def kill_process(self, pid, msg=None):
+        """
+        Kill the process
+
+        :param pid: the pid of the process to kill
+        :param msg: optional kill message
+        :return: True if killed, False otherwise
+        """
         message = copy.copy(KILL_MSG)
         if msg is not None:
             message[MESSAGE_KEY] = msg
@@ -178,6 +198,13 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
 
     @gen.coroutine
     def continue_process(self, pid, tag=None, nowait=False, no_reply=False):
+        """
+        Continue the process
+
+        :param _communicator: the communicator
+        :param pid: the pid of the process to continue
+        :param tag: the checkpoint tag to continue from
+        """
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
         continue_future = yield self._communicator.task_send(message, no_reply=no_reply)
@@ -190,7 +217,15 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
         raise gen.Return(result)
 
     @gen.coroutine
-    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, loader=None, nowait=False, no_reply=False):
+    def launch_process(self,
+                       process_class,
+                       init_args=None,
+                       init_kwargs=None,
+                       persist=False,
+                       loader=None,
+                       nowait=False,
+                       no_reply=False):
+        # pylint: disable=too-many-arguments
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
         launch_future = yield self._communicator.task_send(message, no_reply=no_reply)
 
@@ -201,7 +236,14 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
         raise gen.Return(result)
 
     @gen.coroutine
-    def execute_process(self, process_class, init_args=None, init_kwargs=None, loader=None, nowait=False, no_reply=False):
+    def execute_process(self,
+                        process_class,
+                        init_args=None,
+                        init_kwargs=None,
+                        loader=None,
+                        nowait=False,
+                        no_reply=False):
+        # pylint: disable=too-many-arguments
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         create_future = yield self._communicator.task_send(message)
@@ -223,34 +265,84 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
         self._communicator = communicator
 
     def get_status(self, pid):
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, STATUS_MSG))
+        return self._communicator.rpc_send(pid, STATUS_MSG)
 
     def pause_process(self, pid, msg=None):
+        """
+        Pause the process
+
+        :param pid: the pid of the process to pause
+        :param msg: optional pause message
+        :return: a response future from the process to be paused
+        :rtype: :class:`kiwipy.Future`
+        """
         message = copy.copy(PAUSE_MSG)
         if msg is not None:
             message[MESSAGE_KEY] = msg
 
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message))
+        return self._communicator.rpc_send(pid, message)
 
     def play_process(self, pid):
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, PLAY_MSG))
+        """
+        Play the process
+
+        :param pid: the pid of the process to pause
+        :return: a response future from the process to be played
+        :rtype: :class:`kiwipy.Future`
+        """
+        return self._communicator.rpc_send(pid, PLAY_MSG)
 
     def kill_process(self, pid, msg=None):
+        """
+        Kill the process
+
+        :param pid: the pid of the process to kill
+        :param msg: optional kill message
+        :return: a response future from the process to be killed
+        :rtype: :class:`kiwipy.Future`
+        """
         message = copy.copy(KILL_MSG)
         if msg is not None:
             message[MESSAGE_KEY] = msg
 
-        return futures.unwrap_kiwi_future(self._communicator.rpc_send(pid, message))
+        return self._communicator.rpc_send(pid, message)
 
     def continue_process(self, pid, tag=None, nowait=False, no_reply=False):
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         return self.task_send(message, no_reply=no_reply)
 
-    def launch_process(self, process_class, init_args=None, init_kwargs=None, persist=False, loader=None, nowait=False, no_reply=False):
+    def launch_process(self,
+                       process_class,
+                       init_args=None,
+                       init_kwargs=None,
+                       persist=False,
+                       loader=None,
+                       nowait=False,
+                       no_reply=False):
+        # pylint: disable=too-many-arguments
+        """
+        Launch the process
+
+        :param process_class: the process class to launch
+        :param init_args: positional arguments to the process constructor
+        :param init_kwargs: keyword arguments to the process constructor
+        :param persist: should the process be persisted
+        :param loader: the class loader to use
+        :param nowait: if True only return when the process finishes
+        :param no_reply: don't send a reply to the sender
+        :return: the pid of the created process or the outputs (if nowait=False)
+        """
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
         return self.task_send(message, no_reply=no_reply)
 
-    def execute_process(self, process_class, init_args=None, init_kwargs=None, loader=None, nowait=False, no_reply=False):
+    def execute_process(self,
+                        process_class,
+                        init_args=None,
+                        init_kwargs=None,
+                        loader=None,
+                        nowait=False,
+                        no_reply=False):
+        # pylint: disable=too-many-arguments
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         execute_future = kiwipy.Future()
@@ -268,8 +360,8 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
     def task_send(self, message, no_reply=False):
         if no_reply:
             return self._communicator.task_send(message, no_reply=no_reply)
-        else:
-            return futures.unwrap_kiwi_future(self._communicator.task_send(message, no_reply=no_reply))
+
+        return futures.unwrap_kiwi_future(self._communicator.task_send(message, no_reply=no_reply))
 
 
 class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
@@ -323,6 +415,17 @@ class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
 
     @gen.coroutine
     def _launch(self, _communicator, process_class, persist, nowait, init_args=None, init_kwargs=None):
+        """
+        Launch the process
+
+        :param _communicator: the communicator
+        :param process_class: the process class to launch
+        :param persist: should the process be persisted
+        :param nowait: if True only return when the process finishes
+        :param init_args: positional arguments to the process constructor
+        :param init_kwargs: keyword arguments to the process constructor
+        :return: the pid of the created process or the outputs (if nowait=False)
+        """
         if persist and not self._persister:
             raise communications.TaskRejected("Cannot persist process, no persister")
 
@@ -345,6 +448,14 @@ class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
 
     @gen.coroutine
     def _continue(self, _communicator, pid, nowait, tag=None):
+        """
+        Continue the process
+
+        :param _communicator: the communicator
+        :param pid: the pid of the process to continue
+        :param nowait: if True don't wait for the process to complete
+        :param tag: the checkpoint tag to continue from
+        """
         if not self._persister:
             raise communications.TaskRejected("Cannot continue process, no persister")
 
@@ -364,6 +475,16 @@ class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
 
     @gen.coroutine
     def _create(self, _communicator, process_class, persist, init_args=None, init_kwargs=None):
+        """
+        Create the process
+
+        :param _communicator: the communicator
+        :param process_class: the process class to create
+        :param persist: should the process be persisted
+        :param init_args: positional arguments to the process constructor
+        :param init_kwargs: keyword arguments to the process constructor
+        :return: the pid of the created process
+        """
         if persist and not self._persister:
             raise communications.TaskRejected("Cannot persist process, no persister")
 
