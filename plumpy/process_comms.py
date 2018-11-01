@@ -225,6 +225,18 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
                        loader=None,
                        nowait=False,
                        no_reply=False):
+        """
+        Launch a process given the class and constructor arguments
+
+        :param process_class: the class of the process to launch
+        :param init_args: the constructor positional arguments
+        :param init_kwargs: the constructor keyword arguments
+        :param persist: should the process be persisted
+        :param loader: the classloader to use
+        :param nowait: if True, don't wait for the process to send a response, just return the pid
+        :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
+        :return: the result of launching the process
+        """
         # pylint: disable=too-many-arguments
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
         launch_future = yield self._communicator.task_send(message, no_reply=no_reply)
@@ -243,6 +255,19 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
                         loader=None,
                         nowait=False,
                         no_reply=False):
+        """
+        Execute a process.  This call will first send a create task and then a continue task over
+        the communicator.  This means that if communicator messages are durable then the process
+        will run until the end even if this interpreter instance ceases to exist.
+
+        :param process_class: the process class to execute
+        :param init_args: the positional arguments to the class constructor
+        :param init_kwargs: the keyword arguments to the class constructor
+        :param loader: the class loader to use
+        :param nowait: if True, don't wait for the process to send a response
+        :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
+        :return: the result of executing the process
+        """
         # pylint: disable=too-many-arguments
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
@@ -260,8 +285,17 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
 
 
 class RemoteProcessThreadController(object):  # pylint: disable=useless-object-inheritance
+    """
+    A class that can be used to control and launch remote processes
+    """
 
     def __init__(self, communicator):
+        """
+        Create a new process controller
+
+        :param communicator: the communicator to use
+        :type communicator: :class:`kiwipy.Communicator`
+        """
         self._communicator = communicator
 
     def get_status(self, pid):
@@ -282,6 +316,14 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
 
         return self._communicator.rpc_send(pid, message)
 
+    def pause_all(self, msg):
+        """
+        Pause all processes that are subscribed to the same communicator
+
+        :param msg: an optional pause message
+        """
+        self._communicator.broadcast_send(msg, subject=Intent.PAUSE)
+
     def play_process(self, pid):
         """
         Play the process
@@ -291,6 +333,12 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
         :rtype: :class:`kiwipy.Future`
         """
         return self._communicator.rpc_send(pid, PLAY_MSG)
+
+    def play_all(self):
+        """
+        Play all processes that are subscribed to the same communicator
+        """
+        self._communicator.broadcast_send(None, subject=Intent.PLAY)
 
     def kill_process(self, pid, msg=None):
         """
@@ -306,6 +354,14 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
             message[MESSAGE_KEY] = msg
 
         return self._communicator.rpc_send(pid, message)
+
+    def kill_all(self, msg):
+        """
+        Kill all processes that are subscribed to the same communicator
+
+        :param msg: an optional pause message
+        """
+        self._communicator.broadcast_send(msg, subject=Intent.KILL)
 
     def continue_process(self, pid, tag=None, nowait=False, no_reply=False):
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
@@ -342,6 +398,19 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
                         loader=None,
                         nowait=False,
                         no_reply=False):
+        """
+        Execute a process.  This call will first send a create task and then a continue task over
+        the communicator.  This means that if communicator messages are durable then the process
+        will run until the end even if this interpreter instance ceases to exist.
+
+        :param process_class: the process class to execute
+        :param init_args: the positional arguments to the class constructor
+        :param init_kwargs: the keyword arguments to the class constructor
+        :param loader: the class loader to use
+        :param nowait: if True, don't wait for the process to send a response
+        :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
+        :return: the result of executing the process
+        """
         # pylint: disable=too-many-arguments
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
@@ -358,10 +427,17 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
         return execute_future
 
     def task_send(self, message, no_reply=False):
+        """
+        Send a task to be performed using the communicator
+
+        :param message: the task message
+        :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
+        :return: the response from the remote side (if no_reply=False)
+        """
         if no_reply:
             return self._communicator.task_send(message, no_reply=no_reply)
 
-        return futures.unwrap_kiwi_future(self._communicator.task_send(message, no_reply=no_reply))
+        return self._communicator.task_send(message, no_reply=no_reply)
 
 
 class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance

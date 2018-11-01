@@ -8,10 +8,10 @@ import functools
 import copy
 import logging
 import time
-import six
 import sys
 import threading
 import uuid
+import six
 
 from pika.exceptions import ConnectionClosed
 from tornado import concurrent, gen
@@ -37,6 +37,8 @@ from . import process_comms
 from . import process_states
 from . import ports
 from . import utils
+
+# pylint: disable=too-many-lines
 
 __all__ = ['Process', 'ProcessSpec', 'BundleKeys', 'TransitionFailed']
 
@@ -262,6 +264,10 @@ class Process(StateMachine, persistence.Savable):
             except kiwipy.TimeoutError:
                 self.logger.exception("Failed to add RPC subscriber to process<{}> so it won't respond to RPCs".format(
                     self.pid))
+            try:
+                self._communicator.add_broadcast_subscriber(self.broadcast_receive)
+            except kiwipy.TimeoutError:
+                self.logger.exception("Process<{}> failed to register as a broadcast subscriber".format(self.pid))
 
         if not self._future.done():
 
@@ -387,14 +393,14 @@ class Process(StateMachine, persistence.Savable):
     def killed_msg(self):
         if isinstance(self._state, process_states.Killed):
             return self._state.msg
-        else:
-            raise exceptions.InvalidStateError('Has not been killed')
+
+        raise exceptions.InvalidStateError('Has not been killed')
 
     def exception(self):
         if isinstance(self._state, process_states.Excepted):
             return self._state.exception
-        else:
-            return None
+
+        return None
 
     def done(self):
         """
@@ -557,7 +563,7 @@ class Process(StateMachine, persistence.Savable):
 
     @protected
     def log_with_pid(self, level, msg):
-        self.logger.log(level, "{}: {}".format(self.pid, msg))
+        self.logger.log(level, "%s: %s", self.pid, msg)
 
     # region Events
 
@@ -738,7 +744,7 @@ class Process(StateMachine, persistence.Savable):
         :param msg: the message
         :return: the outcome of processing the message, the return value will be sent back as a response to the sender
         """
-        self.logger.debug("Message '%s' received with communicator '%s'", msg, _comm)
+        self.logger.debug("RPC message '%s' received with communicator '%s'", msg, _comm)
 
         intent = msg[process_comms.INTENT_KEY]
 
@@ -755,6 +761,24 @@ class Process(StateMachine, persistence.Savable):
 
         # Didn't match any known intents
         raise RuntimeError("Unknown intent")
+
+    def broadcast_receive(self, _comm, body, sender, subject, correlation_id):
+        """
+        Coroutine called when the process receives a message from the communicator
+
+        :param _comm: the communicator that sent the message
+        :type _comm: :class:`kiwipy.Communicator`
+        :param msg: the message
+        """
+        self.logger.debug("Broadcast message '%s' received with communicator '%s'", body, _comm)
+
+        # If we get a message we recognise then action it, otherwise ignore
+        if subject == process_comms.Intent.PLAY:
+            return self._schedule_rpc(self.play)
+        if subject == process_comms.Intent.PAUSE:
+            return self._schedule_rpc(self.pause, msg=body)
+        if subject == process_comms.Intent.KILL:
+            return self._schedule_rpc(self.kill, msg=body)
 
     def _schedule_rpc(self, callback, *args, **kwargs):
         """
