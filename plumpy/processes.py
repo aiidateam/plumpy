@@ -813,7 +813,7 @@ class Process(StateMachine, persistence.Savable):
         if self._communicator is not None:
             try:
                 self._communicator.remove_rpc_subscriber(str(self.pid))
-            except ValueError:
+            except (kiwipy.TimeoutError, ValueError):
                 self.logger.exception("Process<{}> failed to remove itself as an RPC subscriber".format(self.pid))
 
     # region State related methods
