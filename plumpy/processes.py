@@ -262,7 +262,7 @@ class Process(StateMachine, persistence.Savable):
             try:
                 self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
             except kiwipy.TimeoutError:
-                self.logger.exception("Failed to add RPC subscriber to process<{}> so it won't respond to RPCs".format(
+                self.logger.exception("Process<{}> failed to register as an RPC subscriber".format(
                     self.pid))
             try:
                 self._communicator.add_broadcast_subscriber(self.broadcast_receive)
@@ -811,7 +811,10 @@ class Process(StateMachine, persistence.Savable):
         Remove all the RPC subscribers from the communicator tied to the process
         """
         if self._communicator is not None:
-            self._communicator.remove_rpc_subscriber(str(self.pid))
+            try:
+                self._communicator.remove_rpc_subscriber(str(self.pid))
+            except ValueError:
+                self.logger.exception("Process<{}> failed to remove itself as an RPC subscriber".format(self.pid))
 
     # region State related methods
 
