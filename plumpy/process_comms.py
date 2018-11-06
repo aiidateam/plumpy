@@ -3,6 +3,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 import copy
+import logging
 
 from tornado import gen
 import kiwipy
@@ -58,6 +59,8 @@ TAG_KEY = 'tag'
 LAUNCH_TASK = 'launch'
 CONTINUE_TASK = 'continue'
 CREATE_TASK = 'create'
+
+LOGGER = logging.getLogger(__name__)
 
 
 def create_launch_body(process_class, init_args=None, init_kwargs=None, persist=False, loader=None, nowait=True):
@@ -533,13 +536,11 @@ class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
         :param tag: the checkpoint tag to continue from
         """
         if not self._persister:
+            LOGGER.warning('rejecting task: cannot continue process<%d> because no persister is available', pid)
             raise communications.TaskRejected("Cannot continue process, no persister")
 
-        try:
-            saved_state = self._persister.load_checkpoint(pid, tag)
-        except exceptions.PersistenceError as exception:
-            raise communications.TaskRejected("Cannot continue process: {}".format(exception))
-
+        # Do not catch exceptions here, because if these operations fail, the continue task should except and bubble up
+        saved_state = self._persister.load_checkpoint(pid, tag)
         proc = saved_state.unbundle(self._load_context)
 
         if nowait:
