@@ -9,6 +9,8 @@ import kiwipy.rmq
 import plumpy
 import plumpy.communications
 from plumpy import process_comms, test_utils
+from .. import utils
+from six.moves import range
 
 try:
     import pika
@@ -19,24 +21,12 @@ AWAIT_TIMEOUT = testing.get_async_test_timeout()
 
 
 @unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
-class TestRemoteProcessController(testing.AsyncTestCase):
+class TestRemoteProcessController(utils.AsyncTestCase):
 
     def setUp(self):
         super(TestRemoteProcessController, self).setUp()
 
-        self.loop = self.io_loop
-
-        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-
-        self.communicator = kiwipy.rmq.connect(
-            connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-            message_exchange=message_exchange,
-            task_exchange=task_exchange,
-            task_queue=task_queue,
-            testing_mode=True)
-
+        self.init_communicator()
         self.process_controller = process_comms.RemoteProcessController(self.communicator)
 
     def tearDown(self):
@@ -154,6 +144,31 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         self.assertTrue(proc.paused)
 
     @testing.gen_test
+    def test_pause_all(self):
+        """Test pausing all processes on a communicator"""
+        procs = []
+        for _ in range(10):
+            procs.append(test_utils.WaitForSignalProcess(communicator=self.communicator))
+
+        self.process_controller.pause_all("Slow yo' roll")
+        # Wait until they are all paused
+        yield utils.wait_util(lambda: all([proc.paused for proc in procs]))
+
+    @testing.gen_test
+    def test_play_all(self):
+        """Test pausing all processes on a communicator"""
+        procs = []
+        for _ in range(10):
+            proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
+            procs.append(proc)
+            proc.pause('hold tight')
+
+        self.assertTrue(all([proc.paused for proc in procs]))
+        self.process_controller.play_all()
+        # Wait until they are all paused
+        yield utils.wait_util(lambda: all([not proc.paused for proc in procs]))
+
+    @testing.gen_test
     def test_play(self):
         proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
         self.assertTrue(proc.pause())
@@ -179,6 +194,17 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         # Check the outcome
         self.assertTrue(result)
         self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
+
+    @testing.gen_test
+    def test_kill_all(self):
+        """Test pausing all processes on a communicator"""
+        procs = []
+        for _ in range(10):
+            procs.append(test_utils.WaitForSignalProcess(communicator=self.communicator))
+
+        self.process_controller.kill_all('bang bang, I shot you down')
+        yield utils.wait_util(lambda: all([proc.killed() for proc in procs]))
+        self.assertTrue(all([proc.state == plumpy.ProcessState.KILLED for proc in procs]))
 
     @testing.gen_test
     def test_status(self):
