@@ -23,7 +23,6 @@ import kiwipy
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import protected
-from . import communications
 from . import exceptions
 from . import futures
 from . import base
@@ -131,6 +130,12 @@ class Process(StateMachine, persistence.Savable):
 
     @classmethod
     def current(cls):
+        """
+        Get the currently running process i.e. the one at the top of the stack
+
+        :return: the currently running process
+        :rtype: :class:`plumpy.Process`
+        """
         if _process_stack():
             return _process_stack()[-1]
 
@@ -262,8 +267,7 @@ class Process(StateMachine, persistence.Savable):
             try:
                 self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
             except kiwipy.TimeoutError:
-                self.logger.exception("Process<{}> failed to register as an RPC subscriber".format(
-                    self.pid))
+                self.logger.exception("Process<{}> failed to register as an RPC subscriber".format(self.pid))
             try:
                 self._communicator.add_broadcast_subscriber(self.broadcast_receive)
             except kiwipy.TimeoutError:
@@ -352,7 +356,7 @@ class Process(StateMachine, persistence.Savable):
     def launch(self, process_class, inputs=None, pid=None, logger=None):
         process = process_class(
             inputs=inputs, pid=pid, logger=logger, loop=self.loop(), communicator=self._communicator)
-        self.create_background_task(process.step_until_terminated)
+        self.loop().add_callback(process.step_until_terminated)
         return process
 
     # region State introspection methods
@@ -426,16 +430,6 @@ class Process(StateMachine, persistence.Savable):
         handle = events.ProcessCallback(self, self._run_task, args, kwargs)
         self._loop.add_callback(handle.run)
         return handle
-
-    def create_background_task(self, callback):
-        """
-        Create a task that corresponds to a callback scheduled on our event loop
-
-        :param callback: the callback to schedule, can be a function or coroutine
-        :return: a future corresponding to the result of this task
-        :rtype: :class:`plumpy.Future`
-        """
-        return futures.create_task(callback, loop=self._loop)
 
     def callback_excepted(self, _callback, exception, trace):
         if self.state != process_states.ProcessState.EXCEPTED:
@@ -792,17 +786,20 @@ class Process(StateMachine, persistence.Savable):
         :return: a kiwi future that resolves to the outcome of the callback
         :rtype: :class:`kiwipy.Future`
         """
+        kiwi_future = kiwipy.Future()
 
         @gen.coroutine
         def run_callback():
-            result = yield gen.coroutine(callback)(*args, **kwargs)
-            while concurrent.is_future(result):
-                result = yield result
-            raise gen.Return(result)
+            with kiwipy.capture_exceptions(kiwi_future):
+                result = callback(*args, **kwargs)
+                while concurrent.is_future(result):
+                    result = yield result
+
+                kiwi_future.set_result(result)
 
         # Schedule the task and give back a kiwi future
-        task = self.create_background_task(run_callback)
-        return communications.plum_to_kiwi_future(task)
+        self.loop().add_callback(run_callback)
+        return kiwi_future
 
     # endregion
 

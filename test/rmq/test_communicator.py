@@ -150,8 +150,8 @@ class TestTaskActions(CommunicatorTestCase):
 
         launch_futures = []
         for _ in range(num_to_launch):
-            task = partial(self.process_controller.launch_process, test_utils.DummyProcess, nowait=True)
-            launch_futures.append(plumpy.create_task(task))
+            launch = self.process_controller.launch_process(test_utils.DummyProcess, nowait=True)
+            launch_futures.append(launch)
 
         results = yield launch_futures
         for result in results:
