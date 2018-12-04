@@ -108,9 +108,9 @@ class LoopCommunicator(kiwipy.Communicator):
     def loop(self):
         return self._loop
 
-    def add_rpc_subscriber(self, subscriber, identifier):
+    def add_rpc_subscriber(self, subscriber, identifier=None):
         converted = convert_to_comm(subscriber, self._loop)
-        self._communicator.add_rpc_subscriber(converted, identifier)
+        return self._communicator.add_rpc_subscriber(converted, identifier)
 
     def remove_rpc_subscriber(self, identifier):
         self._communicator.remove_rpc_subscriber(identifier)
@@ -123,13 +123,14 @@ class LoopCommunicator(kiwipy.Communicator):
     def remove_task_subscriber(self, subscriber):
         self._communicator.remove_task_subscriber(self._subscribers.pop(subscriber))
 
-    def add_broadcast_subscriber(self, subscriber):
+    def add_broadcast_subscriber(self, subscriber, identifier=None):
         converted = convert_to_comm(subscriber, self._loop)
-        self._communicator.add_broadcast_subscriber(converted)
-        self._subscribers[subscriber] = converted
+        identifier = self._communicator.add_broadcast_subscriber(converted, identifier)
+        self._subscribers[identifier] = converted
+        return identifier
 
-    def remove_broadcast_subscriber(self, subscriber):
-        self._communicator.remove_task_subscriber(self._subscribers.pop(subscriber))
+    def remove_broadcast_subscriber(self, identifier):
+        self._communicator.remove_task_subscriber(self._subscribers.pop(identifier))
 
     def task_send(self, task, no_reply=False):
         return self._communicator.task_send(task, no_reply)
