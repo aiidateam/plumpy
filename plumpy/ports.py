@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+"""Module for process ports"""
 from __future__ import absolute_import
 import abc
 import collections
@@ -12,17 +13,51 @@ from plumpy.utils import is_mutable_property
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
 
-__all__ = ['UNSPECIFIED', 'ValueSpec']
+__all__ = ['UNSPECIFIED', 'ValueSpec', 'PortValidationError', 'Port', 'InputPort', 'OutputPort']
 
 
-@six.add_metaclass(abc.ABCMeta)
+class PortValidationError(Exception):
+    """Error when validation fails on a port"""
+
+    def __init__(self, message, port):
+        """
+        :param message: validation error message
+        :type message: str
+        :param port: the port where the validation error occurred
+        :type: str
+        """
+        super(PortValidationError, self).__init__("Error occurred validating port '{}': {}".format(port, message))
+        self._message = message
+        self._port = port
+
+    @property
+    def message(self):
+        """
+        Get the validation error message
+
+        :return: the error message
+        :rtype: str
+        """
+        return self._message
+
+    @property
+    def port(self):
+        """
+        Get the port breadcrumbs
+
+        :return: the port where the error occurred
+        :rtype: str
+        """
+        return self._port
+
+
 class ValueSpec(object):
     """
     Specifications relating to a general input/output value including
     properties like whether it is required, valid types, the help string, etc.
     """
 
-    def __init__(self, name, valid_type=None, help=None, required=True, validator=None):
+    def __init__(self, name, valid_type=None, help=None, required=True, validator=None):  # pylint: disable=redefined-builtin
         self._name = name
         self._valid_type = valid_type
         self._help = help
@@ -30,6 +65,12 @@ class ValueSpec(object):
         self._validator = validator
 
     def __str__(self):
+        """
+        Get the string representing this value specification
+
+        :return: the string representation
+        :rtype: str
+        """
         return json.dumps(self.get_description())
 
     def get_description(self):
@@ -37,6 +78,7 @@ class ValueSpec(object):
         Return a description of the ValueSpec, which will be a dictionary of its attributes
 
         :returns: a dictionary of the stringified ValueSpec attributes
+        :rtype: dict
         """
         description = {
             'name': '{}'.format(self.name),
@@ -67,7 +109,7 @@ class ValueSpec(object):
         return self._help
 
     @help.setter
-    def help(self, help):
+    def help(self, help):  # pylint: disable=redefined-builtin
         self._help = help
 
     @property
@@ -87,30 +129,159 @@ class ValueSpec(object):
         self._validator = validator
 
     def validate(self, value):
+        """
+        Validate the value against this specification
+
+        :param value: the value to validate
+        :type value: typing.Any
+        :return: if validation fails, returns a string containing the error message, otherwise None
+        :rtype: typing.Optional[str]
+        """
         if value is UNSPECIFIED:
             if self._required:
-                return False, "required value was not provided for '{}'".format(self.name)
+                return "required value was not provided for '{}'".format(self.name)
         else:
-            if self._valid_type is not None and \
-                    not isinstance(value, self._valid_type):
+            if self._valid_type is not None and not isinstance(value, self._valid_type):
                 msg = "value '{}' is not of the right type. Got '{}', expected '{}'".format(
                     self.name, type(value), self._valid_type)
-                return False, msg
+                return msg
 
         if self._validator is not None:
             result = self._validator(value)
-            if isinstance(result, collections.Sequence):
-                assert (len(result) == 2), 'Invalid validator return type'
+            if result is not None:
+                assert isinstance(result, str), "Validator returned non string type"
                 return result
-            elif result is False:
-                return False, 'Value failed validation'
 
-        return True, None
+        return
 
 
 @six.add_metaclass(abc.ABCMeta)
-class Port(ValueSpec):
-    pass
+class Port(object):
+    """
+    Specifications relating to a general input/output value including
+    properties like whether it is required, valid types, the help string, etc.
+    """
+
+    def __init__(self, name, valid_type=None, help=None, required=True, validator=None):
+        self._value_spec = ValueSpec(name, valid_type, help, required, validator)
+
+    def __str__(self):
+        """
+        Get the string representing this value specification
+
+        :return: the string representation
+        :rtype: str
+        """
+        return str(self._value_spec)
+
+    def get_description(self):
+        """
+        Return a description of the ValueSpec, which will be a dictionary of its attributes
+
+        :returns: a dictionary of the stringified ValueSpec attributes
+        :rtype: dict
+        """
+        return self._value_spec.get_description()
+
+    @property
+    def name(self):
+        return self._value_spec.name
+
+    @property
+    def valid_type(self):
+        """
+        Get the valid value type for this port if one is specified
+
+        :return: the value value type
+        :rtype: type
+        """
+        return self._value_spec.valid_type
+
+    @valid_type.setter
+    def valid_type(self, valid_type):
+        """
+        Set the valid value type for this port
+
+        :param valid_type: the value valid type
+        :type valid_type: type
+        """
+        self._value_spec.valid_type = valid_type
+
+    @property
+    def help(self):
+        """
+        Get the help string for this port
+
+        :return: the help string
+        :rtype: str
+        """
+        return self._value_spec.help
+
+    @help.setter
+    def help(self, help):
+        """
+        Set the help string for this port
+
+        :param help: the help string
+        :type help: str
+        """
+        self._value_spec.help = help
+
+    @property
+    def required(self):
+        """
+        Is this port required?
+
+        :return: True if required, False otherwise
+        :rtype: bool
+        """
+        return self._value_spec.required
+
+    @required.setter
+    def required(self, required):
+        """
+        Set whether this port is required or not
+
+        :return: True if required, False otherwise
+        :type required: bool
+        """
+        self._value_spec.required = required
+
+    @property
+    def validator(self):
+        """
+        Get the validator for this port
+
+        :return: the validator
+        :rtype: typing.Callable[[typing.Any], typing.Tuple[bool, typing.Optional[str]]]
+        """
+        return self._value_spec.validator
+
+    @validator.setter
+    def validator(self, validator):
+        """
+        Set the validator for this port
+
+        :param validator: a validator function
+        :type validator: typing.Callable[[typing.Any], typing.Tuple[bool, typing.Optional[str]]]
+        """
+        self._value_spec.validator = validator
+
+    def validate(self, value, breadcrumbs=()):
+        """
+        Validate a value to see if it is valid for this port
+
+        :param value: the value to check
+        :type value: typing.Any
+        :param breadcrumbs: a tuple of the path to having reached this point in validation
+        :type breadcrumbs: typing.Tuple[str]
+        :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
+        :rtype: typing.Optional[ValidationError]
+        """
+        validation_error = self._value_spec.validate(value)
+        if validation_error:
+            breadcrumbs += (self.name,)
+            return PortValidationError(validation_error, breadcrumbs_to_port(breadcrumbs))
 
 
 class InputPort(Port):
@@ -127,8 +298,8 @@ class InputPort(Port):
         """
         if default is UNSPECIFIED:
             return required
-        else:
-            return False
+
+        return False
 
     def __init__(self, name, valid_type=None, help=None, default=UNSPECIFIED, required=True, validator=None):
         super(InputPort, self).__init__(
@@ -143,9 +314,9 @@ class InputPort(Port):
                          "because a default was specified".format(name))
 
         if default is not UNSPECIFIED:
-            default_valid, msg = self.validate(default)
-            if not default_valid:
-                raise ValueError("Invalid default value: {}".format(msg))
+            validation_error = self.validate(default)
+            if validation_error:
+                raise ValueError("Invalid default value: {}".format(validation_error.message))
 
         self._default = default
 
@@ -249,7 +420,7 @@ class PortNamespace(collections.MutableMapping, Port):
 
     @property
     def valid_type(self):
-        return self._valid_type
+        return super(PortNamespace, self).valid_type
 
     @valid_type.setter
     def valid_type(self, valid_type):
@@ -264,7 +435,7 @@ class PortNamespace(collections.MutableMapping, Port):
         else:
             self.dynamic = True
 
-        self._valid_type = valid_type
+        super(PortNamespace, self.__class__).valid_type.fset(self, valid_type)
 
     def get_description(self):
         """
@@ -411,15 +582,18 @@ class PortNamespace(collections.MutableMapping, Port):
 
         return result
 
-    def validate(self, port_values=None):
+    def validate(self, port_values=None, breadcrumbs=()):
         """
         Validate the namespace port itself and subsequently all the port_values it contains
 
         :param port_values: an arbitrarily nested dictionary of parsed port values
-        :return: valid or not, error string|None
-        :rtype: tuple(bool, str or None)
+        :type port_values: dict
+        :param my_breadcrumbs: a tuple of the path to having reached this point in validation
+        :type my_breadcrumbs: typing.Tuple[str]
+        :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
+        :rtype: typing.Optional[ValidationError]
         """
-        is_valid, message = True, None
+        my_breadcrumbs = breadcrumbs + (self.name,)
 
         if port_values is None:
             port_values = {}
@@ -427,69 +601,70 @@ class PortNamespace(collections.MutableMapping, Port):
             port_values = dict(port_values)
 
         # Validate the validator first as it most likely will rely on the port values
-        if self._validator is not None:
-            is_valid, message = self._validator(self, port_values)
-            if not is_valid:
-                return is_valid, message
+        if self.validator is not None:
+            message = self.validator(self, port_values)
+            if message is not None:
+                assert isinstance(message, str), \
+                    "Validator returned something other than None or str: '{}'".format(type(message))
+                return PortValidationError(message, breadcrumbs_to_port(my_breadcrumbs))
 
         # If the namespace is not required and there are no port_values specified, consider it valid
         if not port_values and not self.required:
-            return is_valid, message
+            return
 
         # In all other cases, validate all input ports explicitly specified in this port namespace
         else:
-            is_valid, message = self.validate_ports(port_values)
-            if not is_valid:
-                return is_valid, message
+            validation_error = self.validate_ports(port_values, my_breadcrumbs)
+            if validation_error:
+                return validation_error
 
         # If any port_values remain, validate against the dynamic properties of the namespace
-        is_valid, message = self.validate_dynamic_ports(port_values)
-        if not is_valid:
-            return is_valid, message
+        validation_error = self.validate_dynamic_ports(port_values, breadcrumbs)
+        if validation_error:
+            return validation_error
 
-        return is_valid, message
-
-    def validate_ports(self, port_values=None):
+    def validate_ports(self, port_values, breadcrumbs):
         """
         Validate port values with respect to the explicitly defined ports of the port namespace.
         Ports values that are matched to an actual Port will be popped from the dictionary
 
         :param port_values: an arbitrarily nested dictionary of parsed port values
-        :return: valid or not, error string|None
-        :rtype: tuple(bool, str or None)
+        :type port_values: dict
+        :param breadcrumbs: a tuple of breadcrumbs showing the path to to the value being validated
+        :type breadcrumbs: tuple
+        :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
+        :rtype: typing.Optional[ValidationError]
         """
-        is_valid, message = True, None
-
         for name, port in self._ports.items():
-            is_valid, message = port.validate(port_values.pop(name, UNSPECIFIED))
-            if not is_valid:
-                return is_valid, message
+            validation_error = port.validate(port_values.pop(name, UNSPECIFIED), breadcrumbs)
+            if validation_error:
+                return validation_error
 
-        return is_valid, message
-
-    def validate_dynamic_ports(self, port_values=None):
+    def validate_dynamic_ports(self, port_values, breadcrumbs=()):
         """
         Validate port values with respect to the dynamic properties of the port namespace. It will
         check if the namespace is actually dynamic and if all values adhere to the valid types of
         the namespace if those are specified
 
         :param port_values: an arbitrarily nested dictionary of parsed port values
-        :return: valid or not, error string|None
-        :rtype: tuple(bool, str or None)
+        :type port_values: dict
+        :param breadcrumbs: a tuple of the path to having reached this point in validation
+        :type breadcrumbs: typing.Tuple[str]
+        :return: if invalid returns a string with the reason for the validation failure, otherwise None
+        :rtype: typing.Optional[str]
         """
-        is_valid, message = True, None
+        breadcrumbs += (self.name,)
 
         if port_values and not self.dynamic:
-            return False, 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
+            msg = 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
+            return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs))
 
-        if self._valid_type is not None:
-            valid_type = self._valid_type
+        if self.valid_type is not None:
+            valid_type = self.valid_type
             for port_name, port_value in port_values.items():
                 if not isinstance(port_value, valid_type):
-                    return False, 'Invalid type {} for dynamic port value: expected {}'.format(
-                        type(port_value), valid_type)
-
-        return is_valid, message
+                    msg = 'Invalid type {} for dynamic port value: expected {}'.format(type(port_value), valid_type)
+                    return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs + (port_name,)))
 
     @staticmethod
     def _filter_ports(items, exclude, include):
@@ -515,3 +690,15 @@ class PortNamespace(collections.MutableMapping, Port):
                     continue
 
             yield name, port
+
+
+def breadcrumbs_to_port(breadcrumbs):
+    """
+    Convert breadcrumbs to a string representing the port
+
+    :param breadcrumbs: a tuple of the path to the port
+    :type breadcrumbs: typing.Tuple[str]
+    :return: the port string
+    :rtype: str
+    """
+    return PortNamespace.NAMESPACE_SEPARATOR.join(breadcrumbs)

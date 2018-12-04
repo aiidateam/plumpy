@@ -135,9 +135,10 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
     def test_pause(self):
         proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
         # Send a pause message
-        pause_future = self.process_controller.pause_process(proc.pid)
-        # Let the process respond to the request
+        pause_future = yield self.process_controller.pause_process(proc.pid)
+        self.assertIsInstance(pause_future, kiwipy.Future)
         result = yield pause_future
+        self.assertIsInstance(result, bool)
 
         # Check that it all went well
         self.assertTrue(result)

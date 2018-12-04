@@ -80,9 +80,9 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         inputs = self.ExposeProcess.spec().inputs
         exposed_inputs = self.ExposeProcess.spec().inputs.get_port('base.name.space')
 
-        self.assertEqual(self.BaseProcess.spec().inputs.valid_type, str)
-        self.assertEqual(exposed_inputs.valid_type, str)
-        self.assertEqual(inputs.valid_type, int)
+        self.assertEqual(str, self.BaseProcess.spec().inputs.valid_type)
+        self.assertEqual(str, exposed_inputs.valid_type)
+        self.assertEqual(int, inputs.valid_type)
 
         # Now change the valid type of the BaseProcess inputs and verify it does not affect ExposeProcess
         self.BaseProcess.spec().inputs.valid_type = float

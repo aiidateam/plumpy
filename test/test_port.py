@@ -18,7 +18,6 @@ class TestInputPort(TestCase):
 
 
 class TestPortNamespace(TestCase):
-
     BASE_PORT_NAME = 'port'
     BASE_PORT_NAMESPACE_NAME = 'port'
 
@@ -117,3 +116,18 @@ class TestPortNamespace(TestCase):
 
         self.assertFalse(self.port_namespace.dynamic)
         self.assertIsNone(self.port_namespace.valid_type)
+
+    def test_port_namespace_validate(self):
+        """Check that validating of sub namespaces works correctly"""
+        port_namespace_sub = self.port_namespace.create_port_namespace('sub.name.space')
+        port_namespace_sub.valid_type = int
+        validation_error = self.port_namespace.validate({'sub': {'name': {'space': {'my_out': 5}}}})
+        self.assertIsNone(validation_error)
+        validation_error = self.port_namespace.validate({'sub': {'name': {'space': {'my_out': '5'}}}})
+        self.assertIsNotNone(validation_error)
+
+        # Check the breadcrumbs are correct
+        self.assertEqual(
+            validation_error.port,
+            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'name', 'space',
+                                                          'my_out')))

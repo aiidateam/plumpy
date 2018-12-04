@@ -1,3 +1,5 @@
+"""The state machine for processes"""
+
 from __future__ import absolute_import
 import collections
 import enum
@@ -5,9 +7,10 @@ import functools
 import inspect
 import logging
 import os
-import plumpy
 import sys
 import six
+
+import plumpy
 
 from .utils import call_with_super_check, super_check
 
@@ -17,6 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class StateMachineError(Exception):
+    """Base class for state machine errors"""
     pass
 
 
@@ -44,6 +48,7 @@ class EventError(StateMachineError):
 
 
 class TransitionFailed(Exception):
+    """A state transition failed"""
 
     def __init__(self, initial_state, final_state=None, traceback_str=None):
         self.initial_state = initial_state
@@ -77,16 +82,12 @@ def event(from_states='*', to_states='*'):
         def transition(self, *a, **kw):
             initial = self._state
 
-            if from_states != '*' and \
-                    not any(isinstance(self._state, state)
-                            for state in from_states):
+            if from_states != '*' and not any(isinstance(self._state, state) for state in from_states):
                 raise EventError(evt_label, "Event {} invalid in state {}".format(evt_label, initial.LABEL))
 
             result = wrapped(self, *a, **kw)
             if not (result is False or isinstance(result, plumpy.Future)):
-                if to_states != '*' and not \
-                        any(isinstance(self._state, state)
-                            for state in to_states):
+                if to_states != '*' and not any(isinstance(self._state, state) for state in to_states):
                     if self._state == initial:
                         raise EventError(evt_label, "Machine did not transition")
                     else:
@@ -286,6 +287,7 @@ class StateMachine(object):
         for callback in self._event_callbacks.get(hook, []):
             callback(self, hook, state)
 
+    @super_check
     def on_terminated(self):
         """ Called when a terminal state is entered """
         pass
@@ -315,7 +317,7 @@ class StateMachine(object):
                 self._enter_next_state(new_state)
 
             if self._state.is_terminal():
-                self.on_terminated()
+                call_with_super_check(self.on_terminated)
         except Exception as exc:
             self._transitioning = False
             if self._transition_failing:
