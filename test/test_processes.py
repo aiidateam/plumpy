@@ -520,6 +520,13 @@ class TestProcess(utils.AsyncTestCase):
 
         CallSoon().execute()
 
+    def test_execute_twice(self):
+        """Test a process that is executed once finished raises a ClosedError"""
+        proc = test_utils.DummyProcess()
+        proc.execute()
+        with self.assertRaises(plumpy.ClosedError):
+            proc.execute()
+
 
 @plumpy.auto_persist('steps_ran')
 class SavePauseProc(plumpy.Process):

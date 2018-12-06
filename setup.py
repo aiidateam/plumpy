@@ -39,7 +39,7 @@ setup(
     install_requires=[
         'frozendict',
         'tornado>=4.1, <5.0',
-        'kiwipy[rmq]>=0.3.4, <0.4.0',
+        'kiwipy[rmq]>=0.4.1, <0.5.0',
         'enum34; python_version<"3.4"',
         'backports.tempfile; python_version<"3.2"',
         'six',

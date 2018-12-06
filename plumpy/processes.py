@@ -23,7 +23,6 @@ import kiwipy
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import protected
-from . import communications
 from . import exceptions
 from . import futures
 from . import base
@@ -63,7 +62,7 @@ _thread_local = threading.local()  # pylint: disable=invalid-name
 
 def _process_stack():
     """Access the private live stack"""
-    global _thread_local
+    global _thread_local  # pylint: disable=global-statement, invalid-name
     # Lazily create the first time it's used
     try:
         return _thread_local.process_stack
@@ -78,6 +77,17 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
 
 # Make ProcessStateMachineMeta instances (classes) YAML - able
 yaml.representer.Representer.add_representer(ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
+
+
+def ensure_not_closed(func):
+
+    @functools.wraps(func)
+    def func_wrapper(self, *args, **kwargs):
+        if self._closed:
+            raise exceptions.ClosedError("Process is closed")
+        return func(self, *args, **kwargs)
+
+    return func_wrapper
 
 
 @six.add_metaclass(ProcessStateMachineMeta)
@@ -128,9 +138,17 @@ class Process(StateMachine, persistence.Savable):
     _paused = None
     _killing = None
     _interrupt_action = None
+    _closed = False
+    _cleanups = None  # type: list
 
     @classmethod
     def current(cls):
+        """
+        Get the currently running process i.e. the one at the top of the stack
+
+        :return: the currently running process
+        :rtype: :class:`plumpy.Process`
+        """
         if _process_stack():
             return _process_stack()[-1]
 
@@ -258,16 +276,21 @@ class Process(StateMachine, persistence.Savable):
     @base.super_check
     def init(self):
         """ Any common initialisation stuff after create or load goes here """
+        self._cleanups = []  # a list of functions to be ran on terminated
+
         if self._communicator is not None:
             try:
-                self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+                identifier = self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+                self.add_cleanup(functools.partial(self._communicator.remove_rpc_subscriber, identifier))
             except kiwipy.TimeoutError:
-                self.logger.exception("Process<{}> failed to register as an RPC subscriber".format(
-                    self.pid))
+                self.logger.exception("Process<%s> failed to register as an RPC subscriber", self.pid)
+
             try:
-                self._communicator.add_broadcast_subscriber(self.broadcast_receive)
+                identifier = self._communicator.add_broadcast_subscriber(
+                    self.broadcast_receive, identifier=str(self.pid))
+                self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
             except kiwipy.TimeoutError:
-                self.logger.exception("Process<{}> failed to register as a broadcast subscriber".format(self.pid))
+                self.logger.exception("Process<%s> failed to register as a broadcast subscriber", self.pid)
 
         if not self._future.done():
 
@@ -349,10 +372,11 @@ class Process(StateMachine, persistence.Savable):
     def future(self):
         return self._future
 
+    @ensure_not_closed
     def launch(self, process_class, inputs=None, pid=None, logger=None):
         process = process_class(
             inputs=inputs, pid=pid, logger=logger, loop=self.loop(), communicator=self._communicator)
-        self.create_background_task(process.step_until_terminated)
+        self.loop().add_callback(process.step_until_terminated)
         return process
 
     # region State introspection methods
@@ -426,16 +450,6 @@ class Process(StateMachine, persistence.Savable):
         handle = events.ProcessCallback(self, self._run_task, args, kwargs)
         self._loop.add_callback(handle.run)
         return handle
-
-    def create_background_task(self, callback):
-        """
-        Create a task that corresponds to a callback scheduled on our event loop
-
-        :param callback: the callback to schedule, can be a function or coroutine
-        :return: a future corresponding to the result of this task
-        :rtype: :class:`plumpy.Future`
-        """
-        return futures.create_task(callback, loop=self._loop)
 
     def callback_excepted(self, _callback, exception, trace):
         if self.state != process_states.ProcessState.EXCEPTED:
@@ -728,6 +742,26 @@ class Process(StateMachine, persistence.Savable):
         self._killing = None
         self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
 
+    def on_terminated(self):
+        super(Process, self).on_terminated()
+        self.close()
+
+    @super_check
+    def on_close(self):
+        """
+        Called when the Process is being closed an will not be ran anymore.  This is an opportunity
+        to free any runtime resources
+        """
+        try:
+            for cleanup in self._cleanups:
+                try:
+                    cleanup()
+                except Exception:  # pylint: disable=broad-except
+                    self.logger.exception('Exception calling cleanup method %s', cleanup)
+            self._cleanups = None
+        finally:
+            self._closed = True
+
     def _fire_event(self, evt, *args, **kwargs):
         self.__event_helper.fire_event(evt, self, *args, **kwargs)
 
@@ -780,6 +814,8 @@ class Process(StateMachine, persistence.Savable):
         if subject == process_comms.Intent.KILL:
             return self._schedule_rpc(self.kill, msg=body)
 
+        return
+
     def _schedule_rpc(self, callback, *args, **kwargs):
         """
         Schedule a call to a callback as a result of an RPC communication call, this will return
@@ -792,29 +828,39 @@ class Process(StateMachine, persistence.Savable):
         :return: a kiwi future that resolves to the outcome of the callback
         :rtype: :class:`kiwipy.Future`
         """
+        kiwi_future = kiwipy.Future()
 
         @gen.coroutine
         def run_callback():
-            result = yield gen.coroutine(callback)(*args, **kwargs)
-            while concurrent.is_future(result):
-                result = yield result
-            raise gen.Return(result)
+            with kiwipy.capture_exceptions(kiwi_future):
+                result = callback(*args, **kwargs)
+                while concurrent.is_future(result):
+                    result = yield result
+
+                kiwi_future.set_result(result)
 
         # Schedule the task and give back a kiwi future
-        task = self.create_background_task(run_callback)
-        return communications.plum_to_kiwi_future(task)
+        self.loop().add_callback(run_callback)
+        return kiwi_future
 
     # endregion
 
+    @ensure_not_closed
+    def add_cleanup(self, cleanup):
+        self._cleanups.append(cleanup)
+
     def close(self):
         """
-        Remove all the RPC subscribers from the communicator tied to the process
+        Calling this method indicates that this process should not ran anymore and will trigger
+        any runtime resources (such as the communicator connection) to be cleaned up.  The state
+        of the process will still be accessible.
+
+        It is safe to call this method multiple times.
         """
-        if self._communicator is not None:
-            try:
-                self._communicator.remove_rpc_subscriber(str(self.pid))
-            except (kiwipy.TimeoutError, ValueError):
-                self.logger.exception("Process<{}> failed to remove itself as an RPC subscriber".format(self.pid))
+        if self._closed:
+            return
+
+        call_with_super_check(self.on_close)
 
     # region State related methods
 
@@ -992,6 +1038,7 @@ class Process(StateMachine, persistence.Savable):
     def run(self):
         pass
 
+    @ensure_not_closed
     def execute(self):
         """
         Execute the process.  This will return if the process terminates or is paused.
@@ -1003,6 +1050,7 @@ class Process(StateMachine, persistence.Savable):
 
         return self.future().result()
 
+    @ensure_not_closed
     @gen.coroutine
     def step(self):
         assert not self.has_terminated(), "Cannot step, already terminated"
@@ -1026,9 +1074,9 @@ class Process(StateMachine, persistence.Savable):
                 else:
                     self._set_interrupt_action_from_exception(exception)
 
-            except KeyboardInterrupt:
+            except KeyboardInterrupt:  # pylint: disable=try-except-raise
                 raise
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 # Overwrite the next state to go to excepted directly
                 exc_info = sys.exc_info()
                 next_state = self.create_state(process_states.ProcessState.EXCEPTED, exc_info[1], exc_info[2])
@@ -1051,6 +1099,7 @@ class Process(StateMachine, persistence.Savable):
 
     # endregion
 
+    @ensure_not_closed
     @protected
     def out(self, output_port, value):
         """
@@ -1060,6 +1109,7 @@ class Process(StateMachine, persistence.Savable):
         the type of the value is valid
 
         :param output_port: the name of the output port, can be namespaced
+        :type output_port: str
         :param value: the value for the output port
         :raises: TypeError if the output value is not validated against the port
         """
@@ -1075,17 +1125,20 @@ class Process(StateMachine, persistence.Savable):
         else:
             port_namespace = self.spec().outputs
 
+        validation_error = None
         try:
             port = port_namespace[port_name]
             dynamic = False
-            is_valid, message = port.validate(value)
+            validation_error = port.validate(value)
         except KeyError:
             port = port_namespace
             dynamic = True
-            is_valid, message = port.validate_dynamic_ports({port_name: value})
+            validation_error = port.validate_dynamic_ports({port_name: value})
 
-        if not is_valid:
-            raise TypeError(message)
+        if validation_error:
+            msg = "Error validating output '{}' for port '{}': {}".format(value, ".".join(validation_error.port),
+                                                                          validation_error.message)
+            raise TypeError(msg)
 
         self._outputs[output_port] = value
         self.on_output_emitted(output_port, value, dynamic)
@@ -1159,14 +1212,14 @@ class Process(StateMachine, persistence.Savable):
 
     def _check_inputs(self, inputs):
         # Check the inputs meet the requirements
-        valid, msg = self.spec().validate_inputs(inputs)
-        if not valid:
-            raise ValueError(msg)
+        validation_error = self.spec().validate_inputs(inputs)
+        if validation_error:
+            raise ValueError(str(validation_error))
 
     def _check_outputs(self):
         # Check that the necessary outputs have been emitted
         wrapped = utils.wrap_dict(self._outputs, separator=self.spec().namespace_separator)
         for name, port in self.spec().outputs.items():
-            valid, msg = port.validate(wrapped.get(name, ports.UNSPECIFIED))
-            if not valid:
-                raise ValueError(msg)
+            validation_error = port.validate(wrapped.get(name, ports.UNSPECIFIED))
+            if validation_error:
+                raise ValueError(str(validation_error))
