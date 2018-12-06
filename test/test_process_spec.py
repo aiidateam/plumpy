@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from plumpy.ports import PortNamespace, InputPort
 from plumpy import ProcessSpec
 from .utils import TestCase
@@ -26,9 +27,9 @@ class TestProcessSpec(TestCase):
     def test_dynamic_output(self):
         self.spec.outputs.dynamic = True
         self.spec.outputs.valid_type = str
-        self.assertTrue(self.spec.validate_outputs({'dummy': 'foo'})[0])
-        self.assertTrue(self.spec.validate_outputs({'dummy': StrSubtype('bar')})[0])
-        self.assertFalse(self.spec.validate_outputs({'dummy': 5})[0])
+        self.assertIsNone(self.spec.validate_outputs({'dummy': 'foo'}))
+        self.assertIsNone(self.spec.validate_outputs({'dummy': StrSubtype('bar')}))
+        self.assertIsNotNone(self.spec.validate_outputs({'dummy': 5}))
 
         # Remove dynamic output
         self.spec.outputs.dynamic = False
@@ -37,9 +38,9 @@ class TestProcessSpec(TestCase):
         # Now add and check behaviour
         self.spec.outputs.dynamic = True
         self.spec.outputs.valid_type = str
-        self.assertTrue(self.spec.validate_outputs({'dummy': 'foo'})[0])
-        self.assertTrue(self.spec.validate_outputs({'dummy': StrSubtype('bar')})[0])
-        self.assertFalse(self.spec.validate_outputs({'dummy': 5})[0])
+        self.assertIsNone(self.spec.validate_outputs({'dummy': 'foo'}))
+        self.assertIsNone(self.spec.validate_outputs({'dummy': StrSubtype('bar')}))
+        self.assertIsNotNone(self.spec.validate_outputs({'dummy': 5}))
 
     def test_get_description(self):
         spec = ProcessSpec()
@@ -75,24 +76,17 @@ class TestProcessSpec(TestCase):
         """
         Test the global spec validator functionality.
         """
-        def is_valid(spec, inputs):
-            if ('a' in inputs) ^ ('b' in inputs):
-                return True, None
-            else:
-                return False, 'Must have a OR b in inputs'
+
+        def is_valid(_spec, inputs):
+            if not ('a' in inputs) ^ ('b' in inputs):
+                return 'Must have a OR b in inputs'
+            return
 
         self.spec.input('a', required=False)
         self.spec.input('b', required=False)
         self.spec.inputs.validator = is_valid
 
-        valid, msg = self.spec.validate_inputs(inputs={})
-        self.assertFalse(valid, msg)
-
-        valid, msg = self.spec.validate_inputs(inputs={'a': 'a', 'b': 'b'})
-        self.assertFalse(valid, msg)
-
-        valid, msg = self.spec.validate_inputs(inputs={'a': 'a'})
-        self.assertTrue(valid, msg)
-
-        valid, msg = self.spec.validate_inputs(inputs={'b': 'b'})
-        self.assertTrue(valid, msg)
+        self.assertIsNotNone(self.spec.validate_inputs(inputs={}))
+        self.assertIsNotNone(self.spec.validate_inputs(inputs={'a': 'a', 'b': 'b'}))
+        self.assertIsNone(self.spec.validate_inputs(inputs={'a': 'a'}))
+        self.assertIsNone(self.spec.validate_inputs(inputs={'b': 'b'}))

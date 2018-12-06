@@ -1,24 +1,31 @@
+from __future__ import absolute_import
 import plumpy
 
 from . import utils
 
 
 class TestValueSpec(utils.TestCase):
-    def test_required(self):
-        s = plumpy.ValueSpec("required_value", required=True)
 
-        self.assertFalse(s.validate(plumpy.UNSPECIFIED)[0])
-        self.assertTrue(s.validate(5)[0])
+    def test_required(self):
+        spec = plumpy.ValueSpec("required_value", required=True)
+
+        self.assertIsNotNone(spec.validate(plumpy.UNSPECIFIED))
+        self.assertIsNone(spec.validate(5))
 
     def test_validate(self):
-        s = plumpy.ValueSpec("required_value", valid_type=int)
+        spec = plumpy.ValueSpec("required_value", valid_type=int)
 
-        self.assertTrue(s.validate(5)[0])
-        self.assertFalse(s.validate('a')[0])
+        self.assertIsNone(spec.validate(5))
+        self.assertIsNotNone(spec.validate('a'))
 
     def test_validator(self):
-        s = plumpy.ValueSpec("valid_with_validator",
-                             validator=lambda x: isinstance(x, int))
 
-        self.assertTrue(s.validate(5)[0])
-        self.assertFalse(s.validate('s')[0])
+        def validate(value):
+            if not isinstance(value, int):
+                return "Not int"
+            return None
+
+        spec = plumpy.ValueSpec("valid_with_validator", validator=validate)
+
+        self.assertIsNone(spec.validate(5))
+        self.assertIsNotNone(spec.validate('s'))

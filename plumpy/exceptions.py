@@ -5,20 +5,11 @@ class KilledError(Exception):
     """The process was killed."""
 
 
-class Unsupported(Exception):
-    pass
-
-
-class LockError(Exception):
-    pass
-
-
-class ProcessExcepted(Exception):
-    pass
-
-
 class InvalidStateError(Exception):
-    pass
+    """
+    Raised when an operation is attempted that requires the process to be in a state
+    that is different from the current state
+    """
 
 
 class UnsuccessfulResult(object):
@@ -29,4 +20,8 @@ class UnsuccessfulResult(object):
 
 
 class PersistenceError(Exception):
-    pass
+    """Raised when there is a problem persisting the process"""
+
+
+class ClosedError(Exception):
+    """Raised when an mutable operation is attempted on a closed process"""
