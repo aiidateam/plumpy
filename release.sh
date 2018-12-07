@@ -42,8 +42,7 @@ git merge master
 git branch -d $relbranch
 
 # Push everything
-git push --tags origin master
-git push origin $current_branch
+git push --tags origin master $current_branch
 
 # Release on pypi
 rm -r dist
