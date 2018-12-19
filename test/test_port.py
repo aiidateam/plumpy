@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from .utils import TestCase
 
-from plumpy.ports import InputPort, PortNamespace
+from plumpy.ports import InputPort, OutputPort, PortNamespace
 
 
 class TestInputPort(TestCase):
@@ -15,6 +15,28 @@ class TestInputPort(TestCase):
 
         with self.assertRaises(ValueError):
             InputPort('test', default=4, valid_type=str)
+
+
+class TestOutputPort(TestCase):
+
+    def test_default(self):
+        """
+        Test the default value property for the InputPort
+        """
+        name = 'output'
+        valid_type = int
+        help_string = 'Help string'
+        required = False
+
+        def validator(value):
+            pass
+
+        port = OutputPort(name, valid_type=valid_type, help=help_string, required=required, validator=validator)
+        self.assertEqual(port.name, name)
+        self.assertEqual(port.valid_type, valid_type)
+        self.assertEqual(port.help, help_string)
+        self.assertEqual(port.required, required)
+        self.assertEqual(port.validator, validator)
 
 
 class TestPortNamespace(TestCase):
