@@ -585,17 +585,23 @@ class PortNamespace(collections.MutableMapping, Port):
 
         :param port_values: an arbitrarily nested dictionary of parsed port values
         :type port_values: dict
-        :param my_breadcrumbs: a tuple of the path to having reached this point in validation
-        :type my_breadcrumbs: typing.Tuple[str]
+        :param breadcrumbs: a tuple of the path to having reached this point in validation
+        :type breadcrumbs: typing.Tuple[str]
         :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
         :rtype: typing.Optional[ValidationError]
         """
-        my_breadcrumbs = breadcrumbs + (self.name,)
+        breadcrumbs_local = breadcrumbs + (self.name,)
 
-        if port_values is None:
+        print('port-values', type(port_values), port_values)
+
+        if not port_values:
             port_values = {}
-        else:
-            port_values = dict(port_values)
+
+        if not isinstance(port_values, collections.Mapping):
+            message = 'specified value is of type {} which is not sub class of `Mapping`'.format(type(port_values))
+            return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
+
+        port_values = dict(port_values)
 
         # Validate the validator first as it most likely will rely on the port values
         if self.validator is not None:
@@ -603,7 +609,7 @@ class PortNamespace(collections.MutableMapping, Port):
             if message is not None:
                 assert isinstance(message, str), \
                     "Validator returned something other than None or str: '{}'".format(type(message))
-                return PortValidationError(message, breadcrumbs_to_port(my_breadcrumbs))
+                return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
 
         # If the namespace is not required and there are no port_values specified, consider it valid
         if not port_values and not self.required:
@@ -611,7 +617,7 @@ class PortNamespace(collections.MutableMapping, Port):
 
         # In all other cases, validate all input ports explicitly specified in this port namespace
         else:
-            validation_error = self.validate_ports(port_values, my_breadcrumbs)
+            validation_error = self.validate_ports(port_values, breadcrumbs_local)
             if validation_error:
                 return validation_error
 
