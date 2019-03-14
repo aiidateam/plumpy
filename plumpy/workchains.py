@@ -87,7 +87,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     A WorkChain is a series of instructions carried out with the ability to save
     state in between.
     """
-    _spec_type = WorkChainSpec
+    _spec_class = WorkChainSpec
     _STEPPER_STATE = 'stepper_state'
     _CONTEXT = 'CONTEXT'
 

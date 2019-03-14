@@ -131,7 +131,7 @@ class Process(StateMachine, persistence.Savable):
     """
 
     # Static class stuff ######################
-    _spec_type = ProcessSpec
+    _spec_class = ProcessSpec
     # Default placeholders, will be populated in init()
     _stepping = False
     _pausing = None  # type: futures.Future
@@ -179,7 +179,7 @@ class Process(StateMachine, persistence.Savable):
         try:
             return cls.__getattribute__(cls, '_spec')
         except AttributeError:
-            cls._spec = cls._spec_type()
+            cls._spec = cls._spec_class()
             cls.__called = False
             cls.define(cls._spec)
             assert cls.__called, \
