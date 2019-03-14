@@ -1163,6 +1163,8 @@ class Process(StateMachine, persistence.Savable):
                     port_value = port.default
                 elif port.required:
                     raise ValueError('Value not supplied for required inputs port {}'.format(name))
+                elif isinstance(port, ports.PortNamespace):
+                    port_value = {}
                 else:
                     continue
             else:

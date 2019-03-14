@@ -126,6 +126,21 @@ class TestProcess(utils.AsyncTestCase):
             self.assertIn('input', p.inputs)
             self.assertEqual(p.inputs['input'], def_val)
 
+    def test_nested_namespace_defaults(self):
+        """Process with a default in a nested namespace should be created, even if top level namespace not supplied."""
+
+        class SomeProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(SomeProcess, cls).define(spec)
+                spec.input_namespace('namespace', required=False)
+                spec.input('namespace.sub', default=True)
+
+        process = SomeProcess()
+        self.assertIn('sub', process.inputs.namespace)
+        self.assertEqual(process.inputs.namespace.sub, True)
+
     def test_execute(self):
         proc = test_utils.DummyProcessWithOutput()
         proc.execute()
