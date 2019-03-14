@@ -39,6 +39,7 @@ setup(
     install_requires=[
         'frozendict',
         'tornado>=4.1, <5.0',
+        'pika==1.0.0b1',
         'kiwipy[rmq]>=0.4.2, <0.5.0',
         'enum34; python_version<"3.4"',
         'backports.tempfile; python_version<"3.2"',
@@ -47,7 +48,7 @@ setup(
     extras_require={
         'dev': [
             'pip',
-            'pytest',
+            'pytest>4',
             'ipython',
             'twine',
             'pytest-cov',
