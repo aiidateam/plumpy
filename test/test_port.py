@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from .utils import TestCase
 
-from plumpy.ports import InputPort, PortNamespace
+from plumpy.ports import InputPort, OutputPort, PortNamespace
 
 
 class TestInputPort(TestCase):
@@ -15,6 +15,28 @@ class TestInputPort(TestCase):
 
         with self.assertRaises(ValueError):
             InputPort('test', default=4, valid_type=str)
+
+
+class TestOutputPort(TestCase):
+
+    def test_default(self):
+        """
+        Test the default value property for the InputPort
+        """
+        name = 'output'
+        valid_type = int
+        help_string = 'Help string'
+        required = False
+
+        def validator(value):
+            pass
+
+        port = OutputPort(name, valid_type=valid_type, help=help_string, required=required, validator=validator)
+        self.assertEqual(port.name, name)
+        self.assertEqual(port.valid_type, valid_type)
+        self.assertEqual(port.help, help_string)
+        self.assertEqual(port.required, required)
+        self.assertEqual(port.validator, validator)
 
 
 class TestPortNamespace(TestCase):
@@ -55,19 +77,19 @@ class TestPortNamespace(TestCase):
         as they and all intermediate nested PortNamespaces exist
         """
         with self.assertRaises(TypeError):
-            port_namespace = self.port_namespace.get_port()
+            self.port_namespace.get_port()
 
         with self.assertRaises(ValueError):
-            port_namespace = self.port_namespace.get_port(5)
+            self.port_namespace.get_port(5)
 
         with self.assertRaises(ValueError):
-            port_namespace = self.port_namespace.get_port('sub')
+            self.port_namespace.get_port('sub')
 
         port_namespace_sub = self.port_namespace.create_port_namespace('sub')
         self.assertEqual(self.port_namespace.get_port('sub'), port_namespace_sub)
 
         with self.assertRaises(ValueError):
-            port_namespace = self.port_namespace.get_port('sub.name.space')
+            self.port_namespace.get_port('sub.name.space')
 
         port_namespace_sub = self.port_namespace.create_port_namespace('sub.name.space')
         self.assertEqual(self.port_namespace.get_port('sub.name.space'), port_namespace_sub)
@@ -82,10 +104,10 @@ class TestPortNamespace(TestCase):
         Test the create_port_namespace function of the PortNamespace class
         """
         with self.assertRaises(TypeError):
-            port_namespace = self.port_namespace.create_port_namespace()
+            self.port_namespace.create_port_namespace()
 
         with self.assertRaises(ValueError):
-            port_namespace = self.port_namespace.create_port_namespace(5)
+            self.port_namespace.create_port_namespace(5)
 
         port_namespace_sub = self.port_namespace.create_port_namespace('sub')
         port_namespace_sub = self.port_namespace.create_port_namespace('some.nested.sub.space')
@@ -119,15 +141,22 @@ class TestPortNamespace(TestCase):
 
     def test_port_namespace_validate(self):
         """Check that validating of sub namespaces works correctly"""
-        port_namespace_sub = self.port_namespace.create_port_namespace('sub.name.space')
+        port_namespace_sub = self.port_namespace.create_port_namespace('sub.space')
         port_namespace_sub.valid_type = int
-        validation_error = self.port_namespace.validate({'sub': {'name': {'space': {'my_out': 5}}}})
+
+        # Check that passing a non mapping type raises
+        validation_error = self.port_namespace.validate(5)
+        self.assertIsNotNone(validation_error)
+
+        # Valid input
+        validation_error = self.port_namespace.validate({'sub': {'space': {'output': 5}}})
         self.assertIsNone(validation_error)
-        validation_error = self.port_namespace.validate({'sub': {'name': {'space': {'my_out': '5'}}}})
+
+        # Invalid input
+        validation_error = self.port_namespace.validate({'sub': {'space': {'output': '5'}}})
         self.assertIsNotNone(validation_error)
 
         # Check the breadcrumbs are correct
         self.assertEqual(
             validation_error.port,
-            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'name', 'space',
-                                                          'my_out')))
+            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output')))
