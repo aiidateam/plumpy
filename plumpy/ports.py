@@ -592,8 +592,6 @@ class PortNamespace(collections.MutableMapping, Port):
         """
         breadcrumbs_local = breadcrumbs + (self.name,)
 
-        print('port-values', type(port_values), port_values)
-
         if not port_values:
             port_values = {}
 
