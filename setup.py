@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 from __future__ import absolute_import
 from setuptools import setup
 
@@ -30,17 +29,11 @@ setup(
         'Programming Language :: Python :: 3.6',
     ],
     keywords='workflow multithreaded rabbitmq',
-    # Abstract dependencies.  Concrete versions are listed in
-    # requirements.txt
-    # See https://caremad.io/2013/07/setup-vs-requirement/ for an explanation
-    # of the difference and
-    # http://blog.miguelgrinberg.com/post/the-package-dependency-blues
-    # for a useful dicussion
     install_requires=[
         'frozendict',
         'tornado>=4.1, <5.0',
-        'pika==1.0.0b1',
-        'kiwipy[rmq]>=0.4.2, <0.5.0',
+        'pika>=1.0.0b2',
+        'kiwipy[rmq]>=0.5.0, <0.6.0',
         'enum34; python_version<"3.4"',
         'backports.tempfile; python_version<"3.2"',
         'six',
