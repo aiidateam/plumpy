@@ -40,6 +40,7 @@ class TestOutputPort(TestCase):
 
 
 class TestPortNamespace(TestCase):
+
     BASE_PORT_NAME = 'port'
     BASE_PORT_NAMESPACE_NAME = 'port'
 
@@ -160,3 +161,31 @@ class TestPortNamespace(TestCase):
         self.assertEqual(
             validation_error.port,
             self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output')))
+
+    def test_port_namespace_required(self):
+        """Verify that validation will fail if required port is not specified."""
+        port_namespace_sub = self.port_namespace.create_port_namespace('sub.space')
+        port_namespace_sub.valid_type = int
+
+        # Create a required port
+        self.port_namespace['required_port'] = OutputPort('required_port', valid_type=int, required=True)
+
+        # No port values at all should fail
+        port_values = {}
+        validation_error = self.port_namespace.validate(port_values)
+        self.assertIsNotNone(validation_error)
+
+        # Some port value, but still the required output is not defined, so should fail
+        port_values = {'sub': {'space': {'output': 5}}}
+        validation_error = self.port_namespace.validate(port_values)
+        self.assertIsNotNone(validation_error)
+
+        # Specifying the required port and some additional ones should be valid
+        port_values = {'sub': {'space': {'output': 5}}, 'required_port': 1}
+        validation_error = self.port_namespace.validate(port_values)
+        self.assertIsNone(validation_error)
+
+        # Also just the required port should be valid
+        port_values = {'required_port': 1}
+        validation_error = self.port_namespace.validate(port_values)
+        self.assertIsNone(validation_error)

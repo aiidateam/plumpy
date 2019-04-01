@@ -11,7 +11,7 @@ with open('plumpy/version.py') as f:
     exec(f.read(), about)
 
 setup(
-    name="plumpy",
+    name='plumpy',
     version=about['__version__'],
     description='A python workflow library',
     long_description=open('README.rst').read(),
@@ -32,7 +32,7 @@ setup(
     install_requires=[
         'frozendict',
         'tornado>=4.1, <5.0',
-        'pika>=1.0.0b2',
+        'pika>=1.0.0',
         'kiwipy[rmq]>=0.5.0, <0.6.0',
         'enum34; python_version<"3.4"',
         'backports.tempfile; python_version<"3.2"',

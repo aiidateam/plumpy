@@ -1,6 +1,8 @@
 """Process tests"""
 from __future__ import absolute_import
 from tornado import gen, testing
+
+import enum
 import six
 from six.moves import range
 from six.moves import zip
@@ -414,7 +416,7 @@ class TestProcess(utils.AsyncTestCase):
                 self.out("invalid", 5)
 
         proc = InvalidOutput()
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             proc.execute()
 
     def test_missing_output(self):
@@ -767,6 +769,75 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
 
         # Make sure there are no other inputs
         self.assertFalse(original_inputs)
+
+    def test_namespaced_process_outputs(self):
+        """Test the output namespacing and validation."""
+        namespace = 'integer.namespace'
+
+        class OutputMode(enum.Enum):
+
+            NONE = 0
+            DYNAMIC_PORT_NAMESPACE = 1
+            SINGLE_REQUIRED_PORT = 2
+            BOTH_SINGLE_AND_NAMESPACE = 3
+
+        class DummyDynamicProcess(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(DummyDynamicProcess, cls).define(spec)
+                spec.input('output_mode', valid_type=OutputMode, default=OutputMode.NONE)
+                spec.output('required_bool', valid_type=bool)
+                spec.output_namespace(namespace, valid_type=int, dynamic=True)
+
+            def run(self):
+                if self.inputs.output_mode == OutputMode.NONE:
+                    pass
+                elif self.inputs.output_mode == OutputMode.DYNAMIC_PORT_NAMESPACE:
+                    self.out(namespace + '.one', 1)
+                    self.out(namespace + '.two', 2)
+                elif self.inputs.output_mode == OutputMode.SINGLE_REQUIRED_PORT:
+                    self.out('required_bool', False)
+                elif self.inputs.output_mode == OutputMode.BOTH_SINGLE_AND_NAMESPACE:
+                    self.out('required_bool', False)
+                    self.out(namespace + '.one', 1)
+                    self.out(namespace + '.two', 2)
+
+        # Run the process in default mode which should not add any outputs and therefore fail
+        process = DummyDynamicProcess()
+        process.execute()
+
+        self.assertEqual(process.state, ProcessState.FINISHED)
+        self.assertFalse(process.is_successful)
+        self.assertDictEqual(process.outputs, {})
+
+        # Attaching only namespaced ports should fail, because the required port is not added
+        process = DummyDynamicProcess(inputs={'output_mode': OutputMode.DYNAMIC_PORT_NAMESPACE})
+        process.execute()
+
+        self.assertEqual(process.state, ProcessState.FINISHED)
+        self.assertFalse(process.is_successful)
+        self.assertEqual(process.outputs['integer']['namespace']['one'], 1)
+        self.assertEqual(process.outputs['integer']['namespace']['two'], 2)
+
+        # Attaching only the single required top-level port should be fine
+        process = DummyDynamicProcess(inputs={'output_mode': OutputMode.SINGLE_REQUIRED_PORT})
+        process.execute()
+
+        self.assertEqual(process.state, ProcessState.FINISHED)
+        self.assertTrue(process.is_successful)
+        self.assertEqual(process.outputs['required_bool'], False)
+
+        # Attaching both the required and namespaced ports should result in a successful termination
+        process = DummyDynamicProcess(inputs={'output_mode': OutputMode.BOTH_SINGLE_AND_NAMESPACE})
+        process.execute()
+
+        self.assertIsNotNone(process.outputs)
+        self.assertEqual(process.state, ProcessState.FINISHED)
+        self.assertTrue(process.is_successful)
+        self.assertEqual(process.outputs['required_bool'], False)
+        self.assertEqual(process.outputs['integer']['namespace']['one'], 1)
+        self.assertEqual(process.outputs['integer']['namespace']['two'], 2)
 
 
 class TestProcessEvents(utils.AsyncTestCase):
