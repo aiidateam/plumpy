@@ -411,6 +411,17 @@ class Process(StateMachine, persistence.Savable):
         except AttributeError:
             raise exceptions.InvalidStateError('process is not in the finished state')
 
+    @property
+    def is_successful(self):
+        """Return whether the result of the process is considered successful.
+
+        :return: boolean, True if the process is in `Finished` state with `successful` attribute set to `True`
+        """
+        try:
+            return self._state.successful
+        except AttributeError:
+            return False
+
     def killed(self):
         return self.state == process_states.ProcessState.KILLED
 
@@ -713,7 +724,7 @@ class Process(StateMachine, persistence.Savable):
         """ Entering the FINISHED state """
         if successful:
             try:
-                self._check_outputs()
+                self._check_outputs(self._outputs)
             except ValueError:
                 raise StateEntryFailed(process_states.ProcessState.FINISHED, result, False)
 
@@ -1111,7 +1122,7 @@ class Process(StateMachine, persistence.Savable):
         :param output_port: the name of the output port, can be namespaced
         :type output_port: str
         :param value: the value for the output port
-        :raises: TypeError if the output value is not validated against the port
+        :raises: ValueError if the output value is not validated against the port
         """
         self.on_output_emitting(output_port, value)
 
@@ -1136,11 +1147,15 @@ class Process(StateMachine, persistence.Savable):
             validation_error = port.validate_dynamic_ports({port_name: value})
 
         if validation_error:
-            msg = "Error validating output '{}' for port '{}': {}".format(value, ".".join(validation_error.port),
+            msg = "Error validating output '{}' for port '{}': {}".format(value, validation_error.port,
                                                                           validation_error.message)
-            raise TypeError(msg)
+            raise ValueError(msg)
 
-        self._outputs[output_port] = value
+        output_namespace = self._outputs
+        for sub_space in namespace:
+            output_namespace = output_namespace.setdefault(sub_space, {})
+
+        output_namespace[port_name] = value
         self.on_output_emitted(output_port, value, dynamic)
 
     @protected
@@ -1218,10 +1233,8 @@ class Process(StateMachine, persistence.Savable):
         if validation_error:
             raise ValueError(str(validation_error))
 
-    def _check_outputs(self):
+    def _check_outputs(self, outputs):
         # Check that the necessary outputs have been emitted
-        wrapped = utils.wrap_dict(self._outputs, separator=self.spec().namespace_separator)
-        for name, port in self.spec().outputs.items():
-            validation_error = port.validate(wrapped.get(name, ports.UNSPECIFIED))
-            if validation_error:
-                raise ValueError(str(validation_error))
+        validation_error = self.spec().validate_outputs(outputs)
+        if validation_error:
+            raise ValueError(str(validation_error))
