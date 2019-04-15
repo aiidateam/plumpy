@@ -2,7 +2,7 @@
 import os
 
 __license__ = "GPLv3 and MIT, see LICENSE file"
-__version__ = "0.4.3"
+__version__ = "0.4.3.1"
 __contributors__ = "Martin Uhrin"
 
 try:
@@ -13,7 +13,7 @@ except ImportError:
 root_folder = os.path.split(os.path.abspath(__file__))[0]
 bin_folder = os.path.join(root_folder, 'scripts')
 setup(
-    name="plum",
+    name="plumpy",
     license=__license__,
     version=__version__,
     # Abstract dependencies.  Concrete versions are listed in
