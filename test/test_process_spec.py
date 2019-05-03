@@ -77,7 +77,7 @@ class TestProcessSpec(TestCase):
         Test the global spec validator functionality.
         """
 
-        def is_valid(_spec, inputs):
+        def is_valid(inputs):
             if not ('a' in inputs) ^ ('b' in inputs):
                 return 'Must have a OR b in inputs'
             return
