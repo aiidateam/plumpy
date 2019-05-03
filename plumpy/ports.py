@@ -603,7 +603,7 @@ class PortNamespace(collections.MutableMapping, Port):
 
         # Validate the validator first as it most likely will rely on the port values
         if self.validator is not None:
-            message = self.validator(self, port_values)
+            message = self.validator(port_values)
             if message is not None:
                 assert isinstance(message, str), \
                     "Validator returned something other than None or str: '{}'".format(type(message))

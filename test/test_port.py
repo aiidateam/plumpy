@@ -61,6 +61,18 @@ class TestPortNamespace(TestCase):
         with self.assertRaises(KeyError):
             self.port_namespace['non_existent']
 
+    def test_port_namespace_validation(self):
+        """Test validate method of a `PortNamespace`."""
+        def validator(port_values):
+            if port_values['integer'] < 0:
+                return 'Only positive integers allowed'
+
+        self.port_namespace.validator = validator
+        self.port_namespace.valid_type = int
+
+        self.assertIsNone(self.port_namespace.validate({'integer': 5}))
+        self.assertIsNotNone(self.port_namespace.validate({'integer': -5}))
+
     def test_port_namespace_dynamic(self):
         """
         Setting a valid type for a PortNamespace should automatically make it dynamic
