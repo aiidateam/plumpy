@@ -72,10 +72,23 @@ class TestProcessSpec(TestCase):
         self.assertTrue(isinstance(self.spec.inputs.get_port('some.name.space'), PortNamespace))
         self.assertTrue(isinstance(self.spec.inputs.get_port('some.name.space.a'), InputPort))
 
+    def test_validator(self):
+        """Test the port validator with default."""
+
+        def dict_validator(dictionary):
+            if 'key' not in dictionary or dictionary['key'] is not 'value':
+                return 'Invalid dictionary'
+
+        self.spec.input('dict', default={'key': 'value'}, validator=dict_validator)
+
+        self.assertEqual(self.spec.validate_inputs(inputs={}), {'dict': {'key': 'value'}})
+        self.assertEqual(self.spec.validate_inputs(inputs={'dict': {'key': 'value'}}), {'dict': {'key': 'value'}})
+
+        with self.assertRaises(ValueError):
+            self.spec.validate_inputs(inputs={'dict': {'wrong_key': 'value'}})
+
     def test_validate(self):
-        """
-        Test the global spec validator functionality.
-        """
+        """Test the global spec validator functionality."""
 
         def is_valid(inputs):
             if not ('a' in inputs) ^ ('b' in inputs):
@@ -86,7 +99,11 @@ class TestProcessSpec(TestCase):
         self.spec.input('b', required=False)
         self.spec.inputs.validator = is_valid
 
-        self.assertIsNotNone(self.spec.validate_inputs(inputs={}))
-        self.assertIsNotNone(self.spec.validate_inputs(inputs={'a': 'a', 'b': 'b'}))
-        self.assertIsNone(self.spec.validate_inputs(inputs={'a': 'a'}))
-        self.assertIsNone(self.spec.validate_inputs(inputs={'b': 'b'}))
+        self.assertEqual(self.spec.validate_inputs(inputs={'a': 'a'}), {'a': 'a'})
+        self.assertEqual(self.spec.validate_inputs(inputs={'b': 'b'}), {'b': 'b'})
+
+        with self.assertRaises(ValueError):
+            self.spec.validate_inputs(inputs={})
+
+        with self.assertRaises(ValueError):
+            self.spec.validate_inputs(inputs={'a': 'a', 'b': 'b'})

@@ -7,14 +7,23 @@ from plumpy.ports import InputPort, OutputPort, PortNamespace
 class TestInputPort(TestCase):
 
     def test_default(self):
-        """
-        Test the default value property for the InputPort
-        """
-        ip = InputPort('test', default=5)
-        self.assertEqual(ip.default, 5)
+        """Test the default value property for the InputPort."""
+        port = InputPort('test', default=5)
+        self.assertEqual(port.default, 5)
 
         with self.assertRaises(ValueError):
             InputPort('test', default=4, valid_type=str)
+
+    def test_validator(self):
+        """Test the validator functionality."""
+
+        def integer_validator(value):
+            if value < 0:
+                return 'Only positive integers allowed'
+
+        port = InputPort('test', validator=integer_validator)
+        self.assertIsNone(port.validate(5))
+        self.assertIsNotNone(port.validate(-5))
 
 
 class TestOutputPort(TestCase):

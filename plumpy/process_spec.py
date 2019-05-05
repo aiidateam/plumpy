@@ -171,15 +171,59 @@ class ProcessSpec(object):
         """
         return name in self.outputs
 
-    def validate_inputs(self, inputs=None):
+    def pre_process_inputs(self, port_namespace, inputs):
         """
-        Validate a dictionary of inputs according to the input port namespace of this specification
+        Take the passed input arguments and match it to the ports of the port namespace,
+        filling in any default values for inputs that have not been supplied as long as the
+        default is defined
+
+        :param port_namespace: the port namespace against which to compare the inputs dictionary
+        :param inputs: the dictionary with supplied inputs
+        :return: an AttributesFrozenDict with the inputs, complemented with port default values
+        :raises: ValueError if no input was specified for a required port without a default value
+        """
+        from . import utils
+
+        result = dict(inputs) if inputs else {}
+
+        for name, port in port_namespace.items():
+
+            if name not in inputs:
+                if port.has_default():
+                    port_value = port.default
+                elif port.required:
+                    raise ValueError('Value not supplied for required inputs port {}'.format(name))
+                elif isinstance(port, ports.PortNamespace):
+                    port_value = {}
+                else:
+                    continue
+            else:
+                port_value = inputs[name]
+
+            if isinstance(port, ports.PortNamespace):
+                result[name] = self.pre_process_inputs(port, port_value)
+            else:
+                result[name] = port_value
+
+        return utils.AttributesFrozendict(result)
+
+    def validate_inputs(self, inputs=None):
+        """Process and validate a dictionary of inputs according to the input port namespace of this specification.
+
+        The pre processing step will also process ports with defaults that did not receive an explicit value.
 
         :param inputs: the inputs dictionary
-        :return: valid or not, error string|None
-        :rtype: tuple(bool, str or None)
+        :return: the parsed inputs
+        :rtype: AttributeFrozenDict
+        :raise ValueError: if the inputs are invalid
         """
-        return self.inputs.validate(inputs)
+        inputs = self.pre_process_inputs(self.inputs, inputs or {})
+        result = self.inputs.validate(inputs)
+
+        if result is not None:
+            raise ValueError(result)
+
+        return inputs
 
     def validate_outputs(self, outputs=None):
         """

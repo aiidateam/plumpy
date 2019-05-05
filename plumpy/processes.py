@@ -640,13 +640,10 @@ class Process(StateMachine, persistence.Savable):
 
     @super_check
     def on_create(self):
-        # State stuff
         self._CREATION_TIME = time.time()
 
-        # Input/output
-        self._check_inputs(self._raw_inputs)
-        raw_inputs = dict(self.raw_inputs) if self.raw_inputs else {}
-        self._parsed_inputs = self.create_input_args(self.spec().inputs, raw_inputs)
+        # This will parse the inputs with respect to the input portnamespace of the spec and validate them
+        self._parsed_inputs = self.spec().validate_inputs(self._raw_inputs)
 
         # Set up a process ID
         self._uuid = uuid.uuid4()
@@ -1159,40 +1156,6 @@ class Process(StateMachine, persistence.Savable):
         self.on_output_emitted(output_port, value, dynamic)
 
     @protected
-    def create_input_args(self, port_namespace, inputs):
-        """
-        Take the passed input arguments and match it to the ports of the port namespace,
-        filling in any default values for inputs that have not been supplied as long as the
-        default is defined
-
-        :param port_namespace: the port namespace against which to compare the inputs dictionary
-        :param inputs: the dictionary with supplied inputs
-        :return: an AttributesFrozenDict with the inputs, complemented with port default values
-        :raises: ValueError if no input was specified for a required port without a default value
-        """
-        result = dict(inputs)
-        for name, port in port_namespace.items():
-
-            if name not in inputs:
-                if port.has_default():
-                    port_value = port.default
-                elif port.required:
-                    raise ValueError('Value not supplied for required inputs port {}'.format(name))
-                elif isinstance(port, ports.PortNamespace):
-                    port_value = {}
-                else:
-                    continue
-            else:
-                port_value = inputs[name]
-
-            if isinstance(port, ports.PortNamespace):
-                result[name] = self.create_input_args(port, port_value)
-            else:
-                result[name] = port_value
-
-        return utils.AttributesFrozendict(result)
-
-    @protected
     def encode_input_args(self, inputs):
         """
         Encode input arguments such that they may be saved in a :class:`plumpy.Bundle`.
@@ -1226,12 +1189,6 @@ class Process(StateMachine, persistence.Savable):
             'state': self.state,
             'state_info': str(self._state)
         })
-
-    def _check_inputs(self, inputs):
-        # Check the inputs meet the requirements
-        validation_error = self.spec().validate_inputs(inputs)
-        if validation_error:
-            raise ValueError(str(validation_error))
 
     def _check_outputs(self, outputs):
         # Check that the necessary outputs have been emitted
