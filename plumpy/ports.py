@@ -603,7 +603,7 @@ class PortNamespace(collections.MutableMapping, Port):
 
         # Validate the validator first as it most likely will rely on the port values
         if self.validator is not None:
-            message = self.validator(self, port_values)
+            message = self.validator(port_values)
             if message is not None:
                 assert isinstance(message, str), \
                     "Validator returned something other than None or str: '{}'".format(type(message))
@@ -623,6 +623,33 @@ class PortNamespace(collections.MutableMapping, Port):
         validation_error = self.validate_dynamic_ports(port_values, breadcrumbs)
         if validation_error:
             return validation_error
+
+    def pre_process(self, port_values):
+        """Map port values onto the port namespace, filling in values for ports with a default.
+
+        :param port_values: the dictionary with supplied port values
+        :return: an AttributesFrozenDict with pre-processed port value mapping, complemented with port default values
+        """
+        from . import utils
+
+        for name, port in self.items():
+
+            if name not in port_values:
+                if port.has_default():
+                    port_value = port.default
+                elif isinstance(port, PortNamespace):
+                    port_value = {}
+                else:
+                    continue
+            else:
+                port_value = port_values[name]
+
+            if isinstance(port, PortNamespace):
+                port_values[name] = port.pre_process(port_value)
+            else:
+                port_values[name] = port_value
+
+        return utils.AttributesFrozendict(port_values)
 
     def validate_ports(self, port_values, breadcrumbs):
         """
