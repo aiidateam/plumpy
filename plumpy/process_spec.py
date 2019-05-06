@@ -171,26 +171,6 @@ class ProcessSpec(object):
         """
         return name in self.outputs
 
-    def validate_inputs(self, inputs=None):
-        """
-        Validate a dictionary of inputs according to the input port namespace of this specification
-
-        :param inputs: the inputs dictionary
-        :return: valid or not, error string|None
-        :rtype: tuple(bool, str or None)
-        """
-        return self.inputs.validate(inputs)
-
-    def validate_outputs(self, outputs=None):
-        """
-        Validate a dictionary of outputs according to the output port namespace of this specification
-
-        :param outputs: the outputs dictionary
-        :return: valid or not, error string|None
-        :rtype: tuple(bool, str or None)
-        """
-        return self.outputs.validate(outputs)
-
     def expose_inputs(self, process_class, namespace=None, exclude=(), include=None, namespace_options={}):
         """
         This method allows one to automatically add the inputs from another Process to this ProcessSpec.
