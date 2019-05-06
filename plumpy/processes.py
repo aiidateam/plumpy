@@ -643,7 +643,12 @@ class Process(StateMachine, persistence.Savable):
         self._CREATION_TIME = time.time()
 
         # This will parse the inputs with respect to the input portnamespace of the spec and validate them
-        self._parsed_inputs = self.spec().validate_inputs(self._raw_inputs)
+        raw_inputs = dict(self._raw_inputs) if self._raw_inputs else {}
+        self._parsed_inputs = self.spec().inputs.pre_process(raw_inputs)
+        result = self.spec().inputs.validate(self._parsed_inputs)
+
+        if result is not None:
+            raise ValueError(result)
 
         # Set up a process ID
         self._uuid = uuid.uuid4()
@@ -720,9 +725,8 @@ class Process(StateMachine, persistence.Savable):
     def on_finish(self, result, successful):
         """ Entering the FINISHED state """
         if successful:
-            try:
-                self._check_outputs(self._outputs)
-            except ValueError:
+            validation_error = self.spec().outputs.validate(self.outputs)
+            if validation_error:
                 raise StateEntryFailed(process_states.ProcessState.FINISHED, result, False)
 
         self.future().set_result(self.outputs)
@@ -1189,9 +1193,3 @@ class Process(StateMachine, persistence.Savable):
             'state': self.state,
             'state_info': str(self._state)
         })
-
-    def _check_outputs(self, outputs):
-        # Check that the necessary outputs have been emitted
-        validation_error = self.spec().validate_outputs(outputs)
-        if validation_error:
-            raise ValueError(str(validation_error))

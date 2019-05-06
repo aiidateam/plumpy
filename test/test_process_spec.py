@@ -27,9 +27,9 @@ class TestProcessSpec(TestCase):
     def test_dynamic_output(self):
         self.spec.outputs.dynamic = True
         self.spec.outputs.valid_type = str
-        self.assertIsNone(self.spec.validate_outputs({'dummy': 'foo'}))
-        self.assertIsNone(self.spec.validate_outputs({'dummy': StrSubtype('bar')}))
-        self.assertIsNotNone(self.spec.validate_outputs({'dummy': 5}))
+        self.assertIsNone(self.spec.outputs.validate({'dummy': 'foo'}))
+        self.assertIsNone(self.spec.outputs.validate({'dummy': StrSubtype('bar')}))
+        self.assertIsNotNone(self.spec.outputs.validate({'dummy': 5}))
 
         # Remove dynamic output
         self.spec.outputs.dynamic = False
@@ -38,9 +38,9 @@ class TestProcessSpec(TestCase):
         # Now add and check behaviour
         self.spec.outputs.dynamic = True
         self.spec.outputs.valid_type = str
-        self.assertIsNone(self.spec.validate_outputs({'dummy': 'foo'}))
-        self.assertIsNone(self.spec.validate_outputs({'dummy': StrSubtype('bar')}))
-        self.assertIsNotNone(self.spec.validate_outputs({'dummy': 5}))
+        self.assertIsNone(self.spec.outputs.validate({'dummy': 'foo'}))
+        self.assertIsNone(self.spec.outputs.validate({'dummy': StrSubtype('bar')}))
+        self.assertIsNotNone(self.spec.outputs.validate({'dummy': 5}))
 
     def test_get_description(self):
         spec = ProcessSpec()
@@ -81,11 +81,15 @@ class TestProcessSpec(TestCase):
 
         self.spec.input('dict', default={'key': 'value'}, validator=dict_validator)
 
-        self.assertEqual(self.spec.validate_inputs(inputs={}), {'dict': {'key': 'value'}})
-        self.assertEqual(self.spec.validate_inputs(inputs={'dict': {'key': 'value'}}), {'dict': {'key': 'value'}})
+        processed = self.spec.inputs.pre_process({})
+        self.assertEqual(processed, {'dict': {'key': 'value'}})
+        self.spec.inputs.validate()
 
-        with self.assertRaises(ValueError):
-            self.spec.validate_inputs(inputs={'dict': {'wrong_key': 'value'}})
+        processed = self.spec.inputs.pre_process({'dict': {'key': 'value'}})
+        self.assertEqual(processed, {'dict': {'key': 'value'}})
+        self.spec.inputs.validate()
+
+        self.assertIsNotNone(self.spec.inputs.validate({'dict': {'wrong_key': 'value'}}))
 
     def test_validate(self):
         """Test the global spec validator functionality."""
@@ -99,11 +103,13 @@ class TestProcessSpec(TestCase):
         self.spec.input('b', required=False)
         self.spec.inputs.validator = is_valid
 
-        self.assertEqual(self.spec.validate_inputs(inputs={'a': 'a'}), {'a': 'a'})
-        self.assertEqual(self.spec.validate_inputs(inputs={'b': 'b'}), {'b': 'b'})
+        processed = self.spec.inputs.pre_process({'a': 'a'})
+        self.assertEqual(processed, {'a': 'a'})
+        self.spec.inputs.validate()
 
-        with self.assertRaises(ValueError):
-            self.spec.validate_inputs(inputs={})
+        processed = self.spec.inputs.pre_process({'b': 'b'})
+        self.assertEqual(processed, {'b': 'b'})
+        self.spec.inputs.validate()
 
-        with self.assertRaises(ValueError):
-            self.spec.validate_inputs(inputs={'a': 'a', 'b': 'b'})
+        self.assertIsNotNone(self.spec.inputs.validate({}))
+        self.assertIsNotNone(self.spec.inputs.validate({'a': 'a', 'b': 'b'}))
