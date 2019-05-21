@@ -52,7 +52,16 @@ setup(
             'prospector',
             'pylint<2; python_version<"3"',
             'pylint; python_version>="3"',
-        ]
+        ],
+        "docs": [
+          "Sphinx==1.8.4",
+          "Pygments==2.3.1",
+          "docutils==0.14",
+          "Jinja2==2.10.1",
+          "MarkupSafe==1.1.1",
+          "sphinx-rtd-theme==0.4.3",
+          "sphinxcontrib-contentui==0.2.2",
+        ],
     },
     packages=['plumpy', 'plumpy/base'],
     test_suite='test')
