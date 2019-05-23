@@ -33,7 +33,7 @@ Now that you've created your virtualenv, activate your virtual environment::
 Basic Installation
 ------------------
 
-    $ pip install toil
+    $ pip install plumpy
 
 Now you're ready to run :ref:`your first plumpy process and workchain <quickstart>`!
 

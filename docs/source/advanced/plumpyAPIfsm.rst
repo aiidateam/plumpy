@@ -5,6 +5,8 @@ Finite State Machine API
 
  .. autoclass:: plumpy.base.state_machine::State
     :members:
+    :noindex:
 
  .. autoclass:: plumpy.base.state_machine::StateMachine
     :members:
+    :noindex:

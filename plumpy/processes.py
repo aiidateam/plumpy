@@ -109,20 +109,20 @@ class Process(StateMachine, persistence.Savable):
 
     ::
 
-                  ___
-                 |   v
-    CREATED --- RUNNING --- FINISHED (o)
-                 |   ^     /
-                 v   |    /
-                 WAITING--
-                 |   ^
-                  ----
+                          ___
+                         |   v
+        CREATED (x) --- RUNNING (x) --- FINISHED (o)
+                         |   ^          /
+                         v   |         /
+                        WAITING (x) --
+                         |   ^
+                          ---
 
+        * -- EXCEPTED (o)
+        * -- KILLED (o)
 
-      * -- EXCEPTED (o)
-      * -- KILLED (o)
-
-      * = any non terminal state
+    * (o): terminal state
+    * (x): non terminal state
 
     When a Process enters a state is always gets a corresponding message, e.g.
     on entering RUNNING it will receive the on_run message. These are

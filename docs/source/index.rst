@@ -12,13 +12,14 @@ RabbitMQ is used to queue up, control and monitor running processes via the kiwi
 
 Features:
 
-- Processes can be remotely controlled by sending messages over RabbitMQ all from a simple interface
-- Progress can be saved between steps and continued later
+- Process can be remotely controlled by sending messages over RabbitMQ all from a simple interface
+- Process can be saved between steps and continued later
 - Optional explicit specification of inputs and outputs including their types, validation functions, help strings, etc.
 
  * To install plumpy follow the instructions in the :ref:`installation section<installation>`
- * After you have successfully installed plumpy, you can find some tips in the :ref:`user guide section<started>` to help you on your way
+ * After you have successfully installed plumpy, you can find some tips in the :ref:`user guide section<quickstart>` to help you on your way
  * The design concepts behind plumpy can be found in :ref:`concepts section<concepts>`
+ * If you want to develop your process and workchain, you'll find :ref:`Develop Process section<develop_process>` and :ref:`Develop WorkChain section<develop_workchain>` useful.
  * Use the complete :doc:`API reference<apidoc/plumpy>`, the :ref:`modindex` or the :ref:`genindex` to find code you're looking for
 
 .. toctree::
@@ -32,22 +33,20 @@ Features:
    :caption: Basic
    :maxdepth: 2
 
-   running/introduction
-   running/concepts
-   running/process
-   running/workchain
-   running/custom
-   running/debugging
+   basic/introduction
+   basic/concepts
+   basic/process
+   basic/workchain
 
 .. toctree::
-   :caption: Advance
+   :caption: Advanced
    :maxdepth: 2
 
-   developing/process
-   developing/workchain
-   developing/plumpyAPIprocess
-   developing/plumpyAPIworkchain
-   developing/plumpyAPIfsm
+   advanced/process
+   advanced/workchain
+   advanced/plumpyAPIprocess
+   advanced/plumpyAPIworkchain
+   advanced/plumpyAPIfsm
    apidoc/plumpy
 
 Indices and tables

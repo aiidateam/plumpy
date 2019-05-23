@@ -5,3 +5,4 @@ WorkChain API
 
  .. autoclass:: plumpy.workchains::WorkChain
     :members:
+    :noindex:

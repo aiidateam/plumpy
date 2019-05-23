@@ -653,7 +653,7 @@ Use as::
     return_
   )
 
-or
+or::
 
   if_(cls.conditional)(
     return_(EXIT_CODE)

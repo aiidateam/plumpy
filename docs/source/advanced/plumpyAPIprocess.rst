@@ -5,3 +5,4 @@ Process API
 
  .. autoclass:: plumpy.processes::Process
     :members:
+    :noindex:

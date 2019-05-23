@@ -1,44 +1,45 @@
 import plumpy
+import threading
+from kiwipy import rmq
 from tornado import ioloop, gen
 
 class WaitForResumeProc(plumpy.Process):
 
     def run(self, **kwargs):
         print("Now I am running: {:}".format(self.state))
-        return plumpy.Wait(self.after_watting)
+        return plumpy.Wait(self.after_resume_and_exec)
 
-    def after_watting(self):
+    def after_resume_and_exec(self):
         print("After resume from watting state: {:}".format(self.state))
 
+
 if __name__ == "__main__":
-    loop = ioloop.IOLoop()
-    proc = WaitForResumeProc()
-    print("state after inst: {:}".format(proc.state))  # Created
+    message_exchange = "{}.{}".format("WaitForResume", "uuid-0")
+    task_exchange = "{}.{}".format("WaitForResume", "uuid-0")
+    task_queue = "{}.{}".format("WaitForResume", "uuid-0")
 
-    @gen.coroutine
-    def async_steps():
-        print("state after running: {:}".format(proc.state))  # Watting
+    kwargs = {
+        'connection_params': {'url': 'amqp://guest:guest@127.0.0.1:5672/'},
+        'message_exchange': message_exchange,
+        'task_exchange': task_exchange,
+        'task_queue': task_queue,
+    }
+    try:
+        with rmq.RmqThreadCommunicator.connect(**kwargs) as communicator:
+            proc = WaitForResumeProc(communicator=communicator)
+            process_controller = plumpy.RemoteProcessThreadController(communicator)
 
-        yield proc.pause()
-        print("Is paused?  {:}".format(proc.paused))
+            status_future = process_controller.get_status(proc.pid)
+            print(status_future.result()) # pause: False
 
-        proc.play()
-        print("Is paused?  {:}".format(proc.paused))
+            process_controller.pause_process(proc.pid)
+            status_future = process_controller.get_status(proc.pid)
+            print(status_future.result()) # pause: True
 
-        proc.resume()
-        # Wait until the process is terminated
-        yield proc.future()
+            process_controller.play_process(proc.pid)
+            status_future = process_controller.get_status(proc.pid)
+            print(status_future.result()) # pause: False
 
-        print("state done: {:}".format(proc.state))  # Finished
 
-    loop.add_callback(proc.step_until_terminated)
-    loop.run_sync(async_steps)
-
-# output:
-# state after inst: ProcessState.CREATED
-# Now I am running: ProcessState.RUNNING
-# state after running: ProcessState.WAITING
-# Is paused?  True
-# Is paused?  False
-# After resume from watting state: ProcessState.RUNNING
-# state done: ProcessState.FINISHED
+    except KeyboardInterrupt:
+        pass

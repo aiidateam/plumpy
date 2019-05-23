@@ -1,4 +1,4 @@
-.. _started:
+.. _quickstart:
 
 Quickstart Examples
 ===================
@@ -22,6 +22,13 @@ Process can wait, pause, play and resume
 The example below shows how process state transition with different action:
 
 .. literalinclude:: ../../../examples/process_waitAndResume.py
+
+Remote controled process
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+process start.
+
+script to kill that process
 
 Creating and running basis WorkChain
 --------------------------------------
