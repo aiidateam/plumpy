@@ -43,7 +43,7 @@ setup(
         'dev': [
             'pip',
             'pytest>4',
-            'ipython',
+            'ipython>=4.0,<6.0',
             'twine',
             'pytest-cov',
             'pre-commit',
