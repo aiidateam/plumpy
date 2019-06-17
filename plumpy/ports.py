@@ -522,8 +522,8 @@ class PortNamespace(collections.MutableMapping, Port):
             return self[port_name]
 
     def absorb(self, port_namespace, exclude=(), include=None, namespace_options={}):
-        """
-        Absorb another PortNamespace instance into oneself, including all its mutable properties and ports.
+        """Absorb another PortNamespace instance into oneself, including all its mutable properties and ports.
+
         Mutable properties of self will be overwritten with those of the port namespace that is to be absorbed.
         The same goes for the ports, meaning that any ports with a key that already exists in self will
         be overwritten. The namespace_options dictionary can be used to yet override the mutable properties of
@@ -554,7 +554,23 @@ class PortNamespace(collections.MutableMapping, Port):
         absorbed_ports = []
 
         for port_name, port in self._filter_ports(list(port_namespace.items()), exclude=exclude, include=include):
-            self[port_name] = copy.deepcopy(port)
+
+            if isinstance(port, PortNamespace):
+
+                # Strip the namespace's name from the exclude and include rules
+                stripped_exclude = self.strip_namespace(port_name, self.NAMESPACE_SEPARATOR, exclude)
+                stripped_include = self.strip_namespace(port_name, self.NAMESPACE_SEPARATOR, include)
+
+                # Create a new namespace at `port_name` and absorb its ports into it, with the stripped exclude/include.
+                # Note that we copy the port namespace itself such that we keep all its mutable properties, but then
+                # reset its ports, because not all ports need to be included depending on the exclude/include rules.
+                # Instead the copying of the ports is taken care of by the recursive `absorb` call.
+                self[port_name] = copy.copy(port)
+                self[port_name]._ports = {}
+                self[port_name].absorb(port, stripped_exclude, stripped_include)
+            else:
+                self[port_name] = copy.deepcopy(port)
+
             absorbed_ports.append(port_name)
 
         return absorbed_ports
@@ -693,6 +709,40 @@ class PortNamespace(collections.MutableMapping, Port):
                 if not isinstance(port_value, valid_type):
                     msg = 'Invalid type {} for dynamic port value: expected {}'.format(type(port_value), valid_type)
                     return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs + (port_name,)))
+
+    @staticmethod
+    def strip_namespace(namespace, separator, rules=None):
+        """Strip the namespace from the given tuple of exclude/include rules.
+
+        For example if the namespace is `base` and the rules are::
+
+            ('base.a', 'relax.base.c', 'd')
+
+        the function will return::
+
+            ('a', 'relax.base.c', 'd')
+
+        If the rules are `None`, that is what is returned as well.
+
+        :param namespace: the string name of the namespace
+        :param separator: the namespace separator string
+        :param rules: the list or tuple of exclude or include rules to strip
+        :return: `None` if `rules=None` or the list of stripped rules
+        """
+        if not rules:
+            return rules
+
+        stripped = []
+
+        prefix = '{}{}'.format(namespace, separator)
+
+        for rule in rules:
+            if rule.startswith(prefix):
+                stripped.append(rule[len(prefix):])
+            else:
+                stripped.append(rule)
+
+        return stripped
 
     @staticmethod
     def _filter_ports(items, exclude, include):

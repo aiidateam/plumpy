@@ -149,6 +149,62 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         with self.assertRaises(ValueError):
             ExcludeProcess.spec()
 
+    def test_expose_nested_exclude(self):
+        """Test the exclude rules can be nested and are properly unwrapped."""
+        BaseProcess = self.BaseProcess
+
+        def test_validator(self):
+            pass
+
+        class BaseProcess(NewLoopProcess):
+
+            @classmethod
+            def define(cls, spec):
+                super(BaseProcess, cls).define(spec)
+                spec.input('a', valid_type=str, default='a')
+                spec.input('b', valid_type=str, default='b')
+                spec.inputs.dynamic = True
+                spec.inputs.valid_type = str
+                spec.inputs.help = 'Base Process'
+
+        class SubProcess(NewLoopProcess):
+
+            @classmethod
+            def define(cls, spec):
+                super(SubProcess, cls).define(spec)
+                spec.expose_inputs(BaseProcess, namespace='base')
+                spec.input('c', valid_type=str, default='c')
+                spec.input('d', valid_type=str, default='d')
+                spec.inputs.valid_type = int
+                spec.inputs.help = 'Sub Process'
+                spec.inputs.validator = test_validator
+
+        class ExcludeProcess(NewLoopProcess):
+
+            @classmethod
+            def define(cls, spec):
+                super(ExcludeProcess, cls).define(spec)
+                spec.expose_inputs(SubProcess, exclude=('base.a', 'c'))
+
+        inputs = ExcludeProcess.spec().inputs
+
+        # Check that port `base.b` is present but `base.a` is not, as it was excluded
+        self.assertTrue('a' not in inputs['base'])
+        self.assertTrue('b' in inputs['base'])
+        self.assertTrue('c' not in inputs)
+        self.assertTrue('d' in inputs)
+
+        # Properties of the exposed sub namespaces should have been preserved
+        self.assertEqual(inputs['base'].dynamic, True)
+        self.assertEqual(inputs['base'].valid_type, str)
+        self.assertEqual(inputs['base'].help, 'Base Process')
+
+        # Properties of the top level should match that of the `SubProcess` because it was not exposed in a namespace
+        self.assertEqual(inputs.dynamic, True)
+        self.assertEqual(inputs.valid_type, int)
+        self.assertEqual(inputs.help, 'Sub Process')
+        self.assertEqual(inputs.validator, test_validator)
+
     def test_expose_ports_top_level(self):
         """
         Verify that exposing a sub process in top level correctly overrides the parent's namespace
