@@ -14,7 +14,6 @@ if six.PY2:
 else:
     import collections.abc as collections
 
-
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
 
@@ -361,6 +360,7 @@ class PortNamespace(collections.MutableMapping, Port):
     A container for Ports. Effectively it maintains a dictionary whose members are
     either a Port or yet another PortNamespace. This allows for the nesting of ports
     """
+
     NAMESPACE_SEPARATOR = '.'
 
     def __init__(self,
@@ -370,12 +370,26 @@ class PortNamespace(collections.MutableMapping, Port):
                  validator=None,
                  valid_type=None,
                  default=UNSPECIFIED,
-                 dynamic=False):
+                 dynamic=False,
+                 populate_defaults=True):
+        """Construct a port namespace.
+
+        :param name: the name of the namespace
+        :param help: the help string
+        :param required: boolean, if True the validation will fail if no value is specified for this namespace
+        :param validator: an optional validator for the namespace
+        :param valid_type: optional tuple of valid types in the case of a dynamic namespace
+        :param default: default value for the port
+        :param dynamic: boolean, if True, the namespace will accept values even when no explicit port is defined
+        :param populate_defaults: boolean, if False, the pre-processing step does not populate defaults, also not of any
+            nested ports, if no value was explicitly specified for this namespace.
+        """
         super(PortNamespace, self).__init__(
             name=name, help=help, required=required, validator=validator, valid_type=valid_type)
         self._ports = {}
         self._default = default
         self._dynamic = dynamic
+        self._populate_defaults = populate_defaults
 
     def __str__(self):
         return json.dumps(self.get_description(), sort_keys=True, indent=4)
@@ -438,6 +452,14 @@ class PortNamespace(collections.MutableMapping, Port):
             self.dynamic = True
 
         super(PortNamespace, self.__class__).valid_type.fset(self, valid_type)
+
+    @property
+    def populate_defaults(self):
+        return self._populate_defaults
+
+    @populate_defaults.setter
+    def populate_defaults(self, populate_defaults):
+        self._populate_defaults = populate_defaults
 
     def get_description(self):
         """
@@ -677,7 +699,13 @@ class PortNamespace(collections.MutableMapping, Port):
 
         for name, port in self.items():
 
+            # If the port was not specified in the inputs values and the port is a namespace with the property
+            # `populate_defaults=False`, we skip the pre-processing and do not populate defaults.
+            if name not in port_values and isinstance(port, PortNamespace) and not port.populate_defaults:
+                continue
+
             if name not in port_values:
+
                 if port.has_default():
                     port_value = port.default
                 elif isinstance(port, PortNamespace):
