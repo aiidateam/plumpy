@@ -376,13 +376,15 @@ class PortNamespace(collections.MutableMapping, Port):
 
         :param name: the name of the namespace
         :param help: the help string
-        :param required: boolean, if True the validation will fail if no value is specified for this namespace
+        :param required: boolean, if `True` the validation will fail if no value is specified for this namespace
         :param validator: an optional validator for the namespace
         :param valid_type: optional tuple of valid types in the case of a dynamic namespace
         :param default: default value for the port
-        :param dynamic: boolean, if True, the namespace will accept values even when no explicit port is defined
-        :param populate_defaults: boolean, if False, the pre-processing step does not populate defaults, also not of any
-            nested ports, if no value was explicitly specified for this namespace.
+        :param dynamic: boolean, if `True`, the namespace will accept values even when no explicit port is defined
+        :param populate_defaults: boolean, when set to `False`, the populating of defaults for this namespace is skipped
+            entirely, including all nested namespaces, if no explicit value is passed for this port in the parent
+            namespace. As soon as a value is specified in the parent namespace for this port, even if it is empty, this
+            property is ignored and the population of defaults is always performed.
         """
         super(PortNamespace, self).__init__(
             name=name, help=help, required=required, validator=validator, valid_type=valid_type)
