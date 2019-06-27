@@ -171,7 +171,7 @@ class ProcessSpec(object):
         """
         return name in self.outputs
 
-    def expose_inputs(self, process_class, namespace=None, exclude=(), include=None, namespace_options={}):
+    def expose_inputs(self, process_class, namespace=None, exclude=None, include=None, namespace_options={}):
         """
         This method allows one to automatically add the inputs from another Process to this ProcessSpec.
         The optional namespace argument can be used to group the exposed inputs in a separated PortNamespace.
@@ -195,7 +195,7 @@ class ProcessSpec(object):
             namespace_options=namespace_options,
         )
 
-    def expose_outputs(self, process_class, namespace=None, exclude=(), include=None, namespace_options={}):
+    def expose_outputs(self, process_class, namespace=None, exclude=None, include=None, namespace_options={}):
         """
         This method allows one to automatically add the ouputs from another Process to this ProcessSpec.
         The optional namespace argument can be used to group the exposed outputs in a separated PortNamespace.
