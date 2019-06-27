@@ -4,7 +4,13 @@ Python language utilities and tools.
 
 from __future__ import absolute_import
 import functools
-import inspect
+from inspect import stack, currentframe
+from six import PY2
+
+if PY2:
+    from inspect import getargspec as get_arg_spec
+else:
+    from inspect import getfullargspec as get_arg_spec
 
 
 def protected(check=False):
@@ -13,18 +19,18 @@ def protected(check=False):
         if isinstance(func, property):
             raise RuntimeError("Protected must go after @property decorator")
 
-        args = inspect.getargspec(func)[0]
+        args = get_arg_spec(func)[0]  # pylint: disable=deprecated-method
         if len(args) == 0:
             raise RuntimeError("Can only use the protected decorator on member functions")
 
         # We can only perform checks if the interpreter is capable of giving
         # us the stack i.e. currentframe() produces a valid object
-        if check and inspect.currentframe() is not None:
+        if check and currentframe() is not None:
 
             @functools.wraps(func)
             def wrapped_fn(self, *args, **kwargs):
                 try:
-                    calling_class = inspect.stack()[1][0].f_locals['self']
+                    calling_class = stack()[1][0].f_locals['self']
                     assert self is calling_class
                 except (KeyError, AssertionError):
                     raise RuntimeError("Cannot access protected function {} from outside"
@@ -45,7 +51,7 @@ def override(check=False):
         if isinstance(func, property):
             raise RuntimeError("Override must go after @property decorator")
 
-        args = inspect.getargspec(func)[0]
+        args = get_arg_spec(func)[0]  # pylint: disable=deprecated-method
         if len(args) == 0:
             raise RuntimeError("Can only use the override decorator on member functions")
 

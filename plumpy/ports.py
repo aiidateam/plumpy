@@ -2,11 +2,15 @@
 """Module for process ports"""
 from __future__ import absolute_import
 import abc
-import collections
 import copy
 import json
 import logging
 import six
+
+if six.PY2:
+    import collections
+else:
+    import collections.abc as collections
 
 from plumpy.utils import is_mutable_property
 
