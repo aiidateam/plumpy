@@ -72,6 +72,7 @@ class TestPortNamespace(TestCase):
 
     def test_port_namespace_validation(self):
         """Test validate method of a `PortNamespace`."""
+
         def validator(port_values):
             if port_values['integer'] < 0:
                 return 'Only positive integers allowed'
@@ -210,3 +211,28 @@ class TestPortNamespace(TestCase):
         port_values = {'required_port': 1}
         validation_error = self.port_namespace.validate(port_values)
         self.assertIsNone(validation_error)
+
+    def test_port_namespace_no_populate_defaults(self):
+        """Verify that defaults are not populated for a `populate_defaults=False` namespace in `pre_process`."""
+        port_namespace = PortNamespace('base')
+        port_namespace_normal = port_namespace.create_port_namespace('normal', populate_defaults=True)
+        port_namespace_normal['with_default'] = InputPort('with_default', default=1, valid_type=int)
+        port_namespace_normal['without_default'] = InputPort('without_default', valid_type=int)
+
+        inputs = {}
+        pre_processed = port_namespace.pre_process(inputs)
+        self.assertIn('normal', pre_processed)
+        self.assertIn('with_default', pre_processed.normal)
+        self.assertNotIn('without_default', pre_processed.normal)
+
+        # Now repeat the test but with a "lazy" namespace where defaults are not populated if not explicitly specified
+        port_namespace = PortNamespace('base')
+        port_namespace_lazy = port_namespace.create_port_namespace('lazy', populate_defaults=False, required=False)
+        port_namespace_lazy['with_default'] = InputPort('with_default', default=1, valid_type=int)
+        port_namespace_lazy['without_default'] = InputPort('without_default', valid_type=int)
+
+        inputs = {}
+        pre_processed = port_namespace.pre_process(inputs)
+
+        # Because the namespace is lazy and no inputs were passed, the defaults should not have been populated.
+        self.assertEqual(pre_processed, {})
