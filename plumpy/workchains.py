@@ -2,15 +2,16 @@
 
 from __future__ import absolute_import
 import abc
-import collections
 import re
 import six
 
 if six.PY2:
     from inspect import getargspec as get_arg_spec
+    import collections
 else:
     from inspect import getfullargspec as get_arg_spec
-
+    import collections.abc as collections
+    
 from . import lang
 from . import mixins
 from . import persistence
