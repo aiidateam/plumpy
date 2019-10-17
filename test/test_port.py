@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from .utils import TestCase
 
-from plumpy.ports import InputPort, OutputPort, PortNamespace
+from plumpy.ports import InputPort, OutputPort, PortNamespace, breadcrumbs_to_port
 
 
 class TestInputPort(TestCase):
@@ -167,7 +167,8 @@ class TestPortNamespace(TestCase):
     def test_port_namespace_validate(self):
         """Check that validating of sub namespaces works correctly"""
         port_namespace_sub = self.port_namespace.create_port_namespace('sub.space')
-        port_namespace_sub.valid_type = int
+        port_namespace_sub['explicit'] = InputPort('explicit', required=False, valid_type=int)
+        port_namespace_sub.valid_type = int  # Make `base.sub.space` a dynamic namespace
 
         # Check that passing a non mapping type raises
         validation_error = self.port_namespace.validate(5)
@@ -177,14 +178,17 @@ class TestPortNamespace(TestCase):
         validation_error = self.port_namespace.validate({'sub': {'space': {'output': 5}}})
         self.assertIsNone(validation_error)
 
-        # Invalid input
+        # Invalid input for dynamic port
+        expected_breadcrumbs = breadcrumbs_to_port((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output'))
         validation_error = self.port_namespace.validate({'sub': {'space': {'output': '5'}}})
         self.assertIsNotNone(validation_error)
+        self.assertEqual(validation_error.port, expected_breadcrumbs)
 
-        # Check the breadcrumbs are correct
-        self.assertEqual(
-            validation_error.port,
-            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output')))
+        # Invalid input for explicit port
+        expected_breadcrumbs = breadcrumbs_to_port((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'explicit'))
+        validation_error = self.port_namespace.validate({'sub': {'space': {'explicit': '5'}}})
+        self.assertIsNotNone(validation_error)
+        self.assertEqual(validation_error.port, expected_breadcrumbs)
 
     def test_port_namespace_required(self):
         """Verify that validation will fail if required port is not specified."""

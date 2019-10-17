@@ -20,6 +20,17 @@ UNSPECIFIED = ()
 __all__ = ['UNSPECIFIED', 'ValueSpec', 'PortValidationError', 'Port', 'InputPort', 'OutputPort']
 
 
+def breadcrumbs_to_port(breadcrumbs):
+    """Convert breadcrumbs to a string representing the port
+
+    :param breadcrumbs: a tuple of the path to the port
+    :type breadcrumbs: typing.Tuple[str]
+    :return: the port string
+    :rtype: str
+    """
+    return PortNamespace.NAMESPACE_SEPARATOR.join(breadcrumbs)
+
+
 class PortValidationError(Exception):
     """Error when validation fails on a port"""
 
@@ -167,6 +178,8 @@ class Port(object):
     """
 
     def __init__(self, name, valid_type=None, help=None, required=True, validator=None):
+        """Construct a new `Port`."""
+        self._breadcrumbs = (name,) if name is not None else ()
         self._value_spec = ValueSpec(name, valid_type, help, required, validator)
 
     def __str__(self):
@@ -252,6 +265,24 @@ class Port(object):
         self._value_spec.required = required
 
     @property
+    def breadcrumbs(self):
+        """Return the breadcrumbs for this port.
+
+        :return: the breadcrumbs
+        :rtype: tuple
+        """
+        return self._breadcrumbs
+
+    @breadcrumbs.setter
+    def breadcrumbs(self, breadcrumbs):
+        """Set the breadcrumbs for this port.
+
+        :param breadcrumbs: the breadcrumbs of the parent namespace
+        :type breadcrumbs: tuple of strings
+        """
+        self._breadcrumbs = breadcrumbs
+
+    @property
     def validator(self):
         """
         Get the validator for this port
@@ -271,21 +302,18 @@ class Port(object):
         """
         self._value_spec.validator = validator
 
-    def validate(self, value, breadcrumbs=()):
+    def validate(self, value):
         """
         Validate a value to see if it is valid for this port
 
         :param value: the value to check
         :type value: typing.Any
-        :param breadcrumbs: a tuple of the path to having reached this point in validation
-        :type breadcrumbs: typing.Tuple[str]
         :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
         :rtype: typing.Optional[ValidationError]
         """
         validation_error = self._value_spec.validate(value)
         if validation_error:
-            breadcrumbs += (self.name,)
-            return PortValidationError(validation_error, breadcrumbs_to_port(breadcrumbs))
+            return PortValidationError(validation_error, breadcrumbs_to_port(self.breadcrumbs))
 
 
 class InputPort(Port):
@@ -411,6 +439,7 @@ class PortNamespace(collections.MutableMapping, Port):
     def __setitem__(self, key, port):
         if not isinstance(port, Port):
             raise TypeError('port needs to be an instance of Port')
+        port.breadcrumbs = self.breadcrumbs + (port.name,)
         self._ports[key] = port
 
     @property
@@ -646,25 +675,21 @@ class PortNamespace(collections.MutableMapping, Port):
 
         return result
 
-    def validate(self, port_values=None, breadcrumbs=()):
+    def validate(self, port_values=None):
         """
         Validate the namespace port itself and subsequently all the port_values it contains
 
         :param port_values: an arbitrarily nested dictionary of parsed port values
         :type port_values: dict
-        :param breadcrumbs: a tuple of the path to having reached this point in validation
-        :type breadcrumbs: typing.Tuple[str]
         :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
         :rtype: typing.Optional[ValidationError]
         """
-        breadcrumbs_local = breadcrumbs + (self.name,)
-
         if not port_values:
             port_values = {}
 
         if not isinstance(port_values, collections.Mapping):
             message = 'specified value is of type {} which is not sub class of `Mapping`'.format(type(port_values))
-            return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
+            return PortValidationError(message, breadcrumbs_to_port(self.breadcrumbs))
 
         # Turn the port values into a normal dictionary and create a shallow copy. The `validate_ports` method to which
         # the `port_values` will be passed, will pop the values corresponding to explicit ports. This is necessary for
@@ -679,12 +704,12 @@ class PortNamespace(collections.MutableMapping, Port):
             return
 
         # In all other cases, validate all input ports explicitly specified in this port namespace
-        validation_error = self.validate_ports(port_values, breadcrumbs_local)
+        validation_error = self.validate_ports(port_values)
         if validation_error:
             return validation_error
 
         # If any port_values remain, validate against the dynamic properties of the namespace
-        validation_error = self.validate_dynamic_ports(port_values, breadcrumbs)
+        validation_error = self.validate_dynamic_ports(port_values)
         if validation_error:
             return validation_error
 
@@ -694,7 +719,7 @@ class PortNamespace(collections.MutableMapping, Port):
             if message is not None:
                 assert isinstance(message, str), \
                     "Validator returned something other than None or str: '{}'".format(type(message))
-                return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
+                return PortValidationError(message, breadcrumbs_to_port(self.breadcrumbs))
 
     def pre_process(self, port_values):
         """Map port values onto the port namespace, filling in values for ports with a default.
@@ -729,24 +754,22 @@ class PortNamespace(collections.MutableMapping, Port):
 
         return utils.AttributesFrozendict(port_values)
 
-    def validate_ports(self, port_values, breadcrumbs):
+    def validate_ports(self, port_values):
         """
         Validate port values with respect to the explicitly defined ports of the port namespace.
         Ports values that are matched to an actual Port will be popped from the dictionary
 
         :param port_values: an arbitrarily nested dictionary of parsed port values
         :type port_values: dict
-        :param breadcrumbs: a tuple of breadcrumbs showing the path to to the value being validated
-        :type breadcrumbs: tuple
         :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
         :rtype: typing.Optional[ValidationError]
         """
         for name, port in self._ports.items():
-            validation_error = port.validate(port_values.pop(name, UNSPECIFIED), breadcrumbs)
+            validation_error = port.validate(port_values.pop(name, UNSPECIFIED))
             if validation_error:
                 return validation_error
 
-    def validate_dynamic_ports(self, port_values, breadcrumbs=()):
+    def validate_dynamic_ports(self, port_values):
         """
         Validate port values with respect to the dynamic properties of the port namespace. It will
         check if the namespace is actually dynamic and if all values adhere to the valid types of
@@ -754,23 +777,19 @@ class PortNamespace(collections.MutableMapping, Port):
 
         :param port_values: an arbitrarily nested dictionary of parsed port values
         :type port_values: dict
-        :param breadcrumbs: a tuple of the path to having reached this point in validation
-        :type breadcrumbs: typing.Tuple[str]
         :return: if invalid returns a string with the reason for the validation failure, otherwise None
         :rtype: typing.Optional[str]
         """
-        breadcrumbs += (self.name,)
-
         if port_values and not self.dynamic:
             msg = 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
-            return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs))
+            return PortValidationError(msg, breadcrumbs_to_port(self.breadcrumbs))
 
         if self.valid_type is not None:
             valid_type = self.valid_type
             for port_name, port_value in port_values.items():
                 if not isinstance(port_value, valid_type):
                     msg = 'Invalid type {} for dynamic port value: expected {}'.format(type(port_value), valid_type)
-                    return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs + (port_name,)))
+                    return PortValidationError(msg, breadcrumbs_to_port(self.breadcrumbs + (port_name,)))
 
     @staticmethod
     def strip_namespace(namespace, separator, rules=None):
@@ -803,14 +822,3 @@ class PortNamespace(collections.MutableMapping, Port):
                 stripped.append(rule[len(prefix):])
 
         return stripped
-
-
-def breadcrumbs_to_port(breadcrumbs):
-    """Convert breadcrumbs to a string representing the port
-
-    :param breadcrumbs: a tuple of the path to the port
-    :type breadcrumbs: typing.Tuple[str]
-    :return: the port string
-    :rtype: str
-    """
-    return PortNamespace.NAMESPACE_SEPARATOR.join(breadcrumbs)
