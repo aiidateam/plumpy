@@ -738,7 +738,9 @@ class Process(StateMachine, persistence.Savable):
 
     @super_check
     def on_except(self, exc_info):
-        self.future().set_exception(exc_info[1])
+        exception = exc_info[1]
+        exception.__traceback__ = exc_info[2]
+        self.future().set_exception(exception)
 
     @super_check
     def on_excepted(self):
@@ -1090,8 +1092,7 @@ class Process(StateMachine, persistence.Savable):
                 raise
             except Exception:  # pylint: disable=broad-except
                 # Overwrite the next state to go to excepted directly
-                exc_info = sys.exc_info()
-                next_state = self.create_state(process_states.ProcessState.EXCEPTED, exc_info[1], exc_info[2])
+                next_state = self.create_state(process_states.ProcessState.EXCEPTED, *sys.exc_info()[1:])
                 self._set_interrupt_action(None)
 
             if self._interrupt_action:

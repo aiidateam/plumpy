@@ -175,7 +175,7 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         self.assertTrue(proc.pause())
 
         # Send a play message
-        play_future = self.process_controller.pause_process(proc.pid)
+        play_future = self.process_controller.play_process(proc.pid)
         # Allow the process to respond to the request
         result = yield play_future
 
@@ -187,13 +187,14 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
     def test_kill(self):
         proc = test_utils.WaitForSignalProcess(communicator=self.communicator)
 
-        # Send a play message
-        kill_future = self.process_controller.kill_process(proc.pid)
+        # Send a kill message
+        kill_future = yield self.process_controller.kill_process(proc.pid)
         # Allow the process to respond to the request
         result = yield kill_future
 
         # Check the outcome
         self.assertTrue(result)
+        # Occasionally fail
         self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
 
     @testing.gen_test

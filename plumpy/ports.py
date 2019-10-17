@@ -2,13 +2,17 @@
 """Module for process ports"""
 from __future__ import absolute_import
 import abc
-import collections
 import copy
 import json
 import logging
 import six
 
-from plumpy.utils import is_mutable_property
+from plumpy.utils import is_mutable_property, type_check
+
+if six.PY2:
+    import collections
+else:
+    import collections.abc as collections
 
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
@@ -356,6 +360,7 @@ class PortNamespace(collections.MutableMapping, Port):
     A container for Ports. Effectively it maintains a dictionary whose members are
     either a Port or yet another PortNamespace. This allows for the nesting of ports
     """
+
     NAMESPACE_SEPARATOR = '.'
 
     def __init__(self,
@@ -365,12 +370,28 @@ class PortNamespace(collections.MutableMapping, Port):
                  validator=None,
                  valid_type=None,
                  default=UNSPECIFIED,
-                 dynamic=False):
+                 dynamic=False,
+                 populate_defaults=True):
+        """Construct a port namespace.
+
+        :param name: the name of the namespace
+        :param help: the help string
+        :param required: boolean, if `True` the validation will fail if no value is specified for this namespace
+        :param validator: an optional validator for the namespace
+        :param valid_type: optional tuple of valid types in the case of a dynamic namespace
+        :param default: default value for the port
+        :param dynamic: boolean, if `True`, the namespace will accept values even when no explicit port is defined
+        :param populate_defaults: boolean, when set to `False`, the populating of defaults for this namespace is skipped
+            entirely, including all nested namespaces, if no explicit value is passed for this port in the parent
+            namespace. As soon as a value is specified in the parent namespace for this port, even if it is empty, this
+            property is ignored and the population of defaults is always performed.
+        """
         super(PortNamespace, self).__init__(
             name=name, help=help, required=required, validator=validator, valid_type=valid_type)
         self._ports = {}
         self._default = default
         self._dynamic = dynamic
+        self._populate_defaults = populate_defaults
 
     def __str__(self):
         return json.dumps(self.get_description(), sort_keys=True, indent=4)
@@ -433,6 +454,14 @@ class PortNamespace(collections.MutableMapping, Port):
             self.dynamic = True
 
         super(PortNamespace, self.__class__).valid_type.fset(self, valid_type)
+
+    @property
+    def populate_defaults(self):
+        return self._populate_defaults
+
+    @populate_defaults.setter
+    def populate_defaults(self, populate_defaults):
+        self._populate_defaults = populate_defaults
 
     def get_description(self):
         """
@@ -521,9 +550,9 @@ class PortNamespace(collections.MutableMapping, Port):
         else:
             return self[port_name]
 
-    def absorb(self, port_namespace, exclude=(), include=None, namespace_options={}):
-        """
-        Absorb another PortNamespace instance into oneself, including all its mutable properties and ports.
+    def absorb(self, port_namespace, exclude=None, include=None, namespace_options=None):
+        """Absorb another PortNamespace instance into oneself, including all its mutable properties and ports.
+
         Mutable properties of self will be overwritten with those of the port namespace that is to be absorbed.
         The same goes for the ports, meaning that any ports with a key that already exists in self will
         be overwritten. The namespace_options dictionary can be used to yet override the mutable properties of
@@ -539,6 +568,16 @@ class PortNamespace(collections.MutableMapping, Port):
         if not isinstance(port_namespace, PortNamespace):
             raise ValueError('port_namespace has to be an instance of PortNamespace')
 
+        if exclude is not None and include is not None:
+            raise ValueError('exclude and include are mutually exclusive')
+        elif exclude is not None:
+            type_check(exclude, (list, tuple))
+        elif include is not None:
+            type_check(include, (list, tuple))
+
+        if namespace_options is None:
+            namespace_options = {}
+
         # Overload mutable attributes of PortNamespace unless overridden by value in namespace_options
         for attr in dir(port_namespace):
             if is_mutable_property(PortNamespace, attr):
@@ -553,8 +592,36 @@ class PortNamespace(collections.MutableMapping, Port):
 
         absorbed_ports = []
 
-        for port_name, port in self._filter_ports(list(port_namespace.items()), exclude=exclude, include=include):
-            self[port_name] = copy.deepcopy(port)
+        for port_name, port in port_namespace.items():
+
+            # If the current port name occurs in the exclude list, simply skip it entirely, there is no need to consider
+            # any of the nested ports it might have, even if it is a port namespace
+            if exclude and port_name in exclude:
+                continue
+
+            if isinstance(port, PortNamespace):
+
+                # If the name does not appear at the start of any of the include rules we continue:
+                if include and not any([rule.startswith(port_name) for rule in include]):
+                    continue
+
+                # Determine the sub exclude and include rules for this specific namespace
+                sub_exclude = self.strip_namespace(port_name, self.NAMESPACE_SEPARATOR, exclude)
+                sub_include = self.strip_namespace(port_name, self.NAMESPACE_SEPARATOR, include)
+
+                # Create a new namespace at `port_name` and copy the original port namespace itself such that we keep
+                # all its mutable properties, but reset its ports, since those will be taken care of by the recursive
+                # absorb call that will properly consider the include and exclude rules
+                self[port_name] = copy.copy(port)
+                self[port_name]._ports = {}
+                self[port_name].absorb(port, sub_exclude, sub_include)
+            else:
+                # If include rules are specified but the port name does not appear, simply skip it
+                if include and port_name not in include:
+                    continue
+
+                self[port_name] = copy.deepcopy(port)
+
             absorbed_ports.append(port_name)
 
         return absorbed_ports
@@ -634,7 +701,13 @@ class PortNamespace(collections.MutableMapping, Port):
 
         for name, port in self.items():
 
+            # If the port was not specified in the inputs values and the port is a namespace with the property
+            # `populate_defaults=False`, we skip the pre-processing and do not populate defaults.
+            if name not in port_values and isinstance(port, PortNamespace) and not port.populate_defaults:
+                continue
+
             if name not in port_values:
+
                 if port.has_default():
                     port_value = port.default
                 elif isinstance(port, PortNamespace):
@@ -695,34 +768,40 @@ class PortNamespace(collections.MutableMapping, Port):
                     return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs + (port_name,)))
 
     @staticmethod
-    def _filter_ports(items, exclude, include):
+    def strip_namespace(namespace, separator, rules=None):
+        """Filter given exclude/include rules staring with namespace and strip the first level.
+
+        For example if the namespace is `base` and the rules are::
+
+            ('base.a', 'base.sub.b','relax.base.c', 'd')
+
+        the function will return::
+
+            ('a', 'sub.c')
+
+        If the rules are `None`, that is what is returned as well.
+
+        :param namespace: the string name of the namespace
+        :param separator: the namespace separator string
+        :param rules: the list or tuple of exclude or include rules to strip
+        :return: `None` if `rules=None` or the list of stripped rules
         """
-        Convenience generator that will filter the items based on its keys and the exclude/include tuples.
-        The exclude and include tuples are mutually exclusive and only one should be defined. A key in items
-        will only be yielded if it appears in include or does not appear in exclude, otherwise it will be skipped
+        if rules is None:
+            return rules
 
-        :param items: a mapping of port names and Ports
-        :param exclude: a tuple of port names that are to be skipped
-        :param include: a tuple of port names that are the only ones to be yielded
-        :returns: tuple of port name and Port
-        """
-        if exclude and include is not None:
-            raise ValueError('exclude and include are mutually exclusive')
+        stripped = []
 
-        for name, port in items:
-            if include is not None:
-                if name not in include:
-                    continue
-            else:
-                if name in exclude:
-                    continue
+        prefix = '{}{}'.format(namespace, separator)
 
-            yield name, port
+        for rule in rules:
+            if rule.startswith(prefix):
+                stripped.append(rule[len(prefix):])
+
+        return stripped
 
 
 def breadcrumbs_to_port(breadcrumbs):
-    """
-    Convert breadcrumbs to a string representing the port
+    """Convert breadcrumbs to a string representing the port
 
     :param breadcrumbs: a tuple of the path to the port
     :type breadcrumbs: typing.Tuple[str]

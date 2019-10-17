@@ -3,9 +3,13 @@
 from __future__ import absolute_import
 import abc
 import collections
-import inspect
 import re
 import six
+
+if six.PY2:
+    from inspect import getargspec as get_arg_spec
+else:
+    from inspect import getfullargspec as get_arg_spec
 
 from . import lang
 from . import mixins
@@ -235,7 +239,7 @@ class _FunctionCall(_Instruction):
 
     def __init__(self, func):
         try:
-            args = inspect.getargspec(func)[0]
+            args = get_arg_spec(func)[0]
         except TypeError:
             raise TypeError("func is not a function, got {}".format(type(func)))
         if len(args) != 1:
