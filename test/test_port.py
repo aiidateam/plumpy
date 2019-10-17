@@ -74,14 +74,16 @@ class TestPortNamespace(TestCase):
         """Test validate method of a `PortNamespace`."""
 
         def validator(port_values):
-            if port_values['integer'] < 0:
+            if port_values['explicit'] < 0 or port_values['dynamic'] < 0:
                 return 'Only positive integers allowed'
 
+        self.port_namespace['explicit'] = InputPort('explicit', valid_type=int)
         self.port_namespace.validator = validator
         self.port_namespace.valid_type = int
 
-        self.assertIsNone(self.port_namespace.validate({'integer': 5}))
-        self.assertIsNotNone(self.port_namespace.validate({'integer': -5}))
+        # The explicit ports will be validated first before the namespace validator is called.
+        self.assertIsNone(self.port_namespace.validate({'explicit': 1, 'dynamic': 5}))
+        self.assertIsNotNone(self.port_namespace.validate({'dynamic': -5}))
 
     def test_port_namespace_dynamic(self):
         """
