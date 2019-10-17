@@ -17,6 +17,17 @@ class TestInputPort(TestCase):
     def test_validator(self):
         """Test the validator functionality."""
 
+        def integer_validator(value, ctx):
+            if value < 0:
+                return 'Only positive integers allowed'
+
+        port = InputPort('test', validator=integer_validator)
+        self.assertIsNone(port.validate(5))
+        self.assertIsNotNone(port.validate(-5))
+
+    def test_validator_depreacted(self):
+        """Test the validator functionality."""
+
         def integer_validator(value):
             if value < 0:
                 return 'Only positive integers allowed'
@@ -73,7 +84,7 @@ class TestPortNamespace(TestCase):
     def test_port_namespace_validation(self):
         """Test validate method of a `PortNamespace`."""
 
-        def validator(port_values):
+        def validator(port_values, ctx):
             if port_values['explicit'] < 0 or port_values['dynamic'] < 0:
                 return 'Only positive integers allowed'
 

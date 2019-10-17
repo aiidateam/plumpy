@@ -34,7 +34,6 @@ from . import events
 from . import persistence
 from . import process_comms
 from . import process_states
-from . import ports
 from . import utils
 
 # pylint: disable=too-many-lines
@@ -645,7 +644,10 @@ class Process(StateMachine, persistence.Savable):
         # This will parse the inputs with respect to the input portnamespace of the spec and validate them
         raw_inputs = dict(self._raw_inputs) if self._raw_inputs else {}
         self._parsed_inputs = self.spec().inputs.pre_process(raw_inputs)
-        result = self.spec().inputs.validate(self._parsed_inputs)
+
+        # Pass a shallow clone of the parsed inputs as the `context`, to prevent validators altering the parsed inputs
+        context = copy.copy(self._parsed_inputs)
+        result = self.spec().inputs.validate(self._parsed_inputs, context)
 
         if result is not None:
             raise ValueError(result)

@@ -11,8 +11,10 @@ from plumpy.utils import is_mutable_property, type_check
 
 if six.PY2:
     import collections
+    from inspect import getargspec as get_arg_spec
 else:
     import collections.abc as collections
+    from inspect import getfullargspec as get_arg_spec
 
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
@@ -143,7 +145,7 @@ class ValueSpec(object):
     def validator(self, validator):
         self._validator = validator
 
-    def validate(self, value):
+    def validate(self, value, ctx=None):
         """
         Validate the value against this specification
 
@@ -161,8 +163,12 @@ class ValueSpec(object):
                     self.name, type(value), self._valid_type)
                 return msg
 
-        if self._validator is not None:
-            result = self._validator(value)
+        if self.validator is not None:
+            spec = get_arg_spec(self.validator)
+            if len(spec[0]) == 1:
+                result = self.validator(value)
+            else:
+                result = self.validator(value, ctx)
             if result is not None:
                 assert isinstance(result, str), "Validator returned non string type"
                 return result
@@ -302,7 +308,7 @@ class Port(object):
         """
         self._value_spec.validator = validator
 
-    def validate(self, value):
+    def validate(self, value, ctx=None):
         """
         Validate a value to see if it is valid for this port
 
@@ -311,7 +317,7 @@ class Port(object):
         :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
         :rtype: typing.Optional[ValidationError]
         """
-        validation_error = self._value_spec.validate(value)
+        validation_error = self._value_spec.validate(value, ctx)
         if validation_error:
             return PortValidationError(validation_error, breadcrumbs_to_port(self.breadcrumbs))
 
@@ -346,7 +352,7 @@ class InputPort(Port):
                          "because a default was specified".format(name))
 
         if default is not UNSPECIFIED:
-            validation_error = self.validate(default)
+            validation_error = self.validate(default, ctx=None)
             if validation_error:
                 raise ValueError("Invalid default value: {}".format(validation_error.message))
 
@@ -675,7 +681,7 @@ class PortNamespace(collections.MutableMapping, Port):
 
         return result
 
-    def validate(self, port_values=None):
+    def validate(self, port_values=None, ctx=None):
         """
         Validate the namespace port itself and subsequently all the port_values it contains
 
@@ -704,7 +710,7 @@ class PortNamespace(collections.MutableMapping, Port):
             return
 
         # In all other cases, validate all input ports explicitly specified in this port namespace
-        validation_error = self.validate_ports(port_values)
+        validation_error = self.validate_ports(port_values, ctx)
         if validation_error:
             return validation_error
 
@@ -715,7 +721,13 @@ class PortNamespace(collections.MutableMapping, Port):
 
         # Validate the validator after the ports themselves, as it most likely will rely on the port values
         if self.validator is not None:
-            message = self.validator(port_values_clone)
+
+            spec = get_arg_spec(self.validator)
+            if len(spec[0]) == 1:
+                message = self.validator(port_values_clone)
+            else:
+                message = self.validator(port_values_clone, ctx)
+
             if message is not None:
                 assert isinstance(message, str), \
                     "Validator returned something other than None or str: '{}'".format(type(message))
@@ -754,7 +766,7 @@ class PortNamespace(collections.MutableMapping, Port):
 
         return utils.AttributesFrozendict(port_values)
 
-    def validate_ports(self, port_values):
+    def validate_ports(self, port_values, ctx=None):
         """
         Validate port values with respect to the explicitly defined ports of the port namespace.
         Ports values that are matched to an actual Port will be popped from the dictionary
@@ -765,7 +777,7 @@ class PortNamespace(collections.MutableMapping, Port):
         :rtype: typing.Optional[ValidationError]
         """
         for name, port in self._ports.items():
-            validation_error = port.validate(port_values.pop(name, UNSPECIFIED))
+            validation_error = port.validate(port_values.pop(name, UNSPECIFIED), ctx)
             if validation_error:
                 return validation_error
 
