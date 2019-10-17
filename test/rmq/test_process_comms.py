@@ -194,6 +194,7 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
 
         # Check the outcome
         self.assertTrue(result)
+        # Occasionally fail
         self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
 
     @testing.gen_test
