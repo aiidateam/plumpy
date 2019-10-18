@@ -7,6 +7,7 @@ class MyCls(object):
 
 
 class TestDefaultObjectLoader(unittest.TestCase):
+
     def test_simple_load(self):
         loader = plumpy.DefaultObjectLoader()
         identifier = loader.identify_object(MyCls)
@@ -14,7 +15,9 @@ class TestDefaultObjectLoader(unittest.TestCase):
         self.assertIs(MyCls, cls)
 
     def test_custom_loader(self):
+
         class CustomClassLoader(plumpy.ObjectLoader):
+
             def identify_object(self, obj):
                 if obj is MyCls:
                     return 'MyCls'
@@ -26,3 +29,11 @@ class TestDefaultObjectLoader(unittest.TestCase):
         loader = CustomClassLoader()
         cls = loader.load_object(loader.identify_object(MyCls))
         self.assertIs(MyCls, cls)
+
+    def test_load_failure(self):
+        loader = plumpy.DefaultObjectLoader()
+        identifier = loader.identify_object(MyCls)
+        broken_identifer = identifier + 'NotExistingClass'
+
+        with self.assertRaises(ImportError):
+            loader.load_object(broken_identifer)

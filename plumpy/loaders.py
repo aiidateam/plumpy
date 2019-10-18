@@ -48,13 +48,13 @@ class DefaultObjectLoader(ObjectLoader):
         mod, name = identifier.split(":")
         try:
             mod = importlib.import_module(mod)
-        except ImportError as e:
-            raise ValueError("module '{}' from identifier '{}' could not be loaded".format(mod, identifier))
+        except ImportError:
+            raise ImportError("module '{}' from identifier '{}' could not be loaded".format(mod, identifier))
         else:
             try:
                 return getattr(mod, name)
             except AttributeError:
-                raise ValueError("object '{}' form identifier '{}' could not be loaded".format(name, identifier))
+                raise ImportError("object '{}' form identifier '{}' could not be loaded".format(name, identifier))
 
     def identify_object(self, obj):
         identifier = "{}:{}".format(obj.__module__, obj.__name__)
