@@ -4,6 +4,7 @@ from __future__ import absolute_import
 import abc
 import re
 import six
+from collections import OrderedDict
 
 if six.PY2:
     from inspect import getargspec as get_arg_spec
@@ -11,7 +12,7 @@ if six.PY2:
 else:
     from inspect import getfullargspec as get_arg_spec
     import collections.abc as collections
-    
+
 from . import lang
 from . import mixins
 from . import persistence
@@ -486,7 +487,7 @@ class _If(_Instruction, collections.Sequence):
         return _IfStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
-        description = collections.OrderedDict()
+        description = OrderedDict()
 
         description['if({})'.format(self._ifs[0].predicate.__name__)] = self._ifs[0].body.get_description()
         for conditional in self._ifs[1:]:
