@@ -318,9 +318,13 @@ class InputPort(Port):
                          "because a default was specified".format(name))
 
         if default is not UNSPECIFIED:
-            validation_error = self.validate(default)
-            if validation_error:
-                raise ValueError("Invalid default value: {}".format(validation_error.message))
+
+            # Only validate the default value if it is not a callable. If it is a callable its return value will always
+            # be validated when the port is validated upon process construction, if the default is was actually used.
+            if not callable(default):
+                validation_error = self.validate(default)
+                if validation_error:
+                    raise ValueError("Invalid default value: {}".format(validation_error.message))
 
         self._default = default
 
@@ -714,7 +718,11 @@ class PortNamespace(collections.MutableMapping, Port):
             if name not in port_values:
 
                 if port.has_default():
-                    port_value = port.default
+                    default = port.default
+                    if callable(default):
+                        port_value = default()
+                    else:
+                        port_value = default
                 elif isinstance(port, PortNamespace):
                     port_value = {}
                 else:

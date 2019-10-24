@@ -1,4 +1,6 @@
 from __future__ import absolute_import
+
+import types
 from .utils import TestCase
 
 from plumpy.ports import InputPort, OutputPort, PortNamespace
@@ -24,6 +26,24 @@ class TestInputPort(TestCase):
         port = InputPort('test', validator=integer_validator)
         self.assertIsNone(port.validate(5))
         self.assertIsNotNone(port.validate(-5))
+
+    def test_lambda_default(self):
+        """Test a default with a lambda."""
+        from plumpy.ports import UNSPECIFIED
+
+        # The default should not be evaluated upon construction, so even if it will return an incorrect type, the
+        # following call should not fail
+        InputPort('lambda_default', default=lambda: 'string', valid_type=int)
+
+        port = InputPort('test', default=lambda: 5)
+
+        self.assertIsNone(port.validate(UNSPECIFIED))
+        self.assertIsNone(port.validate(3))
+
+        # Testing that passing an actual lambda as a value is alos possible
+        port = InputPort('test', valid_type=(types.FunctionType, int), default=lambda: 5)
+        some_lambda = lambda: 'string'
+        self.assertIsNone(port.validate(some_lambda))
 
 
 class TestOutputPort(TestCase):
@@ -238,3 +258,22 @@ class TestPortNamespace(TestCase):
 
         # Because the namespace is lazy and no inputs were passed, the defaults should not have been populated.
         self.assertEqual(pre_processed, {})
+
+    def test_port_namespace_lambda_defaults(self):
+        """Verify that lambda defaults are accepted and properly evaluated."""
+        port_namespace = PortNamespace('base')
+        port_namespace['lambda_default'] = InputPort('lambda_default', default=lambda: 1, valid_type=(types.FunctionType, int))
+
+        inputs = port_namespace.pre_process({})
+        self.assertEqual(inputs['lambda_default'], 1)
+        self.assertIsNone(port_namespace.validate(inputs))
+
+        inputs = port_namespace.pre_process({'lambda_default': 5})
+        self.assertEqual(inputs['lambda_default'], 5)
+        self.assertIsNone(port_namespace.validate(inputs))
+
+        # When passing a lambda directly as the value, it should NOT be evaluated during pre_processing
+        some_lambda = lambda: 5
+        inputs = port_namespace.pre_process({'lambda_default': some_lambda})
+        self.assertEqual(inputs['lambda_default'], some_lambda)
+        self.assertIsNone(port_namespace.validate(inputs))
