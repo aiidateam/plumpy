@@ -318,9 +318,13 @@ class InputPort(Port):
                          "because a default was specified".format(name))
 
         if default is not UNSPECIFIED:
-            validation_error = self.validate(default)
-            if validation_error:
-                raise ValueError("Invalid default value: {}".format(validation_error.message))
+
+            # Only validate the default value if it is not a callable. If it is a callable its return value will always
+            # be validated when the port is validated upon process construction, if the default is was actually used.
+            if not callable(default):
+                validation_error = self.validate(default)
+                if validation_error:
+                    raise ValueError("Invalid default value: {}".format(validation_error.message))
 
         self._default = default
 
@@ -666,30 +670,35 @@ class PortNamespace(collections.MutableMapping, Port):
             message = 'specified value is of type {} which is not sub class of `Mapping`'.format(type(port_values))
             return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
 
+        # Turn the port values into a normal dictionary and create a shallow copy. The `validate_ports` method to which
+        # the `port_values` will be passed, will pop the values corresponding to explicit ports. This is necessary for
+        # the `validate_dynamic_ports` to correctly detect any implicit ports. However, the `validator` will expect the
+        # entire original input namespace to be there. Since the latter has to be called after the ports have been
+        # validated, we need to create a clone of the port values here.
         port_values = dict(port_values)
-
-        # Validate the validator first as it most likely will rely on the port values
-        if self.validator is not None:
-            message = self.validator(port_values)
-            if message is not None:
-                assert isinstance(message, str), \
-                    "Validator returned something other than None or str: '{}'".format(type(message))
-                return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
+        port_values_clone = port_values.copy()
 
         # If the namespace is not required and there are no port_values specified, consider it valid
         if not port_values and not self.required:
             return
 
         # In all other cases, validate all input ports explicitly specified in this port namespace
-        else:
-            validation_error = self.validate_ports(port_values, breadcrumbs_local)
-            if validation_error:
-                return validation_error
+        validation_error = self.validate_ports(port_values, breadcrumbs_local)
+        if validation_error:
+            return validation_error
 
         # If any port_values remain, validate against the dynamic properties of the namespace
         validation_error = self.validate_dynamic_ports(port_values, breadcrumbs)
         if validation_error:
             return validation_error
+
+        # Validate the validator after the ports themselves, as it most likely will rely on the port values
+        if self.validator is not None:
+            message = self.validator(port_values_clone)
+            if message is not None:
+                assert isinstance(message, str), \
+                    "Validator returned something other than None or str: '{}'".format(type(message))
+                return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
 
     def pre_process(self, port_values):
         """Map port values onto the port namespace, filling in values for ports with a default.
@@ -709,7 +718,11 @@ class PortNamespace(collections.MutableMapping, Port):
             if name not in port_values:
 
                 if port.has_default():
-                    port_value = port.default
+                    default = port.default
+                    if callable(default):
+                        port_value = default()
+                    else:
+                        port_value = default
                 elif isinstance(port, PortNamespace):
                     port_value = {}
                 else:
