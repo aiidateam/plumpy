@@ -448,21 +448,24 @@ class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
     Takes incoming task messages and uses them to launch processes.
 
     Expected format of task:
-    For launch:
-    {
-        'task': [LAUNCH_TASK]
-        'process_class': [Process class to launch]
-        'args': [tuple of positional args for process constructor]
-        'kwargs': [dict of keyword args for process constructor].
-        'nowait': True or False
-    }
 
-    For continue
-    {
-        'task': [CONTINUE_TASK]
-        'pid': [Process ID]
-        'nowait': True or False
-    }
+    For launch::
+
+        {
+            'task': <LAUNCH_TASK>
+            'process_class': <Process class to launch>
+            'args': <tuple of positional args for process constructor>
+            'kwargs': <dict of keyword args for process constructor>.
+            'nowait': True or False
+        }
+
+    For continue::
+
+        {
+            'task': <CONTINUE_TASK>
+            'pid': <Process ID>
+            'nowait': True or False
+        }
     """
 
     def __init__(self, loop=None, persister=None, load_context=None, loader=None):

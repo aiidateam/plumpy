@@ -22,3 +22,12 @@ install:
 
 script:
   - py.test
+
+jobs:
+  include:
+    - stage: docs-test
+      python: 3.6
+      install:
+          - pip install .[dev,docs]
+      script:
+          - sphinx-build -nT -b dummy docs/source build/html
