@@ -1,7 +1,12 @@
 """The state machine for processes"""
 
 from __future__ import absolute_import
-import collections
+
+# ABC imports that support python 2 & 3
+try:
+    from collections.abc import Iterable
+except ImportError:
+    from collections import Iterable
 import enum
 import functools
 import inspect
@@ -21,7 +26,6 @@ _LOGGER = logging.getLogger(__name__)
 
 class StateMachineError(Exception):
     """Base class for state machine errors"""
-    pass
 
 
 class StateEntryFailed(Exception):
@@ -229,7 +233,7 @@ class StateMachine(object):
             pass
 
         cls.STATES = cls.get_states()
-        assert isinstance(cls.STATES, collections.Iterable)
+        assert isinstance(cls.STATES, Iterable)
 
         # Build the states map
         cls._STATES_MAP = {}

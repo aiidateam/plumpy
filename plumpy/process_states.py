@@ -1,11 +1,7 @@
 from __future__ import absolute_import
 from enum import Enum
 import sys
-
-from plumpy.lang import NULL
-from tornado.gen import coroutine, Return
 import traceback
-import yaml
 
 try:
     import tblib
@@ -14,10 +10,14 @@ try:
 except ImportError:
     _HAS_TBLIB = False
 
+from tornado.gen import coroutine, Return
+import yaml
+
 from . import futures
 from .base import state_machine
 from . import persistence
 from .persistence import auto_persist
+from .lang import NULL
 from . import utils
 from . import exceptions
 
@@ -348,7 +348,7 @@ class Excepted(State):
 
     def load_instance_state(self, saved_state, load_context):
         super(Excepted, self).load_instance_state(saved_state, load_context)
-        self.exception = yaml.load(saved_state[self.EXC_VALUE])
+        self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=yaml.Loader)
         if _HAS_TBLIB:
             try:
                 self.traceback = \
