@@ -179,14 +179,19 @@ class Process(StateMachine, persistence.Savable):
         try:
             return cls.__getattribute__(cls, '_spec')
         except AttributeError:
-            cls._spec = cls._spec_class()
-            cls.__called = False
-            cls.define(cls._spec)
-            assert cls.__called, \
-                "Process.define() was not called by {}\n" \
-                "Hint: Did you forget to call the superclass method in your define? " \
-                "Try: super({}, cls).define(spec)".format(cls, cls.__name__)
-            return cls._spec
+            try:
+                cls._spec = cls._spec_class()
+                cls.__called = False
+                cls.define(cls._spec)
+                assert cls.__called, \
+                    "Process.define() was not called by {}\n" \
+                    "Hint: Did you forget to call the superclass method in your define? " \
+                    "Try: super({}, cls).define(spec)".format(cls, cls.__name__)
+                return cls._spec
+            except Exception:
+                del cls._spec
+                cls.__called = False
+                raise
 
     @classmethod
     def get_name(cls):

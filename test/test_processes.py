@@ -143,6 +143,22 @@ class TestProcess(utils.AsyncTestCase):
         self.assertIn('sub', process.inputs.namespace)
         self.assertEqual(process.inputs.namespace.sub, True)
 
+    def test_raise_in_define(self):
+        """Process which raises in its 'define' method. Check that the spec is not set."""
+
+        class BrokenProcess(Process):
+            @classmethod
+            def define(cls, spec):
+                super(BrokenProcess, cls).define(spec)
+                raise ValueError
+
+        with self.assertRaises(ValueError):
+            BrokenProcess.spec()
+        # Check that the error is still raised when calling .spec()
+        # a second time.
+        with self.assertRaises(ValueError):
+            BrokenProcess.spec()
+
     def test_execute(self):
         proc = test_utils.DummyProcessWithOutput()
         proc.execute()
