@@ -30,14 +30,14 @@ git commit --no-verify -m "Release ${version}"
 
 
 # Merge into master
-
 git checkout master
-git merge --no-ff $relbranch
+git merge $relbranch
+
 # Tag the thing
 git tag -a $tag -m "Version $version"
 
 git checkout $current_branch
-git merge master
+git merge $relbranch
 
 git branch -d $relbranch
 
@@ -45,9 +45,7 @@ git branch -d $relbranch
 git push --tags origin master $current_branch
 
 # Release on pypi
-rm -r dist
-rm -r build
-rm -r *.egg-info
+rm -r dist build *.egg-info
 python setup.py sdist
 python setup.py bdist_wheel --universal
 
