@@ -32,7 +32,7 @@ setup(name='plumpy',
       install_requires=[
           'frozendict',
           'tornado>=4.1, <5.0',
-          'PyYAML>=3.13'
+          'pyyaml~=5.1.2',
           'pika>=1.0.0',
           'kiwipy[rmq]>=0.5.2',
           'enum34; python_version<"3.4"',
