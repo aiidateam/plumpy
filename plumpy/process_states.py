@@ -348,7 +348,7 @@ class Excepted(State):
 
     def load_instance_state(self, saved_state, load_context):
         super(Excepted, self).load_instance_state(saved_state, load_context)
-        self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=yaml.Loader)
+        self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=yaml.FullLoader)
         if _HAS_TBLIB:
             try:
                 self.traceback = \
