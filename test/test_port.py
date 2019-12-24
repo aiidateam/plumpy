@@ -22,7 +22,8 @@ class TestPort(TestCase):
 
     def test_validator(self):
 
-        def validate(value):
+        def validate(value, port):
+            assert isinstance(port, Port)
             if not isinstance(value, int):
                 return "Not int"
             return None
@@ -46,7 +47,8 @@ class TestInputPort(TestCase):
     def test_validator(self):
         """Test the validator functionality."""
 
-        def integer_validator(value):
+        def integer_validator(value, port):
+            assert isinstance(port, Port)
             if value < 0:
                 return 'Only positive integers allowed'
 
@@ -84,8 +86,8 @@ class TestOutputPort(TestCase):
         help_string = 'Help string'
         required = False
 
-        def validator(value):
-            pass
+        def validator(value, port):
+            assert isinstance(port, Port)
 
         port = OutputPort(name, valid_type=valid_type, help=help_string, required=required, validator=validator)
         self.assertEqual(port.name, name)
@@ -120,7 +122,8 @@ class TestPortNamespace(TestCase):
     def test_port_namespace_validation(self):
         """Test validate method of a `PortNamespace`."""
 
-        def validator(port_values):
+        def validator(port_values, port):
+            assert isinstance(port, PortNamespace)
             if port_values['explicit'] < 0 or port_values['dynamic'] < 0:
                 return 'Only positive integers allowed'
 
