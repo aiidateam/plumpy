@@ -12,7 +12,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
     def setUp(self):
         super(TestExposeProcess, self).setUp()
 
-        def validator_function(input):
+        def validator_function(input, port):
             pass
 
         class BaseNamespaceProcess(NewLoopProcess):
@@ -183,7 +183,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         properties with that of the exposed process
         """
 
-        def validator_function(input):
+        def validator_function(input, port):
             pass
 
         # Define child process with all mutable properties of the inputs PortNamespace to a non-default value
@@ -230,7 +230,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         namespace_options will be the end-all-be-all
         """
 
-        def validator_function(input):
+        def validator_function(input, port):
             pass
 
         # Define child process with all mutable properties of the inputs PortNamespace to a non-default value
@@ -283,7 +283,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         namespace with the properties of the exposed port namespace
         """
 
-        def validator_function(input):
+        def validator_function(input, port):
             pass
 
         # Define child process with all mutable properties of the inputs PortNamespace to a non-default value
