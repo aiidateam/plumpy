@@ -6,18 +6,26 @@ import copy
 import json
 import logging
 import six
+import warnings
 
 from plumpy.utils import is_mutable_property, type_check
 
 if six.PY2:
     import collections
+    from inspect import getargspec as get_arg_spec
 else:
     import collections.abc as collections
+    from inspect import getfullargspec as get_arg_spec
 
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
 
 __all__ = ['UNSPECIFIED', 'PortValidationError', 'Port', 'InputPort', 'OutputPort']
+
+
+VALIDATOR_SIGNATURE_DEPRECATION_WARNING = """the validator `{}` has a signature that only takes a single argument.
+    This has been deprecated and the new signature is `validator(value, port)` where the `port` argument will be the
+    port instance to which the validator has been assigned."""
 
 
 class PortValidationError(Exception):
@@ -190,7 +198,12 @@ class Port(object):
                 self.name, type(value), self._valid_type)
 
         if not validation_error and self._validator is not None:
-            result = self.validator(value)
+            spec = get_arg_spec(self.validator)
+            if len(spec[0]) == 1:
+                warnings.warn(VALIDATOR_SIGNATURE_DEPRECATION_WARNING.format(self.validator.__name__))
+                result = self.validator(value)
+            else:
+                result = self.validator(value, self)
             if result is not None:
                 assert isinstance(result, str), "Validator returned non string type"
                 validation_error = result
@@ -606,7 +619,12 @@ class PortNamespace(collections.MutableMapping, Port):
 
         # Validate the validator after the ports themselves, as it most likely will rely on the port values
         if self.validator is not None:
-            message = self.validator(port_values_clone)
+            spec = get_arg_spec(self.validator)
+            if len(spec[0]) == 1:
+                warnings.warn(VALIDATOR_SIGNATURE_DEPRECATION_WARNING.format(self.validator.__name__))
+                message = self.validator(port_values_clone)
+            else:
+                message = self.validator(port_values_clone, self)
             if message is not None:
                 assert isinstance(message, str), \
                     "Validator returned something other than None or str: '{}'".format(type(message))

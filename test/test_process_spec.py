@@ -75,7 +75,7 @@ class TestProcessSpec(TestCase):
     def test_validator(self):
         """Test the port validator with default."""
 
-        def dict_validator(dictionary):
+        def dict_validator(dictionary, port):
             if 'key' not in dictionary or dictionary['key'] is not 'value':
                 return 'Invalid dictionary'
 
@@ -94,7 +94,7 @@ class TestProcessSpec(TestCase):
     def test_validate(self):
         """Test the global spec validator functionality."""
 
-        def is_valid(inputs):
+        def is_valid(inputs, port):
             if not ('a' in inputs) ^ ('b' in inputs):
                 return 'Must have a OR b in inputs'
             return
