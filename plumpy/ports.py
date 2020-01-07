@@ -17,7 +17,7 @@ else:
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
 
-__all__ = ['UNSPECIFIED', 'ValueSpec', 'PortValidationError', 'Port', 'InputPort', 'OutputPort']
+__all__ = ['UNSPECIFIED', 'PortValidationError', 'Port', 'InputPort', 'OutputPort']
 
 
 class PortValidationError(Exception):
@@ -55,7 +55,8 @@ class PortValidationError(Exception):
         return self._port
 
 
-class ValueSpec(object):
+@six.add_metaclass(abc.ABCMeta)
+class Port(object):
     """
     Specifications relating to a general input/output value including
     properties like whether it is required, valid types, the help string, etc.
@@ -69,8 +70,7 @@ class ValueSpec(object):
         self._validator = validator
 
     def __str__(self):
-        """
-        Get the string representing this value specification
+        """Get the string representing this port.
 
         :return: the string representation
         :rtype: str
@@ -78,10 +78,9 @@ class ValueSpec(object):
         return json.dumps(self.get_description())
 
     def get_description(self):
-        """
-        Return a description of the ValueSpec, which will be a dictionary of its attributes
+        """Return a description of the Port, which will be a dictionary of its attributes
 
-        :returns: a dictionary of the stringified ValueSpec attributes
+        :returns: a dictionary of the stringified Port attributes
         :rtype: dict
         """
         description = {
@@ -102,178 +101,78 @@ class ValueSpec(object):
 
     @property
     def valid_type(self):
-        return self._valid_type
-
-    @valid_type.setter
-    def valid_type(self, valid_type):
-        self._valid_type = valid_type
-
-    @property
-    def help(self):
-        return self._help
-
-    @help.setter
-    def help(self, help):  # pylint: disable=redefined-builtin
-        self._help = help
-
-    @property
-    def required(self):
-        return self._required
-
-    @required.setter
-    def required(self, required):
-        self._required = required
-
-    @property
-    def validator(self):
-        return self._validator
-
-    @validator.setter
-    def validator(self, validator):
-        self._validator = validator
-
-    def validate(self, value):
-        """
-        Validate the value against this specification
-
-        :param value: the value to validate
-        :type value: typing.Any
-        :return: if validation fails, returns a string containing the error message, otherwise None
-        :rtype: typing.Optional[str]
-        """
-        if value is UNSPECIFIED:
-            if self._required:
-                return "required value was not provided for '{}'".format(self.name)
-        else:
-            if self._valid_type is not None and not isinstance(value, self._valid_type):
-                msg = "value '{}' is not of the right type. Got '{}', expected '{}'".format(
-                    self.name, type(value), self._valid_type)
-                return msg
-
-        if self._validator is not None:
-            result = self._validator(value)
-            if result is not None:
-                assert isinstance(result, str), "Validator returned non string type"
-                return result
-
-        return
-
-
-@six.add_metaclass(abc.ABCMeta)
-class Port(object):
-    """
-    Specifications relating to a general input/output value including
-    properties like whether it is required, valid types, the help string, etc.
-    """
-
-    def __init__(self, name, valid_type=None, help=None, required=True, validator=None):
-        self._value_spec = ValueSpec(name, valid_type, help, required, validator)
-
-    def __str__(self):
-        """
-        Get the string representing this value specification
-
-        :return: the string representation
-        :rtype: str
-        """
-        return str(self._value_spec)
-
-    def get_description(self):
-        """
-        Return a description of the ValueSpec, which will be a dictionary of its attributes
-
-        :returns: a dictionary of the stringified ValueSpec attributes
-        :rtype: dict
-        """
-        return self._value_spec.get_description()
-
-    @property
-    def name(self):
-        return self._value_spec.name
-
-    @property
-    def valid_type(self):
-        """
-        Get the valid value type for this port if one is specified
+        """Get the valid value type for this port if one is specified
 
         :return: the value value type
         :rtype: type
         """
-        return self._value_spec.valid_type
+        return self._valid_type
 
     @valid_type.setter
     def valid_type(self, valid_type):
-        """
-        Set the valid value type for this port
+        """Set the valid value type for this port
 
         :param valid_type: the value valid type
         :type valid_type: type
         """
-        self._value_spec.valid_type = valid_type
+        self._valid_type = valid_type
 
     @property
     def help(self):
-        """
-        Get the help string for this port
+        """Get the help string for this port
 
         :return: the help string
         :rtype: str
         """
-        return self._value_spec.help
+        return self._help
 
     @help.setter
     def help(self, help):
-        """
-        Set the help string for this port
+        """Set the help string for this port
 
         :param help: the help string
         :type help: str
         """
-        self._value_spec.help = help
+        self._help = help
 
     @property
     def required(self):
-        """
-        Is this port required?
+        """Is this port required?
 
         :return: True if required, False otherwise
         :rtype: bool
         """
-        return self._value_spec.required
+        return self._required
 
     @required.setter
     def required(self, required):
-        """
-        Set whether this port is required or not
+        """Set whether this port is required or not
 
         :return: True if required, False otherwise
         :type required: bool
         """
-        self._value_spec.required = required
+        self._required = required
 
     @property
     def validator(self):
-        """
-        Get the validator for this port
+        """Get the validator for this port
 
         :return: the validator
         :rtype: typing.Callable[[typing.Any], typing.Tuple[bool, typing.Optional[str]]]
         """
-        return self._value_spec.validator
+        return self._validator
 
     @validator.setter
     def validator(self, validator):
-        """
-        Set the validator for this port
+        """Set the validator for this port
 
         :param validator: a validator function
         :type validator: typing.Callable[[typing.Any], typing.Tuple[bool, typing.Optional[str]]]
         """
-        self._value_spec.validator = validator
+        self._validator = validator
 
     def validate(self, value, breadcrumbs=()):
-        """
-        Validate a value to see if it is valid for this port
+        """Validate a value to see if it is valid for this port
 
         :param value: the value to check
         :type value: typing.Any
@@ -282,7 +181,20 @@ class Port(object):
         :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
         :rtype: typing.Optional[ValidationError]
         """
-        validation_error = self._value_spec.validate(value)
+        validation_error = None
+
+        if value is UNSPECIFIED and self._required:
+            validation_error = "required value was not provided for '{}'".format(self.name)
+        elif value is not UNSPECIFIED and self._valid_type is not None and not isinstance(value, self._valid_type):
+            validation_error = "value '{}' is not of the right type. Got '{}', expected '{}'".format(
+                self.name, type(value), self._valid_type)
+
+        if not validation_error and self._validator is not None:
+            result = self.validator(value)
+            if result is not None:
+                assert isinstance(result, str), "Validator returned non string type"
+                validation_error = result
+
         if validation_error:
             breadcrumbs += (self.name,)
             return PortValidationError(validation_error, breadcrumbs_to_port(breadcrumbs))
