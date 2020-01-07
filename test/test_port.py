@@ -3,7 +3,34 @@ from __future__ import absolute_import
 import types
 from .utils import TestCase
 
-from plumpy.ports import InputPort, OutputPort, PortNamespace
+from plumpy.ports import Port, InputPort, OutputPort, PortNamespace, UNSPECIFIED
+
+
+class TestPort(TestCase):
+
+    def test_required(self):
+        spec = Port("required_value", required=True)
+
+        self.assertIsNotNone(spec.validate(UNSPECIFIED))
+        self.assertIsNone(spec.validate(5))
+
+    def test_validate(self):
+        spec = Port("required_value", valid_type=int)
+
+        self.assertIsNone(spec.validate(5))
+        self.assertIsNotNone(spec.validate('a'))
+
+    def test_validator(self):
+
+        def validate(value):
+            if not isinstance(value, int):
+                return "Not int"
+            return None
+
+        spec = Port("valid_with_validator", validator=validate)
+
+        self.assertIsNone(spec.validate(5))
+        self.assertIsNotNone(spec.validate('s'))
 
 
 class TestInputPort(TestCase):

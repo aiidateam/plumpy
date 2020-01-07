@@ -72,12 +72,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
         port_namespace_left.__dict__.pop('_ports', None)
         port_namespace_right.__dict__.pop('_ports', None)
 
-        # The `_value_spec` is a nested dictionary so should be compared explicitly separately
-        value_spec_left = port_namespace_left._value_spec
-        value_spec_right = port_namespace_right._value_spec
-
         self.assertEqual(port_namespace_left.__dict__, port_namespace_right.__dict__)
-        self.assertEqual(value_spec_left.__dict__, value_spec_right.__dict__)
 
     def test_expose_nested_namespace(self):
         """Test that expose_inputs can create nested namespaces while maintaining own ports."""
