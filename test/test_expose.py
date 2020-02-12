@@ -73,6 +73,26 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
         self.assertEqual(port_namespace_left.__dict__, port_namespace_right.__dict__)
 
+    def test_expose_dynamic(self):
+        """Test that exposing a dynamic namespace remains dynamic."""
+
+        class Lower(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(Lower, cls).define(spec)
+                spec.input_namespace('foo', dynamic=True)
+
+        class Upper(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super(Upper, cls).define(spec)
+                spec.expose_inputs(Lower)
+
+        self.assertTrue(Lower.spec().inputs['foo'].dynamic)
+        self.assertTrue(Upper.spec().inputs['foo'].dynamic)
+
     def test_expose_nested_namespace(self):
         """Test that expose_inputs can create nested namespaces while maintaining own ports."""
         inputs = self.ExposeProcess.spec().inputs
