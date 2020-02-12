@@ -653,7 +653,9 @@ class PortNamespace(collections.MutableMapping, Port):
                         port_value = default()
                     else:
                         port_value = default
-                elif isinstance(port, PortNamespace):
+
+                # If a namespace containing ports, create an empty dictionary so its ports can be considered recursively
+                elif isinstance(port, PortNamespace) and port.ports:
                     port_value = {}
                 else:
                     continue

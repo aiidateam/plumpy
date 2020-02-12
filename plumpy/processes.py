@@ -34,7 +34,6 @@ from . import events
 from . import persistence
 from . import process_comms
 from . import process_states
-from . import ports
 from . import utils
 
 # pylint: disable=too-many-lines
