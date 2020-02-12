@@ -119,6 +119,26 @@ class TestPortNamespace(TestCase):
         with self.assertRaises(KeyError):
             self.port_namespace['non_existent']
 
+    def test_port_namespace_valid_type_and_dynamic(self):
+        """Test that `dynamic` and `valid_type` attributes defined through constructor are properly set."""
+
+        # Setting `dynamic=True` should leave `valid_type` untouched
+        port_namespace = PortNamespace(dynamic=True)
+        self.assertEqual(port_namespace.valid_type, None)
+        self.assertEqual(port_namespace.dynamic, True)
+
+        # Setting `valid_type` to not `None` should automatically set `dynamic=True`
+        port_namespace = PortNamespace(valid_type=int)
+        self.assertEqual(port_namespace.valid_type, int)
+        self.assertEqual(port_namespace.dynamic, True)
+
+        # The following does not make sense, but the constructor cannot raise a warning because it cannot detect whether
+        # the `dynamic=False` is explicitly set by the user or is merely the default. In any case, the `dynamic=False`
+        # is simply ignored in this case
+        port_namespace = PortNamespace(dynamic=False, valid_type=int)
+        self.assertEqual(port_namespace.valid_type, int)
+        self.assertEqual(port_namespace.dynamic, True)
+
     def test_port_namespace_validation(self):
         """Test validate method of a `PortNamespace`."""
 

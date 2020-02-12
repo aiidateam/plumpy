@@ -307,7 +307,8 @@ class PortNamespace(collections.MutableMapping, Port):
         :param help: the help string
         :param required: boolean, if `True` the validation will fail if no value is specified for this namespace
         :param validator: an optional validator for the namespace
-        :param valid_type: optional tuple of valid types in the case of a dynamic namespace
+        :param valid_type: optional tuple of valid types in the case of a dynamic namespace. Setting this to anything
+            other than `None` will automatically force `dynamic` to be set to `True`.
         :param default: default value for the port
         :param dynamic: boolean, if `True`, the namespace will accept values even when no explicit port is defined
         :param populate_defaults: boolean, when set to `False`, the populating of defaults for this namespace is skipped
@@ -318,9 +319,13 @@ class PortNamespace(collections.MutableMapping, Port):
         super(PortNamespace, self).__init__(
             name=name, help=help, required=required, validator=validator, valid_type=valid_type)
         self._ports = {}
-        self._default = default
-        self._dynamic = dynamic
-        self._populate_defaults = populate_defaults
+        self.default = default
+        self.populate_defaults = populate_defaults
+        self.valid_type = valid_type
+
+        # Do not override `dynamic` if the `valid_type` is not `None` because the setter will have set it properly
+        if valid_type is None:
+            self.dynamic = dynamic
 
     def __str__(self):
         return json.dumps(self.get_description(), sort_keys=True, indent=4)
@@ -371,9 +376,10 @@ class PortNamespace(collections.MutableMapping, Port):
 
     @valid_type.setter
     def valid_type(self, valid_type):
-        """
-        Will set the valid_type for the PortNamespace. If the valid_type is None, the dynamic property
-        will be set to False, in all other cases dynamic will be set to True
+        """Set the `valid_type` for the `PortNamespace`.
+
+        If the `valid_type` is None, the `dynamic` property will be set to `False`, in all other cases `dynamic` will be
+        set to True.
 
         :param valid_type: a tuple or single valid type that the namespace accepts
         """
