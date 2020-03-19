@@ -1,12 +1,10 @@
 from __future__ import absolute_import
 import abc
-import six
 
 __all__ = ['ProcessListener']
 
 
-@six.add_metaclass(abc.ABCMeta)
-class ProcessListener(object):
+class ProcessListener(metaclass=abc.ABCMeta):
 
     def on_process_created(self, process):
         """

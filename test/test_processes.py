@@ -3,15 +3,12 @@ from __future__ import absolute_import
 from tornado import gen, testing
 
 import enum
-import six
-from six.moves import range
-from six.moves import zip
-
 import kiwipy
 
 import plumpy
-from plumpy import Process, ProcessState, test_utils, BundleKeys
+from plumpy import Process, ProcessState, BundleKeys
 from plumpy.utils import AttributesFrozendict
+from test import test_utils
 from . import utils
 
 # pylint: disable=missing-docstring, invalid-name
@@ -234,7 +231,7 @@ class TestProcess(utils.AsyncTestCase):
         self.assertTrue('spec' in desc_with_spec)
         self.assertTrue('description' in desc_with_spec)
         self.assertIsInstance(desc_with_spec['spec'], dict)
-        self.assertIsInstance(desc_with_spec['description'], six.string_types)
+        self.assertIsInstance(desc_with_spec['description'], str)
 
     def test_logging(self):
 
@@ -745,8 +742,8 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
                 super(NameSpacedProcess, cls).define(spec)
                 spec.input('some.name.space.a', valid_type=int)
                 spec.input('test', valid_type=int, default=6)
-                spec.input('label', valid_type=six.string_types, required=False)
-                spec.input('description', valid_type=six.string_types, required=False)
+                spec.input('label', valid_type=str, required=False)
+                spec.input('description', valid_type=str, required=False)
                 spec.input('store_provenance', valid_type=bool, default=True)
 
         proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})

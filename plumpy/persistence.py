@@ -6,7 +6,6 @@ import errno
 import fnmatch
 import inspect
 import os
-import six
 import yaml
 import pickle
 
@@ -69,8 +68,7 @@ yaml.add_representer(Bundle, _bundle_representer)
 yaml.add_constructor(_BUNDLE_TAG, _bundle_constructor)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Persister(object):
+class Persister(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def save_checkpoint(self, process, tag=None):

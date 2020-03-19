@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 import inspect
-import six
 from tornado import gen
 
 import plumpy
@@ -8,7 +7,7 @@ from plumpy.workchains import *
 from plumpy.process_listener import ProcessListener
 import unittest
 
-from plumpy import test_utils
+from test import test_utils
 from . import utils
 
 
@@ -242,7 +241,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         Wf().execute()
 
     def test_str(self):
-        self.assertIsInstance(str(Wf.spec()), six.string_types)
+        self.assertIsInstance(str(Wf.spec()), str)
 
     def test_malformed_outline(self):
         """

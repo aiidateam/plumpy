@@ -5,17 +5,12 @@ import abc
 import copy
 import json
 import logging
-import six
 import warnings
 
 from plumpy.utils import is_mutable_property, type_check
 
-if six.PY2:
-    import collections
-    from inspect import getargspec as get_arg_spec
-else:
-    import collections.abc as collections
-    from inspect import getfullargspec as get_arg_spec
+import collections.abc as collections
+from inspect import getfullargspec as get_arg_spec
 
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
@@ -63,8 +58,7 @@ class PortValidationError(Exception):
         return self._port
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Port(object):
+class Port(metaclass=abc.ABCMeta):
     """
     Specifications relating to a general input/output value including
     properties like whether it is required, valid types, the help string, etc.
@@ -429,7 +423,7 @@ class PortNamespace(collections.MutableMapping, Port):
         :returns: Port
         :raises: ValueError if port or namespace does not exist
         """
-        if not isinstance(name, six.string_types):
+        if not isinstance(name, str):
             raise ValueError('name has to be a string type, not {}'.format(type(name)))
 
         if not name:
@@ -457,7 +451,7 @@ class PortNamespace(collections.MutableMapping, Port):
         :returns: PortNamespace
         :raises: ValueError if any sub namespace is occupied by a non-PortNamespace port
         """
-        if not isinstance(name, six.string_types):
+        if not isinstance(name, str):
             raise ValueError('name has to be a string type, not {}'.format(type(name)))
 
         if not name:

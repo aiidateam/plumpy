@@ -12,7 +12,6 @@ import frozendict
 
 from . import lang
 from plumpy.settings import check_protected, check_override
-from six.moves import range
 
 __all__ = []
 
