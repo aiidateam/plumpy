@@ -2,9 +2,12 @@
 """
 Module containing future related methods and classes
 """
-
 import kiwipy
-from tornado import concurrent, gen, ioloop
+import asyncio
+from tornado import gen, ioloop
+import inspect
+import plumpy
+import concurrent
 
 __all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError', 'create_task']
 
@@ -20,35 +23,11 @@ chain = kiwipy.chain  # pylint: disable=invalid-name
 gather = lambda *args: gen.multi(args)  # pylint: disable=invalid-name
 
 
-class Future(concurrent.Future):
-    """
-    Plumpy future.  This subclasses tornado's futures to allow for cancellation.
-    """
-    _cancelled = False
+class Future(concurrent.futures.Future):
+    """Just a concurrent Future that can be awaited in an event loop"""
 
-    def result(self, timeout=None):
-        if self._cancelled:
-            raise CancelledError()
-
-        return super().result(timeout)
-
-    def cancel(self):
-        """Cancel the future and schedule callbacks.
-        If the future is already done or cancelled, return False.  Otherwise,
-        change the future's state to cancelled, schedule the callbacks and
-        return True.
-        """
-        if self.done():
-            return False
-        self._cancelled = True
-        self._set_done()
-        return True
-
-    def cancelled(self):
-        return self._cancelled
-
-    def remove_done_callback(self, callback):
-        self._callbacks.remove(callback)
+    def __await__(self):
+        return asyncio.wrap_future(self).__await__()
 
 
 class CancellableAction(Future):
@@ -90,18 +69,23 @@ def create_task(coro, loop=None):
     :param coro: the coroutine to schedule
     :param loop: the event loop to schedule it in
     :return: the future representing the outcome of the coroutine
-    :rtype: :class:`tornado.concurrent.Future`
+    :rtype: :class:`concurrent.futures.Future`
     """
-    loop = loop or ioloop.IOLoop.current()
+    future = plumpy.Future()
 
-    future = concurrent.Future()
-
-    @gen.coroutine
-    def run_task():
+    async def run_task():
+        print("inside run_task")
+        print((id(asyncio.get_event_loop())))
         with kiwipy.capture_exceptions(future):
-            future.set_result((yield coro()))
+            res = coro()
+            if inspect.isawaitable(res):
+                future.set_result(await res)
+            else:
+                future.set_result(res)
 
-    loop.add_callback(run_task)
+    # function create_task is called in kiwipy's thread
+    # but we want it awaited in event loop of plumpy's LoopCommunicator
+    asyncio.run_coroutine_threadsafe(run_task(), loop)
     return future
 
 

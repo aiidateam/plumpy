@@ -49,12 +49,11 @@ class ProcessCallback:
     def cancelled(self):
         return self._cancelled
 
-    @tornado.gen.coroutine
-    def run(self):
+    async def run(self):
         """Run the callback"""
         if not self._cancelled:
             try:
-                yield self._callback(*self._args, **self._kwargs)
+                await self._callback(*self._args, **self._kwargs)
             except Exception:  # pylint: disable=broad-except
                 exc_info = sys.exc_info()
                 self._process.callback_excepted(self._callback, exc_info[1], exc_info[2])

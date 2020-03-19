@@ -6,6 +6,7 @@ import unittest
 
 import kiwipy.rmq
 from tornado import testing, gen
+import asyncio
 import plumpy
 
 
@@ -58,8 +59,7 @@ class AsyncTestCase(testing.AsyncTestCase):
         return self.communicator
 
 
-@gen.coroutine
-def wait_util(condition, sleep_interval=0.1):
+async def wait_util(condition, sleep_interval=0.1):
     """Given a condition function, keep polling until it returns True"""
     while not condition():
-        yield gen.sleep(sleep_interval)
+        await asyncio.sleep(sleep_interval)

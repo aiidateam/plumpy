@@ -7,6 +7,7 @@ import fnmatch
 import inspect
 import os
 import pickle
+import asyncio
 
 import yaml
 
@@ -420,6 +421,10 @@ class Savable:
     _auto_persist = None
     _persist_configured = False
 
+    @classmethod
+    def create_obj(cls):
+        return cls.__new__(cls)
+
     @staticmethod
     def load(saved_state, load_context=None):
         """
@@ -463,7 +468,8 @@ class Savable:
         :rtype: :class:`Savable`
         """
         load_context = _ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
+        # create object of a Savable class without specify attributes
+        obj = cls.create_obj()
         base.call_with_super_check(obj.load_instance_state, saved_state, load_context)
         return obj
 
@@ -517,7 +523,9 @@ class Savable:
 
     def load_members(self, members, saved_state, load_context=None):
         for member in members:
-            setattr(self, member, self._get_value(saved_state, member, load_context))
+            v = self._get_value(saved_state, member, load_context)
+            # setattr(self, member, self._get_value(saved_state, member, load_context))
+            setattr(self, member, v)
 
     def _ensure_persist_configured(self):
         if not self._persist_configured:
@@ -576,7 +584,7 @@ class Savable:
         return value
 
 
-@auto_persist('_done', '_result')
+@auto_persist('_state', '_result')
 class SavableFuture(futures.Future, Savable):
     """
     A savable future.
@@ -584,6 +592,10 @@ class SavableFuture(futures.Future, Savable):
     .. note: This does not save any assigned done callbacks.
     """
     EXCEPTION = 'exception'
+
+    @classmethod
+    def create_obj(cls):
+        return cls()
 
     def save_instance_state(self, out_state, save_context):
         super().save_instance_state(out_state, save_context)
@@ -595,11 +607,10 @@ class SavableFuture(futures.Future, Savable):
         super().load_instance_state(saved_state, load_context)
         try:
             exception = saved_state[self.EXCEPTION]
-            self._exc_info = (type(exception), exception, None)
+            self._exception = exception
         except KeyError:
-            self._exc_info = None
+            self._exception = None
 
         self._log_traceback = False  # Used for Python >= 3.4
-        self._tb_logger = None  # Used for Python <= 3.3
 
         self._callbacks = []

@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 """Module for general kiwipy communication methods"""
-
 import functools
 
-from tornado import concurrent, ioloop
-
 import kiwipy
+import asyncio
 
 from . import futures
 
@@ -37,7 +35,7 @@ def plum_to_kiwi_future(plum_future):
             else:
                 result = plum_future.result()
                 # Did we get another future?  In which case convert it too
-                if concurrent.is_future(result):
+                if asyncio.isfuture(result):
                     result = plum_to_kiwi_future(result)
                 kiwi_future.set_result(result)
 
@@ -55,9 +53,10 @@ def convert_to_comm(callback, loop=None):
     :param callback: the function to convert
     :return: a new callback function that returns a future
     """
-    loop = loop or ioloop.IOLoop.current()
 
     def converted(communicator, *args, **kwargs):
+        print('inside convert')
+        print((id(asyncio.get_event_loop())))
         msg_fn = functools.partial(callback, communicator, *args, **kwargs)
         task_future = futures.create_task(msg_fn, loop)
         return plum_to_kiwi_future(task_future)
@@ -89,7 +88,7 @@ def wrap_communicator(communicator, loop=None):
 class LoopCommunicator(kiwipy.Communicator):
     """Wrapper around a `kiwipy.Communicator` that schedules any subscriber messages on a given event loop."""
 
-    def __init__(self, communicator, loop=None):
+    def __init__(self, communicator, loop=None, testing_mode=False):
         """
         :param communicator: The kiwipy communicator
         :type communicator: :class:`kiwipy.Communicator`
@@ -99,7 +98,9 @@ class LoopCommunicator(kiwipy.Communicator):
         assert communicator is not None
 
         self._communicator = communicator
-        self._loop = loop or ioloop.IOLoop.current()
+        self._loop = loop or asyncio.get_event_loop()
+        print(testing_mode)
+        self._loop.set_debug(testing_mode)
         self._subscribers = {}
 
     def loop(self):

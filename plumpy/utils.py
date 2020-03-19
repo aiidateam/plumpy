@@ -6,8 +6,9 @@ import threading
 import types
 from collections import deque, defaultdict
 
-import tornado.gen
+import asyncio
 import frozendict
+import tornado.gen
 
 from .settings import check_protected, check_override
 from . import lang
@@ -223,12 +224,11 @@ def type_check(obj, expected_type):
 
 
 def ensure_coroutine(wrapped):
-    if tornado.gen.is_coroutine_function(wrapped):
+    if asyncio.iscoroutinefunction(wrapped):
         return wrapped
 
-    @tornado.gen.coroutine
-    def wrapper(*args, **kwargs):
-        raise tornado.gen.Return(wrapped(*args, **kwargs))
+    async def wrapper(*args, **kwargs):
+        return wrapped(*args, **kwargs)
 
     return wrapper
 

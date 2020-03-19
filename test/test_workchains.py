@@ -6,6 +6,8 @@ import plumpy
 from plumpy.workchains import *
 from plumpy.process_listener import ProcessListener
 import unittest
+import pytest
+import asyncio
 
 from test import test_utils
 from . import utils
@@ -225,7 +227,10 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 spec.outline(cls.s1, cls.s2, cls.s3)
 
             def s1(self):
-                return ToContext(r1=self.launch(ReturnA), r2=self.launch(ReturnB))
+                r1=self.launch(ReturnA)
+                r2=self.launch(ReturnB)
+                # return ToContext(r1=self.launch(ReturnA), r2=self.launch(ReturnB))
+                return ToContext(r1=r1, r2=r2)
 
             def s2(self):
                 assert self.ctx.r1['res'] == A
@@ -380,33 +385,30 @@ class TestWorkchain(utils.TestCaseWithLoop):
         workchain = MainWorkChain()
         workchain.execute()
 
-    def test_if_block_persistence(self):
-        wc = IfTest()
-        self.loop.add_callback(wc.step_until_terminated)
+    @pytest.mark.asyncio
+    async def test_if_block_persistence(self):
+        workchain = IfTest()
+        asyncio.ensure_future(workchain.step_until_terminated())
 
-        @gen.coroutine
-        def run_async(workchain):
-            yield test_utils.run_until_paused(workchain)
-            self.assertTrue(workchain.ctx.s1)
-            self.assertFalse(workchain.ctx.s2)
+        await test_utils.run_until_paused(workchain)
+        self.assertTrue(workchain.ctx.s1)
+        self.assertFalse(workchain.ctx.s2)
 
-            # Now bundle the thing
-            bundle = plumpy.Bundle(workchain)
+        # Now bundle the thing
+        bundle = plumpy.Bundle(workchain)
 
-            # Load from saved state
-            workchain2 = bundle.unbundle()
-            self.assertTrue(workchain2.ctx.s1)
-            self.assertFalse(workchain2.ctx.s2)
+        # Load from saved state
+        workchain2 = bundle.unbundle()
+        self.assertTrue(workchain2.ctx.s1)
+        self.assertFalse(workchain2.ctx.s2)
 
-            bundle2 = plumpy.Bundle(workchain2)
-            self.assertDictEqual(bundle, bundle2)
+        bundle2 = plumpy.Bundle(workchain2)
+        self.assertDictEqual(bundle, bundle2)
 
-            workchain.play()
-            yield workchain.future()
-            self.assertTrue(workchain.ctx.s1)
-            self.assertTrue(workchain.ctx.s2)
-
-        self.loop.run_sync(lambda: run_async(wc))
+        workchain.play()
+        await workchain.future()
+        self.assertTrue(workchain.ctx.s1)
+        self.assertTrue(workchain.ctx.s2)
 
     def test_to_context(self):
         val = 5
