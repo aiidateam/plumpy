@@ -37,7 +37,6 @@ setup(name='plumpy',
           'kiwipy[rmq]>=0.5.2',
           'enum34; python_version<"3.4"',
           'backports.tempfile; python_version<"3.2"',
-          'six',
       ],
       extras_require={
           'dev': [

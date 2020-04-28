@@ -3,8 +3,8 @@ from __future__ import absolute_import
 from plumpy.ports import PortNamespace
 from plumpy.processes import Process
 from plumpy.process_spec import ProcessSpec
-from plumpy.test_utils import NewLoopProcess
-from . import utils
+from test.test_utils import NewLoopProcess
+from test import utils
 
 
 class TestExposeProcess(utils.TestCaseWithLoop):

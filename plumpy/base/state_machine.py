@@ -13,7 +13,6 @@ import inspect
 import logging
 import os
 import sys
-import six
 
 import plumpy
 
@@ -193,8 +192,7 @@ class StateMachineMeta(type):
         return inst
 
 
-@six.add_metaclass(StateMachineMeta)
-class StateMachine(object):
+class StateMachine(metaclass=StateMachineMeta):
     STATES = None
     _STATES_MAP = None
 
@@ -340,7 +338,7 @@ class StateMachine(object):
         :param exception: The transition failed exception
         :type exception: :class:`Exception`
         """
-        six.reraise(type(exception), exception, trace)
+        raise exception.with_traceback(trace)
 
     def get_debug(self):
         return self._debug

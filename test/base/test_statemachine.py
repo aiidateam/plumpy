@@ -13,6 +13,7 @@ PLAYING = 'Playing'
 PAUSED = 'Paused'
 STOPPED = 'Stopped'
 
+# TODO: test exceptions
 
 class Playing(state_machine.State):
     LABEL = PLAYING
