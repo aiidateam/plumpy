@@ -1,12 +1,6 @@
 """The state machine for processes"""
 
-from __future__ import absolute_import
-
-# ABC imports that support python 2 & 3
-try:
-    from collections.abc import Iterable
-except ImportError:
-    from collections import Iterable
+from collections.abc import Iterable
 import enum
 import functools
 import inspect

@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from plumpy.ports import PortNamespace
 from plumpy.processes import Process
 from plumpy.process_spec import ProcessSpec

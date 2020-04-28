@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import tempfile
 
 if getattr(tempfile, 'TemporaryDirectory', None) is None:

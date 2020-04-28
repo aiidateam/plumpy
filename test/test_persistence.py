@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import plumpy
 from test import test_utils
 import unittest

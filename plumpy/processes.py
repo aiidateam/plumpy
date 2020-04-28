@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
 
-from __future__ import absolute_import
 import abc
 import contextlib
 import functools

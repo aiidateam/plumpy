@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """Module for process ports"""
-from __future__ import absolute_import
 import abc
 import copy
 import json

@@ -1,5 +1,4 @@
 """Process tests"""
-from __future__ import absolute_import
 from tornado import gen, testing
 
 import enum

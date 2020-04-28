@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
 from setuptools import setup
 
 __author__ = "Martin Uhrin"

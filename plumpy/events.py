@@ -1,5 +1,4 @@
 """Event and loop related classes and functions"""
-from __future__ import absolute_import
 import sys
 from tornado import ioloop
 import tornado.gen
