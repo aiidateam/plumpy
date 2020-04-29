@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Event and loop related classes and functions"""
 import sys
 from tornado import ioloop

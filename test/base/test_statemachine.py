@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import time
 import unittest
 
@@ -21,7 +22,7 @@ class Playing(state_machine.State):
 
     def __init__(self, player, track):
         assert track is not None, 'Must provide a track name'
-        super(Playing, self).__init__(player)
+        super().__init__(player)
         self.track = track
         self._last_time = None
         self._played = 0.
@@ -32,11 +33,11 @@ class Playing(state_machine.State):
         return '> {} ({}s)'.format(self.track, self._played)
 
     def enter(self):
-        super(Playing, self).enter()
+        super().enter()
         self._last_time = time.time()
 
     def exit(self):
-        super(Playing, self).exit()
+        super().exit()
         self._update_time()
 
     def play(self, track=None):  # pylint: disable=no-self-use, unused-argument
@@ -56,7 +57,7 @@ class Paused(state_machine.State):
     def __init__(self, player, playing_state):
         assert isinstance(playing_state, Playing), \
             'Must provide the playing state to pause'
-        super(Paused, self).__init__(player)
+        super().__init__(player)
         self.playing_state = playing_state
 
     def __str__(self):
@@ -87,9 +88,10 @@ class CdPlayer(state_machine.StateMachine):
     STATES = (Stopped, Playing, Paused)
 
     def __init__(self):
-        super(CdPlayer, self).__init__()
-        self.add_state_event_callback(state_machine.StateEventHook.ENTERING_STATE,
-                                      lambda _s, _h, state: self.entering(state))
+        super().__init__()
+        self.add_state_event_callback(
+            state_machine.StateEventHook.ENTERING_STATE, lambda _s, _h, state: self.entering(state)
+        )
         self.add_state_event_callback(state_machine.StateEventHook.EXITING_STATE, lambda _s, _h, _st: self.exiting())
 
     def entering(self, state):

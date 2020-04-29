@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 import unittest
 from plumpy.base import utils
 
 
 class Root:
+
     @utils.super_check
     def method(self):
         pass
@@ -12,16 +14,19 @@ class Root:
 
 
 class DoCall(Root):
+
     def method(self):
-        super(DoCall, self).method()
+        super().method()
 
 
 class DontCall(Root):
+
     def method(self):
         pass
 
 
 class TestSuperCheckMixin(unittest.TestCase):
+
     def test_do_call(self):
         DoCall().do()
 
@@ -30,9 +35,11 @@ class TestSuperCheckMixin(unittest.TestCase):
             DontCall().do()
 
     def dont_call_middle(self):
+
         class ThirdChild(DontCall):
+
             def method(self):
-                super(ThirdChild, self).method()
+                super().method()
 
         with self.assertRaises(AssertionError):
             ThirdChild.do()

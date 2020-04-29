@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Module for general kiwipy communication methods"""
 
 import functools
