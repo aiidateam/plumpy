@@ -184,7 +184,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 assert cls.__called, \
                     'Process.define() was not called by {}\n' \
                     'Hint: Did you forget to call the superclass method in your define? ' \
-                    'Try: super({}, cls).define(spec)'.format(cls, cls.__name__)
+                    'Try: super().define(spec)'.format(cls)
                 return cls._spec
             except Exception:
                 del cls._spec
@@ -230,7 +230,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: An instance of the object with its state loaded from the save state.
         :rtype: :class:`Process`
         """
-        process = super(Process, cls).recreate_from(saved_state, load_context)
+        process = super().recreate_from(saved_state, load_context)
         base.call_with_super_check(process.init)
         return process
 
@@ -249,7 +249,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param communicator: The (optional) communicator
         :type communicator: :class:`plumpy.Communicator`
         """
-        super(Process, self).__init__()
+        super().__init__()
 
         # Don't allow the spec to be changed anymore
         self.spec().seal()
@@ -520,7 +520,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :type out_state: :class:`plumpy.Bundle`
         :param save_context: The save context
         """
-        super(Process, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
 
         out_state['_state'] = self._state.save()
 
@@ -537,7 +537,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @protected
     def load_instance_state(self, saved_state, load_context):
         # First make sure the state machine constructor is called
-        super(Process, self).__init__()
+        super().__init__()
 
         self._setup_event_hooks()
 
@@ -561,7 +561,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._logger = load_context.logger
 
         # Need to call this here as things downstream may rely on us having the runtime variable above
-        super(Process, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
 
         # Inputs/outputs
         try:
@@ -765,7 +765,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
 
     def on_terminated(self):
-        super(Process, self).on_terminated()
+        super().on_terminated()
         self.close()
 
     @super_check

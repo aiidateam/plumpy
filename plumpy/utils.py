@@ -106,7 +106,7 @@ class ThreadSafeCounter:
 class AttributesFrozendict(frozendict.frozendict):
 
     def __init__(self, *args, **kwargs):
-        super(AttributesFrozendict, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._initialised = True
 
     def __getattr__(self, attr):

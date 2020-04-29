@@ -17,7 +17,7 @@ class Wf(WorkChain):
 
     @classmethod
     def define(cls, spec):
-        super(Wf, cls).define(spec)
+        super().define(spec)
         spec.input('value', default='A')
         spec.input('n', default=3)
         spec.outputs.dynamic = True
@@ -29,7 +29,7 @@ class Wf(WorkChain):
         )
 
     def on_create(self):
-        super(Wf, self).on_create()
+        super().on_create()
         # Reset the finished step
         self.finished_steps = {
             k: False for k in [
@@ -80,11 +80,11 @@ class IfTest(WorkChain):
 
     @classmethod
     def define(cls, spec):
-        super(IfTest, cls).define(spec)
+        super().define(spec)
         spec.outline(if_(cls.condition)(cls.step1, cls.step2))
 
     def on_create(self, *args, **kwargs):
-        super(IfTest, self).on_create(*args, **kwargs)
+        super().on_create(*args, **kwargs)
         self.ctx.s1 = False
         self.ctx.s2 = False
 
@@ -103,7 +103,7 @@ class DummyWc(WorkChain):
 
     @classmethod
     def define(cls, spec):
-        super(DummyWc, cls).define(spec)
+        super().define(spec)
         spec.outline(cls.do_nothing)
 
     def do_nothing(self):
@@ -167,7 +167,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 # Try defining an invalid outline
                 spec.outline(5)
 
@@ -180,7 +180,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.input('a', valid_type=int)
                 spec.input('b', valid_type=int)
                 # Try defining an invalid outline
@@ -201,7 +201,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ReturnA, cls).define(spec)
+                super().define(spec)
                 spec.output('res')
 
             def run(self):
@@ -211,7 +211,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ReturnB, cls).define(spec)
+                super().define(spec)
                 spec.output('res')
 
             def run(self):
@@ -221,7 +221,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.s1, cls.s2, cls.s3)
 
             def s1(self):
@@ -289,7 +289,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(WcWithReturn, cls).define(spec)
+                super().define(spec)
                 spec.input('success', valid_type=bool, required=False)
                 spec.outline(
                     cls.step_one,
@@ -326,7 +326,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(WcWithReturn, cls).define(spec)
+                super().define(spec)
                 spec.input('success', valid_type=bool, required=False)
                 spec.outline(cls.step_one, cls.after)
 
@@ -357,7 +357,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(MainWorkChain, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.run, cls.check)
                 spec.outputs.dynamic = True
 
@@ -371,7 +371,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(SubWorkChain, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.run)
 
             def run(self):
@@ -415,7 +415,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(SimpleWc, cls).define(spec)
+                super().define(spec)
                 spec.output('_return')
 
             def run(self):
@@ -425,7 +425,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Workchain, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.begin, cls.check)
 
             def begin(self):
@@ -446,7 +446,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(TestWorkChain, cls).define(spec)
+                super().define(spec)
                 spec.output('x.y', required=True)
                 spec.outline(cls.do_run)
 
@@ -463,7 +463,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Workchain, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.begin, cls.check)
 
             def begin(self):
@@ -490,7 +490,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.input('N', valid_type=int)
                 spec.outline(
                     cls.check_n,
@@ -555,7 +555,7 @@ class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.input('a', valid_type=int)
                 spec.input('b', valid_type=int)
                 spec.outline(
@@ -592,7 +592,7 @@ class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.input_namespace('subspace', dynamic=True)
                 spec.outline(
                     cls.step_one,

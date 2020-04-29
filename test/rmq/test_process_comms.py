@@ -23,7 +23,7 @@ AWAIT_TIMEOUT = testing.get_async_test_timeout()
 class TestRemoteProcessController(utils.AsyncTestCase):
 
     def setUp(self):
-        super(TestRemoteProcessController, self).setUp()
+        super().setUp()
 
         self.init_communicator()
         self.process_controller = process_comms.RemoteProcessController(self.communicator)
@@ -32,7 +32,7 @@ class TestRemoteProcessController(utils.AsyncTestCase):
         # Close the connector before calling super because it will
         # close the loop
         self.communicator.stop()
-        super(TestRemoteProcessController, self).tearDown()
+        super().tearDown()
 
     @testing.gen_test
     def test_pause(self):
@@ -107,7 +107,7 @@ class TestRemoteProcessController(utils.AsyncTestCase):
 class TestRemoteProcessThreadController(testing.AsyncTestCase):
 
     def setUp(self):
-        super(TestRemoteProcessThreadController, self).setUp()
+        super().setUp()
 
         self.loop = self.io_loop
 
@@ -129,7 +129,7 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         # Close the connector before calling super because it will
         # close the loop
         self.communicator.stop()
-        super(TestRemoteProcessThreadController, self).tearDown()
+        super().tearDown()
 
     @testing.gen_test
     def test_pause(self):

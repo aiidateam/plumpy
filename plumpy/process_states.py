@@ -101,11 +101,11 @@ class Continue(Command):
         self.kwargs = kwargs
 
     def save_instance_state(self, out_state, save_context):
-        super(Continue, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         out_state[self.CONTINUE_FN] = self.continue_fn.__name__
 
     def load_instance_state(self, saved_state, load_context):
-        super(Continue, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         try:
             self.continue_fn = utils.load_function(saved_state[self.CONTINUE_FN])
         except ValueError:
@@ -142,7 +142,7 @@ class State(state_machine.State, persistence.Savable):
         return self.state_machine
 
     def load_instance_state(self, saved_state, load_context):
-        super(State, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         self.state_machine = load_context.process
 
     @staticmethod
@@ -158,18 +158,18 @@ class Created(State):
     RUN_FN = 'run_fn'
 
     def __init__(self, process, run_fn, *args, **kwargs):
-        super(Created, self).__init__(process)
+        super().__init__(process)
         assert run_fn is not None
         self.run_fn = run_fn
         self.args = args
         self.kwargs = kwargs
 
     def save_instance_state(self, out_state, save_context):
-        super(Created, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         out_state[self.RUN_FN] = self.run_fn.__name__
 
     def load_instance_state(self, saved_state, load_context):
-        super(Created, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
 
     def execute(self):
@@ -192,7 +192,7 @@ class Running(State):
     _run_handle = None
 
     def __init__(self, process, run_fn, *args, **kwargs):
-        super(Running, self).__init__(process)
+        super().__init__(process)
         assert run_fn is not None
         self.run_fn = run_fn
         self.args = args
@@ -200,13 +200,13 @@ class Running(State):
         self._run_handle = None
 
     def save_instance_state(self, out_state, save_context):
-        super(Running, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         out_state[self.RUN_FN] = self.run_fn.__name__
         if self._command is not None:
             out_state[self.COMMAND] = self._command.save()
 
     def load_instance_state(self, saved_state, load_context):
-        super(Running, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
         if self.COMMAND in saved_state:
             self._command = persistence.Savable.load(saved_state[self.COMMAND], load_context)
@@ -273,25 +273,25 @@ class Waiting(State):
     _interruption = None
 
     def __str__(self):
-        state_info = super(Waiting, self).__str__()
+        state_info = super().__str__()
         if self.msg is not None:
             state_info += ' ({})'.format(self.msg)
         return state_info
 
     def __init__(self, process, done_callback, msg=None, data=None):
-        super(Waiting, self).__init__(process)
+        super().__init__(process)
         self.done_callback = done_callback
         self.msg = msg
         self.data = data
         self._waiting_future = futures.Future()
 
     def save_instance_state(self, out_state, save_context):
-        super(Waiting, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         if self.done_callback is not None:
             out_state[self.DONE_CALLBACK] = self.done_callback.__name__
 
     def load_instance_state(self, saved_state, load_context):
-        super(Waiting, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         callback_name = saved_state.get(self.DONE_CALLBACK, None)
         if callback_name is not None:
             self.done_callback = getattr(self.process, callback_name)
@@ -338,24 +338,24 @@ class Excepted(State):
         :param exception: The exception instance
         :param trace_back: An optional exception traceback
         """
-        super(Excepted, self).__init__(process)
+        super().__init__(process)
         self.exception = exception
         self.traceback = trace_back
 
     def __str__(self):
         return '{} ({})'.format(
-            super(Excepted, self).__str__(),
+            super().__str__(),
             traceback.format_exception_only(type(self.exception), self.exception)[0]
         )
 
     def save_instance_state(self, out_state, save_context):
-        super(Excepted, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         out_state[self.EXC_VALUE] = yaml.dump(self.exception)
         if self.traceback is not None:
             out_state[self.TRACEBACK] = ''.join(traceback.format_tb(self.traceback))
 
     def load_instance_state(self, saved_state, load_context):
-        super(Excepted, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=yaml.FullLoader)
         if _HAS_TBLIB:
             try:
@@ -379,7 +379,7 @@ class Finished(State):
     LABEL = ProcessState.FINISHED
 
     def __init__(self, process, result, successful):
-        super(Finished, self).__init__(process)
+        super().__init__(process)
         self.result = result
         self.successful = successful
 
@@ -394,7 +394,7 @@ class Killed(State):
         :param msg: Optional kill message
         :type msg: str
         """
-        super(Killed, self).__init__(process)
+        super().__init__(process)
         self.msg = msg
 
 

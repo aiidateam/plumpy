@@ -27,7 +27,7 @@ class DummyProcessWithOutput(processes.Process):
 
     @classmethod
     def define(cls, spec):
-        super(DummyProcessWithOutput, cls).define(spec)
+        super().define(spec)
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
         spec.output('default', valid_type=int)
@@ -41,7 +41,7 @@ class DummyProcessWithDynamicOutput(processes.Process):
 
     @classmethod
     def define(cls, spec):
-        super(DummyProcessWithDynamicOutput, cls).define(spec)
+        super().define(spec)
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
 
@@ -81,7 +81,7 @@ class MissingOutputProcess(processes.Process):
 
     @classmethod
     def define(cls, spec):
-        super(MissingOutputProcess, cls).define(spec)
+        super().define(spec)
         spec.output('default', required=True)
 
 
@@ -89,7 +89,7 @@ class NewLoopProcess(processes.Process):
 
     def __init__(self, *args, **kwargs):
         kwargs['loop'] = plumpy.new_event_loop()
-        super(NewLoopProcess, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 class EventsTesterMixin:
@@ -105,47 +105,47 @@ class EventsTesterMixin:
     def __init__(self, *args, **kwargs):
         assert isinstance(self, processes.Process), \
             'Mixin has to be used with a type derived from a Process'
-        super(EventsTesterMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.__class__.called_events = []
 
     @utils.override
     def on_create(self):
-        super(EventsTesterMixin, self).on_create()
+        super().on_create()
         self.called('create')
 
     @utils.override
     def on_run(self):
-        super(EventsTesterMixin, self).on_run()
+        super().on_run()
         self.called('run')
 
     @utils.override
     def _on_output_emitted(self, output_port, value, dynamic):
-        super(EventsTesterMixin, self)._on_output_emitted(output_port, value, dynamic)
+        super()._on_output_emitted(output_port, value, dynamic)
         self.called('emitted')
 
     @utils.override
     def on_wait(self, wait_on):
-        super(EventsTesterMixin, self).on_wait(wait_on)
+        super().on_wait(wait_on)
         self.called('wait')
 
     @utils.override
     def on_resume(self):
-        super(EventsTesterMixin, self).on_resume()
+        super().on_resume()
         self.called('resume')
 
     @utils.override
     def on_finish(self, result, successful):
-        super(EventsTesterMixin, self).on_finish(result, successful)
+        super().on_finish(result, successful)
         self.called('finish')
 
     @utils.override
     def on_stop(self):
-        super(EventsTesterMixin, self).on_stop()
+        super().on_stop()
         self.called('stop')
 
     @utils.override
     def on_terminate(self):
-        super(EventsTesterMixin, self).on_terminate()
+        super().on_terminate()
         self.called('terminate')
 
 
@@ -153,7 +153,7 @@ class ProcessEventsTester(EventsTesterMixin, processes.Process):
 
     @classmethod
     def define(cls, spec):
-        super(ProcessEventsTester, cls).define(spec)
+        super().define(spec)
         spec.outputs.dynamic = True
 
     def run(self):

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """Module for process ports"""
-import abc
 import collections
 import copy
 import inspect
@@ -30,7 +29,7 @@ class PortValidationError(Exception):
         :param port: the port where the validation error occurred
         :type: str
         """
-        super(PortValidationError, self).__init__("Error occurred validating port '{}': {}".format(port, message))
+        super().__init__("Error occurred validating port '{}': {}".format(port, message))
         self._message = message
         self._port = port
 
@@ -55,7 +54,7 @@ class PortValidationError(Exception):
         return self._port
 
 
-class Port(metaclass=abc.ABCMeta):
+class Port:
     """
     Specifications relating to a general input/output value including
     properties like whether it is required, valid types, the help string, etc.
@@ -223,7 +222,7 @@ class InputPort(Port):
         return False
 
     def __init__(self, name, valid_type=None, help=None, default=UNSPECIFIED, required=True, validator=None):  # pylint: disable=redefined-builtin,too-many-arguments
-        super(InputPort, self).__init__(
+        super().__init__(
             name,
             valid_type=valid_type,
             help=help,
@@ -266,7 +265,7 @@ class InputPort(Port):
 
         :returns: a dictionary of the stringified InputPort attributes
         """
-        description = super(InputPort, self).get_description()
+        description = super().get_description()
 
         if self.has_default():
             description['default'] = '{}'.format(self.default)
@@ -312,8 +311,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
             namespace. As soon as a value is specified in the parent namespace for this port, even if it is empty, this
             property is ignored and the population of defaults is always performed.
         """
-        super(PortNamespace,
-              self).__init__(name=name, help=help, required=required, validator=validator, valid_type=valid_type)
+        super().__init__(name=name, help=help, required=required, validator=validator, valid_type=valid_type)
         self._ports = {}
         self.default = default
         self.populate_defaults = populate_defaults
@@ -368,7 +366,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
     @property
     def valid_type(self):
-        return super(PortNamespace, self).valid_type
+        return super().valid_type
 
     @valid_type.setter
     def valid_type(self, valid_type):

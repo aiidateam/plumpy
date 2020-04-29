@@ -18,11 +18,11 @@ ToContext = dict
 class WorkChainSpec(processes.ProcessSpec):
 
     def __init__(self):
-        super(WorkChainSpec, self).__init__()
+        super().__init__()
         self._outline = None
 
     def get_description(self):
-        description = super(WorkChainSpec, self).get_description()
+        description = super().get_description()
 
         if self._outline:
             description['outline'] = self._outline.get_description()
@@ -51,7 +51,7 @@ class Waiting(process_states.Waiting):
     """ Overwrite the waiting state"""
 
     def __init__(self, process, done_callback, msg=None, awaiting=None):
-        super(Waiting, self).__init__(process, done_callback, msg, awaiting)
+        super().__init__(process, done_callback, msg, awaiting)
         self._awaiting = {}
         for awaitable, key in awaiting.items():
             if isinstance(awaitable, processes.Process):
@@ -59,12 +59,12 @@ class Waiting(process_states.Waiting):
             self._awaiting[awaitable] = key
 
     def enter(self):
-        super(Waiting, self).enter()
+        super().enter()
         for awaitable in self._awaiting:
             awaitable.add_done_callback(self._awaitable_done)
 
     def exit(self):
-        super(Waiting, self).exit()
+        super().exit()
         for awaitable in self._awaiting:
             awaitable.remove_done_callback(self._awaitable_done)
 
@@ -90,28 +90,28 @@ class WorkChain(mixins.ContextMixin, processes.Process):
 
     @classmethod
     def get_state_classes(cls):
-        states_map = super(WorkChain, cls).get_state_classes()
+        states_map = super().get_state_classes()
         states_map[process_states.ProcessState.WAITING] = Waiting
         return states_map
 
     def __init__(self, inputs=None, pid=None, logger=None, loop=None, communicator=None):
-        super(WorkChain, self).__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
+        super().__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
         self._stepper = None
         self._awaitables = {}
 
     def on_create(self):
-        super(WorkChain, self).on_create()
+        super().on_create()
         self._stepper = self.spec().get_outline().create_stepper(self)
 
     def save_instance_state(self, out_state, save_context):
-        super(WorkChain, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
 
         # Ask the stepper to save itself
         if self._stepper is not None:
             out_state[self._STEPPER_STATE] = self._stepper.save()
 
     def load_instance_state(self, saved_state, load_context):
-        super(WorkChain, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
 
         # Recreate the stepper
         self._stepper = None
@@ -160,7 +160,7 @@ class Stepper(persistence.Savable, metaclass=abc.ABCMeta):
         self._workchain = workchain
 
     def load_instance_state(self, saved_state, load_context):
-        super(Stepper, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         self._workchain = load_context.workchain
 
     @abc.abstractmethod
@@ -204,15 +204,15 @@ class _Instruction(metaclass=abc.ABCMeta):
 class _FunctionStepper(Stepper):
 
     def __init__(self, workchain, fn):
-        super(_FunctionStepper, self).__init__(workchain)
+        super().__init__(workchain)
         self._fn = fn
 
     def save_instance_state(self, out_state, save_context):
-        super(_FunctionStepper, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         out_state['_fn'] = self._fn.__name__
 
     def load_instance_state(self, saved_state, load_context):
-        super(_FunctionStepper, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         self._fn = getattr(self._workchain.__class__, saved_state['_fn'])
 
     def step(self):
@@ -257,7 +257,7 @@ STEPPER_STATE = 'stepper_state'
 class _BlockStepper(Stepper):
 
     def __init__(self, block, workchain):
-        super(_BlockStepper, self).__init__(workchain)
+        super().__init__(workchain)
         self._block = block
         self._pos = 0
         self._child_stepper = self._block[0].create_stepper(self._workchain)
@@ -283,12 +283,12 @@ class _BlockStepper(Stepper):
         return self._pos == len(self._block)
 
     def save_instance_state(self, out_state, save_context):
-        super(_BlockStepper, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
     def load_instance_state(self, saved_state, load_context):
-        super(_BlockStepper, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         self._block = load_context.block_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
@@ -375,7 +375,7 @@ class _Conditional:
 class _IfStepper(Stepper):
 
     def __init__(self, if_instruction, workchain):
-        super(_IfStepper, self).__init__(workchain)
+        super().__init__(workchain)
         self._if_instruction = if_instruction
         self._pos = 0
         self._child_stepper = None
@@ -408,12 +408,12 @@ class _IfStepper(Stepper):
         return self._pos == len(self._if_instruction)
 
     def save_instance_state(self, out_state, save_context):
-        super(_IfStepper, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
     def load_instance_state(self, saved_state, load_context):
-        super(_IfStepper, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         self._if_instruction = load_context.if_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
@@ -431,7 +431,7 @@ class _IfStepper(Stepper):
 class _If(_Instruction, collections.abc.Sequence):
 
     def __init__(self, condition):
-        super(_If, self).__init__()
+        super().__init__()
         self._ifs = [_Conditional(self, condition, label=if_.__name__)]
         self._sealed = False
 
@@ -484,7 +484,7 @@ class _If(_Instruction, collections.abc.Sequence):
 class _WhileStepper(Stepper):
 
     def __init__(self, while_instruction, workchain):
-        super(_WhileStepper, self).__init__(workchain)
+        super().__init__(workchain)
         self._while_instruction = while_instruction
         self._child_stepper = None
 
@@ -504,12 +504,12 @@ class _WhileStepper(Stepper):
         return False, result
 
     def save_instance_state(self, out_state, save_context):
-        super(_WhileStepper, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
     def load_instance_state(self, saved_state, load_context):
-        super(_WhileStepper, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         self._while_instruction = load_context.while_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
         self._child_stepper = None
@@ -527,7 +527,7 @@ class _WhileStepper(Stepper):
 class _While(_Conditional, _Instruction, collections.abc.Sequence):
 
     def __init__(self, predicate):
-        super(_While, self).__init__(self, predicate, label=while_.__name__)
+        super().__init__(self, predicate, label=while_.__name__)
 
     def __getitem__(self, idx):
         assert idx == 0

@@ -6,7 +6,7 @@ class AddAndMulWF(plumpy.WorkChain):
 
     @classmethod
     def define(cls, spec):
-        super(AddAndMulWF, cls).define(spec)
+        super().define(spec)
         spec.input('ini', valid_type=float, default=1.0)
         spec.input('add', valid_type=int, required=True)
         spec.input('mul', valid_type=int, required=True)

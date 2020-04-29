@@ -36,7 +36,7 @@ class Bundle(dict):
         :param save_context: The optional save context to use
         :type save_context: :class:`LoadSaveContext`
         """
-        super(Bundle, self).__init__()
+        super().__init__()
         self.update(savable.save(save_context))
 
     def unbundle(self, load_context=None):
@@ -153,7 +153,7 @@ class PicklePersister(Persister):
 
         :param pickle_directory: the full path to the directory where pickles will be written
         """
-        super(PicklePersister, self).__init__()
+        super().__init__()
 
         try:
             PicklePersister.ensure_pickle_directory(pickle_directory)
@@ -297,7 +297,7 @@ class InMemoryPersister(Persister):
     """ Mainly to be used in testing/debugging """
 
     def __init__(self, loader=None):
-        super(InMemoryPersister, self).__init__()
+        super().__init__()
         self._checkpoints = {}
         self._save_context = LoadSaveContext(loader=loader)
 
@@ -586,13 +586,13 @@ class SavableFuture(futures.Future, Savable):
     EXCEPTION = 'exception'
 
     def save_instance_state(self, out_state, save_context):
-        super(SavableFuture, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         if self.done() and self.exception() is not None:
             out_state[self.EXCEPTION] = self.exception()
 
     def load_instance_state(self, saved_state, load_context):
         # pylint: disable=attribute-defined-outside-init
-        super(SavableFuture, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         try:
             exception = saved_state[self.EXCEPTION]
             self._exc_info = (type(exception), exception, None)

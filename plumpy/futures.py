@@ -30,7 +30,7 @@ class Future(concurrent.Future):
         if self._cancelled:
             raise CancelledError()
 
-        return super(Future, self).result(timeout)
+        return super().result(timeout)
 
     def cancel(self):
         """Cancel the future and schedule callbacks.
@@ -57,7 +57,7 @@ class CancellableAction(Future):
     """
 
     def __init__(self, action, cookie=None):
-        super(CancellableAction, self).__init__()
+        super().__init__()
         self._action = action
         self._cookie = cookie
 

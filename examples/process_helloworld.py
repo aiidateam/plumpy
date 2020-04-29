@@ -6,7 +6,7 @@ class HelloWorld(plumpy.Process):
 
     @classmethod
     def define(cls, spec):
-        super(HelloWorld, cls).define(spec)
+        super().define(spec)
         spec.input('name', default='World', required=True)
         spec.output('greeting', valid_type=str)
 

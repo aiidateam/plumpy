@@ -19,19 +19,19 @@ class CustomObjectLoader(plumpy.DefaultObjectLoader):
         if identifier == 'jimmy':
             return Process
         else:
-            return super(CustomObjectLoader, self).load_object(identifier)
+            return super().load_object(identifier)
 
     def identify_object(self, obj):
         if isinstance(obj, Process) or issubclass(obj, Process):
             return 'jimmy'
         else:
-            return super(CustomObjectLoader, self).identify_object(obj)
+            return super().identify_object(obj)
 
 
 class TestProcessLauncher(testing.AsyncTestCase):
 
     def setUp(self):
-        super(TestProcessLauncher, self).setUp()
+        super().setUp()
         self.loop = self.io_loop
 
     @testing.gen_test

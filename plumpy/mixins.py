@@ -14,7 +14,7 @@ class ContextMixin(persistence.Savable):
     CONTEXT = '_context'
 
     def __init__(self, *args, **kwargs):
-        super(ContextMixin, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._context = AttributesDict()
 
     @property
@@ -22,12 +22,12 @@ class ContextMixin(persistence.Savable):
         return self._context
 
     def save_instance_state(self, out_state, save_context):
-        super(ContextMixin, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         if self._context is not None:
             out_state[self.CONTEXT] = self._context.__dict__
 
     def load_instance_state(self, saved_state, load_context):
-        super(ContextMixin, self).load_instance_state(saved_state, load_context)
+        super().load_instance_state(saved_state, load_context)
         try:
             self._context = AttributesDict(**saved_state[self.CONTEXT])
         except KeyError:

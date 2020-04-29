@@ -27,7 +27,7 @@ AWAIT_TIMEOUT = testing.get_async_test_timeout()
 class CommunicatorTestCase(AsyncTestCase):
 
     def setUp(self):
-        super(CommunicatorTestCase, self).setUp()
+        super().setUp()
         message_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
         task_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
         queue_name = '{}.{}.tasks'.format(self.__class__.__name__, shortuuid.uuid())
@@ -44,7 +44,7 @@ class CommunicatorTestCase(AsyncTestCase):
     def tearDown(self):
         # Close the connector before calling super because it will close the loop
         self.rmq_communicator.stop()
-        super(CommunicatorTestCase, self).tearDown()
+        super().tearDown()
 
 
 @unittest.skipIf(not pika, 'Requires pika library and RabbitMQ')
@@ -106,7 +106,7 @@ class TestLoopCommunicator(CommunicatorTestCase):
 class TestTaskActions(CommunicatorTestCase):
 
     def setUp(self):
-        super(TestTaskActions, self).setUp()
+        super().setUp()
         self._tmppath = tempfile.mkdtemp()
         self.persister = plumpy.PicklePersister(self._tmppath)
         # Add the process launcher
@@ -116,7 +116,7 @@ class TestTaskActions(CommunicatorTestCase):
 
     def tearDown(self):
         # Close the connector before calling super because it will
-        super(TestTaskActions, self).tearDown()
+        super().tearDown()
         shutil.rmtree(self._tmppath)
 
     @testing.gen_test

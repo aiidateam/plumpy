@@ -17,7 +17,7 @@ class TestCaseWithLoop(unittest.TestCase):
     """Test case with an event loop"""
 
     def setUp(self):
-        super(TestCaseWithLoop, self).setUp()
+        super().setUp()
         self.loop = plumpy.new_event_loop()
         plumpy.set_event_loop(self.loop)
 
@@ -33,7 +33,7 @@ class AsyncTestCase(testing.AsyncTestCase):
     communicator = None
 
     def setUp(self):
-        super(AsyncTestCase, self).setUp()
+        super().setUp()
         self.loop = self.io_loop
 
     def init_communicator(self):

@@ -16,7 +16,7 @@ class Root:
 class DoCall(Root):
 
     def method(self):
-        super(DoCall, self).method()
+        super().method()
 
 
 class DontCall(Root):
@@ -39,7 +39,7 @@ class TestSuperCheckMixin(unittest.TestCase):
         class ThirdChild(DontCall):
 
             def method(self):
-                super(ThirdChild, self).method()
+                super().method()
 
         with self.assertRaises(AssertionError):
             ThirdChild.do()

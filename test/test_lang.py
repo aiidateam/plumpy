@@ -154,7 +154,7 @@ class TestOverride(TestCase):
 #
 # class B(A):
 #     def __init__(self):
-#         super(B, self).__init__()
+#         super().__init__()
 #         self.b_called = False
 #
 #     @call_super
@@ -164,7 +164,7 @@ class TestOverride(TestCase):
 #
 # class C(B):
 #     def __init__(self):
-#         super(C, self).__init__()
+#         super().__init__()
 #         self.c_called = False
 #
 #     @call_super
@@ -173,7 +173,7 @@ class TestOverride(TestCase):
 #
 # class BPrime(A):
 #     def __init__(self):
-#         super(A, super).__init__()
+#         super().__init__()
 #         self.b_prime_called = False
 #
 #     def test(self):
@@ -181,7 +181,7 @@ class TestOverride(TestCase):
 #
 # class CPrime(BPrime):
 #     def __init__(self):
-#         super(CPrime, self).__init__()
+#         super().__init__()
 #         self.c_prime_called = False
 #
 #     @call_super

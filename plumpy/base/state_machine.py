@@ -26,7 +26,7 @@ class StateEntryFailed(Exception):
     """
 
     def __init__(self, state=None, *args, **kwargs):  # pylint: disable=keyword-arg-before-vararg
-        super(StateEntryFailed, self).__init__('failed to enter state')
+        super().__init__('failed to enter state')
         self.state = state
         self.args = args
         self.kwargs = kwargs
@@ -39,7 +39,7 @@ class InvalidStateError(Exception):
 class EventError(StateMachineError):
 
     def __init__(self, evt, msg):
-        super(EventError, self).__init__(msg)
+        super().__init__(msg)
         self.event = evt
 
 
@@ -50,7 +50,7 @@ class TransitionFailed(Exception):
         self.initial_state = initial_state
         self.final_state = final_state
         self.traceback_str = traceback_str
-        super(TransitionFailed, self).__init__(self._format_msg())
+        super().__init__(self._format_msg())
 
     def _format_msg(self):
         msg = ['{} -> {}'.format(self.initial_state, self.final_state)]
@@ -178,7 +178,7 @@ class StateMachineMeta(type):
         :param kwargs: Any keyword arguments to be passed to the constructor
         :return: An instance of the state machine
         """
-        inst = super(StateMachineMeta, cls).__call__(*args, **kwargs)
+        inst = super().__call__(*args, **kwargs)
         inst.transition_to(inst.create_initial_state())
         call_with_super_check(inst.init)
         return inst
@@ -236,7 +236,7 @@ class StateMachine(metaclass=StateMachineMeta):
         cls.sealed = True
 
     def __init__(self):
-        super(StateMachine, self).__init__()
+        super().__init__()
         self.__ensure_built()
         self._state = None
         self._exception_handler = None
