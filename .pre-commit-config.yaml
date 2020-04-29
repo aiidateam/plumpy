@@ -1,14 +1,4 @@
 # yet another python formatter
-# modernizer: make sure our code-base is Python 3 ready
-- repo: https://github.com/python-modernize/python-modernize.git
-  sha: a234ce4e185cf77a55632888f1811d83b4ad9ef2
-  hooks:
-  - id: python-modernize
-    exclude: ^docs/
-    args:
-      - --write
-      - --nobackups
-
 - repo: local
   hooks:
   # yapf = yet another python formatter
@@ -18,6 +8,10 @@
     language: system
     types: [python]
     args: ["-i"]
+    exclude: &exclude_files >-
+      (?x)^(
+        docs/source/conf.py|
+      )$
 
   # prospector: collection of linters
   - id: prospector
@@ -26,10 +20,10 @@
     name: prospector
     description: "This hook runs Prospector: https://github.com/landscapeio/prospector"
     entry: prospector
+    exclude: *exclude_files
 
 - repo: git://github.com/pre-commit/pre-commit-hooks
-  sha: v1.1.1
+  rev: v2.2.3
   hooks:
-  - id: check-yaml
-
-
+  - id: trailing-whitespace
+  - id: double-quote-string-fixer

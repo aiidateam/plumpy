@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from plumpy.ports import PortNamespace, InputPort
 from plumpy import ProcessSpec
 from .utils import TestCase

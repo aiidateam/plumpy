@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
 
-from __future__ import absolute_import
 import abc
 import contextlib
 import functools
@@ -11,7 +10,6 @@ import time
 import sys
 import threading
 import uuid
-import six
 
 from pika.exceptions import ConnectionClosed
 from tornado import concurrent, gen
@@ -44,7 +42,7 @@ __all__ = ['Process', 'ProcessSpec', 'BundleKeys', 'TransitionFailed']
 _LOGGER = logging.getLogger(__name__)
 
 
-class BundleKeys(object):
+class BundleKeys:
     """
     String keys used by the process to save its state in the state bundle.
 
@@ -90,9 +88,8 @@ def ensure_not_closed(func):
     return func_wrapper
 
 
-@six.add_metaclass(ProcessStateMachineMeta)
 @persistence.auto_persist('_pid', '_CREATION_TIME', '_future', '_paused', '_status', '_pre_paused_status')
-class Process(StateMachine, persistence.Savable):
+class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMeta):
     """
     The Process class is the base for any unit of work in plumpy.
 
@@ -886,7 +883,7 @@ class Process(StateMachine, persistence.Savable):
     def transition_excepted(self, _initial_state, final_state, exception, trace):
         # If we are creating, then reraise instead of failing.
         if final_state == process_states.ProcessState.CREATED:
-            six.reraise(type(exception), exception, trace)
+            raise exception.with_traceback(trace)
         else:
             self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
 

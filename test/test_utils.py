@@ -1,16 +1,10 @@
 """Test utilities"""
 
-from __future__ import absolute_import
 import collections
 from collections import namedtuple
-from six.moves import range
-from six.moves import zip
 
 import plumpy
-from . import processes
-from . import process_states
-from . import persistence
-from . import utils
+from plumpy import processes, process_states, persistence, utils
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -97,7 +91,7 @@ class NewLoopProcess(processes.Process):
         super(NewLoopProcess, self).__init__(*args, **kwargs)
 
 
-class EventsTesterMixin(object):
+class EventsTesterMixin:
     EVENTS = ("create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate")
 
     called_events = []
@@ -238,7 +232,7 @@ class ProcessListenerTester(plumpy.ProcessListener):
         self.called.add('killed')
 
 
-class Saver(object):
+class Saver:
 
     def __init__(self):
         self.snapshots = []

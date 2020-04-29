@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import unittest
 
 import shortuuid
@@ -8,9 +6,9 @@ import kiwipy.rmq
 
 import plumpy
 import plumpy.communications
-from plumpy import process_comms, test_utils
+from plumpy import process_comms
+from test import test_utils
 from .. import utils
-from six.moves import range
 
 try:
     import pika

@@ -2,7 +2,6 @@
 Python language utilities and tools.
 """
 
-from __future__ import absolute_import
 import functools
 import inspect
 
@@ -67,7 +66,7 @@ def override(check=False):
     return wrap
 
 
-class __NULL(object):
+class __NULL:
 
     def __eq__(self, other):
         return isinstance(other, self.__class__)

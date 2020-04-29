@@ -1,6 +1,5 @@
 """Module for general kiwipy communication methods"""
 
-from __future__ import absolute_import
 import functools
 
 from tornado import concurrent, ioloop

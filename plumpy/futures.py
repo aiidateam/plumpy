@@ -2,7 +2,6 @@
 Module containing future related methods and classes
 """
 
-from __future__ import absolute_import
 import kiwipy
 from tornado import concurrent, gen, ioloop
 

@@ -1,13 +1,10 @@
-from __future__ import absolute_import
 import abc
 import importlib
-import six
 
 __all__ = ['ObjectLoader', 'DefaultObjectLoader', 'set_object_loader', 'get_object_loader']
 
 
-@six.add_metaclass(abc.ABCMeta)
-class ObjectLoader(object):
+class ObjectLoader(metaclass=abc.ABCMeta):
     """
     An abstract object loaders. Concrete implementations can be used to identify an
     object and load it with that identifier.

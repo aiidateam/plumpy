@@ -1,6 +1,5 @@
 """Plumpy tests"""
 
-from __future__ import absolute_import
 import logging
 import tempfile
 import os

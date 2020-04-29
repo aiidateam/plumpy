@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
 import collections
 import json
 import logging
@@ -7,7 +6,7 @@ import logging
 from . import ports
 
 
-class ProcessSpec(object):
+class ProcessSpec:
     """
     A class that defines the specifications of a :class:`plumpy.Process`,
     this includes what its inputs, outputs, etc are.

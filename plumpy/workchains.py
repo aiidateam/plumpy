@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import absolute_import
 import abc
 import collections
 import inspect
@@ -157,8 +156,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
             return return_value
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Stepper(persistence.Savable):
+class Stepper(persistence.Savable, metaclass=abc.ABCMeta):
 
     def __init__(self, workchain):
         self._workchain = workchain
@@ -179,8 +177,7 @@ class Stepper(persistence.Savable):
         pass
 
 
-@six.add_metaclass(abc.ABCMeta)
-class _Instruction(object):
+class _Instruction(object, metaclass=abc.ABCMeta):
     """
     This class represents an instruction in a workchain. To step through the
     step you need to get a stepper by calling ``create_stepper()`` from which
@@ -341,7 +338,7 @@ class _Block(_Instruction, collections.Sequence):
         return [instruction.get_description() for instruction in self._instruction]
 
 
-class _Conditional(object):
+class _Conditional:
     """
     Object that represents some condition with the corresponding body to be
     executed if the condition is met e.g.:

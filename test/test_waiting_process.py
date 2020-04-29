@@ -1,9 +1,8 @@
 import plumpy
 from plumpy import Process, ProcessState, BundleKeys
-from plumpy.test_utils import ThreeSteps, \
-    DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess
-from plumpy.test_utils import check_process_against_snapshots
-from plumpy.test_utils import ProcessSaver
+from test.test_utils import ThreeSteps, \
+    DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess, \
+    check_process_against_snapshots, ProcessSaver
 
 from . import utils
 
