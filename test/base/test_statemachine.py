@@ -1,7 +1,7 @@
-from enum import Enum
-import unittest
-from plumpy.base import state_machine
 import time
+import unittest
+
+from plumpy.base import state_machine
 
 # Events
 PLAY = 'Play'
@@ -13,17 +13,14 @@ PLAYING = 'Playing'
 PAUSED = 'Paused'
 STOPPED = 'Stopped'
 
-# TODO: test exceptions
 
 class Playing(state_machine.State):
     LABEL = PLAYING
     ALLOWED = {PAUSED, STOPPED}
-    TRANSITIONS = {
-        STOP: STOPPED
-    }
+    TRANSITIONS = {STOP: STOPPED}
 
     def __init__(self, player, track):
-        assert track is not None, "Must provide a track name"
+        assert track is not None, 'Must provide a track name'
         super(Playing, self).__init__(player)
         self.track = track
         self._last_time = None
@@ -32,7 +29,7 @@ class Playing(state_machine.State):
     def __str__(self):
         if self.in_state:
             self._update_time()
-        return "> {} ({}s)".format(self.track, self._played)
+        return '> {} ({}s)'.format(self.track, self._played)
 
     def enter(self):
         super(Playing, self).enter()
@@ -42,7 +39,7 @@ class Playing(state_machine.State):
         super(Playing, self).exit()
         self._update_time()
 
-    def play(self, track=None):
+    def play(self, track=None):  # pylint: disable=no-self-use, unused-argument
         return False
 
     def _update_time(self):
@@ -54,18 +51,16 @@ class Playing(state_machine.State):
 class Paused(state_machine.State):
     LABEL = PAUSED
     ALLOWED = {PLAYING, STOPPED}
-    TRANSITIONS = {
-        STOP: STOPPED
-    }
+    TRANSITIONS = {STOP: STOPPED}
 
     def __init__(self, player, playing_state):
         assert isinstance(playing_state, Playing), \
-            "Must provide the playing state to pause"
+            'Must provide the playing state to pause'
         super(Paused, self).__init__(player)
         self.playing_state = playing_state
 
     def __str__(self):
-        return "|| ({})".format(self.playing_state)
+        return '|| ({})'.format(self.playing_state)
 
     def play(self, track=None):
         if track is not None:
@@ -76,13 +71,13 @@ class Paused(state_machine.State):
 
 class Stopped(state_machine.State):
     LABEL = STOPPED
-    ALLOWED = {PLAYING, }
-    TRANSITIONS = {
-        PLAY: PLAYING
+    ALLOWED = {
+        PLAYING,
     }
+    TRANSITIONS = {PLAY: PLAYING}
 
     def __str__(self):
-        return "[]"
+        return '[]'
 
     def play(self, track):
         self.state_machine.transition_to(Playing, track)
@@ -93,19 +88,16 @@ class CdPlayer(state_machine.StateMachine):
 
     def __init__(self):
         super(CdPlayer, self).__init__()
-        self.add_state_event_callback(
-            state_machine.StateEventHook.ENTERING_STATE,
-            lambda _s, _h, state: self.entering(state))
-        self.add_state_event_callback(
-            state_machine.StateEventHook.EXITING_STATE,
-            lambda _s, _h, _st: self.exiting())
+        self.add_state_event_callback(state_machine.StateEventHook.ENTERING_STATE,
+                                      lambda _s, _h, state: self.entering(state))
+        self.add_state_event_callback(state_machine.StateEventHook.EXITING_STATE, lambda _s, _h, _st: self.exiting())
 
     def entering(self, state):
-        print("Entering {}".format(state))
+        print('Entering {}'.format(state))
         print(self._state)
 
     def exiting(self):
-        print("Exiting {}".format(self.state))
+        print('Exiting {}'.format(self.state))
         print(self._state)
 
     @state_machine.event(to_states=Playing)
@@ -123,6 +115,7 @@ class CdPlayer(state_machine.StateMachine):
 
 
 class TestStateMachine(unittest.TestCase):
+
     def test_basic(self):
         cd_player = CdPlayer()
         self.assertEqual(cd_player.state, STOPPED)
