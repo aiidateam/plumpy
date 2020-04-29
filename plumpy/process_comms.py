@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 """Module for process level communication functions and classes"""
-
+import asyncio
 import copy
 import logging
 
-from tornado import gen
-import asyncio
 import kiwipy
 
 from . import loaders

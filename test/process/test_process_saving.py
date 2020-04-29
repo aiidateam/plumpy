@@ -14,7 +14,7 @@ class SavePauseProc(plumpy.Process):
     steps_ran = None
 
     def init(self):
-        super(SavePauseProc, self).init()
+        super().init()
         self.steps_ran = []
 
     def run(self):
@@ -152,7 +152,7 @@ class _RestartProcess(utils.WaitForSignalProcess):
 
     @classmethod
     def define(cls, spec):
-        super(_RestartProcess, cls).define(spec)
+        super().define(spec)
         spec.outputs.dynamic = True
 
     def last_step(self):

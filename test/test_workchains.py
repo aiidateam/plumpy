@@ -9,7 +9,6 @@ import unittest
 import pytest
 import asyncio
 
-from test import test_utils
 from . import utils
 
 
@@ -227,8 +226,8 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 spec.outline(cls.s1, cls.s2, cls.s3)
 
             def s1(self):
-                r1=self.launch(ReturnA)
-                r2=self.launch(ReturnB)
+                r1 = self.launch(ReturnA)
+                r2 = self.launch(ReturnB)
                 # return ToContext(r1=self.launch(ReturnA), r2=self.launch(ReturnB))
                 return ToContext(r1=r1, r2=r2)
 
@@ -390,7 +389,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         workchain = IfTest()
         asyncio.ensure_future(workchain.step_until_terminated())
 
-        await test_utils.run_until_paused(workchain)
+        await utils.run_until_paused(workchain)
         self.assertTrue(workchain.ctx.s1)
         self.assertFalse(workchain.ctx.s2)
 
@@ -469,7 +468,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 spec.outline(cls.begin, cls.check)
 
             def begin(self):
-                self.to_context(result_a=self.launch(test_utils.ExceptionProcess))
+                self.to_context(result_a=self.launch(utils.ExceptionProcess))
 
             def check(self):
                 raise my_exception

@@ -42,14 +42,14 @@ class TestProcessLauncher(unittest.TestCase):
         load_context = plumpy.LoadSaveContext()
         launcher = plumpy.ProcessLauncher(persister=persister, load_context=load_context)
 
-        process = test_utils.DummyProcess()
+        process = utils.DummyProcess()
         pid = process.pid
         persister.save_checkpoint(process)
         del process
         process = None
 
         result = await launcher._continue(None, **plumpy.create_continue_body(pid)[process_comms.TASK_ARGS])
-        self.assertEqual(test_utils.DummyProcess.EXPECTED_OUTPUTS, result)
+        self.assertEqual(utils.DummyProcess.EXPECTED_OUTPUTS, result)
 
     @pytest.mark.asyncio
     async def test_loader_is_used(self):

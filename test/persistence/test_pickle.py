@@ -5,8 +5,7 @@ if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
 
 import plumpy
-from test.test_utils import ProcessWithCheckpoint
-from test.utils import TestCaseWithLoop
+from test.utils import ProcessWithCheckpoint, TestCaseWithLoop
 
 
 class TestPicklePersister(TestCaseWithLoop):

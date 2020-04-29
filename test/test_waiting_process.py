@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 import plumpy
-from plumpy import Process, ProcessState, BundleKeys
-from test.test_utils import ThreeSteps, \
-    DummyProcessWithOutput, TEST_WAITING_PROCESSES, WaitForSignalProcess, \
-    check_process_against_snapshots, ProcessSaver
+from plumpy import BundleKeys
 
 from . import utils
 
@@ -11,23 +8,23 @@ from . import utils
 class TestWaitingProcess(utils.TestCaseWithLoop):
 
     def test_instance_state(self):
-        proc = ThreeSteps()
-        wl = ProcessSaver(proc)
+        proc = utils.ThreeSteps()
+        wl = utils.ProcessSaver(proc)
         proc.execute()
 
         for bundle, outputs in zip(wl.snapshots, wl.outputs):
             self.assertEqual(outputs, bundle.get(BundleKeys.OUTPUTS, {}))
 
     def test_saving_each_step(self):
-        for proc_class in TEST_WAITING_PROCESSES:
+        for proc_class in utils.TEST_WAITING_PROCESSES:
             proc = proc_class()
-            saver = ProcessSaver(proc)
+            saver = utils.ProcessSaver(proc)
             saver.capture()
 
-            self.assertTrue(check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
+            self.assertTrue(utils.check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
 
     def test_kill(self):
-        process = WaitForSignalProcess()
+        process = utils.WaitForSignalProcess()
 
         # Kill the process when it enters the WAITING state
         listener = plumpy.ProcessListener()

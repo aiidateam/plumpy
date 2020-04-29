@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pytest
 import shortuuid
 
@@ -13,10 +14,11 @@ def communicator() -> rmq.RmqThreadCommunicator:
 
     communicator = rmq.connect(
         connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-                                        message_exchange=message_exchange,
-                                        task_exchange=task_exchange,
-                                        task_queue=queue_name,
-                                        testing_mode=True)
+        message_exchange=message_exchange,
+        task_exchange=task_exchange,
+        task_queue=queue_name,
+        testing_mode=True
+    )
     yield communicator
     communicator.stop()
 

@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 from plumpy.ports import PortNamespace, InputPort
 from plumpy import ProcessSpec
-from .utils import TestCase
+
+from .. import utils
 
 
 class StrSubtype(str):
     pass
 
 
-class TestProcessSpec(TestCase):
+class TestProcessSpec(utils.TestCase):
 
     def setUp(self):
         self.spec = ProcessSpec()

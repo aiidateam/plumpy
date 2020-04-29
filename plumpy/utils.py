@@ -8,7 +8,6 @@ from collections import deque, defaultdict
 
 import asyncio
 import frozendict
-import tornado.gen
 
 from .settings import check_protected, check_override
 from . import lang

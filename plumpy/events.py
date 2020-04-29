@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Event and loop related classes and functions"""
 import sys
+
 from tornado import ioloop
-import tornado.gen
 
 __all__ = ['new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete']
 

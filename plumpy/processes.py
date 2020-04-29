@@ -1,23 +1,20 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
-
 import abc
+import asyncio
 import contextlib
 import functools
 import copy
 import logging
 import time
 import sys
-import threading
 import uuid
 import inspect
 
 from aiocontextvars import ContextVar
-from pika.exceptions import ConnectionClosed
-import asyncio
-import yaml
-
 import kiwipy
+from pika.exceptions import ConnectionClosed
+import yaml
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -40,6 +37,7 @@ from . import utils
 __all__ = ['Process', 'ProcessSpec', 'BundleKeys', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
+PROCESS_STACK = ContextVar('process stack', default=[])
 
 
 class BundleKeys:
@@ -53,7 +51,6 @@ class BundleKeys:
     INPUTS_PARSED = 'INPUTS_PARSED'
     OUTPUTS = 'OUTPUTS'
 
-_process_stack = ContextVar('process stack', default=[])
 
 class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
     pass
@@ -134,8 +131,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: the currently running process
         :rtype: :class:`plumpy.Process`
         """
-        if _process_stack.get():
-            return _process_stack.get()[-1]
+        if PROCESS_STACK.get():
+            return PROCESS_STACK.get()[-1]
 
         return None
 
@@ -469,14 +466,14 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         meaning that globally someone can ask for Process.current() to get the last process
         that is on the call stack.
         """
-        _process_stack.get().append(self)
+        PROCESS_STACK.get().append(self)
         try:
             yield
         finally:
             assert Process.current() is self, \
                 'Somehow, the process at the top of the stack is not me, ' \
                 'but another process! ({} != {})'.format(self, Process.current())
-            _process_stack().get().pop()
+            PROCESS_STACK.get().pop()
 
     async def _run_task(self, callback, *args, **kwargs):
         """

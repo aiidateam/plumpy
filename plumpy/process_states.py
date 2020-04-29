@@ -3,15 +3,14 @@ from enum import Enum
 import sys
 import traceback
 
+import yaml
+
 try:
     import tblib
 
     _HAS_TBLIB = True
 except ImportError:
     _HAS_TBLIB = False
-
-from tornado.gen import coroutine, Return
-import yaml
 
 from . import futures
 from .base import state_machine
@@ -228,7 +227,7 @@ class Running(State):
             except Interruption:
                 # Let this bubble up to the caller
                 raise
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 excepted = self.create_state(ProcessState.EXCEPTED, *sys.exc_info()[1:])
                 return excepted
             else:

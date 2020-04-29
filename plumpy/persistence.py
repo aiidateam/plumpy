@@ -7,7 +7,6 @@ import fnmatch
 import inspect
 import os
 import pickle
-import asyncio
 
 import yaml
 
@@ -52,7 +51,7 @@ class Bundle(dict):
         return Savable.load(self, load_context)
 
 
-_BUNDLE_TAG = u'!plumpy:Bundle'
+_BUNDLE_TAG = '!plumpy:Bundle'
 
 
 def _bundle_representer(dumper, node):
@@ -523,9 +522,7 @@ class Savable:
 
     def load_members(self, members, saved_state, load_context=None):
         for member in members:
-            v = self._get_value(saved_state, member, load_context)
-            # setattr(self, member, self._get_value(saved_state, member, load_context))
-            setattr(self, member, v)
+            setattr(self, member, self._get_value(saved_state, member, load_context))
 
     def _ensure_persist_configured(self):
         if not self._persist_configured:

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Module for general kiwipy communication methods"""
+import asyncio
 import functools
 
 import kiwipy
-import asyncio
 
 from . import futures
 

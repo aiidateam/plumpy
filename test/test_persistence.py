@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import plumpy
-from test import test_utils
 import unittest
 import yaml
 
@@ -80,7 +79,7 @@ class TestBundle(utils.TestCaseWithLoop):
 
     def test_bundle_load_context(self):
         """ Check that the loop from the load context is used """
-        proc = test_utils.DummyProcess(loop=self.loop)
+        proc = utils.DummyProcess(loop=self.loop)
         bundle = plumpy.Bundle(proc)
 
         loop2 = plumpy.new_event_loop()

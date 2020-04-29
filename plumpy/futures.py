@@ -2,12 +2,14 @@
 """
 Module containing future related methods and classes
 """
-import kiwipy
 import asyncio
-from tornado import gen, ioloop
-import inspect
-import plumpy
 import concurrent
+import inspect
+
+import kiwipy
+import tornado
+
+import plumpy
 
 __all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError', 'create_task']
 
@@ -20,7 +22,7 @@ class InvalidStateError(Exception):
 
 copy_future = kiwipy.copy_future  # pylint: disable=invalid-name
 chain = kiwipy.chain  # pylint: disable=invalid-name
-gather = lambda *args: gen.multi(args)  # pylint: disable=invalid-name
+gather = lambda *args: tornado.gen.multi(args)  # pylint: disable=invalid-name
 
 
 class Future(concurrent.futures.Future):
@@ -74,7 +76,7 @@ def create_task(coro, loop=None):
     future = plumpy.Future()
 
     async def run_task():
-        print("inside run_task")
+        print('inside run_task')
         print((id(asyncio.get_event_loop())))
         with kiwipy.capture_exceptions(future):
             res = coro()
