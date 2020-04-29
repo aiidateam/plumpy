@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from functools import partial
 import shutil
 import tempfile
@@ -26,26 +27,27 @@ AWAIT_TIMEOUT = testing.get_async_test_timeout()
 class CommunicatorTestCase(AsyncTestCase):
 
     def setUp(self):
-        super(CommunicatorTestCase, self).setUp()
-        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        queue_name = "{}.{}.tasks".format(self.__class__.__name__, shortuuid.uuid())
+        super().setUp()
+        message_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        task_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        queue_name = '{}.{}.tasks'.format(self.__class__.__name__, shortuuid.uuid())
 
         self.rmq_communicator = rmq.connect(
             connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
             message_exchange=message_exchange,
             task_exchange=task_exchange,
             task_queue=queue_name,
-            testing_mode=True)
+            testing_mode=True
+        )
         self.communicator = communications.LoopCommunicator(self.rmq_communicator, self.loop)
 
     def tearDown(self):
         # Close the connector before calling super because it will close the loop
         self.rmq_communicator.stop()
-        super(CommunicatorTestCase, self).tearDown()
+        super().tearDown()
 
 
-@unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
+@unittest.skipIf(not pika, 'Requires pika library and RabbitMQ')
 class TestLoopCommunicator(CommunicatorTestCase):
     """Make sure the loop communicator is working as expected"""
 
@@ -100,11 +102,11 @@ class TestLoopCommunicator(CommunicatorTestCase):
         self.assertEqual(TASK, result)
 
 
-@unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
+@unittest.skipIf(not pika, 'Requires pika library and RabbitMQ')
 class TestTaskActions(CommunicatorTestCase):
 
     def setUp(self):
-        super(TestTaskActions, self).setUp()
+        super().setUp()
         self._tmppath = tempfile.mkdtemp()
         self.persister = plumpy.PicklePersister(self._tmppath)
         # Add the process launcher
@@ -114,7 +116,7 @@ class TestTaskActions(CommunicatorTestCase):
 
     def tearDown(self):
         # Close the connector before calling super because it will
-        super(TestTaskActions, self).tearDown()
+        super().tearDown()
         shutil.rmtree(self._tmppath)
 
     @testing.gen_test

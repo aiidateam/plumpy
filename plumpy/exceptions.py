@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 __all__ = ['KilledError', 'UnsuccessfulResult', 'InvalidStateError', 'PersistenceError', 'ClosedError']
 
 

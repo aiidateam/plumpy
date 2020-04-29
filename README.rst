@@ -1,8 +1,8 @@
 plumpy
 ======
 
-.. image:: https://travis-ci.org/muhrin/plumpy.svg
-    :target: https://travis-ci.org/muhrin/plumpy
+.. image:: https://github.com/aiidateam/plumpy/workflows/plumpy/badge.svg
+    :target: https://github.com/aiidateam/plumpy/actions
     :alt: Travis CI
 
 .. image:: https://readthedocs.org/projects/plumpy/badge

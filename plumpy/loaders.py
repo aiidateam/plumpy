@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import abc
 import importlib
 
@@ -20,7 +21,6 @@ class ObjectLoader(metaclass=abc.ABCMeta):
         :param identifier: The identifier
         :return: The loaded object
         """
-        pass
 
     @abc.abstractmethod
     def identify_object(self, obj):
@@ -32,7 +32,6 @@ class ObjectLoader(metaclass=abc.ABCMeta):
         :param obj: The object to identify
         :return: An identifier for the object
         """
-        pass
 
 
 class DefaultObjectLoader(ObjectLoader):
@@ -42,10 +41,10 @@ class DefaultObjectLoader(ObjectLoader):
     """
 
     def load_object(self, identifier):
-        mod, name = identifier.split(":")
+        mod, name = identifier.split(':')
         try:
             mod = importlib.import_module(mod)
-        except ImportError as e:
+        except ImportError:
             raise ValueError("module '{}' from identifier '{}' could not be loaded".format(mod, identifier))
         else:
             try:
@@ -54,13 +53,13 @@ class DefaultObjectLoader(ObjectLoader):
                 raise ValueError("object '{}' form identifier '{}' could not be loaded".format(name, identifier))
 
     def identify_object(self, obj):
-        identifier = "{}:{}".format(obj.__module__, obj.__name__)
+        identifier = '{}:{}'.format(obj.__module__, obj.__name__)
         # Make sure we can load the object
         self.load_object(identifier)
         return identifier
 
 
-_object_loader = None
+OBJECT_LOADER = None
 
 
 def get_object_loader():
@@ -70,10 +69,10 @@ def get_object_loader():
     :return: A class loader
     :rtype: :class:`ObjectLoader`
     """
-    global _object_loader
-    if _object_loader is None:
-        _object_loader = DefaultObjectLoader()
-    return _object_loader
+    global OBJECT_LOADER
+    if OBJECT_LOADER is None:
+        OBJECT_LOADER = DefaultObjectLoader()
+    return OBJECT_LOADER
 
 
 def set_object_loader(loader):
@@ -84,5 +83,5 @@ def set_object_loader(loader):
     :type loader: :class:`ObjectLoader`
     :return:
     """
-    global _object_loader
-    _object_loader = loader
+    global OBJECT_LOADER
+    OBJECT_LOADER = loader

@@ -50,4 +50,4 @@ Workchain
 A WorkChain is a series of instructions carried out with the ability to save state in between.
 
 The `outline` can give a succinct summary of the logical steps that the workchain will perform.
-WorkChain supporting using `If_` and `While_` to control the state flow of certain processes. 
+WorkChain supporting using `If_` and `While_` to control the state flow of certain processes.

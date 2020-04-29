@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import plumpy
 from plumpy import Process, ProcessState, BundleKeys
 from test.test_utils import ThreeSteps, \
@@ -8,6 +9,7 @@ from . import utils
 
 
 class TestWaitingProcess(utils.TestCaseWithLoop):
+
     def test_instance_state(self):
         proc = ThreeSteps()
         wl = ProcessSaver(proc)
