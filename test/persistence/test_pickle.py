@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import tempfile
 
 if getattr(tempfile, 'TemporaryDirectory', None) is None:

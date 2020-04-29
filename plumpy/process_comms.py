@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Module for process level communication functions and classes"""
 
 import copy
@@ -217,14 +218,16 @@ class RemoteProcessController:
         raise gen.Return(result)
 
     @gen.coroutine
-    def launch_process(self,
-                       process_class,
-                       init_args=None,
-                       init_kwargs=None,
-                       persist=False,
-                       loader=None,
-                       nowait=False,
-                       no_reply=False):
+    def launch_process(
+        self,
+        process_class,
+        init_args=None,
+        init_kwargs=None,
+        persist=False,
+        loader=None,
+        nowait=False,
+        no_reply=False
+    ):
         """
         Launch a process given the class and constructor arguments
 
@@ -248,13 +251,9 @@ class RemoteProcessController:
         raise gen.Return(result)
 
     @gen.coroutine
-    def execute_process(self,
-                        process_class,
-                        init_args=None,
-                        init_kwargs=None,
-                        loader=None,
-                        nowait=False,
-                        no_reply=False):
+    def execute_process(
+        self, process_class, init_args=None, init_kwargs=None, loader=None, nowait=False, no_reply=False
+    ):
         """
         Execute a process.  This call will first send a create task and then a continue task over
         the communicator.  This means that if communicator messages are durable then the process
@@ -367,14 +366,16 @@ class RemoteProcessThreadController:
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         return self.task_send(message, no_reply=no_reply)
 
-    def launch_process(self,
-                       process_class,
-                       init_args=None,
-                       init_kwargs=None,
-                       persist=False,
-                       loader=None,
-                       nowait=False,
-                       no_reply=False):
+    def launch_process(
+        self,
+        process_class,
+        init_args=None,
+        init_kwargs=None,
+        persist=False,
+        loader=None,
+        nowait=False,
+        no_reply=False
+    ):
         # pylint: disable=too-many-arguments
         """
         Launch the process
@@ -391,13 +392,9 @@ class RemoteProcessThreadController:
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
         return self.task_send(message, no_reply=no_reply)
 
-    def execute_process(self,
-                        process_class,
-                        init_args=None,
-                        init_kwargs=None,
-                        loader=None,
-                        nowait=False,
-                        no_reply=False):
+    def execute_process(
+        self, process_class, init_args=None, init_kwargs=None, loader=None, nowait=False, no_reply=False
+    ):
         """
         Execute a process.  This call will first send a create task and then a continue task over
         the communicator.  This means that if communicator messages are durable then the process

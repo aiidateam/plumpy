@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import time
 import unittest
 
@@ -88,8 +89,9 @@ class CdPlayer(state_machine.StateMachine):
 
     def __init__(self):
         super(CdPlayer, self).__init__()
-        self.add_state_event_callback(state_machine.StateEventHook.ENTERING_STATE,
-                                      lambda _s, _h, state: self.entering(state))
+        self.add_state_event_callback(
+            state_machine.StateEventHook.ENTERING_STATE, lambda _s, _h, state: self.entering(state)
+        )
         self.add_state_event_callback(state_machine.StateEventHook.EXITING_STATE, lambda _s, _h, _st: self.exiting())
 
     def entering(self, state):

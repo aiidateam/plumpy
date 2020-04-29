@@ -1,29 +1,29 @@
-# yet another python formatter
-- repo: local
-  hooks:
-  # yapf = yet another python formatter
-  - id: yapf
-    name: yapf
-    entry: yapf
-    language: system
-    types: [python]
-    args: ["-i"]
-    exclude: &exclude_files >-
-      (?x)^(
-        docs/source/conf.py|
-      )$
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.5.0
+    hooks:
+    -   id: double-quote-string-fixer
+    -   id: end-of-file-fixer
+    -   id: fix-encoding-pragma
+    -   id: mixed-line-ending
+    -   id: trailing-whitespace
 
-  # prospector: collection of linters
-  - id: prospector
-    language: system
-    types: [file, python]
-    name: prospector
-    description: "This hook runs Prospector: https://github.com/landscapeio/prospector"
-    entry: prospector
-    exclude: *exclude_files
+-   repo: https://github.com/PyCQA/prospector
+    rev: 1.2.0
+    hooks:
+    -   id: prospector
+        language: system
+        exclude: &exclude_files >
+            (?x)^(
+                docs/source/conf.py|
+                test/.*|
+            )$
 
-- repo: git://github.com/pre-commit/pre-commit-hooks
-  rev: v2.2.3
-  hooks:
-  - id: trailing-whitespace
-  - id: double-quote-string-fixer
+-   repo: local
+    hooks:
+    -   id: yapf
+        name: yapf
+        entry: yapf
+        language: system
+        types: [python]
+        args: ['-i']

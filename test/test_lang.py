@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 from .utils import TestCase
 from plumpy.lang import protected, override
 
 
 class A:
+
     def __init__(self):
         self._a = None
 
@@ -25,20 +27,24 @@ class A:
 
 
 class B(A):
+
     def testB(self):
         self.protected_fn()
         self.protected_property
 
 
 class C(B):
+
     def testC(self):
         self.protected_fn()
         self.protected_property
 
 
 class TestProtected(TestCase):
+
     def test_free_function(self):
         with self.assertRaises(RuntimeError):
+
             @protected(check=False)
             def some_func():
                 pass
@@ -70,7 +76,9 @@ class TestProtected(TestCase):
             c.protected_property
 
         with self.assertRaises(RuntimeError):
+
             class TestWrongDecoratorOrder:
+
                 @protected(check=True)
                 @property
                 def a(self):
@@ -78,19 +86,24 @@ class TestProtected(TestCase):
 
 
 class Superclass:
+
     def test(self):
         pass
 
 
 class TestOverride(TestCase):
+
     def test_free_function(self):
         with self.assertRaises(RuntimeError):
+
             @override(check=False)
             def some_func():
                 pass
 
     def test_correct_usage(self):
+
         class Derived(Superclass):
+
             @override(check=True)
             def test(self):
                 return True
@@ -101,6 +114,7 @@ class TestOverride(TestCase):
             pass
 
         class Next(Middle):
+
             @override(check=True)
             def test(self):
                 return True
@@ -108,7 +122,9 @@ class TestOverride(TestCase):
         self.assertTrue(Next().test())
 
     def test_incorrect_usage(self):
+
         class Derived:
+
             @override(check=True)
             def test(self):
                 pass
@@ -117,11 +133,14 @@ class TestOverride(TestCase):
             Derived().test()
 
         with self.assertRaises(RuntimeError):
+
             class TestWrongDecoratorOrder(Superclass):
+
                 @override(check=True)
                 @property
                 def test(self):
                     return None
+
 
 #
 #

@@ -32,7 +32,6 @@ from . import events
 from . import persistence
 from . import process_comms
 from . import process_states
-from . import ports
 from . import utils
 
 # pylint: disable=too-many-lines
@@ -81,14 +80,14 @@ def ensure_not_closed(func):
 
     @functools.wraps(func)
     def func_wrapper(self, *args, **kwargs):
-        if self._closed:
-            raise exceptions.ClosedError("Process is closed")
+        if self._closed:  # pylint: disable=protected-access
+            raise exceptions.ClosedError('Process is closed')
         return func(self, *args, **kwargs)
 
     return func_wrapper
 
 
-@persistence.auto_persist('_pid', '_CREATION_TIME', '_future', '_paused', '_status', '_pre_paused_status')
+@persistence.auto_persist('_pid', '_creation_time', '_future', '_paused', '_status', '_pre_paused_status')
 class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMeta):
     """
     The Process class is the base for any unit of work in plumpy.
@@ -126,6 +125,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     always called immediately after that state is entered but before being
     executed.
     """
+
+    # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
     # Static class stuff ######################
     _spec_class = ProcessSpec
@@ -181,9 +182,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 cls.__called = False
                 cls.define(cls._spec)
                 assert cls.__called, \
-                    "Process.define() was not called by {}\n" \
-                    "Hint: Did you forget to call the superclass method in your define? " \
-                    "Try: super({}, cls).define(spec)".format(cls, cls.__name__)
+                    'Process.define() was not called by {}\n' \
+                    'Hint: Did you forget to call the superclass method in your define? ' \
+                    'Try: super({}, cls).define(spec)'.format(cls, cls.__name__)
                 return cls._spec
             except Exception:
                 del cls._spec
@@ -267,7 +268,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._parsed_inputs = None
         self._outputs = {}
         self._uuid = None
-        self._CREATION_TIME = None
+        self._creation_time = None
 
         # Runtime variables
         self._future = persistence.SavableFuture()
@@ -285,31 +286,35 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 identifier = self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
                 self.add_cleanup(functools.partial(self._communicator.remove_rpc_subscriber, identifier))
             except kiwipy.TimeoutError:
-                self.logger.exception("Process<%s> failed to register as an RPC subscriber", self.pid)
+                self.logger.exception('Process<%s> failed to register as an RPC subscriber', self.pid)
 
             try:
                 identifier = self._communicator.add_broadcast_subscriber(
-                    self.broadcast_receive, identifier=str(self.pid))
+                    self.broadcast_receive, identifier=str(self.pid)
+                )
                 self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
             except kiwipy.TimeoutError:
-                self.logger.exception("Process<%s> failed to register as a broadcast subscriber", self.pid)
+                self.logger.exception('Process<%s> failed to register as a broadcast subscriber', self.pid)
 
         if not self._future.done():
 
             def try_killing(future):
                 if future.cancelled():
                     if not self.kill('Killed by future being cancelled'):
-                        self.logger.warning("Failed to kill process on future cancel")
+                        self.logger.warning('Failed to kill process on future cancel')
 
             self._future.add_done_callback(try_killing)
 
     def _setup_event_hooks(self):
-        self.add_state_event_callback(state_machine.StateEventHook.ENTERING_STATE,
-                                      lambda _s, _h, state: self.on_entering(state))
-        self.add_state_event_callback(state_machine.StateEventHook.ENTERED_STATE,
-                                      lambda _s, _h, from_state: self.on_entered(from_state))
-        self.add_state_event_callback(state_machine.StateEventHook.EXITING_STATE,
-                                      lambda _s, _h, _state: self.on_exiting())
+        self.add_state_event_callback(
+            state_machine.StateEventHook.ENTERING_STATE, lambda _s, _h, state: self.on_entering(state)
+        )
+        self.add_state_event_callback(
+            state_machine.StateEventHook.ENTERED_STATE, lambda _s, _h, from_state: self.on_entered(from_state)
+        )
+        self.add_state_event_callback(
+            state_machine.StateEventHook.EXITING_STATE, lambda _s, _h, _state: self.on_exiting()
+        )
 
     @property
     def creation_time(self):
@@ -318,7 +323,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: The creation time
         :rtype: float
         """
-        return self._CREATION_TIME
+        return self._creation_time
 
     @property
     def pid(self):
@@ -377,7 +382,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @ensure_not_closed
     def launch(self, process_class, inputs=None, pid=None, logger=None):
         process = process_class(
-            inputs=inputs, pid=pid, logger=logger, loop=self.loop(), communicator=self._communicator)
+            inputs=inputs, pid=pid, logger=logger, loop=self.loop(), communicator=self._communicator
+        )
         self.loop().add_callback(process.step_until_terminated)
         return process
 
@@ -480,8 +486,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             yield
         finally:
             assert Process.current() is self, \
-                "Somehow, the process at the top of the stack is not me, " \
-                "but another process! ({} != {})".format(self, Process.current())
+                'Somehow, the process at the top of the stack is not me, ' \
+                'but another process! ({} != {})'.format(self, Process.current())
             _process_stack().pop()
 
     @gen.coroutine
@@ -498,7 +504,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         # Make sure execute is a coroutine
         coro = utils.ensure_coroutine(callback)
         result = yield tornado.stack_context.run_with_stack_context(
-            tornado.stack_context.StackContext(self._process_scope), functools.partial(coro, *args, **kwargs))
+            tornado.stack_context.StackContext(self._process_scope), functools.partial(coro, *args, **kwargs)
+        )
         raise gen.Return(result)
 
     # endregion
@@ -578,7 +585,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     # endregion
 
     def add_process_listener(self, listener):
-        assert (listener != self), "Cannot listen to yourself!"
+        assert (listener != self), 'Cannot listen to yourself!'
         self.__event_helper.add_listener(listener)
 
     def remove_process_listener(self, listener):
@@ -590,7 +597,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @protected
     def log_with_pid(self, level, msg):
-        self.logger.log(level, "%s: %s", self.pid, msg)
+        self.logger.log(level, '%s: %s', self.pid, msg)
 
     # region Events
 
@@ -628,10 +635,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             from_label = from_state.LABEL.value if from_state is not None else None
             try:
                 self._communicator.broadcast_send(
-                    body=None, sender=self.pid, subject='state_changed.{}.{}'.format(from_label, self.state.value))
+                    body=None, sender=self.pid, subject='state_changed.{}.{}'.format(from_label, self.state.value)
+                )
             except ConnectionClosed:
-                self.logger.info('no connection available to broadcast state change from %s to %s', from_label,
-                                 self.state.value)
+                self.logger.info(
+                    'no connection available to broadcast state change from %s to %s', from_label, self.state.value
+                )
 
     def on_exiting(self):
         state = self.state
@@ -642,7 +651,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @super_check
     def on_create(self):
-        self._CREATION_TIME = time.time()
+        self._creation_time = time.time()
 
         # This will parse the inputs with respect to the input portnamespace of the spec and validate them
         raw_inputs = dict(self._raw_inputs) if self._raw_inputs else {}
@@ -659,46 +668,43 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @super_check
     def on_exit_running(self):
-        pass
+        """Exiting the RUNNING state."""
 
     @super_check
     def on_exit_waiting(self):
-        pass
+        """Exiting the WAITING state."""
 
     @super_check
     def on_run(self):
-        """ Entering the RUNNING state """
-        pass
+        """Entering the RUNNING state."""
 
     @super_check
     def on_running(self):
-        """ Entered the RUNNING state """
+        """Entered the RUNNING state."""
         self._fire_event(ProcessListener.on_process_running)
 
     def on_output_emitting(self, output_port, value):
-        pass
+        """Output is about to be emitted."""
 
     def on_output_emitted(self, output_port, value, dynamic):
         self.__event_helper.fire_event(ProcessListener.on_output_emitted, self, output_port, value, dynamic)
 
     @super_check
     def on_wait(self, awaitables):
-        """ Entering the WAITING state """
-        pass
+        """Entering the WAITING state."""
 
     @super_check
     def on_waiting(self):
-        """ Entered the WAITING state """
+        """Entered the WAITING state."""
         self._fire_event(ProcessListener.on_process_waiting)
 
     @super_check
     def on_pausing(self, msg=None):
-        """ The process is being paused """
-        pass
+        """The process is being paused."""
 
     @super_check
     def on_paused(self, msg=None):
-        """ The process was paused """
+        """The process was paused """
         self._pausing = None
 
         # Create a future to represent the duration of the paused state
@@ -810,7 +816,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             return status_info
 
         # Didn't match any known intents
-        raise RuntimeError("Unknown intent")
+        raise RuntimeError('Unknown intent')
 
     def broadcast_receive(self, _comm, body, sender, subject, correlation_id):
         """
@@ -820,6 +826,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :type _comm: :class:`kiwipy.Communicator`
         :param msg: the message
         """
+        # pylint: disable=unused-argument
         self.logger.debug("Broadcast message '%s' received with communicator '%s'", body, _comm)
 
         # If we get a message we recognise then action it, otherwise ignore
@@ -829,8 +836,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             return self._schedule_rpc(self.pause, msg=body)
         if subject == process_comms.Intent.KILL:
             return self._schedule_rpc(self.kill, msg=body)
-
-        return
 
     def _schedule_rpc(self, callback, *args, **kwargs):
         """
@@ -884,8 +889,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         # If we are creating, then reraise instead of failing.
         if final_state == process_states.ProcessState.CREATED:
             raise exception.with_traceback(trace)
-        else:
-            self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
+
+        self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
 
     def pause(self, msg=None):
         """
@@ -1069,7 +1074,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @ensure_not_closed
     @gen.coroutine
     def step(self):
-        assert not self.has_terminated(), "Cannot step, already terminated"
+        assert not self.has_terminated(), 'Cannot step, already terminated'
 
         if self.paused:
             yield self._paused
@@ -1151,8 +1156,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             validation_error = port.validate_dynamic_ports({port_name: value})
 
         if validation_error:
-            msg = "Error validating output '{}' for port '{}': {}".format(value, validation_error.port,
-                                                                          validation_error.message)
+            msg = "Error validating output '{}' for port '{}': {}".format(
+                value, validation_error.port, validation_error.message
+            )
             raise ValueError(msg)
 
         output_namespace = self._outputs

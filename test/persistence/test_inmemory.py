@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import plumpy
 from test.test_utils import ProcessWithCheckpoint
 from test.utils import TestCaseWithLoop

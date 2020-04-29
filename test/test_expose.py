@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from plumpy.ports import PortNamespace
 from plumpy.processes import Process
 from plumpy.process_spec import ProcessSpec
@@ -206,7 +207,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
             namespace=None,
             exclude=(),
             include=None,
-            namespace_options={})
+            namespace_options={}
+        )
 
         # Verify that all the ports are there
         self.assertIn('a', ParentProcessSpec.inputs)
@@ -260,7 +262,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 'dynamic': False,
                 'default': None,
                 'help': None,
-            })
+            }
+        )
 
         # Verify that all the ports are there
         self.assertIn('a', ParentProcessSpec.inputs)
@@ -306,7 +309,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
             namespace='namespace',
             exclude=(),
             include=None,
-            namespace_options={})
+            namespace_options={}
+        )
 
         # Verify that all the ports are there
         self.assertIn('a', ParentProcessSpec.inputs['namespace'])
@@ -340,7 +344,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 include=None,
                 namespace_options={
                     'non_existent': None,
-                })
+                }
+            )
 
     def test_expose_nested_include_top_level(self):
         """Test the include rules can be nested and are properly unwrapped."""

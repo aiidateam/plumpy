@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from kiwipy import rmq
 from tornado import testing
 
@@ -7,25 +8,28 @@ from test import test_utils
 
 
 class Process(plumpy.Process):
+
     def run(self):
         pass
 
 
 class CustomObjectLoader(plumpy.DefaultObjectLoader):
+
     def load_object(self, identifier):
-        if identifier == "jimmy":
+        if identifier == 'jimmy':
             return Process
         else:
             return super(CustomObjectLoader, self).load_object(identifier)
 
     def identify_object(self, obj):
         if isinstance(obj, Process) or issubclass(obj, Process):
-            return "jimmy"
+            return 'jimmy'
         else:
             return super(CustomObjectLoader, self).identify_object(obj)
 
 
 class TestProcessLauncher(testing.AsyncTestCase):
+
     def setUp(self):
         super(TestProcessLauncher, self).setUp()
         self.loop = self.io_loop

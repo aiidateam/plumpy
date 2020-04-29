@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from enum import Enum
 import sys
 import traceback
@@ -62,6 +63,7 @@ class Command(persistence.Savable):
 class Kill(Command):
 
     def __init__(self, msg=None):
+        super().__init__()
         self.msg = msg
 
 
@@ -73,6 +75,7 @@ class Pause(Command):
 class Wait(Command):
 
     def __init__(self, continue_fn=None, msg=None, data=None):
+        super().__init__()
         self.continue_fn = continue_fn
         self.msg = msg
         self.data = data
@@ -82,6 +85,7 @@ class Wait(Command):
 class Stop(Command):
 
     def __init__(self, result, successful):
+        super().__init__()
         self.result = result
         self.successful = successful
 
@@ -91,6 +95,7 @@ class Continue(Command):
     CONTINUE_FN = 'continue_fn'
 
     def __init__(self, continue_fn, *args, **kwargs):
+        super().__init__()
         self.continue_fn = continue_fn
         self.args = args
         self.kwargs = kwargs
@@ -140,7 +145,8 @@ class State(state_machine.State, persistence.Savable):
         super(State, self).load_instance_state(saved_state, load_context)
         self.state_machine = load_context.process
 
-    def interrupt(self, reason):
+    @staticmethod
+    def interrupt(reason):  # pylint: disable=unused-argument
         return False
 
 
@@ -243,14 +249,16 @@ class Running(State):
             return self.create_state(ProcessState.FINISHED, command.result, command.successful)
         # elif isinstance(command, Pause):
         #     self.pause()
-        elif isinstance(command, Stop):
+        if isinstance(command, Stop):
             return self.create_state(ProcessState.FINISHED, command.result, command.successful)
-        elif isinstance(command, Wait):
+
+        if isinstance(command, Wait):
             return self.create_state(ProcessState.WAITING, command.continue_fn, command.msg, command.data)
-        elif isinstance(command, Continue):
+
+        if isinstance(command, Continue):
             return self.create_state(ProcessState.RUNNING, command.continue_fn, *command.args)
-        else:
-            raise ValueError("Unrecognised command")
+
+        raise ValueError('Unrecognised command')
 
 
 @auto_persist('msg', 'data')
@@ -267,7 +275,7 @@ class Waiting(State):
     def __str__(self):
         state_info = super(Waiting, self).__str__()
         if self.msg is not None:
-            state_info += " ({})".format(self.msg)
+            state_info += ' ({})'.format(self.msg)
         return state_info
 
     def __init__(self, process, done_callback, msg=None, data=None):
@@ -314,7 +322,7 @@ class Waiting(State):
         raise Return(next_state)
 
     def resume(self, value=NULL):
-        assert self._waiting_future is not None, "Not yet waiting"
+        assert self._waiting_future is not None, 'Not yet waiting'
         self._waiting_future.set_result(value)
 
 
@@ -335,15 +343,16 @@ class Excepted(State):
         self.traceback = trace_back
 
     def __str__(self):
-        return "{} ({})".format(
+        return '{} ({})'.format(
             super(Excepted, self).__str__(),
-            traceback.format_exception_only(type(self.exception), self.exception)[0])
+            traceback.format_exception_only(type(self.exception), self.exception)[0]
+        )
 
     def save_instance_state(self, out_state, save_context):
         super(Excepted, self).save_instance_state(out_state, save_context)
         out_state[self.EXC_VALUE] = yaml.dump(self.exception)
         if self.traceback is not None:
-            out_state[self.TRACEBACK] = "".join(traceback.format_tb(self.traceback))
+            out_state[self.TRACEBACK] = ''.join(traceback.format_tb(self.traceback))
 
     def load_instance_state(self, saved_state, load_context):
         super(Excepted, self).load_instance_state(saved_state, load_context)

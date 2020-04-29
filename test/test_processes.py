@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Process tests"""
 from tornado import gen, testing
 
@@ -143,6 +144,7 @@ class TestProcess(utils.AsyncTestCase):
         """Process which raises in its 'define' method. Check that the spec is not set."""
 
         class BrokenProcess(Process):
+
             @classmethod
             def define(cls, spec):
                 super(BrokenProcess, cls).define(spec)
@@ -237,7 +239,7 @@ class TestProcess(utils.AsyncTestCase):
         class LoggerTester(Process):
 
             def run(self, **kwargs):
-                self.logger.info("Test")
+                self.logger.info('Test')
 
         # TODO: Test giving a custom logger to see if it gets used
         proc = LoggerTester()
@@ -425,7 +427,7 @@ class TestProcess(utils.AsyncTestCase):
         class InvalidOutput(plumpy.Process):
 
             def run(self):
-                self.out("invalid", 5)
+                self.out('invalid', 5)
 
         proc = InvalidOutput()
         with self.assertRaises(ValueError):
@@ -545,7 +547,7 @@ class TestProcess(utils.AsyncTestCase):
                 self.call_soon(self.do_except)
 
             def do_except(self):
-                raise RuntimeError("Breaking yo!")
+                raise RuntimeError('Breaking yo!')
 
         CallSoon().execute()
 
@@ -861,7 +863,8 @@ class TestProcessEvents(utils.AsyncTestCase):
     @testing.gen_test
     def test_basic_events(self):
         events_tester = test_utils.ProcessListenerTester(
-            process=self.proc, expected_events=('running', 'output_emitted', 'finished'))
+            process=self.proc, expected_events=('running', 'output_emitted', 'finished')
+        )
         yield self.proc.step_until_terminated()
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
@@ -912,7 +915,7 @@ class TestProcessEvents(utils.AsyncTestCase):
         expected_subjects = []
         for i, state in enumerate(test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
             from_state = test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
-            expected_subjects.append("state_changed.{}.{}".format(from_state, state.value))
+            expected_subjects.append('state_changed.{}.{}'.format(from_state, state.value))
 
         for i, message in enumerate(messages):
             self.assertEqual(message['subject'], expected_subjects[i])
@@ -926,4 +929,4 @@ class _RestartProcess(test_utils.WaitForSignalProcess):
         spec.outputs.dynamic = True
 
     def last_step(self):
-        self.out("finished", True)
+        self.out('finished', True)

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import types
 from .utils import TestCase
 
@@ -7,13 +8,13 @@ from plumpy.ports import Port, InputPort, OutputPort, PortNamespace, UNSPECIFIED
 class TestPort(TestCase):
 
     def test_required(self):
-        spec = Port("required_value", required=True)
+        spec = Port('required_value', required=True)
 
         self.assertIsNotNone(spec.validate(UNSPECIFIED))
         self.assertIsNone(spec.validate(5))
 
     def test_validate(self):
-        spec = Port("required_value", valid_type=int)
+        spec = Port('required_value', valid_type=int)
 
         self.assertIsNone(spec.validate(5))
         self.assertIsNotNone(spec.validate('a'))
@@ -23,10 +24,10 @@ class TestPort(TestCase):
         def validate(value, port):
             assert isinstance(port, Port)
             if not isinstance(value, int):
-                return "Not int"
+                return 'Not int'
             return None
 
-        spec = Port("valid_with_validator", validator=validate)
+        spec = Port('valid_with_validator', validator=validate)
 
         self.assertIsNone(spec.validate(5))
         self.assertIsNotNone(spec.validate('s'))
@@ -252,7 +253,8 @@ class TestPortNamespace(TestCase):
         # Check the breadcrumbs are correct
         self.assertEqual(
             validation_error.port,
-            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output')))
+            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output'))
+        )
 
     def test_port_namespace_required(self):
         """Verify that validation will fail if required port is not specified."""
@@ -310,7 +312,9 @@ class TestPortNamespace(TestCase):
     def test_port_namespace_lambda_defaults(self):
         """Verify that lambda defaults are accepted and properly evaluated."""
         port_namespace = PortNamespace('base')
-        port_namespace['lambda_default'] = InputPort('lambda_default', default=lambda: 1, valid_type=(types.FunctionType, int))
+        port_namespace['lambda_default'] = InputPort(
+            'lambda_default', default=lambda: 1, valid_type=(types.FunctionType, int)
+        )
 
         inputs = port_namespace.pre_process({})
         self.assertEqual(inputs['lambda_default'], 1)

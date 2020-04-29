@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
-
 import abc
+import collections
+import inspect
 import re
-from collections import OrderedDict
-
-from inspect import getfullargspec as get_arg_spec
-import collections.abc as collections
 
 from . import lang
 from . import mixins
@@ -63,19 +60,19 @@ class Waiting(process_states.Waiting):
 
     def enter(self):
         super(Waiting, self).enter()
-        for awaitable in self._awaiting.keys():
+        for awaitable in self._awaiting:
             awaitable.add_done_callback(self._awaitable_done)
 
     def exit(self):
         super(Waiting, self).exit()
-        for awaitable in self._awaiting.keys():
+        for awaitable in self._awaiting:
             awaitable.remove_done_callback(self._awaitable_done)
 
     def _awaitable_done(self, awaitable):
         key = self._awaiting.pop(awaitable)
         try:
             self.process.ctx[key] = awaitable.result()
-        except Exception as exception:
+        except Exception as exception:  # pylint: disable=broad-except
             self._waiting_future.set_exception(exception)
         else:
             if not self._awaiting:
@@ -153,8 +150,8 @@ class WorkChain(mixins.ContextMixin, processes.Process):
                 return process_states.Wait(self._do_step, 'Waiting before next step', self._awaitables)
 
             return process_states.Continue(self._do_step)
-        else:
-            return return_value
+
+        return return_value
 
 
 class Stepper(persistence.Savable, metaclass=abc.ABCMeta):
@@ -175,10 +172,9 @@ class Stepper(persistence.Savable, metaclass=abc.ABCMeta):
             1. The return value from the executed step
         :rtype: tuple
         """
-        pass
 
 
-class _Instruction(object, metaclass=abc.ABCMeta):
+class _Instruction(metaclass=abc.ABCMeta):
     """
     This class represents an instruction in a workchain. To step through the
     step you need to get a stepper by calling ``create_stepper()`` from which
@@ -188,12 +184,10 @@ class _Instruction(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def create_stepper(self, workchain):
         """ Create a new stepper for this instruction """
-        pass
 
     @abc.abstractmethod
     def recreate_stepper(self, saved_state, workchain):
         """ Recreate a stepper from a previously saved state """
-        pass
 
     def __str__(self):
         return str(self.get_description())
@@ -205,7 +199,6 @@ class _Instruction(object, metaclass=abc.ABCMeta):
         :return: The description
         :rtype: dict or str
         """
-        pass
 
 
 class _FunctionStepper(Stepper):
@@ -233,11 +226,11 @@ class _FunctionCall(_Instruction):
 
     def __init__(self, func):
         try:
-            args = get_arg_spec(func)[0]
+            args = inspect.getfullargspec(func)[0]
         except TypeError:
-            raise TypeError("func is not a function, got {}".format(type(func)))
+            raise TypeError('func is not a function, got {}'.format(type(func)))
         if len(args) != 1:
-            raise TypeError("Step must take one argument only: self")
+            raise TypeError('Step must take one argument only: self')
 
         self._fn = func
 
@@ -252,7 +245,7 @@ class _FunctionCall(_Instruction):
         desc = self._fn.__name__
         if self._fn.__doc__:
             doc = re.sub(r'\n\s*', ' ', self._fn.__doc__).strip()
-            desc += "({})".format(doc)
+            desc += '({})'.format(doc)
 
         return desc
 
@@ -306,7 +299,7 @@ class _BlockStepper(Stepper):
         return str(self._pos) + ':' + str(self._child_stepper)
 
 
-class _Block(_Instruction, collections.Sequence):
+class _Block(_Instruction, collections.abc.Sequence):
     """
     Represents a block of instructions i.e. a sequential list of instructions.
     """
@@ -428,14 +421,14 @@ class _IfStepper(Stepper):
             self._child_stepper = self._if_instruction[self._pos].body.recreate_stepper(stepper_state, self._workchain)
 
     def __str__(self):
-        s = str(self._if_instruction[self._pos])
+        string = str(self._if_instruction[self._pos])
         if self._child_stepper is not None:
-            s += '(' + str(self._child_stepper) + ')'
+            string += '(' + str(self._child_stepper) + ')'
 
-        return s
+        return string
 
 
-class _If(_Instruction, collections.Sequence):
+class _If(_Instruction, collections.abc.Sequence):
 
     def __init__(self, condition):
         super(_If, self).__init__()
@@ -479,7 +472,7 @@ class _If(_Instruction, collections.Sequence):
         return _IfStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
-        description = OrderedDict()
+        description = collections.OrderedDict()
 
         description['if({})'.format(self._ifs[0].predicate.__name__)] = self._ifs[0].body.get_description()
         for conditional in self._ifs[1:]:
@@ -524,14 +517,14 @@ class _WhileStepper(Stepper):
             self._child_stepper = self._while_instruction.body.recreate_stepper(stepper_state, self._workchain)
 
     def __str__(self):
-        s = str(self._while_instruction)
+        string = str(self._while_instruction)
         if self._child_stepper is not None:
-            s += '(' + str(self._child_stepper) + ')'
+            string += '(' + str(self._child_stepper) + ')'
 
-        return s
+        return string
 
 
-class _While(_Conditional, _Instruction, collections.Sequence):
+class _While(_Conditional, _Instruction, collections.abc.Sequence):
 
     def __init__(self, predicate):
         super(_While, self).__init__(self, predicate, label=while_.__name__)
@@ -551,20 +544,20 @@ class _While(_Conditional, _Instruction, collections.Sequence):
         return _WhileStepper.recreate_from(saved_state, load_context)
 
     def get_description(self):
-        return {"while({})".format(self.predicate.__name__): self.body.get_description()}
+        return {'while({})'.format(self.predicate.__name__): self.body.get_description()}
 
 
 class _PropagateReturn(BaseException):
 
     def __init__(self, exit_code):
-        super(_PropagateReturn, self).__init__()
+        super().__init__()
         self.exit_code = exit_code
 
 
 class _ReturnStepper(Stepper):
 
     def __init__(self, return_instruction, workchain):
-        super(_ReturnStepper, self).__init__(workchain)
+        super().__init__(workchain)
         self._return_instruction = return_instruction
 
     def step(self):
@@ -572,7 +565,7 @@ class _ReturnStepper(Stepper):
         Raise a _PropagateReturn exception where the value is the exit code set
         in the _Return instruction upon instantiation
         """
-        raise _PropagateReturn(self._return_instruction._exit_code)
+        raise _PropagateReturn(self._return_instruction._exit_code)  # pylint: disable=protected-access
 
 
 class _Return(_Instruction):
@@ -582,7 +575,7 @@ class _Return(_Instruction):
     """
 
     def __init__(self, exit_code=None):
-        super(_Return, self).__init__()
+        super().__init__()
         self._exit_code = exit_code
 
     def __call__(self, exit_code):
@@ -639,7 +632,7 @@ def while_(condition):
     return _While(condition)
 
 
-return_ = _Return()
+return_ = _Return()  # pylint: disable=invalid-name
 """
 A global singleton that contains a Return instruction that allows to exit
 out of the workchain outline directly with None as exit code

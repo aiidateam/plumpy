@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from functools import partial
 import shutil
 import tempfile
@@ -27,16 +28,17 @@ class CommunicatorTestCase(AsyncTestCase):
 
     def setUp(self):
         super(CommunicatorTestCase, self).setUp()
-        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        queue_name = "{}.{}.tasks".format(self.__class__.__name__, shortuuid.uuid())
+        message_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        task_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        queue_name = '{}.{}.tasks'.format(self.__class__.__name__, shortuuid.uuid())
 
         self.rmq_communicator = rmq.connect(
             connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
             message_exchange=message_exchange,
             task_exchange=task_exchange,
             task_queue=queue_name,
-            testing_mode=True)
+            testing_mode=True
+        )
         self.communicator = communications.LoopCommunicator(self.rmq_communicator, self.loop)
 
     def tearDown(self):
@@ -45,7 +47,7 @@ class CommunicatorTestCase(AsyncTestCase):
         super(CommunicatorTestCase, self).tearDown()
 
 
-@unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
+@unittest.skipIf(not pika, 'Requires pika library and RabbitMQ')
 class TestLoopCommunicator(CommunicatorTestCase):
     """Make sure the loop communicator is working as expected"""
 
@@ -100,7 +102,7 @@ class TestLoopCommunicator(CommunicatorTestCase):
         self.assertEqual(TASK, result)
 
 
-@unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
+@unittest.skipIf(not pika, 'Requires pika library and RabbitMQ')
 class TestTaskActions(CommunicatorTestCase):
 
     def setUp(self):

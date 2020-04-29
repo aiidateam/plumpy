@@ -1,21 +1,19 @@
 # -*- coding: utf-8 -*-
 """Module for process ports"""
 import abc
+import collections
 import copy
+import inspect
 import json
 import logging
 import warnings
 
 from plumpy.utils import is_mutable_property, type_check
 
-import collections.abc as collections
-from inspect import getfullargspec as get_arg_spec
+__all__ = ['UNSPECIFIED', 'PortValidationError', 'Port', 'InputPort', 'OutputPort']
 
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
-
-__all__ = ['UNSPECIFIED', 'PortValidationError', 'Port', 'InputPort', 'OutputPort']
-
 
 VALIDATOR_SIGNATURE_DEPRECATION_WARNING = """the validator `{}` has a signature that only takes a single argument.
     This has been deprecated and the new signature is `validator(value, port)` where the `port` argument will be the
@@ -128,7 +126,7 @@ class Port(metaclass=abc.ABCMeta):
         return self._help
 
     @help.setter
-    def help(self, help):
+    def help(self, help):  # pylint: disable=redefined-builtin
         """Set the help string for this port
 
         :param help: the help string
@@ -188,17 +186,18 @@ class Port(metaclass=abc.ABCMeta):
             validation_error = "required value was not provided for '{}'".format(self.name)
         elif value is not UNSPECIFIED and self._valid_type is not None and not isinstance(value, self._valid_type):
             validation_error = "value '{}' is not of the right type. Got '{}', expected '{}'".format(
-                self.name, type(value), self._valid_type)
+                self.name, type(value), self._valid_type
+            )
 
         if not validation_error and self._validator is not None:
-            spec = get_arg_spec(self.validator)
+            spec = inspect.getfullargspec(self.validator)
             if len(spec[0]) == 1:
                 warnings.warn(VALIDATOR_SIGNATURE_DEPRECATION_WARNING.format(self.validator.__name__))
-                result = self.validator(value)
+                result = self.validator(value)  # pylint: disable=not-callable
             else:
-                result = self.validator(value, self)
+                result = self.validator(value, self)  # pylint: disable=not-callable
             if result is not None:
-                assert isinstance(result, str), "Validator returned non string type"
+                assert isinstance(result, str), 'Validator returned non string type'
                 validation_error = result
 
         if validation_error:
@@ -223,17 +222,19 @@ class InputPort(Port):
 
         return False
 
-    def __init__(self, name, valid_type=None, help=None, default=UNSPECIFIED, required=True, validator=None):
+    def __init__(self, name, valid_type=None, help=None, default=UNSPECIFIED, required=True, validator=None):  # pylint: disable=redefined-builtin,too-many-arguments
         super(InputPort, self).__init__(
             name,
             valid_type=valid_type,
             help=help,
             required=InputPort.required_override(required, default),
-            validator=validator)
+            validator=validator
+        )
 
         if required is not InputPort.required_override(required, default):
-            _LOGGER.info("the required attribute for the input port '{}' was overridden "
-                         "because a default was specified".format(name))
+            _LOGGER.info(
+                "the required attribute for the input port '%s' was overridden because a default was specified", name
+            )
 
         if default is not UNSPECIFIED:
 
@@ -242,7 +243,7 @@ class InputPort(Port):
             if not callable(default):
                 validation_error = self.validate(default)
                 if validation_error:
-                    raise ValueError("Invalid default value: {}".format(validation_error.message))
+                    raise ValueError('Invalid default value: {}'.format(validation_error.message))
 
         self._default = default
 
@@ -277,7 +278,7 @@ class OutputPort(Port):
     pass
 
 
-class PortNamespace(collections.MutableMapping, Port):
+class PortNamespace(collections.abc.MutableMapping, Port):
     """
     A container for Ports. Effectively it maintains a dictionary whose members are
     either a Port or yet another PortNamespace. This allows for the nesting of ports
@@ -285,15 +286,17 @@ class PortNamespace(collections.MutableMapping, Port):
 
     NAMESPACE_SEPARATOR = '.'
 
-    def __init__(self,
-                 name=None,
-                 help=None,
-                 required=True,
-                 validator=None,
-                 valid_type=None,
-                 default=UNSPECIFIED,
-                 dynamic=False,
-                 populate_defaults=True):
+    def __init__(
+        self,
+        name=None,
+        help=None,
+        required=True,
+        validator=None,
+        valid_type=None,
+        default=UNSPECIFIED,
+        dynamic=False,
+        populate_defaults=True
+    ):  # pylint: disable=redefined-builtin,too-many-arguments
         """Construct a port namespace.
 
         :param name: the name of the namespace
@@ -309,8 +312,8 @@ class PortNamespace(collections.MutableMapping, Port):
             namespace. As soon as a value is specified in the parent namespace for this port, even if it is empty, this
             property is ignored and the population of defaults is always performed.
         """
-        super(PortNamespace, self).__init__(
-            name=name, help=help, required=required, validator=validator, valid_type=valid_type)
+        super(PortNamespace,
+              self).__init__(name=name, help=help, required=required, validator=validator, valid_type=valid_type)
         self._ports = {}
         self.default = default
         self.populate_defaults = populate_defaults
@@ -436,8 +439,8 @@ class PortNamespace(collections.MutableMapping, Port):
 
         if namespace:
             return self[port_name].get_port(self.NAMESPACE_SEPARATOR.join(namespace))
-        else:
-            return self[port_name]
+
+        return self[port_name]
 
     def create_port_namespace(self, name, **kwargs):
         """
@@ -475,8 +478,8 @@ class PortNamespace(collections.MutableMapping, Port):
 
         if namespace:
             return self[port_name].create_port_namespace(self.NAMESPACE_SEPARATOR.join(namespace), **kwargs)
-        else:
-            return self[port_name]
+
+        return self[port_name]
 
     def absorb(self, port_namespace, exclude=None, include=None, namespace_options=None):
         """Absorb another PortNamespace instance into oneself, including all its mutable properties and ports.
@@ -493,12 +496,14 @@ class PortNamespace(collections.MutableMapping, Port):
         :param namespace_options: a dictionary with mutable PortNamespace property values to override
         :return: list of the names of the ports that were absorbed
         """
+        # pylint: disable=too-many-branches
         if not isinstance(port_namespace, PortNamespace):
             raise ValueError('port_namespace has to be an instance of PortNamespace')
 
         if exclude is not None and include is not None:
             raise ValueError('exclude and include are mutually exclusive')
-        elif exclude is not None:
+
+        if exclude is not None:
             type_check(exclude, (list, tuple))
         elif include is not None:
             type_check(include, (list, tuple))
@@ -515,8 +520,11 @@ class PortNamespace(collections.MutableMapping, Port):
                     setattr(self, attr, getattr(port_namespace, attr))
 
         if namespace_options:
-            raise ValueError('the namespace_options {}, is not a supported PortNamespace property'.format(', '.join(
-                list(namespace_options.keys()))))
+            raise ValueError(
+                'the namespace_options {}, is not a supported PortNamespace property'.format(
+                    ', '.join(list(namespace_options.keys()))
+                )
+            )
 
         absorbed_ports = []
 
@@ -541,7 +549,7 @@ class PortNamespace(collections.MutableMapping, Port):
                 # all its mutable properties, but reset its ports, since those will be taken care of by the recursive
                 # absorb call that will properly consider the include and exclude rules
                 self[port_name] = copy.copy(port)
-                self[port_name]._ports = {}
+                self[port_name]._ports = {}  # pylint: disable=protected-access
                 self[port_name].absorb(port, sub_exclude, sub_include)
             else:
                 # If include rules are specified but the port name does not appear, simply skip it
@@ -574,7 +582,7 @@ class PortNamespace(collections.MutableMapping, Port):
 
         return result
 
-    def validate(self, port_values=None, breadcrumbs=()):
+    def validate(self, port_values=None, breadcrumbs=()):  # pylint: disable=arguments-differ
         """
         Validate the namespace port itself and subsequently all the port_values it contains
 
@@ -590,7 +598,7 @@ class PortNamespace(collections.MutableMapping, Port):
         if not port_values:
             port_values = {}
 
-        if not isinstance(port_values, collections.Mapping):
+        if not isinstance(port_values, collections.abc.Mapping):
             message = 'specified value is of type {} which is not sub class of `Mapping`'.format(type(port_values))
             return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
 
@@ -618,12 +626,12 @@ class PortNamespace(collections.MutableMapping, Port):
 
         # Validate the validator after the ports themselves, as it most likely will rely on the port values
         if self.validator is not None:
-            spec = get_arg_spec(self.validator)
+            spec = inspect.getfullargspec(self.validator)
             if len(spec[0]) == 1:
                 warnings.warn(VALIDATOR_SIGNATURE_DEPRECATION_WARNING.format(self.validator.__name__))
-                message = self.validator(port_values_clone)
+                message = self.validator(port_values_clone)  # pylint: disable=not-callable
             else:
-                message = self.validator(port_values_clone, self)
+                message = self.validator(port_values_clone, self)  # pylint: disable=not-callable
             if message is not None:
                 assert isinstance(message, str), \
                     "Validator returned something other than None or str: '{}'".format(type(message))

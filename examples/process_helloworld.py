@@ -1,4 +1,6 @@
+# -*- coding: utf-8 -*-
 import plumpy
+
 
 class HelloWorld(plumpy.Process):
 
@@ -6,23 +8,26 @@ class HelloWorld(plumpy.Process):
     def define(cls, spec):
         super(HelloWorld, cls).define(spec)
         spec.input('name', default='World', required=True)
-        spec.output("greeting", valid_type=str)
+        spec.output('greeting', valid_type=str)
 
-    def run(self, **kwargs):
-        s = "Hello {:}!".format(self.inputs.name)
-        self.out("greeting", s)
+    def run(self):
+        self.out('greeting', 'Hello {:}!'.format(self.inputs.name))
         return plumpy.Stop(None, True)
 
-if __name__ == "__main__":
-    p = HelloWorld(inputs={'name': 'foobar'})
-    print("Process State: {:}".format(p.state))
 
-    p.execute()
+def launch():
+    process = HelloWorld(inputs={'name': 'foobar'})
+    print('Process State: {:}'.format(process.state))
+    process.execute()
 
-    print("Process State: {:}".format(p.state))
-    print("{:}".format(p.outputs['greeting']))
+    print('Process State: {:}'.format(process.state))
+    print('{:}'.format(process.outputs['greeting']))
 
     # default inputs
-    p = HelloWorld()
-    p.execute()
-    print("{:}".format(p.outputs['greeting']))
+    process = HelloWorld()
+    process.execute()
+    print('{:}'.format(process.outputs['greeting']))
+
+
+if __name__ == '__main__':
+    launch()

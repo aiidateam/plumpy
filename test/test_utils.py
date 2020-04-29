@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Test utilities"""
 
 import collections
@@ -29,10 +30,10 @@ class DummyProcessWithOutput(processes.Process):
         super(DummyProcessWithOutput, cls).define(spec)
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
-        spec.output("default", valid_type=int)
+        spec.output('default', valid_type=int)
 
     def run(self, **kwargs):
-        self.out("default", 5)
+        self.out('default', 5)
 
 
 class DummyProcessWithDynamicOutput(processes.Process):
@@ -45,7 +46,7 @@ class DummyProcessWithDynamicOutput(processes.Process):
         spec.outputs.dynamic = True
 
     def run(self, **kwargs):
-        self.out("default", 5)
+        self.out('default', 5)
 
 
 class KeyboardInterruptProc(processes.Process):
@@ -81,7 +82,7 @@ class MissingOutputProcess(processes.Process):
     @classmethod
     def define(cls, spec):
         super(MissingOutputProcess, cls).define(spec)
-        spec.output("default", required=True)
+        spec.output('default', required=True)
 
 
 class NewLoopProcess(processes.Process):
@@ -92,7 +93,7 @@ class NewLoopProcess(processes.Process):
 
 
 class EventsTesterMixin:
-    EVENTS = ("create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate")
+    EVENTS = ('create', 'run', 'finish', 'emitted', 'wait', 'resume', 'stop', 'terminate')
 
     called_events = []
 
@@ -103,7 +104,7 @@ class EventsTesterMixin:
 
     def __init__(self, *args, **kwargs):
         assert isinstance(self, processes.Process), \
-            "Mixin has to be used with a type derived from a Process"
+            'Mixin has to be used with a type derived from a Process'
         super(EventsTesterMixin, self).__init__(*args, **kwargs)
         self.__class__.called_events = []
 
@@ -156,7 +157,7 @@ class ProcessEventsTester(EventsTesterMixin, processes.Process):
         spec.outputs.dynamic = True
 
     def run(self):
-        self.out("test", 5)
+        self.out('test', 5)
 
 
 class ThreeSteps(ProcessEventsTester):
@@ -166,7 +167,7 @@ class ThreeSteps(ProcessEventsTester):
 
     @utils.override
     def run(self):
-        self.out("test", 5)
+        self.out('test', 5)
         return process_states.Continue(self.middle_step)
 
     def middle_step(self,):
@@ -179,7 +180,7 @@ class ThreeSteps(ProcessEventsTester):
 class TwoCheckpointNoFinish(ProcessEventsTester):
 
     def run(self):
-        self.out("test", 5)
+        self.out('test', 5)
         return process_states.Continue(self.middle_step)
 
     def middle_step(self):
@@ -189,15 +190,15 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
 class ExceptionProcess(ProcessEventsTester):
 
     def run(self):
-        self.out("test", 5)
-        raise RuntimeError("Great scott!")
+        self.out('test', 5)
+        raise RuntimeError('Great scott!')
 
 
 class ThreeStepsThenException(ThreeSteps):
 
     @utils.override
     def last_step(self):
-        raise RuntimeError("Great scott!")
+        raise RuntimeError('Great scott!')
 
 
 class ProcessListenerTester(plumpy.ProcessListener):
@@ -329,7 +330,8 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
                 break
 
             compare_dictionaries(
-                snapshots[-j], saver.snapshots[-j], snapshots[-j], saver.snapshots[-j], exclude={'exception'})
+                snapshots[-j], saver.snapshots[-j], snapshots[-j], saver.snapshots[-j], exclude={'exception'}
+            )
             j += 1
 
     return True
@@ -361,7 +363,7 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
             compare_value(bundle1, bundle2, vv1, vv2, exclude)
     else:
         if v1 != v2:
-            raise ValueError("Dict values mismatch for :\n{} != {}".format(v1, v2))
+            raise ValueError('Dict values mismatch for :\n{} != {}'.format(v1, v2))
 
 
 class TestPersister(persistence.Persister):

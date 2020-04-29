@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 from .utils import TestCase
 from plumpy.utils import AttributesFrozendict
 
 
 class TestAttributesFrozendict(TestCase):
+
     def test_getitem(self):
         d = AttributesFrozendict({'a': 5})
         self.assertEqual(d['a'], 5)

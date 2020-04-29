@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 import importlib
 import inspect
 import logging
@@ -15,11 +14,10 @@ from . import lang
 
 __all__ = []
 
-protected = lang.protected(check=check_protected)
-override = lang.override(check=check_override)
+protected = lang.protected(check=check_protected)  # pylint: disable=invalid-name
+override = lang.override(check=check_override)  # pylint: disable=invalid-name
 
 _LOGGER = logging.getLogger(__name__)
-_default_loop = None
 
 
 class EventHelper:
@@ -52,8 +50,8 @@ class EventHelper:
         for listener in list(self.listeners):
             try:
                 getattr(listener, event_function.__name__)(*args, **kwargs)
-            except Exception as e:
-                _LOGGER.error("Listener '{}' produced an exception:\n{}".format(listener, e))
+            except Exception as exception:  # pylint: disable=broad-except
+                _LOGGER.error("Listener '%s' produced an exception:\n%s", listener, exception)
 
 
 class ListenContext:
@@ -161,12 +159,13 @@ def load_function(name, instance=None):
     if inspect.ismethod(obj):
         if instance is not None:
             return obj.__get__(instance, instance.__class__)
-        else:
-            return obj
-    elif inspect.isfunction(obj):
+
         return obj
-    else:
-        raise ValueError("Invalid function name '{}'".format(name))
+
+    if inspect.isfunction(obj):
+        return obj
+
+    raise ValueError("Invalid function name '{}'".format(name))
 
 
 def load_object(fullname):
@@ -191,7 +190,7 @@ def load_module(fullname):
     # Try to find the module, working our way from the back
     mod = None
     remainder = deque()
-    for i in range(len(parts)):
+    for _ in range(len(parts)):
         try:
             mod = importlib.import_module('.'.join(parts))
             break
@@ -223,16 +222,15 @@ def type_check(obj, expected_type):
         raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
 
 
-def ensure_coroutine(fn):
-    if tornado.gen.is_coroutine_function(fn):
-        return fn
-    else:
+def ensure_coroutine(wrapped):
+    if tornado.gen.is_coroutine_function(wrapped):
+        return wrapped
 
-        @tornado.gen.coroutine
-        def wrapper(*args, **kwargs):
-            raise tornado.gen.Return(fn(*args, **kwargs))
+    @tornado.gen.coroutine
+    def wrapper(*args, **kwargs):
+        raise tornado.gen.Return(wrapped(*args, **kwargs))
 
-        return wrapper
+    return wrapper
 
 
 def is_mutable_property(cls, attribute):

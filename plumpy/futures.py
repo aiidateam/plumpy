@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Module containing future related methods and classes
 """
@@ -12,7 +13,6 @@ CancelledError = kiwipy.CancelledError
 
 class InvalidStateError(Exception):
     """Exception for when a future or action is in an invalid state"""
-    pass
 
 
 copy_future = kiwipy.copy_future  # pylint: disable=invalid-name
@@ -73,7 +73,7 @@ class CancellableAction(Future):
         :param kwargs: the keyword arguments to the action
         """
         if self.done():
-            raise InvalidStateError("Action has already been ran")
+            raise InvalidStateError('Action has already been ran')
 
         try:
             with kiwipy.capture_exceptions(self):

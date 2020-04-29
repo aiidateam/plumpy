@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Utilities for tests"""
 
 import shortuuid
@@ -42,16 +43,17 @@ class AsyncTestCase(testing.AsyncTestCase):
         :return: the created communicator
         :rtype: :class:`kiwipy.Communicator`
         """
-        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        message_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        task_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        task_queue = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
 
         self.communicator = kiwipy.rmq.connect(
             connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
             message_exchange=message_exchange,
             task_exchange=task_exchange,
             task_queue=task_queue,
-            testing_mode=True)
+            testing_mode=True
+        )
 
         return self.communicator
 
