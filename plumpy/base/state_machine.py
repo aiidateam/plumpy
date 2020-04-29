@@ -1,19 +1,12 @@
 """The state machine for processes"""
 
-from __future__ import absolute_import
-
-# ABC imports that support python 2 & 3
-try:
-    from collections.abc import Iterable
-except ImportError:
-    from collections import Iterable
+from collections.abc import Iterable
 import enum
 import functools
 import inspect
 import logging
 import os
 import sys
-import six
 
 import plumpy
 
@@ -109,7 +102,7 @@ def event(from_states='*', to_states='*'):
     return wrapper
 
 
-class State(object):
+class State:
     LABEL = None
     # A set containing the labels of states that can be entered
     # from this one
@@ -193,8 +186,7 @@ class StateMachineMeta(type):
         return inst
 
 
-@six.add_metaclass(StateMachineMeta)
-class StateMachine(object):
+class StateMachine(metaclass=StateMachineMeta):
     STATES = None
     _STATES_MAP = None
 
@@ -340,7 +332,7 @@ class StateMachine(object):
         :param exception: The transition failed exception
         :type exception: :class:`Exception`
         """
-        six.reraise(type(exception), exception, trace)
+        raise exception.with_traceback(trace)
 
     def get_debug(self):
         return self._debug

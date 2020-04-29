@@ -1,24 +1,21 @@
-dist: xenial
-sudo: required
-
+dist: bionic
 language: python
 cache: pip
 
-before_install:
-  - sudo apt install rabbitmq-server
 addons:
   apt:
-    update: true
+    packages:
+      - rabbitmq-server
 
 python:
-  - 2.7
-  - 3.4
   - 3.5
   - 3.6
   - 3.7
+  - 3.8
 
 install:
   - pip install .[dev]
+  # - pip install -U git+https://github.com/aiidateam/kiwipy.git@develop
 
 script:
   - py.test

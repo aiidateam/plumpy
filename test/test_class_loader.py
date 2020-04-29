@@ -2,7 +2,7 @@ import plumpy
 import unittest
 
 
-class MyCls(object):
+class MyCls:
     pass
 
 

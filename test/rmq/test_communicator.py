@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from functools import partial
 import shutil
 import tempfile
@@ -7,12 +6,12 @@ import uuid
 import shortuuid
 
 from kiwipy import rmq
-from six.moves import range
 from tornado import testing, ioloop
 
-import plumpy.test_utils
-from plumpy import communications, process_comms, test_utils
-from ..utils import AsyncTestCase
+import plumpy
+from plumpy import communications, process_comms
+from test import test_utils
+from test.utils import AsyncTestCase
 
 try:
     import pika

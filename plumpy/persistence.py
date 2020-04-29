@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 import abc
 import collections
 import copy
@@ -6,7 +5,6 @@ import errno
 import fnmatch
 import inspect
 import os
-import six
 import yaml
 import pickle
 
@@ -69,8 +67,7 @@ yaml.add_representer(Bundle, _bundle_representer)
 yaml.add_constructor(_BUNDLE_TAG, _bundle_constructor)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Persister(object):
+class Persister(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def save_checkpoint(self, process, tag=None):
@@ -384,7 +381,7 @@ def _ensure_object_loader(context, saved_state):
         return context.copyextend(loader=loader)
 
 
-class LoadSaveContext(object):
+class LoadSaveContext:
 
     def __init__(self, loader=None, **kwargs):
         self._values = dict(**kwargs)
@@ -419,7 +416,7 @@ META__TYPE__METHOD = 'm'
 META__TYPE__SAVABLE = 'S'
 
 
-class Savable(object):
+class Savable:
     CLASS_NAME = 'class_name'
 
     _auto_persist = None

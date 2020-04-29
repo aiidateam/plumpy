@@ -1,6 +1,5 @@
-from __future__ import absolute_import
 import plumpy
-from plumpy import test_utils
+from test import test_utils
 import unittest
 import yaml
 

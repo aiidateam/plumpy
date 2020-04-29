@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import absolute_import
-from collections import deque, defaultdict
 import importlib
 import inspect
 import logging
 import threading
-import tornado.gen
+import types
+from collections import deque, defaultdict
 
+import tornado.gen
 import frozendict
 
+from .settings import check_protected, check_override
 from . import lang
-from plumpy.settings import check_protected, check_override
-from six.moves import range
 
 __all__ = []
 
@@ -23,16 +22,16 @@ _LOGGER = logging.getLogger(__name__)
 _default_loop = None
 
 
-class EventHelper(object):
+class EventHelper:
 
     def __init__(self, listener_type):
-        assert listener_type is not None, "Must provide valid listener type"
+        assert listener_type is not None, 'Must provide valid listener type'
 
         self._listener_type = listener_type
         self._listeners = set()
 
     def add_listener(self, listener):
-        assert isinstance(listener, self._listener_type), "Listener is not of right type"
+        assert isinstance(listener, self._listener_type), 'Listener is not of right type'
         self._listeners.add(listener)
 
     def remove_listener(self, listener):
@@ -47,7 +46,7 @@ class EventHelper(object):
 
     def fire_event(self, event_function, *args, **kwargs):
         if event_function is None:
-            raise ValueError("Must provide valid event method")
+            raise ValueError('Must provide valid event method')
 
         # Make a copy of the list for iteration just in case it changes in a callback
         for listener in list(self.listeners):
@@ -57,7 +56,7 @@ class EventHelper(object):
                 _LOGGER.error("Listener '{}' produced an exception:\n{}".format(listener, e))
 
 
-class ListenContext(object):
+class ListenContext:
     """
     A context manager for listening to producer that can generate messages.
     The requirements for the producer are that it has methods:
@@ -86,7 +85,7 @@ class ListenContext(object):
         self._producer.remove_listener(*self._args, **self._kwargs)
 
 
-class ThreadSafeCounter(object):
+class ThreadSafeCounter:
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -120,7 +119,7 @@ class AttributesFrozendict(frozendict.frozendict):
         # This attribute is looked for by pickle when deserialising.  At this point
         # the object is not yet constructed and so accessing any members is
         # dangerous and often causes infinite recursion so I have to guard like this.
-        if attr == "__setstate__":
+        if attr == '__setstate__':
             raise AttributeError()
         try:
             return self[attr]
@@ -136,24 +135,7 @@ class AttributesFrozendict(frozendict.frozendict):
         return list(self.keys())
 
 
-class SimpleNamespace(object):
-    """
-    An attempt to emulate python 3's types.SimpleNamespace
-    """
-
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-    def __repr__(self):
-        keys = sorted(self.__dict__)
-        items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
-        return "{}({})".format(type(self).__name__, ", ".join(items))
-
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
-
-
-class AttributesDict(SimpleNamespace):
+class AttributesDict(types.SimpleNamespace):
 
     def __setitem__(self, key, value):
         setattr(self, key, value)

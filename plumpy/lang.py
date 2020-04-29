@@ -2,15 +2,10 @@
 Python language utilities and tools.
 """
 
-from __future__ import absolute_import
 import functools
 from inspect import stack, currentframe
-from six import PY2
 
-if PY2:
-    from inspect import getargspec as get_arg_spec
-else:
-    from inspect import getfullargspec as get_arg_spec
+from inspect import getfullargspec as get_arg_spec
 
 
 def protected(check=False):
@@ -73,7 +68,7 @@ def override(check=False):
     return wrap
 
 
-class __NULL(object):
+class __NULL:
 
     def __eq__(self, other):
         return isinstance(other, self.__class__)
