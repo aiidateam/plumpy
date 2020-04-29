@@ -102,7 +102,7 @@ def event(from_states='*', to_states='*'):
     return wrapper
 
 
-class State(object):
+class State:
     LABEL = None
     # A set containing the labels of states that can be entered
     # from this one

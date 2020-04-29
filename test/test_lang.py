@@ -2,7 +2,7 @@ from .utils import TestCase
 from plumpy.lang import protected, override
 
 
-class A(object):
+class A:
     def __init__(self):
         self._a = None
 
@@ -70,14 +70,14 @@ class TestProtected(TestCase):
             c.protected_property
 
         with self.assertRaises(RuntimeError):
-            class TestWrongDecoratorOrder(object):
+            class TestWrongDecoratorOrder:
                 @protected(check=True)
                 @property
                 def a(self):
                     return None
 
 
-class Superclass(object):
+class Superclass:
     def test(self):
         pass
 
@@ -108,7 +108,7 @@ class TestOverride(TestCase):
         self.assertTrue(Next().test())
 
     def test_incorrect_usage(self):
-        class Derived(object):
+        class Derived:
             @override(check=True)
             def test(self):
                 pass
@@ -125,7 +125,7 @@ class TestOverride(TestCase):
 
 #
 #
-# class A(object):
+# class A:
 #     def __init__(self):
 #         self.a_called = False
 #

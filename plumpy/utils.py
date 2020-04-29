@@ -21,7 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 _default_loop = None
 
 
-class EventHelper(object):
+class EventHelper:
 
     def __init__(self, listener_type):
         assert listener_type is not None, "Must provide valid listener type"
@@ -55,7 +55,7 @@ class EventHelper(object):
                 _LOGGER.error("Listener '{}' produced an exception:\n{}".format(listener, e))
 
 
-class ListenContext(object):
+class ListenContext:
     """
     A context manager for listening to producer that can generate messages.
     The requirements for the producer are that it has methods:
@@ -84,7 +84,7 @@ class ListenContext(object):
         self._producer.remove_listener(*self._args, **self._kwargs)
 
 
-class ThreadSafeCounter(object):
+class ThreadSafeCounter:
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -134,7 +134,7 @@ class AttributesFrozendict(frozendict.frozendict):
         return list(self.keys())
 
 
-class SimpleNamespace(object):
+class SimpleNamespace:
     """
     An attempt to emulate python 3's types.SimpleNamespace
     """

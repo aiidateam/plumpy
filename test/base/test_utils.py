@@ -2,7 +2,7 @@ import unittest
 from plumpy.base import utils
 
 
-class Root(object):
+class Root:
     @utils.super_check
     def method(self):
         pass
@@ -40,5 +40,3 @@ class TestSuperCheckMixin(unittest.TestCase):
     def test_skip_check_call(self):
         with self.assertRaises(AssertionError):
             DoCall().method()
-
-

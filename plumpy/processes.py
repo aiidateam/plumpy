@@ -42,7 +42,7 @@ __all__ = ['Process', 'ProcessSpec', 'BundleKeys', 'TransitionFailed']
 _LOGGER = logging.getLogger(__name__)
 
 
-class BundleKeys(object):
+class BundleKeys:
     """
     String keys used by the process to save its state in the state bundle.
 

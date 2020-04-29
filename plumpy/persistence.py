@@ -381,7 +381,7 @@ def _ensure_object_loader(context, saved_state):
         return context.copyextend(loader=loader)
 
 
-class LoadSaveContext(object):
+class LoadSaveContext:
 
     def __init__(self, loader=None, **kwargs):
         self._values = dict(**kwargs)
@@ -416,7 +416,7 @@ META__TYPE__METHOD = 'm'
 META__TYPE__SAVABLE = 'S'
 
 
-class Savable(object):
+class Savable:
     CLASS_NAME = 'class_name'
 
     _auto_persist = None
@@ -600,7 +600,7 @@ class SavableFuture(futures.Future, Savable):
         except KeyError:
             self._exc_info = None
 
-        self._log_traceback = False  # Used for Python >= 3.4
-        self._tb_logger = None  # Used for Python <= 3.3
+        self._log_traceback = False
+        self._tb_logger = None
 
         self._callbacks = []

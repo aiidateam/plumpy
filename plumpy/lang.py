@@ -68,7 +68,7 @@ def override(check=False):
     return wrap
 
 
-class __NULL(object):
+class __NULL:
 
     def __eq__(self, other):
         return isinstance(other, self.__class__)

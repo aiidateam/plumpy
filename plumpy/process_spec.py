@@ -6,7 +6,7 @@ import logging
 from . import ports
 
 
-class ProcessSpec(object):
+class ProcessSpec:
     """
     A class that defines the specifications of a :class:`plumpy.Process`,
     this includes what its inputs, outputs, etc are.

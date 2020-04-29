@@ -91,7 +91,7 @@ class NewLoopProcess(processes.Process):
         super(NewLoopProcess, self).__init__(*args, **kwargs)
 
 
-class EventsTesterMixin(object):
+class EventsTesterMixin:
     EVENTS = ("create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate")
 
     called_events = []
@@ -232,7 +232,7 @@ class ProcessListenerTester(plumpy.ProcessListener):
         self.called.add('killed')
 
 
-class Saver(object):
+class Saver:
 
     def __init__(self):
         self.snapshots = []

@@ -339,7 +339,7 @@ class _Block(_Instruction, collections.Sequence):
         return [instruction.get_description() for instruction in self._instruction]
 
 
-class _Conditional(object):
+class _Conditional:
     """
     Object that represents some condition with the corresponding body to be
     executed if the condition is met e.g.:
