@@ -9,7 +9,6 @@ import logging
 import time
 import sys
 import uuid
-import inspect
 
 from aiocontextvars import ContextVar
 import kiwipy
@@ -64,7 +63,8 @@ def ensure_not_closed(func):
 
     @functools.wraps(func)
     def func_wrapper(self, *args, **kwargs):
-        if self._closed:  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        if self._closed:
             raise exceptions.ClosedError('Process is closed')
         return func(self, *args, **kwargs)
 
@@ -836,13 +836,14 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         async def run_callback():
             with kiwipy.capture_exceptions(kiwi_future):
                 result = callback(*args, **kwargs)
-                while inspect.isawaitable(result):
+                while asyncio.isfuture(result):
                     result = await result
 
                 kiwi_future.set_result(result)
 
         # Schedule the task and give back a kiwi future
-        self.loop().create_task(run_callback())
+        asyncio.run_coroutine_threadsafe(run_callback(), self.loop())
+
         return kiwi_future
 
     # endregion

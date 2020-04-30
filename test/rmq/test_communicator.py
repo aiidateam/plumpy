@@ -1,19 +1,27 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from functools import partial
 import shutil
 import tempfile
 import unittest
 import uuid
-import shortuuid
-import pytest
 import asyncio
+import shortuuid
 
+import pytest
 from kiwipy import rmq
+from six.moves import range
 from tornado import testing, ioloop
 
 import plumpy
 from plumpy import communications, process_comms
-from test.utils import AsyncTestCase
+from ..utils import AsyncTestCase
+from .. import utils
+
+try:
+    import aio_pika
+except ImportError:
+    aio_pika = None
 
 AWAIT_TIMEOUT = testing.get_async_test_timeout()
 
@@ -23,7 +31,7 @@ AWAIT_TIMEOUT = testing.get_async_test_timeout()
 class CommunicatorTestCase(unittest.TestCase):
 
     def setUp(self):
-        super().setUp()
+        super(CommunicatorTestCase, self).setUp()
         message_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
         task_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
         queue_name = '{}.{}.tasks'.format(self.__class__.__name__, shortuuid.uuid())
@@ -36,24 +44,17 @@ class CommunicatorTestCase(unittest.TestCase):
             testing_mode=True
         )
         self.loop = asyncio.get_event_loop()
-        self.communicator = communications.LoopCommunicator(self.rmq_communicator, loop=self.loop, testing_mode=True)
+        self.communicator = communications.LoopCommunicator(self.rmq_communicator, self.loop)
 
     def tearDown(self):
         # Close the connector before calling super because it will close the loop
         self.rmq_communicator.stop()
-        super().tearDown()
+        super(CommunicatorTestCase, self).tearDown()
 
 
+@unittest.skipIf(not aio_pika, 'Requires pika library and RabbitMQ')
 class TestLoopCommunicator(CommunicatorTestCase):
     """Make sure the loop communicator is working as expected"""
-
-    def setUp(self):
-        super().setUp()
-
-    def tearDown(self):
-        # Close the connector before calling super because it will close the loop
-        self.rmq_communicator.stop()
-        super().tearDown()
 
     @pytest.mark.asyncio
     async def test_broadcast(self):
@@ -106,20 +107,21 @@ class TestLoopCommunicator(CommunicatorTestCase):
         self.assertEqual(TASK, result)
 
 
+@unittest.skipIf(not aio_pika, 'Requires pika library and RabbitMQ')
 class TestTaskActions(CommunicatorTestCase):
 
     def setUp(self):
-        super().setUp()
+        super(TestTaskActions, self).setUp()
         self._tmppath = tempfile.mkdtemp()
         self.persister = plumpy.PicklePersister(self._tmppath)
-
         # Add the process launcher
-        self.communicator.add_task_subscriber(plumpy.ProcessLauncher(persister=self.persister))
+        self.communicator.add_task_subscriber(plumpy.ProcessLauncher(self.loop, persister=self.persister))
+
         self.process_controller = process_comms.RemoteProcessController(self.communicator)
 
     def tearDown(self):
         # Close the connector before calling super because it will
-        super().tearDown()
+        super(TestTaskActions, self).tearDown()
         shutil.rmtree(self._tmppath)
 
     @pytest.mark.asyncio

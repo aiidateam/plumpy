@@ -5,6 +5,7 @@ import functools
 
 import kiwipy
 
+import plumpy
 from . import futures
 
 __all__ = [
@@ -35,7 +36,7 @@ def plum_to_kiwi_future(plum_future):
             else:
                 result = plum_future.result()
                 # Did we get another future?  In which case convert it too
-                if asyncio.isfuture(result):
+                if isinstance(result, plumpy.Future):
                     result = plum_to_kiwi_future(result)
                 kiwi_future.set_result(result)
 
@@ -55,8 +56,6 @@ def convert_to_comm(callback, loop=None):
     """
 
     def converted(communicator, *args, **kwargs):
-        print('inside convert')
-        print((id(asyncio.get_event_loop())))
         msg_fn = functools.partial(callback, communicator, *args, **kwargs)
         task_future = futures.create_task(msg_fn, loop)
         return plum_to_kiwi_future(task_future)
@@ -99,7 +98,6 @@ class LoopCommunicator(kiwipy.Communicator):
 
         self._communicator = communicator
         self._loop = loop or asyncio.get_event_loop()
-        print(testing_mode)
         self._loop.set_debug(testing_mode)
         self._subscribers = {}
 

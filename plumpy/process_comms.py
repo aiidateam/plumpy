@@ -143,7 +143,8 @@ class RemoteProcessController:
         :param pid: the process id
         :return: the status response from the process
         """
-        result = await self._communicator.rpc_send(pid, STATUS_MSG)
+        future = self._communicator.rpc_send(pid, STATUS_MSG)
+        result = await asyncio.wrap_future(future)
         return result
 
     async def pause_process(self, pid, msg=None):
@@ -158,8 +159,9 @@ class RemoteProcessController:
         if msg is not None:
             message[MESSAGE_KEY] = msg
 
-        pause_future = await self._communicator.rpc_send(pid, message)
-        result = await pause_future
+        pause_future = self._communicator.rpc_send(pid, message)
+        future = await asyncio.wrap_future(pause_future)
+        result = await asyncio.wrap_future(future)
         return result
 
     async def play_process(self, pid):
@@ -169,8 +171,9 @@ class RemoteProcessController:
         :param pid: the pid of the process to play
         :return: True if played, False otherwise
         """
-        play_future = await self._communicator.rpc_send(pid, PLAY_MSG)
-        result = await play_future
+        play_future = self._communicator.rpc_send(pid, PLAY_MSG)
+        future = await asyncio.wrap_future(play_future)
+        result = await asyncio.wrap_future(future)
         return result
 
     async def kill_process(self, pid, msg=None):
@@ -186,9 +189,10 @@ class RemoteProcessController:
             message[MESSAGE_KEY] = msg
 
         # Wait for the communication to go through
-        kill_future = await self._communicator.rpc_send(pid, message)
+        kill_future = self._communicator.rpc_send(pid, message)
+        future = await asyncio.wrap_future(kill_future)
         # Now wait for the kill to be enacted
-        result = await kill_future
+        result = await asyncio.wrap_future(future)
 
         return result
 
@@ -202,13 +206,14 @@ class RemoteProcessController:
         """
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
-        continue_future = await self._communicator.task_send(message, no_reply=no_reply)
+        continue_future = self._communicator.task_send(message, no_reply=no_reply)
+        future = await asyncio.wrap_future(continue_future)
 
         if no_reply:
             return
 
         # Now wait for the result of the task
-        result = await continue_future
+        result = await asyncio.wrap_future(future)
         return result
 
     async def launch_process(
@@ -235,12 +240,13 @@ class RemoteProcessController:
         """
         # pylint: disable=too-many-arguments
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
-        launch_future = await self._communicator.task_send(message, no_reply=no_reply)
+        launch_future = self._communicator.task_send(message, no_reply=no_reply)
+        future = await asyncio.wrap_future(launch_future)
 
         if no_reply:
             return
 
-        result = await launch_future
+        result = await asyncio.wrap_future(future)
         return result
 
     async def execute_process(
@@ -262,16 +268,18 @@ class RemoteProcessController:
         # pylint: disable=too-many-arguments
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
-        create_future = await self._communicator.task_send(message)
-        pid = await create_future
+        create_future = self._communicator.task_send(message)
+        future = await asyncio.wrap_future(create_future)
+        pid = await asyncio.wrap_future(future)
 
         message = create_continue_body(pid, nowait=nowait)
-        continue_future = await self._communicator.task_send(message, no_reply=no_reply)
+        continue_future = self._communicator.task_send(message, no_reply=no_reply)
+        future = await asyncio.wrap_future(continue_future)
 
         if no_reply:
             return
 
-        result = await continue_future
+        result = await asyncio.wrap_future(future)
         return result
 
 
