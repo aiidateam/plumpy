@@ -3,6 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+.. _API documentation: apidoc.rst
+
 Welcome to plumpy's documentation!
 ==================================
 
@@ -20,23 +22,24 @@ Features:
  * After you have successfully installed plumpy, you can find some tips in the :ref:`user guide section<quickstart>` to help you on your way
  * The design concepts behind plumpy can be found in :ref:`concepts section<concepts>`
  * If you want to develop your process and workchain, you'll find :ref:`Develop Process section<develop_process>` and :ref:`Develop WorkChain section<develop_workchain>` useful.
- * Use the complete :doc:`API reference<apidoc/plumpy>`, the :ref:`modindex` or the :ref:`genindex` to find code you're looking for
+ * Use the complete `API documentation`_, the :ref:`modindex` or the :ref:`genindex` to find code you're looking for
 
 .. toctree::
    :caption: Getting Started
    :maxdepth: 2
 
-   gettingStarted/install
-   gettingStarted/quickStart
+   install
+   quick_start
 
 .. toctree::
    :caption: Basic
    :maxdepth: 2
 
-   basic/introduction
-   basic/concepts
-   basic/process
-   basic/workchain
+   introduction
+   concepts
+   process
+   workchain
+   controller
 
 .. toctree::
    :caption: Advanced
@@ -44,13 +47,17 @@ Features:
 
    advanced/process
    advanced/workchain
-   advanced/plumpyAPIprocess
-   advanced/plumpyAPIworkchain
-   advanced/plumpyAPIfsm
-   apidoc/plumpy
+   apidoc
 
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`search`
+
+Versioning
+==========
+
+This software follows `Semantic Versioning`_
+
+.. _Semantic Versioning: http://semver.org/

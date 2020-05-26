@@ -10,7 +10,7 @@ A Plumpy process can be create and run with:
 
 1. Copy and paste the following code block into a new file called ``helloWorld.py``:
 
-.. literalinclude:: ../../../examples/process_helloworld.py
+.. literalinclude:: ../../examples/process_helloworld.py
 
 2. run the process::
 
@@ -21,7 +21,7 @@ Process can wait, pause, play and resume
 
 The example below shows how process state transition with different action:
 
-.. literalinclude:: ../../../examples/process_waitAndResume.py
+.. literalinclude:: ../../examples/process_wait_and_resume.py
 
 Remote controled process
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -38,4 +38,4 @@ together into a independent process.
 
 See the example below:
 
-.. literalinclude:: ../../../examples/workchain_simple.py
+.. literalinclude:: ../../examples/workchain_simple.py
