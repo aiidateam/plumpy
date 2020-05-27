@@ -3,7 +3,6 @@ import asyncio
 import unittest
 
 from kiwipy import rmq
-from tornado import testing
 
 import pytest
 import plumpy

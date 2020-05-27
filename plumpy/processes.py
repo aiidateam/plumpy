@@ -63,7 +63,7 @@ def ensure_not_closed(func):
 
     @functools.wraps(func)
     def func_wrapper(self, *args, **kwargs):
-        # pylint: disable=protected-access
+        # pylint: disable=protected-access, useless-suppression
         if self._closed:
             raise exceptions.ClosedError('Process is closed')
         return func(self, *args, **kwargs)
@@ -238,7 +238,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        # self._loop = loop if loop is not None else events.get_event_loop()
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         self._setup_event_hooks()
@@ -533,7 +532,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if 'loop' in load_context:
             self._loop = load_context.loop
         else:
-            self._loop = events.get_event_loop()
+            self._loop = asyncio.get_event_loop()
 
         self._state = self.recreate_state(saved_state['_state'])
 

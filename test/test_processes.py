@@ -527,11 +527,12 @@ class TestProcess(unittest.TestCase):
 
             def run(self):
                 expect_true.append(self == Process.current())
-                proc = StackTest()
-                asyncio.ensure_future(proc.step_until_terminated())
+                # proc = StackTest()
+                # asyncio.ensure_future(proc.step_until_terminated())
+                StackTest().execute()
 
         to_run = []
-        for _ in range(100):
+        for _ in range(3):
             to_run.append(ParentProcess().step_until_terminated())
 
         loop = asyncio.get_event_loop()

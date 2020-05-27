@@ -6,9 +6,6 @@ import asyncio
 from concurrent import futures
 
 import kiwipy
-import tornado
-
-import plumpy
 
 __all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError', 'create_task']
 
@@ -21,7 +18,7 @@ class InvalidStateError(Exception):
 
 copy_future = kiwipy.copy_future  # pylint: disable=invalid-name
 chain = kiwipy.chain  # pylint: disable=invalid-name
-gather = lambda *args: tornado.gen.multi(args)  # pylint: disable=invalid-name
+gather = asyncio.gather  # pylint: disable=invalid-name
 
 
 class Future(futures.Future):
@@ -69,11 +66,11 @@ def create_task(coro, loop=None):
     :param coro: the coroutine to schedule
     :param loop: the event loop to schedule it in
     :return: the future representing the outcome of the coroutine
-    :rtype: :class:`tornado.concurrent.Future`
+    :rtype: :class:`plumpy.Future`
     """
     loop = loop or asyncio.get_event_loop()
 
-    future = plumpy.Future()
+    future = Future()
 
     async def run_task():
         with kiwipy.capture_exceptions(future):

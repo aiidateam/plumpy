@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
+import asyncio
+import unittest
+
 import plumpy
 from plumpy import BundleKeys
 
 from . import utils
 
 
-class TestWaitingProcess(utils.TestCaseWithLoop):
+class TestWaitingProcess(unittest.TestCase):
 
     def test_instance_state(self):
         proc = utils.ThreeSteps()
@@ -16,12 +19,13 @@ class TestWaitingProcess(utils.TestCaseWithLoop):
             self.assertEqual(outputs, bundle.get(BundleKeys.OUTPUTS, {}))
 
     def test_saving_each_step(self):
+        loop = asyncio.get_event_loop()
         for proc_class in utils.TEST_WAITING_PROCESSES:
             proc = proc_class()
             saver = utils.ProcessSaver(proc)
             saver.capture()
 
-            self.assertTrue(utils.check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
+            self.assertTrue(utils.check_process_against_snapshots(loop, proc_class, saver.snapshots))
 
     def test_kill(self):
         process = utils.WaitForSignalProcess()

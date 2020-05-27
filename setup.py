@@ -30,7 +30,6 @@ setup(
     python_requires='>=3.5',
     install_requires=[
         'frozendict',
-        'tornado>=4.1, <5.0',
         'pyyaml~=5.1.2',
         'pika>=1.0.0',
         'aio-pika',

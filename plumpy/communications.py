@@ -5,7 +5,6 @@ import functools
 
 import kiwipy
 
-import plumpy
 from . import futures
 
 __all__ = [
@@ -36,7 +35,7 @@ def plum_to_kiwi_future(plum_future):
             else:
                 result = plum_future.result()
                 # Did we get another future?  In which case convert it too
-                if isinstance(result, plumpy.Future):
+                if isinstance(result, futures.Future):
                     result = plum_to_kiwi_future(result)
                 kiwi_future.set_result(result)
 
@@ -74,7 +73,7 @@ def wrap_communicator(communicator, loop=None):
     :param communicator: the communicator to wrap
     :type communicator: :class:`kiwipy.Communicator`
     :param loop: the event loop to schedule callbacks on
-    :type loop: :class:`tornado.ioloop.IOLoop`
+    :type loop: the asyncio event loop
     :return: a communicator wrapper
     :rtype: :class:`plumpy.LoopCommunicator`
     """
@@ -91,8 +90,8 @@ class LoopCommunicator(kiwipy.Communicator):
         """
         :param communicator: The kiwipy communicator
         :type communicator: :class:`kiwipy.Communicator`
-        :param loop: The tornado event loop to schedule callbacks on
-        :type loop: :class:`tornado.ioloop.IOLoop`
+        :param loop: The event loop to schedule callbacks on
+        :type loop: The asyncio event loop
         """
         assert communicator is not None
 
@@ -134,3 +133,9 @@ class LoopCommunicator(kiwipy.Communicator):
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         return self._communicator.broadcast_send(body, sender, subject, correlation_id)
+
+    def close(self):
+        self._communicator.close()
+
+    def is_closed(self):
+        return self._communicator.is_closed()

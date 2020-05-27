@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import inspect
-from tornado import gen
 
 import plumpy
 from plumpy.workchains import *
@@ -132,7 +131,7 @@ class TestContext(unittest.TestCase):
             wc.ctx['new_attr']
 
 
-class TestWorkchain(utils.TestCaseWithLoop):
+class TestWorkchain(unittest.TestCase):
     maxDiff = None
 
     def test_run(self):
@@ -541,7 +540,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         self.assertListEqual(collector.stepper_strings, stepper_strings)
 
 
-class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
+class TestImmutableInputWorkchain(unittest.TestCase):
     """
     Test that inputs cannot be modified
     """

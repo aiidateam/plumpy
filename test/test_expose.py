@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
+import unittest
+
 from plumpy.ports import PortNamespace
 from plumpy.processes import Process
 from plumpy.process_spec import ProcessSpec
-from test.utils import TestCaseWithLoop, NewLoopProcess
+from test.utils import NewLoopProcess
 
 
-class TestExposeProcess(TestCaseWithLoop):
+class TestExposeProcess(unittest.TestCase):
 
     def setUp(self):
         super().setUp()

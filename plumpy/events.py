@@ -1,32 +1,18 @@
 # -*- coding: utf-8 -*-
 """Event and loop related classes and functions"""
 import sys
-
-from tornado import ioloop
+import asyncio
 
 __all__ = ['new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete']
 
-get_event_loop = ioloop.IOLoop.current  # pylint: disable=invalid-name
+get_event_loop = asyncio.get_event_loop  # pylint: disable=invalid-name
+new_event_loop = asyncio.new_event_loop  # pylint: disable=invalid-name
+set_event_loop = asyncio.set_event_loop  # pylint: disable=invalid-name
 
 
-def new_event_loop():
-    loop = ioloop.IOLoop()
-    loop.make_current()
-    return loop
-
-
-def set_event_loop(loop):
-    if loop is None:
-        ioloop.IOLoop.clear_instance()
-    else:
-        loop.make_current()
-
-
-def run_until_complete(future, loop=None):
-    if loop is None:
-        loop = get_event_loop()
-
-    return loop.run_sync(lambda: future)
+def run_until_complete(fut, loop=None):
+    loop = loop or asyncio.get_event_loop()
+    return loop.run_until_complete(fut)
 
 
 class ProcessCallback:

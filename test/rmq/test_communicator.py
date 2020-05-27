@@ -11,19 +11,15 @@ import shortuuid
 import pytest
 from kiwipy import rmq
 from six.moves import range
-from tornado import testing, ioloop
 
 import plumpy
 from plumpy import communications, process_comms
-from ..utils import AsyncTestCase
 from .. import utils
 
 try:
     import aio_pika
 except ImportError:
     aio_pika = None
-
-AWAIT_TIMEOUT = testing.get_async_test_timeout()
 
 # pylint: disable=missing-docstring
 
