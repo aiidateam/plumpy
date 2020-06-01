@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
 import abc
-import asyncio
 import contextlib
 import functools
 import copy
@@ -9,11 +8,13 @@ import logging
 import time
 import sys
 import uuid
+import asyncio
 
 from aiocontextvars import ContextVar
 import kiwipy
 from pika.exceptions import ConnectionClosed
 import yaml
+import nest_asyncio
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -239,6 +240,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self.spec().seal()
 
         self._loop = loop if loop is not None else asyncio.get_event_loop()
+        nest_asyncio.apply(self._loop)
 
         self._setup_event_hooks()
 
@@ -368,7 +370,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         process = process_class(
             inputs=inputs, pid=pid, logger=logger, loop=self.loop(), communicator=self._communicator
         )
-        asyncio.ensure_future(process.step_until_terminated())
+        self.loop().create_task(process.step_until_terminated())
         return process
 
     # region State introspection methods
@@ -451,7 +453,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         args = (callback,) + args
         handle = events.ProcessCallback(self, self._run_task, args, kwargs)
-        asyncio.ensure_future(handle.run())
+        self.loop().create_task(handle.run())
         return handle
 
     def callback_excepted(self, _callback, exception, trace):
@@ -465,14 +467,22 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         meaning that globally someone can ask for Process.current() to get the last process
         that is on the call stack.
         """
-        PROCESS_STACK.get().append(self)
+        stack_copy = PROCESS_STACK.get().copy()
+        stack_copy.append(self)
+        PROCESS_STACK.set(stack_copy)
+        # print('before yield: ')
+        # print([self], 'before coro: ', PROCESS_STACK.get())
         try:
             yield
         finally:
+            # print('finally:')
+            # print([self], 'after coro: ', PROCESS_STACK.get())
             assert Process.current() is self, \
                 'Somehow, the process at the top of the stack is not me, ' \
                 'but another process! ({} != {})'.format(self, Process.current())
-            PROCESS_STACK.get().pop()
+            stack_copy = PROCESS_STACK.get().copy()
+            stack_copy.pop()
+            PROCESS_STACK.set(stack_copy)
 
     async def _run_task(self, callback, *args, **kwargs):
         """

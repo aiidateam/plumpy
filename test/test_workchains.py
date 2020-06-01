@@ -383,30 +383,33 @@ class TestWorkchain(unittest.TestCase):
         workchain = MainWorkChain()
         workchain.execute()
 
-    @pytest.mark.asyncio
-    async def test_if_block_persistence(self):
+    def test_if_block_persistence(self):
         workchain = IfTest()
-        asyncio.ensure_future(workchain.step_until_terminated())
 
-        await utils.run_until_paused(workchain)
-        self.assertTrue(workchain.ctx.s1)
-        self.assertFalse(workchain.ctx.s2)
+        async def async_test():
+            await utils.run_until_paused(workchain)
+            self.assertTrue(workchain.ctx.s1)
+            self.assertFalse(workchain.ctx.s2)
 
-        # Now bundle the thing
-        bundle = plumpy.Bundle(workchain)
+            # Now bundle the thing
+            bundle = plumpy.Bundle(workchain)
 
-        # Load from saved state
-        workchain2 = bundle.unbundle()
-        self.assertTrue(workchain2.ctx.s1)
-        self.assertFalse(workchain2.ctx.s2)
+            # Load from saved state
+            workchain2 = bundle.unbundle()
+            self.assertTrue(workchain2.ctx.s1)
+            self.assertFalse(workchain2.ctx.s2)
 
-        bundle2 = plumpy.Bundle(workchain2)
-        self.assertDictEqual(bundle, bundle2)
+            bundle2 = plumpy.Bundle(workchain2)
+            self.assertDictEqual(bundle, bundle2)
 
-        workchain.play()
-        await workchain.future()
-        self.assertTrue(workchain.ctx.s1)
-        self.assertTrue(workchain.ctx.s2)
+            workchain.play()
+            await workchain.future()
+            self.assertTrue(workchain.ctx.s1)
+            self.assertTrue(workchain.ctx.s2)
+
+        loop = asyncio.get_event_loop()
+        loop.create_task(workchain.step_until_terminated())
+        loop.run_until_complete(async_test())
 
     def test_to_context(self):
         val = 5
