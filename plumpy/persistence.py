@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+# -*- coding: utf-8 -*-
 import abc
 import collections
 import copy
@@ -6,9 +6,9 @@ import errno
 import fnmatch
 import inspect
 import os
-import six
-import yaml
 import pickle
+
+import yaml
 
 from . import loaders
 from . import futures
@@ -36,7 +36,7 @@ class Bundle(dict):
         :param save_context: The optional save context to use
         :type save_context: :class:`LoadSaveContext`
         """
-        super(Bundle, self).__init__()
+        super().__init__()
         self.update(savable.save(save_context))
 
     def unbundle(self, load_context=None):
@@ -69,8 +69,7 @@ yaml.add_representer(Bundle, _bundle_representer)
 yaml.add_constructor(_BUNDLE_TAG, _bundle_constructor)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Persister(object):
+class Persister(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def save_checkpoint(self, process, tag=None):
@@ -82,7 +81,6 @@ class Persister(object):
             multiple checkpoints for the same process
         :raises: :class:`plumpy.PersistenceError` Raised if there was a problem saving the checkpoint
         """
-        pass
 
     @abc.abstractmethod
     def load_checkpoint(self, pid, tag=None):
@@ -96,7 +94,6 @@ class Persister(object):
         :rtype: :class:`plumpy.Bundle`
         :raises: :class:`plumpy.PersistenceError` Raised if there was a problem loading the checkpoint
         """
-        pass
 
     @abc.abstractmethod
     def get_checkpoints(self):
@@ -106,7 +103,6 @@ class Persister(object):
 
         :return: list of PersistedCheckpoint tuples
         """
-        pass
 
     @abc.abstractmethod
     def get_process_checkpoints(self, pid):
@@ -118,7 +114,6 @@ class Persister(object):
         :param pid: the process pid
         :return: list of PersistedCheckpoint tuples
         """
-        pass
 
     @abc.abstractmethod
     def delete_checkpoint(self, pid, tag=None):
@@ -130,7 +125,6 @@ class Persister(object):
         :param tag: optional checkpoint identifier to allow retrieving
             a specific sub checkpoint for the corresponding process
         """
-        pass
 
     @abc.abstractmethod
     def delete_process_checkpoints(self, pid):
@@ -139,7 +133,6 @@ class Persister(object):
 
         :param pid: the process id of the :class:`plumpy.Process`
         """
-        pass
 
 
 PersistedPickle = collections.namedtuple('PersistedPickle', ['checkpoint', 'bundle'])
@@ -160,11 +153,11 @@ class PicklePersister(Persister):
 
         :param pickle_directory: the full path to the directory where pickles will be written
         """
-        super(PicklePersister, self).__init__()
+        super().__init__()
 
         try:
             PicklePersister.ensure_pickle_directory(pickle_directory)
-        except OSError as exception:
+        except OSError:
             raise ValueError('failed to create the pickle directory at {}'.format(pickle_directory))
 
         self._pickle_directory = pickle_directory
@@ -255,7 +248,7 @@ class PicklePersister(Persister):
         checkpoints = []
         file_pattern = '*.{}'.format(_PICKLE_SUFFIX)
 
-        for _subdir, dirs, files in os.walk(self._pickle_directory):
+        for _, _, files in os.walk(self._pickle_directory):
             for filename in fnmatch.filter(files, file_pattern):
                 filepath = os.path.join(self._pickle_directory, filename)
                 persisted_pickle = PicklePersister.load_pickle(filepath)
@@ -304,7 +297,7 @@ class InMemoryPersister(Persister):
     """ Mainly to be used in testing/debugging """
 
     def __init__(self, loader=None):
-        super(InMemoryPersister, self).__init__()
+        super().__init__()
         self._checkpoints = {}
         self._save_context = LoadSaveContext(loader=loader)
 
@@ -323,7 +316,7 @@ class InMemoryPersister(Persister):
     def get_process_checkpoints(self, pid):
         cps = []
         try:
-            for tag, bundle in self._checkpoints[pid].items():
+            for tag, _ in self._checkpoints[pid].items():
                 cps.append(PersistedCheckpoint(pid, tag))
         except KeyError:
             pass
@@ -343,6 +336,7 @@ class InMemoryPersister(Persister):
 def auto_persist(*members):
 
     def wrapped(savable):
+        # pylint: disable=protected-access
         if savable._auto_persist is None:
             savable._auto_persist = set()
         else:
@@ -368,23 +362,24 @@ def _ensure_object_loader(context, saved_state):
         context = LoadSaveContext()
 
     assert isinstance(context, LoadSaveContext)
+
     if context.loader is not None:
         return context
+
+    # 2) Try getting from saved_state
+    default_loader = loaders.get_object_loader()
+    try:
+        loader_identifier = Savable.get_custom_meta(saved_state, META__OBJECT_LOADER)
+    except ValueError:
+        # 3) Fall back to default
+        loader = default_loader
     else:
-        # 2) Try getting from saved_state
-        default_loader = loaders.get_object_loader()
-        try:
-            loader_identifier = Savable.get_custom_meta(saved_state, META__OBJECT_LOADER)
-        except ValueError:
-            # 3) Fall back to default
-            loader = default_loader
-        else:
-            loader = default_loader.load_object(loader_identifier)
+        loader = default_loader.load_object(loader_identifier)
 
-        return context.copyextend(loader=loader)
+    return context.copyextend(loader=loader)
 
 
-class LoadSaveContext(object):
+class LoadSaveContext:
 
     def __init__(self, loader=None, **kwargs):
         self._values = dict(**kwargs)
@@ -419,7 +414,7 @@ META__TYPE__METHOD = 'm'
 META__TYPE__SAVABLE = 'S'
 
 
-class Savable(object):
+class Savable:
     CLASS_NAME = 'class_name'
 
     _auto_persist = None
@@ -442,7 +437,7 @@ class Savable(object):
             class_name = Savable._get_class_name(saved_state)
             load_cls = load_context.loader.load_object(class_name)
         except KeyError:
-            raise ValueError("Class name not found in saved state")
+            raise ValueError('Class name not found in saved state')
         else:
             return load_cls.recreate_from(saved_state, load_context)
 
@@ -479,7 +474,7 @@ class Savable(object):
             self.load_members(self._auto_persist, saved_state, load_context)
 
     @super_check
-    def save_instance_state(self, out_state, save_context):
+    def save_instance_state(self, out_state, save_context):  # pylint: disable=unused-argument
         self._ensure_persist_configured()
         if self._auto_persist is not None:
             self.save_members(self._auto_persist, out_state)
@@ -510,7 +505,7 @@ class Savable(object):
             value = getattr(self, member)
             if inspect.ismethod(value):
                 if value.__self__ is not self:
-                    raise TypeError("Cannot persist methods of other classes")
+                    raise TypeError('Cannot persist methods of other classes')
                 Savable._set_meta_type(out_state, member, META__TYPE__METHOD)
                 value = value.__name__
             elif isinstance(value, Savable):
@@ -591,12 +586,13 @@ class SavableFuture(futures.Future, Savable):
     EXCEPTION = 'exception'
 
     def save_instance_state(self, out_state, save_context):
-        super(SavableFuture, self).save_instance_state(out_state, save_context)
+        super().save_instance_state(out_state, save_context)
         if self.done() and self.exception() is not None:
             out_state[self.EXCEPTION] = self.exception()
 
     def load_instance_state(self, saved_state, load_context):
-        super(SavableFuture, self).load_instance_state(saved_state, load_context)
+        # pylint: disable=attribute-defined-outside-init
+        super().load_instance_state(saved_state, load_context)
         try:
             exception = saved_state[self.EXCEPTION]
             self._exc_info = (type(exception), exception, None)

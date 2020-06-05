@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 from .utils import TestCase
 from plumpy.lang import protected, override
 
 
-class A(object):
+class A:
+
     def __init__(self):
         self._a = None
 
@@ -25,20 +27,24 @@ class A(object):
 
 
 class B(A):
+
     def testB(self):
         self.protected_fn()
         self.protected_property
 
 
 class C(B):
+
     def testC(self):
         self.protected_fn()
         self.protected_property
 
 
 class TestProtected(TestCase):
+
     def test_free_function(self):
         with self.assertRaises(RuntimeError):
+
             @protected(check=False)
             def some_func():
                 pass
@@ -70,27 +76,34 @@ class TestProtected(TestCase):
             c.protected_property
 
         with self.assertRaises(RuntimeError):
-            class TestWrongDecoratorOrder(object):
+
+            class TestWrongDecoratorOrder:
+
                 @protected(check=True)
                 @property
                 def a(self):
                     return None
 
 
-class Superclass(object):
+class Superclass:
+
     def test(self):
         pass
 
 
 class TestOverride(TestCase):
+
     def test_free_function(self):
         with self.assertRaises(RuntimeError):
+
             @override(check=False)
             def some_func():
                 pass
 
     def test_correct_usage(self):
+
         class Derived(Superclass):
+
             @override(check=True)
             def test(self):
                 return True
@@ -101,6 +114,7 @@ class TestOverride(TestCase):
             pass
 
         class Next(Middle):
+
             @override(check=True)
             def test(self):
                 return True
@@ -108,7 +122,9 @@ class TestOverride(TestCase):
         self.assertTrue(Next().test())
 
     def test_incorrect_usage(self):
-        class Derived(object):
+
+        class Derived:
+
             @override(check=True)
             def test(self):
                 pass
@@ -117,15 +133,18 @@ class TestOverride(TestCase):
             Derived().test()
 
         with self.assertRaises(RuntimeError):
+
             class TestWrongDecoratorOrder(Superclass):
+
                 @override(check=True)
                 @property
                 def test(self):
                     return None
 
+
 #
 #
-# class A(object):
+# class A:
 #     def __init__(self):
 #         self.a_called = False
 #
@@ -135,7 +154,7 @@ class TestOverride(TestCase):
 #
 # class B(A):
 #     def __init__(self):
-#         super(B, self).__init__()
+#         super().__init__()
 #         self.b_called = False
 #
 #     @call_super
@@ -145,7 +164,7 @@ class TestOverride(TestCase):
 #
 # class C(B):
 #     def __init__(self):
-#         super(C, self).__init__()
+#         super().__init__()
 #         self.c_called = False
 #
 #     @call_super
@@ -154,7 +173,7 @@ class TestOverride(TestCase):
 #
 # class BPrime(A):
 #     def __init__(self):
-#         super(A, super).__init__()
+#         super().__init__()
 #         self.b_prime_called = False
 #
 #     def test(self):
@@ -162,7 +181,7 @@ class TestOverride(TestCase):
 #
 # class CPrime(BPrime):
 #     def __init__(self):
-#         super(CPrime, self).__init__()
+#         super().__init__()
 #         self.c_prime_called = False
 #
 #     @call_super

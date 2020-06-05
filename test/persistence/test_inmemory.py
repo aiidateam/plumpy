@@ -1,7 +1,6 @@
-from __future__ import absolute_import
-
+# -*- coding: utf-8 -*-
 import plumpy
-from plumpy.test_utils import ProcessWithCheckpoint
+from test.test_utils import ProcessWithCheckpoint
 from test.utils import TestCaseWithLoop
 
 

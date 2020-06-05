@@ -1,38 +1,35 @@
 # -*- coding: utf-8 -*-
-
-from __future__ import absolute_import
-from collections import deque, defaultdict
 import importlib
 import inspect
 import logging
 import threading
-import tornado.gen
+import types
+from collections import deque, defaultdict
 
+import tornado.gen
 import frozendict
 
+from .settings import check_protected, check_override
 from . import lang
-from plumpy.settings import check_protected, check_override
-from six.moves import range
 
 __all__ = []
 
-protected = lang.protected(check=check_protected)
-override = lang.override(check=check_override)
+protected = lang.protected(check=check_protected)  # pylint: disable=invalid-name
+override = lang.override(check=check_override)  # pylint: disable=invalid-name
 
 _LOGGER = logging.getLogger(__name__)
-_default_loop = None
 
 
-class EventHelper(object):
+class EventHelper:
 
     def __init__(self, listener_type):
-        assert listener_type is not None, "Must provide valid listener type"
+        assert listener_type is not None, 'Must provide valid listener type'
 
         self._listener_type = listener_type
         self._listeners = set()
 
     def add_listener(self, listener):
-        assert isinstance(listener, self._listener_type), "Listener is not of right type"
+        assert isinstance(listener, self._listener_type), 'Listener is not of right type'
         self._listeners.add(listener)
 
     def remove_listener(self, listener):
@@ -47,17 +44,17 @@ class EventHelper(object):
 
     def fire_event(self, event_function, *args, **kwargs):
         if event_function is None:
-            raise ValueError("Must provide valid event method")
+            raise ValueError('Must provide valid event method')
 
         # Make a copy of the list for iteration just in case it changes in a callback
         for listener in list(self.listeners):
             try:
                 getattr(listener, event_function.__name__)(*args, **kwargs)
-            except Exception as e:
-                _LOGGER.error("Listener '{}' produced an exception:\n{}".format(listener, e))
+            except Exception as exception:  # pylint: disable=broad-except
+                _LOGGER.error("Listener '%s' produced an exception:\n%s", listener, exception)
 
 
-class ListenContext(object):
+class ListenContext:
     """
     A context manager for listening to producer that can generate messages.
     The requirements for the producer are that it has methods:
@@ -86,7 +83,7 @@ class ListenContext(object):
         self._producer.remove_listener(*self._args, **self._kwargs)
 
 
-class ThreadSafeCounter(object):
+class ThreadSafeCounter:
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -109,7 +106,7 @@ class ThreadSafeCounter(object):
 class AttributesFrozendict(frozendict.frozendict):
 
     def __init__(self, *args, **kwargs):
-        super(AttributesFrozendict, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._initialised = True
 
     def __getattr__(self, attr):
@@ -120,7 +117,7 @@ class AttributesFrozendict(frozendict.frozendict):
         # This attribute is looked for by pickle when deserialising.  At this point
         # the object is not yet constructed and so accessing any members is
         # dangerous and often causes infinite recursion so I have to guard like this.
-        if attr == "__setstate__":
+        if attr == '__setstate__':
             raise AttributeError()
         try:
             return self[attr]
@@ -136,24 +133,7 @@ class AttributesFrozendict(frozendict.frozendict):
         return list(self.keys())
 
 
-class SimpleNamespace(object):
-    """
-    An attempt to emulate python 3's types.SimpleNamespace
-    """
-
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-    def __repr__(self):
-        keys = sorted(self.__dict__)
-        items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
-        return "{}({})".format(type(self).__name__, ", ".join(items))
-
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
-
-
-class AttributesDict(SimpleNamespace):
+class AttributesDict(types.SimpleNamespace):
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
@@ -179,12 +159,13 @@ def load_function(name, instance=None):
     if inspect.ismethod(obj):
         if instance is not None:
             return obj.__get__(instance, instance.__class__)
-        else:
-            return obj
-    elif inspect.isfunction(obj):
+
         return obj
-    else:
-        raise ValueError("Invalid function name '{}'".format(name))
+
+    if inspect.isfunction(obj):
+        return obj
+
+    raise ValueError("Invalid function name '{}'".format(name))
 
 
 def load_object(fullname):
@@ -209,7 +190,7 @@ def load_module(fullname):
     # Try to find the module, working our way from the back
     mod = None
     remainder = deque()
-    for i in range(len(parts)):
+    for _ in range(len(parts)):
         try:
             mod = importlib.import_module('.'.join(parts))
             break
@@ -241,16 +222,15 @@ def type_check(obj, expected_type):
         raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
 
 
-def ensure_coroutine(fn):
-    if tornado.gen.is_coroutine_function(fn):
-        return fn
-    else:
+def ensure_coroutine(wrapped):
+    if tornado.gen.is_coroutine_function(wrapped):
+        return wrapped
 
-        @tornado.gen.coroutine
-        def wrapper(*args, **kwargs):
-            raise tornado.gen.Return(fn(*args, **kwargs))
+    @tornado.gen.coroutine
+    def wrapper(*args, **kwargs):
+        raise tornado.gen.Return(wrapped(*args, **kwargs))
 
-        return wrapper
+    return wrapper
 
 
 def is_mutable_property(cls, attribute):

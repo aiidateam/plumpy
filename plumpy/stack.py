@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Keep track of the per-thread call stack of processes.
 """
@@ -6,7 +7,7 @@ import contextlib
 import threading
 
 # Use thread-local storage for the stack
-_thread_local = threading.local()
+THREAD_LOCAL = threading.local()
 
 
 @contextlib.contextmanager
@@ -43,16 +44,16 @@ def pop(process):
 
     :param process: The process instance
     """
-    global _thread_local
+    global THREAD_LOCAL
     assert process is top(), "Can't pop a process that is not top of the stack"
     _stack().pop()
 
 
 def _stack():
     """Access the private live stack"""
-    global _thread_local
+    global THREAD_LOCAL
     try:
-        return _thread_local.wf_stack
+        return THREAD_LOCAL.wf_stack
     except AttributeError:
-        _thread_local.wf_stack = []
-        return _thread_local.wf_stack
+        THREAD_LOCAL.wf_stack = []
+        return THREAD_LOCAL.wf_stack

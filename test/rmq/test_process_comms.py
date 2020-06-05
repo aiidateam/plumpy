@@ -1,5 +1,4 @@
-from __future__ import absolute_import
-
+# -*- coding: utf-8 -*-
 import unittest
 
 import shortuuid
@@ -8,9 +7,9 @@ import kiwipy.rmq
 
 import plumpy
 import plumpy.communications
-from plumpy import process_comms, test_utils
+from plumpy import process_comms
+from test import test_utils
 from .. import utils
-from six.moves import range
 
 try:
     import pika
@@ -20,11 +19,11 @@ except ImportError:
 AWAIT_TIMEOUT = testing.get_async_test_timeout()
 
 
-@unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
+@unittest.skipIf(not pika, 'Requires pika library and RabbitMQ')
 class TestRemoteProcessController(utils.AsyncTestCase):
 
     def setUp(self):
-        super(TestRemoteProcessController, self).setUp()
+        super().setUp()
 
         self.init_communicator()
         self.process_controller = process_comms.RemoteProcessController(self.communicator)
@@ -33,7 +32,7 @@ class TestRemoteProcessController(utils.AsyncTestCase):
         # Close the connector before calling super because it will
         # close the loop
         self.communicator.stop()
-        super(TestRemoteProcessController, self).tearDown()
+        super().tearDown()
 
     @testing.gen_test
     def test_pause(self):
@@ -98,30 +97,31 @@ class TestRemoteProcessController(utils.AsyncTestCase):
         expected_subjects = []
         for i, state in enumerate(test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
             from_state = test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
-            expected_subjects.append("state_changed.{}.{}".format(from_state, state.value))
+            expected_subjects.append('state_changed.{}.{}'.format(from_state, state.value))
 
         for i, message in enumerate(messages):
             self.assertEqual(message['subject'], expected_subjects[i])
 
 
-@unittest.skipIf(not pika, "Requires pika library and RabbitMQ")
+@unittest.skipIf(not pika, 'Requires pika library and RabbitMQ')
 class TestRemoteProcessThreadController(testing.AsyncTestCase):
 
     def setUp(self):
-        super(TestRemoteProcessThreadController, self).setUp()
+        super().setUp()
 
         self.loop = self.io_loop
 
-        message_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_exchange = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
-        task_queue = "{}.{}".format(self.__class__.__name__, shortuuid.uuid())
+        message_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        task_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
+        task_queue = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
 
         self.communicator = kiwipy.rmq.connect(
             connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
             message_exchange=message_exchange,
             task_exchange=task_exchange,
             task_queue=task_queue,
-            testing_mode=True)
+            testing_mode=True
+        )
 
         self.process_controller = process_comms.RemoteProcessThreadController(self.communicator)
 
@@ -129,7 +129,7 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
         # Close the connector before calling super because it will
         # close the loop
         self.communicator.stop()
-        super(TestRemoteProcessThreadController, self).tearDown()
+        super().tearDown()
 
     @testing.gen_test
     def test_pause(self):

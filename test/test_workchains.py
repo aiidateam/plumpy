@@ -1,6 +1,5 @@
-from __future__ import absolute_import
+# -*- coding: utf-8 -*-
 import inspect
-import six
 from tornado import gen
 
 import plumpy
@@ -8,7 +7,7 @@ from plumpy.workchains import *
 from plumpy.process_listener import ProcessListener
 import unittest
 
-from plumpy import test_utils
+from test import test_utils
 from . import utils
 
 
@@ -18,9 +17,9 @@ class Wf(WorkChain):
 
     @classmethod
     def define(cls, spec):
-        super(Wf, cls).define(spec)
-        spec.input("value", default='A')
-        spec.input("n", default=3)
+        super().define(spec)
+        spec.input('value', default='A')
+        spec.input('n', default=3)
         spec.outputs.dynamic = True
         spec.outline(
             cls.s1,
@@ -30,12 +29,12 @@ class Wf(WorkChain):
         )
 
     def on_create(self):
-        super(Wf, self).on_create()
+        super().on_create()
         # Reset the finished step
         self.finished_steps = {
             k: False for k in [
-                self.s1.__name__, self.s2.__name__, self.s3.__name__, self.s4.__name__, self.s5.__name__, self.s6.
-                __name__, self.isA.__name__, self.isB.__name__, self.ltN.__name__
+                self.s1.__name__, self.s2.__name__, self.s3.__name__, self.s4.__name__, self.s5.__name__,
+                self.s6.__name__, self.isA.__name__, self.isB.__name__, self.ltN.__name__
             ]
         }
 
@@ -81,11 +80,11 @@ class IfTest(WorkChain):
 
     @classmethod
     def define(cls, spec):
-        super(IfTest, cls).define(spec)
+        super().define(spec)
         spec.outline(if_(cls.condition)(cls.step1, cls.step2))
 
     def on_create(self, *args, **kwargs):
-        super(IfTest, self).on_create(*args, **kwargs)
+        super().on_create(*args, **kwargs)
         self.ctx.s1 = False
         self.ctx.s2 = False
 
@@ -104,7 +103,7 @@ class DummyWc(WorkChain):
 
     @classmethod
     def define(cls, spec):
-        super(DummyWc, cls).define(spec)
+        super().define(spec)
         spec.outline(cls.do_nothing)
 
     def do_nothing(self):
@@ -146,21 +145,21 @@ class TestWorkchain(utils.TestCaseWithLoop):
         # Check the steps that should have been run
         for step, finished in Wf.finished_steps.items():
             if step not in ['s3', 's4', 'isB']:
-                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
+                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
 
         # Try the elif(..) part
         finished_steps = Wf(inputs=dict(value=B, n=three)).execute()
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 's4']:
-                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
+                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
 
         # Try the else... part
         finished_steps = Wf(inputs=dict(value=C, n=three)).execute()
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 'isB', 's3']:
-                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
+                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
 
     def test_incorrect_outline(self):
 
@@ -168,7 +167,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 # Try defining an invalid outline
                 spec.outline(5)
 
@@ -181,7 +180,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.input('a', valid_type=int)
                 spec.input('b', valid_type=int)
                 # Try defining an invalid outline
@@ -195,14 +194,14 @@ class TestWorkchain(utils.TestCaseWithLoop):
         Wf(inputs=dict(a=x, b=x)).execute()
 
     def test_context(self):
-        A = "a"
-        B = "b"
+        A = 'a'
+        B = 'b'
 
         class ReturnA(plumpy.Process):
 
             @classmethod
             def define(cls, spec):
-                super(ReturnA, cls).define(spec)
+                super().define(spec)
                 spec.output('res')
 
             def run(self):
@@ -212,7 +211,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ReturnB, cls).define(spec)
+                super().define(spec)
                 spec.output('res')
 
             def run(self):
@@ -222,7 +221,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.s1, cls.s2, cls.s3)
 
             def s1(self):
@@ -242,7 +241,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         Wf().execute()
 
     def test_str(self):
-        self.assertIsInstance(str(Wf.spec()), six.string_types)
+        self.assertIsInstance(str(Wf.spec()), str)
 
     def test_malformed_outline(self):
         """
@@ -267,21 +266,21 @@ class TestWorkchain(utils.TestCaseWithLoop):
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['s3', 's4', 'isB']:
-                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
+                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
 
         # Try the elif(..) part
         finished_steps = self._run_with_checkpoints(Wf, inputs={'value': B, 'n': three})
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 's4']:
-                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
+                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
 
         # Try the else... part
         finished_steps = self._run_with_checkpoints(Wf, inputs={'value': C, 'n': three})
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 'isB', 's3']:
-                self.assertTrue(finished, "Step {} was not called by workflow".format(step))
+                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
 
     def test_return_in_outline(self):
 
@@ -290,7 +289,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(WcWithReturn, cls).define(spec)
+                super().define(spec)
                 spec.input('success', valid_type=bool, required=False)
                 spec.outline(
                     cls.step_one,
@@ -327,7 +326,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(WcWithReturn, cls).define(spec)
+                super().define(spec)
                 spec.input('success', valid_type=bool, required=False)
                 spec.outline(cls.step_one, cls.after)
 
@@ -358,7 +357,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(MainWorkChain, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.run, cls.check)
                 spec.outputs.dynamic = True
 
@@ -372,11 +371,11 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(SubWorkChain, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.run)
 
             def run(self):
-                self.out("value", 5)
+                self.out('value', 5)
 
         workchain = MainWorkChain()
         workchain.execute()
@@ -416,8 +415,8 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(SimpleWc, cls).define(spec)
-                spec.output("_return")
+                super().define(spec)
+                spec.output('_return')
 
             def run(self):
                 self.out('_return', val)
@@ -426,7 +425,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Workchain, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.begin, cls.check)
 
             def begin(self):
@@ -447,7 +446,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(TestWorkChain, cls).define(spec)
+                super().define(spec)
                 spec.output('x.y', required=True)
                 spec.outline(cls.do_run)
 
@@ -458,13 +457,13 @@ class TestWorkchain(utils.TestCaseWithLoop):
         workchain.execute()
 
     def test_exception_tocontext(self):
-        my_exception = RuntimeError("Should not be reached")
+        my_exception = RuntimeError('Should not be reached')
 
         class Workchain(WorkChain):
 
             @classmethod
             def define(cls, spec):
-                super(Workchain, cls).define(spec)
+                super().define(spec)
                 spec.outline(cls.begin, cls.check)
 
             def begin(self):
@@ -491,7 +490,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.input('N', valid_type=int)
                 spec.outline(
                     cls.check_n,
@@ -556,7 +555,7 @@ class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.input('a', valid_type=int)
                 spec.input('b', valid_type=int)
                 spec.outline(
@@ -593,7 +592,7 @@ class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(Wf, cls).define(spec)
+                super().define(spec)
                 spec.input_namespace('subspace', dynamic=True)
                 spec.outline(
                     cls.step_one,

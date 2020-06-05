@@ -1,12 +1,10 @@
-from __future__ import absolute_import
+# -*- coding: utf-8 -*-
 import abc
-import six
 
 __all__ = ['ProcessListener']
 
 
-@six.add_metaclass(abc.ABCMeta)
-class ProcessListener(object):
+class ProcessListener(metaclass=abc.ABCMeta):
 
     def on_process_created(self, process):
         """
@@ -15,7 +13,6 @@ class ProcessListener(object):
         :param process: The process
         :type process: :class:`plumpy.Process`
         """
-        pass
 
     def on_process_running(self, process):
         """
@@ -24,7 +21,6 @@ class ProcessListener(object):
         :param process: The process
         :type process: :class:`plumpy.Process`
         """
-        pass
 
     def on_process_waiting(self, process):
         """
@@ -33,7 +29,6 @@ class ProcessListener(object):
         :param process: The process
         :type process: :class:`plumpy.Process`
         """
-        pass
 
     def on_process_paused(self, process):
         """
@@ -42,7 +37,6 @@ class ProcessListener(object):
         :param process: The process
         :type process: :class:`plumpy.Process`
         """
-        pass
 
     def on_process_played(self, process):
         """
@@ -51,7 +45,6 @@ class ProcessListener(object):
         :param process: The process
         :type process: :class:`plumpy.Process`
         """
-        pass
 
     def on_output_emitted(self, process, output_port, value, dynamic):
         """
@@ -65,7 +58,6 @@ class ProcessListener(object):
         :param dynamic: True if the port is dynamic, False otherwise
         :type dynamic: bool
         """
-        pass
 
     def on_process_finished(self, process, outputs):
         """
@@ -75,7 +67,6 @@ class ProcessListener(object):
         :type process: :class:`plumpy.Process`
         :param outputs: The process outputs
         """
-        pass
 
     def on_process_excepted(self, process, reason):
         """
@@ -85,7 +76,6 @@ class ProcessListener(object):
         :param reason: A string of the exception message
         :type process: :class:`plumpy.Process`
         """
-        pass
 
     def on_process_killed(self, process, msg):
         """
@@ -94,4 +84,3 @@ class ProcessListener(object):
         :param process: The process
         :type process: :class:`plumpy.Process`
         """
-        pass

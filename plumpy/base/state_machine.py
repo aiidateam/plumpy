@@ -1,22 +1,14 @@
+# -*- coding: utf-8 -*-
 """The state machine for processes"""
-
-from __future__ import absolute_import
-
-# ABC imports that support python 2 & 3
-try:
-    from collections.abc import Iterable
-except ImportError:
-    from collections import Iterable
+from collections.abc import Iterable
 import enum
 import functools
 import inspect
 import logging
 import os
 import sys
-import six
 
-import plumpy
-
+from plumpy.futures import Future
 from .utils import call_with_super_check, super_check
 
 __all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed']
@@ -33,8 +25,8 @@ class StateEntryFailed(Exception):
     Failed to enter a state, can provide the next state to go to via this exception
     """
 
-    def __init__(self, state=None, *args, **kwargs):
-        super(StateEntryFailed, self).__init__('failed to enter state')
+    def __init__(self, state=None, *args, **kwargs):  # pylint: disable=keyword-arg-before-vararg
+        super().__init__('failed to enter state')
         self.state = state
         self.args = args
         self.kwargs = kwargs
@@ -47,7 +39,7 @@ class InvalidStateError(Exception):
 class EventError(StateMachineError):
 
     def __init__(self, evt, msg):
-        super(EventError, self).__init__(msg)
+        super().__init__(msg)
         self.event = evt
 
 
@@ -58,13 +50,13 @@ class TransitionFailed(Exception):
         self.initial_state = initial_state
         self.final_state = final_state
         self.traceback_str = traceback_str
-        super(TransitionFailed, self).__init__(self._format_msg())
+        super().__init__(self._format_msg())
 
     def _format_msg(self):
-        msg = ["{} -> {}".format(self.initial_state, self.final_state)]
+        msg = ['{} -> {}'.format(self.initial_state, self.final_state)]
         if self.traceback_str is not None:
             msg.append(self.traceback_str)
-        return "\n".join(msg)
+        return '\n'.join(msg)
 
 
 def event(from_states='*', to_states='*'):
@@ -84,20 +76,22 @@ def event(from_states='*', to_states='*'):
 
         @functools.wraps(wrapped)
         def transition(self, *a, **kw):
+            # pylint: disable=protected-access
             initial = self._state
 
             if from_states != '*' and not any(isinstance(self._state, state) for state in from_states):
-                raise EventError(evt_label, "Event {} invalid in state {}".format(evt_label, initial.LABEL))
+                raise EventError(evt_label, 'Event {} invalid in state {}'.format(evt_label, initial.LABEL))
 
             result = wrapped(self, *a, **kw)
-            if not (result is False or isinstance(result, plumpy.Future)):
+            if not (result is False or isinstance(result, Future)):
                 if to_states != '*' and not any(isinstance(self._state, state) for state in to_states):
                     if self._state == initial:
-                        raise EventError(evt_label, "Machine did not transition")
-                    else:
-                        raise EventError(
-                            evt_label, "Event produced invalid state transition from "
-                            "{} to {}".format(initial.LABEL, self._state.LABEL))
+                        raise EventError(evt_label, 'Machine did not transition')
+
+                    raise EventError(
+                        evt_label, 'Event produced invalid state transition from '
+                        '{} to {}'.format(initial.LABEL, self._state.LABEL)
+                    )
 
             return result
 
@@ -109,7 +103,7 @@ def event(from_states='*', to_states='*'):
     return wrapper
 
 
-class State(object):
+class State:
     LABEL = None
     # A set containing the labels of states that can be entered
     # from this one
@@ -138,21 +132,18 @@ class State(object):
     @super_check
     def enter(self):
         """ Entering the state """
-        pass
 
     def execute(self):
         """
         Execute the state, performing the actions that this state is responsible
         for.  Return a state to transition to or None if finished.
         """
-        pass
 
     @super_check
     def exit(self):
         """ Exiting the state """
         if self.is_terminal():
-            raise InvalidStateError("Cannot exit a terminal state {}".format(self.LABEL))
-        pass
+            raise InvalidStateError('Cannot exit a terminal state {}'.format(self.LABEL))
 
     def create_state(self, state_label, *args, **kwargs):
         return self.state_machine.create_state(state_label, *args, **kwargs)
@@ -187,14 +178,13 @@ class StateMachineMeta(type):
         :param kwargs: Any keyword arguments to be passed to the constructor
         :return: An instance of the state machine
         """
-        inst = super(StateMachineMeta, cls).__call__(*args, **kwargs)
+        inst = super().__call__(*args, **kwargs)
         inst.transition_to(inst.create_initial_state())
         call_with_super_check(inst.init)
         return inst
 
 
-@six.add_metaclass(StateMachineMeta)
-class StateMachine(object):
+class StateMachine(metaclass=StateMachineMeta):
     STATES = None
     _STATES_MAP = None
 
@@ -211,17 +201,17 @@ class StateMachine(object):
         if cls.STATES is not None:
             return cls.STATES
 
-        raise RuntimeError("States not defined")
+        raise RuntimeError('States not defined')
 
     @classmethod
     def initial_state_label(cls):
         cls.__ensure_built()
-        return cls.STATES[0].LABEL
+        return cls.STATES[0].LABEL  # pylint: disable=unsubscriptable-object
 
     @classmethod
     def get_state_class(cls, label):
         cls.__ensure_built()
-        return cls._STATES_MAP[label]
+        return cls._STATES_MAP[label]  # pylint: disable=unsubscriptable-object
 
     @classmethod
     def __ensure_built(cls):
@@ -237,16 +227,16 @@ class StateMachine(object):
 
         # Build the states map
         cls._STATES_MAP = {}
-        for state_cls in cls.STATES:
+        for state_cls in cls.STATES:  # pylint: disable=not-an-iterable
             assert issubclass(state_cls, State)
             label = state_cls.LABEL
-            assert label not in cls._STATES_MAP, "Duplicate label '{}'".format(label)
-            cls._STATES_MAP[label] = state_cls
+            assert label not in cls._STATES_MAP, "Duplicate label '{}'".format(label)  # pylint: disable=unsupported-membership-test
+            cls._STATES_MAP[label] = state_cls  # pylint: disable=unsupported-assignment-operation
 
         cls.sealed = True
 
     def __init__(self):
-        super(StateMachine, self).__init__()
+        super().__init__()
         self.__ensure_built()
         self._state = None
         self._exception_handler = None
@@ -257,10 +247,9 @@ class StateMachine(object):
     @super_check
     def init(self):
         """ Called after entering initial state. """
-        pass
 
     def __str__(self):
-        return "<{}> ({})".format(self.__class__.__name__, self.state)
+        return '<{}> ({})'.format(self.__class__.__name__, self.state)
 
     def create_initial_state(self):
         return self.get_state_class(self.initial_state_label())(self)
@@ -294,11 +283,10 @@ class StateMachine(object):
     @super_check
     def on_terminated(self):
         """ Called when a terminal state is entered """
-        pass
 
     def transition_to(self, new_state, *args, **kwargs):
         assert not self._transitioning, \
-            "Cannot call transition_to when already transitioning state"
+            'Cannot call transition_to when already transitioning state'
 
         initial_state_label = self._state.LABEL if self._state is not None else None
         label = None
@@ -322,7 +310,7 @@ class StateMachine(object):
 
             if self._state.is_terminal():
                 call_with_super_check(self.on_terminated)
-        except Exception as exc:
+        except Exception:  # pylint: disable=broad-except
             self._transitioning = False
             if self._transition_failing:
                 raise
@@ -332,7 +320,8 @@ class StateMachine(object):
             self._transition_failing = False
             self._transitioning = False
 
-    def transition_failed(self, initial_state, final_state, exception, trace):
+    @staticmethod
+    def transition_failed(initial_state, final_state, exception, trace):
         """
         Called when a state transitions fails.  This method can be overwritten
         to change the default behaviour which is to raise the exception.
@@ -340,7 +329,7 @@ class StateMachine(object):
         :param exception: The transition failed exception
         :type exception: :class:`Exception`
         """
-        six.reraise(type(exception), exception, trace)
+        raise exception.with_traceback(trace)
 
     def get_debug(self):
         return self._debug
@@ -350,9 +339,9 @@ class StateMachine(object):
 
     def create_state(self, state_label, *args, **kwargs):
         try:
-            return self.get_states_map()[state_label](self, *args, **kwargs)
+            return self.get_states_map()[state_label](self, *args, **kwargs)  # pylint: disable=unsubscriptable-object
         except KeyError:
-            raise ValueError("{} is not a valid state".format(state_label))
+            raise ValueError('{} is not a valid state'.format(state_label))
 
     def _exit_current_state(self, next_state):
         """ Exit the given state """
@@ -365,7 +354,7 @@ class StateMachine(object):
             return  # Nothing to exit
 
         if next_state.LABEL not in self._state.ALLOWED:
-            raise RuntimeError("Cannot transition from {} to {}".format(self._state.LABEL, next_state.label))
+            raise RuntimeError('Cannot transition from {} to {}'.format(self._state.LABEL, next_state.label))
         self._fire_state_event(StateEventHook.EXITING_STATE, next_state)
         self._state.do_exit()
 
@@ -391,6 +380,6 @@ class StateMachine(object):
             return state
 
         try:
-            return self.get_states_map()[state]
+            return self.get_states_map()[state]  # pylint: disable=unsubscriptable-object
         except KeyError:
-            raise ValueError("{} is not a valid state".format(state))
+            raise ValueError('{} is not a valid state'.format(state))

@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+# -*- coding: utf-8 -*-
 from plumpy.ports import PortNamespace, InputPort
 from plumpy import ProcessSpec
 from .utils import TestCase

@@ -1,17 +1,14 @@
+# -*- coding: utf-8 -*-
 """Process tests"""
-from __future__ import absolute_import
 from tornado import gen, testing
 
 import enum
-import six
-from six.moves import range
-from six.moves import zip
-
 import kiwipy
 
 import plumpy
-from plumpy import Process, ProcessState, test_utils, BundleKeys
+from plumpy import Process, ProcessState, BundleKeys
 from plumpy.utils import AttributesFrozendict
+from test import test_utils
 from . import utils
 
 # pylint: disable=missing-docstring, invalid-name
@@ -20,28 +17,28 @@ from . import utils
 class ForgetToCallParent(plumpy.Process):
 
     def __init__(self, forget_on):
-        super(ForgetToCallParent, self).__init__()
+        super().__init__()
         self.forget_on = forget_on
 
     def on_create(self):
         if self.forget_on != 'create':
-            super(ForgetToCallParent, self).on_create()
+            super().on_create()
 
     def on_run(self):
         if self.forget_on != 'run':
-            super(ForgetToCallParent, self).on_run()
+            super().on_run()
 
     def on_except(self, exception):
         if self.forget_on != 'except':
-            super(ForgetToCallParent, self).on_except(exception)
+            super().on_except(exception)
 
     def on_finish(self, result, successful):
         if self.forget_on != 'finish':
-            super(ForgetToCallParent, self).on_finish(result, successful)
+            super().on_finish(result, successful)
 
     def on_kill(self, msg):
         if self.forget_on != 'kill':
-            super(ForgetToCallParent, self).on_kill(msg)
+            super().on_kill(msg)
 
 
 class TestProcess(utils.AsyncTestCase):
@@ -71,7 +68,7 @@ class TestProcess(utils.AsyncTestCase):
 
             @classmethod
             def define(cls, spec):
-                super(WithDynamic, cls).define(spec)
+                super().define(spec)
                 spec.inputs.dynamic = True
 
         with self.assertRaises(ValueError):
@@ -86,7 +83,7 @@ class TestProcess(utils.AsyncTestCase):
 
             @classmethod
             def define(cls, spec):
-                super(Proc, cls).define(spec)
+                super().define(spec)
                 spec.input('a')
 
         p = Proc({'a': 5})
@@ -102,7 +99,7 @@ class TestProcess(utils.AsyncTestCase):
 
             @classmethod
             def define(cls, spec):
-                super(Proc, cls).define(spec)
+                super().define(spec)
                 spec.input('input', default=5, required=False)
 
         # Supply a value
@@ -120,7 +117,7 @@ class TestProcess(utils.AsyncTestCase):
 
                 @classmethod
                 def define(cls, spec):
-                    super(Proc, cls).define(spec)
+                    super().define(spec)
                     spec.input('input', default=def_val)
 
             # Don't supply, use default
@@ -176,7 +173,7 @@ class TestProcess(utils.AsyncTestCase):
 
             @classmethod
             def define(cls, spec):
-                super(SomeProcess, cls).define(spec)
+                super().define(spec)
                 spec.input_namespace('namespace', required=False)
                 spec.input('namespace.sub', default=True)
 
@@ -188,9 +185,10 @@ class TestProcess(utils.AsyncTestCase):
         """Process which raises in its 'define' method. Check that the spec is not set."""
 
         class BrokenProcess(Process):
+
             @classmethod
             def define(cls, spec):
-                super(BrokenProcess, cls).define(spec)
+                super().define(spec)
                 raise ValueError
 
         with self.assertRaises(ValueError):
@@ -256,7 +254,7 @@ class TestProcess(utils.AsyncTestCase):
 
             @classmethod
             def define(cls, spec):
-                super(ProcWithSpec, cls).define(spec)
+                super().define(spec)
                 spec.input('a', default=1)
 
         for proc_class in test_utils.TEST_PROCESSES:
@@ -275,14 +273,14 @@ class TestProcess(utils.AsyncTestCase):
         self.assertTrue('spec' in desc_with_spec)
         self.assertTrue('description' in desc_with_spec)
         self.assertIsInstance(desc_with_spec['spec'], dict)
-        self.assertIsInstance(desc_with_spec['description'], six.string_types)
+        self.assertIsInstance(desc_with_spec['description'], str)
 
     def test_logging(self):
 
         class LoggerTester(Process):
 
             def run(self, **kwargs):
-                self.logger.info("Test")
+                self.logger.info('Test')
 
         # TODO: Test giving a custom logger to see if it gets used
         proc = LoggerTester()
@@ -470,7 +468,7 @@ class TestProcess(utils.AsyncTestCase):
         class InvalidOutput(plumpy.Process):
 
             def run(self):
-                self.out("invalid", 5)
+                self.out('invalid', 5)
 
         proc = InvalidOutput()
         with self.assertRaises(ValueError):
@@ -493,7 +491,7 @@ class TestProcess(utils.AsyncTestCase):
 
             @classmethod
             def define(cls, spec):
-                super(Proc, cls).define(spec)
+                super().define(spec)
 
             def run(self):
                 return plumpy.UnsuccessfulResult(ERROR_CODE)
@@ -590,7 +588,7 @@ class TestProcess(utils.AsyncTestCase):
                 self.call_soon(self.do_except)
 
             def do_except(self):
-                raise RuntimeError("Breaking yo!")
+                raise RuntimeError('Breaking yo!')
 
         CallSoon().execute()
 
@@ -607,7 +605,7 @@ class SavePauseProc(plumpy.Process):
     steps_ran = None
 
     def init(self):
-        super(SavePauseProc, self).init()
+        super().init()
         self.steps_ran = []
 
     def run(self):
@@ -758,7 +756,7 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(NameSpacedProcess, cls).define(spec)
+                super().define(spec)
                 spec.input('some.name.space.a', valid_type=int)
 
         proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})
@@ -783,11 +781,11 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(NameSpacedProcess, cls).define(spec)
+                super().define(spec)
                 spec.input('some.name.space.a', valid_type=int)
                 spec.input('test', valid_type=int, default=6)
-                spec.input('label', valid_type=six.string_types, required=False)
-                spec.input('description', valid_type=six.string_types, required=False)
+                spec.input('label', valid_type=str, required=False)
+                spec.input('description', valid_type=str, required=False)
                 spec.input('store_provenance', valid_type=bool, default=True)
 
         proc = NameSpacedProcess(inputs={'some': {'name': {'space': {'a': 5}}}})
@@ -809,7 +807,7 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(DummyDynamicProcess, cls).define(spec)
+                super().define(spec)
                 spec.input_namespace(namespace)
                 spec.inputs['name']['space'].dynamic = True
                 spec.inputs['name']['space'].valid_type = int
@@ -842,7 +840,7 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(DummyDynamicProcess, cls).define(spec)
+                super().define(spec)
                 spec.input('output_mode', valid_type=OutputMode, default=OutputMode.NONE)
                 spec.output('required_bool', valid_type=bool)
                 spec.output_namespace(namespace, valid_type=int, dynamic=True)
@@ -900,13 +898,14 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
 class TestProcessEvents(utils.AsyncTestCase):
 
     def setUp(self):
-        super(TestProcessEvents, self).setUp()
+        super().setUp()
         self.proc = test_utils.DummyProcessWithOutput(loop=self.loop)
 
     @testing.gen_test
     def test_basic_events(self):
         events_tester = test_utils.ProcessListenerTester(
-            process=self.proc, expected_events=('running', 'output_emitted', 'finished'))
+            process=self.proc, expected_events=('running', 'output_emitted', 'finished')
+        )
         yield self.proc.step_until_terminated()
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
@@ -957,7 +956,7 @@ class TestProcessEvents(utils.AsyncTestCase):
         expected_subjects = []
         for i, state in enumerate(test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
             from_state = test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
-            expected_subjects.append("state_changed.{}.{}".format(from_state, state.value))
+            expected_subjects.append('state_changed.{}.{}'.format(from_state, state.value))
 
         for i, message in enumerate(messages):
             self.assertEqual(message['subject'], expected_subjects[i])
@@ -967,8 +966,8 @@ class _RestartProcess(test_utils.WaitForSignalProcess):
 
     @classmethod
     def define(cls, spec):
-        super(_RestartProcess, cls).define(spec)
+        super().define(spec)
         spec.outputs.dynamic = True
 
     def last_step(self):
-        self.out("finished", True)
+        self.out('finished', True)

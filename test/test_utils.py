@@ -1,16 +1,11 @@
+# -*- coding: utf-8 -*-
 """Test utilities"""
 
-from __future__ import absolute_import
 import collections
 from collections import namedtuple
-from six.moves import range
-from six.moves import zip
 
 import plumpy
-from . import processes
-from . import process_states
-from . import persistence
-from . import utils
+from plumpy import processes, process_states, persistence, utils
 
 Snapshot = namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -32,13 +27,13 @@ class DummyProcessWithOutput(processes.Process):
 
     @classmethod
     def define(cls, spec):
-        super(DummyProcessWithOutput, cls).define(spec)
+        super().define(spec)
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
-        spec.output("default", valid_type=int)
+        spec.output('default', valid_type=int)
 
     def run(self, **kwargs):
-        self.out("default", 5)
+        self.out('default', 5)
 
 
 class DummyProcessWithDynamicOutput(processes.Process):
@@ -46,12 +41,12 @@ class DummyProcessWithDynamicOutput(processes.Process):
 
     @classmethod
     def define(cls, spec):
-        super(DummyProcessWithDynamicOutput, cls).define(spec)
+        super().define(spec)
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
 
     def run(self, **kwargs):
-        self.out("default", 5)
+        self.out('default', 5)
 
 
 class KeyboardInterruptProc(processes.Process):
@@ -86,19 +81,19 @@ class MissingOutputProcess(processes.Process):
 
     @classmethod
     def define(cls, spec):
-        super(MissingOutputProcess, cls).define(spec)
-        spec.output("default", required=True)
+        super().define(spec)
+        spec.output('default', required=True)
 
 
 class NewLoopProcess(processes.Process):
 
     def __init__(self, *args, **kwargs):
         kwargs['loop'] = plumpy.new_event_loop()
-        super(NewLoopProcess, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
-class EventsTesterMixin(object):
-    EVENTS = ("create", "run", "finish", "emitted", "wait", "resume", "stop", "terminate")
+class EventsTesterMixin:
+    EVENTS = ('create', 'run', 'finish', 'emitted', 'wait', 'resume', 'stop', 'terminate')
 
     called_events = []
 
@@ -109,48 +104,48 @@ class EventsTesterMixin(object):
 
     def __init__(self, *args, **kwargs):
         assert isinstance(self, processes.Process), \
-            "Mixin has to be used with a type derived from a Process"
-        super(EventsTesterMixin, self).__init__(*args, **kwargs)
+            'Mixin has to be used with a type derived from a Process'
+        super().__init__(*args, **kwargs)
         self.__class__.called_events = []
 
     @utils.override
     def on_create(self):
-        super(EventsTesterMixin, self).on_create()
+        super().on_create()
         self.called('create')
 
     @utils.override
     def on_run(self):
-        super(EventsTesterMixin, self).on_run()
+        super().on_run()
         self.called('run')
 
     @utils.override
     def _on_output_emitted(self, output_port, value, dynamic):
-        super(EventsTesterMixin, self)._on_output_emitted(output_port, value, dynamic)
+        super()._on_output_emitted(output_port, value, dynamic)
         self.called('emitted')
 
     @utils.override
     def on_wait(self, wait_on):
-        super(EventsTesterMixin, self).on_wait(wait_on)
+        super().on_wait(wait_on)
         self.called('wait')
 
     @utils.override
     def on_resume(self):
-        super(EventsTesterMixin, self).on_resume()
+        super().on_resume()
         self.called('resume')
 
     @utils.override
     def on_finish(self, result, successful):
-        super(EventsTesterMixin, self).on_finish(result, successful)
+        super().on_finish(result, successful)
         self.called('finish')
 
     @utils.override
     def on_stop(self):
-        super(EventsTesterMixin, self).on_stop()
+        super().on_stop()
         self.called('stop')
 
     @utils.override
     def on_terminate(self):
-        super(EventsTesterMixin, self).on_terminate()
+        super().on_terminate()
         self.called('terminate')
 
 
@@ -158,11 +153,11 @@ class ProcessEventsTester(EventsTesterMixin, processes.Process):
 
     @classmethod
     def define(cls, spec):
-        super(ProcessEventsTester, cls).define(spec)
+        super().define(spec)
         spec.outputs.dynamic = True
 
     def run(self):
-        self.out("test", 5)
+        self.out('test', 5)
 
 
 class ThreeSteps(ProcessEventsTester):
@@ -172,7 +167,7 @@ class ThreeSteps(ProcessEventsTester):
 
     @utils.override
     def run(self):
-        self.out("test", 5)
+        self.out('test', 5)
         return process_states.Continue(self.middle_step)
 
     def middle_step(self,):
@@ -185,7 +180,7 @@ class ThreeSteps(ProcessEventsTester):
 class TwoCheckpointNoFinish(ProcessEventsTester):
 
     def run(self):
-        self.out("test", 5)
+        self.out('test', 5)
         return process_states.Continue(self.middle_step)
 
     def middle_step(self):
@@ -195,15 +190,15 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
 class ExceptionProcess(ProcessEventsTester):
 
     def run(self):
-        self.out("test", 5)
-        raise RuntimeError("Great scott!")
+        self.out('test', 5)
+        raise RuntimeError('Great scott!')
 
 
 class ThreeStepsThenException(ThreeSteps):
 
     @utils.override
     def last_step(self):
-        raise RuntimeError("Great scott!")
+        raise RuntimeError('Great scott!')
 
 
 class ProcessListenerTester(plumpy.ProcessListener):
@@ -238,7 +233,7 @@ class ProcessListenerTester(plumpy.ProcessListener):
         self.called.add('killed')
 
 
-class Saver(object):
+class Saver:
 
     def __init__(self):
         self.snapshots = []
@@ -335,7 +330,8 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
                 break
 
             compare_dictionaries(
-                snapshots[-j], saver.snapshots[-j], snapshots[-j], saver.snapshots[-j], exclude={'exception'})
+                snapshots[-j], saver.snapshots[-j], snapshots[-j], saver.snapshots[-j], exclude={'exception'}
+            )
             j += 1
 
     return True
@@ -367,7 +363,7 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
             compare_value(bundle1, bundle2, vv1, vv2, exclude)
     else:
         if v1 != v2:
-            raise ValueError("Dict values mismatch for :\n{} != {}".format(v1, v2))
+            raise ValueError('Dict values mismatch for :\n{} != {}'.format(v1, v2))
 
 
 class TestPersister(persistence.Persister):

@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
 import collections
 import json
 import logging
 
-from . import ports
+from .ports import PortNamespace, InputPort, OutputPort
 
 
-class ProcessSpec(object):
+class ProcessSpec:
     """
     A class that defines the specifications of a :class:`plumpy.Process`,
     this includes what its inputs, outputs, etc are.
@@ -19,9 +18,9 @@ class ProcessSpec(object):
     """
     NAME_INPUTS_PORT_NAMESPACE = 'inputs'
     NAME_OUTPUTS_PORT_NAMESPACE = 'outputs'
-    PORT_NAMESPACE_TYPE = ports.PortNamespace
-    INPUT_PORT_TYPE = ports.InputPort
-    OUTPUT_PORT_TYPE = ports.OutputPort
+    PORT_NAMESPACE_TYPE = PortNamespace
+    INPUT_PORT_TYPE = InputPort
+    OUTPUT_PORT_TYPE = OutputPort
 
     def __init__(self):
         self._ports = self.PORT_NAMESPACE_TYPE()
@@ -171,7 +170,7 @@ class ProcessSpec(object):
         """
         return name in self.outputs
 
-    def expose_inputs(self, process_class, namespace=None, exclude=None, include=None, namespace_options={}):
+    def expose_inputs(self, process_class, namespace=None, exclude=None, include=None, namespace_options=None):
         """
         This method allows one to automatically add the inputs from another Process to this ProcessSpec.
         The optional namespace argument can be used to group the exposed inputs in a separated PortNamespace.
@@ -195,7 +194,7 @@ class ProcessSpec(object):
             namespace_options=namespace_options,
         )
 
-    def expose_outputs(self, process_class, namespace=None, exclude=None, include=None, namespace_options={}):
+    def expose_outputs(self, process_class, namespace=None, exclude=None, include=None, namespace_options=None):
         """
         This method allows one to automatically add the ouputs from another Process to this ProcessSpec.
         The optional namespace argument can be used to group the exposed outputs in a separated PortNamespace.
@@ -219,15 +218,17 @@ class ProcessSpec(object):
             namespace_options=namespace_options,
         )
 
-    def _expose_ports(self,
-                      process_class,
-                      source,
-                      destination,
-                      expose_memory,
-                      namespace,
-                      exclude,
-                      include,
-                      namespace_options={}):
+    @staticmethod
+    def _expose_ports(
+        process_class,
+        source,
+        destination,
+        expose_memory,
+        namespace,
+        exclude,
+        include,
+        namespace_options=None
+    ):  # pylint: disable=too-many-arguments
         """
         Expose ports from a source PortNamespace of the ProcessSpec of a Process class into the destination
         PortNamespace of this ProcessSpec. If the namespace is specified, the ports will be exposed in that sub
@@ -243,6 +244,9 @@ class ProcessSpec(object):
         :param include: list or tuple of input ports that are to be included
         :param namespace_options: a dictionary with mutable PortNamespace property values to override
         """
+        if namespace_options is None:
+            namespace_options = {}
+
         if exclude and include is not None:
             raise ValueError('exclude and include are mutually exclusive')
 

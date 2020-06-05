@@ -1,9 +1,9 @@
 plumpy
 ======
 
-.. image:: https://travis-ci.org/muhrin/plumpy.svg
-    :target: https://travis-ci.org/muhrin/plumpy
-    :alt: Travis CI
+.. image:: https://github.com/aiidateam/plumpy/workflows/continuous-integration/badge.svg?branch=develop&event=push
+    :target: https://github.com/aiidateam/plumpy/actions
+    :alt: Build status
 
 .. image:: https://readthedocs.org/projects/plumpy/badge
     :target: http://plumpy.readthedocs.io/

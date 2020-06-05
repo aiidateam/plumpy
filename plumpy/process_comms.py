@@ -1,7 +1,6 @@
+# -*- coding: utf-8 -*-
 """Module for process level communication functions and classes"""
 
-from __future__ import absolute_import
-from __future__ import print_function
 import copy
 import logging
 
@@ -12,7 +11,6 @@ from . import loaders
 from . import communications
 from . import futures
 from . import persistence
-from . import exceptions
 
 __all__ = [
     'PAUSE_MSG',
@@ -30,7 +28,7 @@ INTENT_KEY = 'intent'
 MESSAGE_KEY = 'message'
 
 
-class Intent(object):  # pylint: disable=useless-object-inheritance
+class Intent:
     """Intent constants for a process message"""
     # pylint: disable=too-few-public-methods
     PLAY = 'play'
@@ -131,7 +129,7 @@ def create_create_body(process_class, init_args=None, init_kwargs=None, persist=
     return msg_body
 
 
-class RemoteProcessController(object):  # pylint: disable=useless-object-inheritance
+class RemoteProcessController:
     """
     Control remote processes using coroutines that will send messages and wait
     (in a non-blocking way) for their response
@@ -220,14 +218,16 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
         raise gen.Return(result)
 
     @gen.coroutine
-    def launch_process(self,
-                       process_class,
-                       init_args=None,
-                       init_kwargs=None,
-                       persist=False,
-                       loader=None,
-                       nowait=False,
-                       no_reply=False):
+    def launch_process(
+        self,
+        process_class,
+        init_args=None,
+        init_kwargs=None,
+        persist=False,
+        loader=None,
+        nowait=False,
+        no_reply=False
+    ):
         """
         Launch a process given the class and constructor arguments
 
@@ -251,13 +251,9 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
         raise gen.Return(result)
 
     @gen.coroutine
-    def execute_process(self,
-                        process_class,
-                        init_args=None,
-                        init_kwargs=None,
-                        loader=None,
-                        nowait=False,
-                        no_reply=False):
+    def execute_process(
+        self, process_class, init_args=None, init_kwargs=None, loader=None, nowait=False, no_reply=False
+    ):
         """
         Execute a process.  This call will first send a create task and then a continue task over
         the communicator.  This means that if communicator messages are durable then the process
@@ -287,7 +283,7 @@ class RemoteProcessController(object):  # pylint: disable=useless-object-inherit
         raise gen.Return(result)
 
 
-class RemoteProcessThreadController(object):  # pylint: disable=useless-object-inheritance
+class RemoteProcessThreadController:
     """
     A class that can be used to control and launch remote processes
     """
@@ -370,14 +366,16 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         return self.task_send(message, no_reply=no_reply)
 
-    def launch_process(self,
-                       process_class,
-                       init_args=None,
-                       init_kwargs=None,
-                       persist=False,
-                       loader=None,
-                       nowait=False,
-                       no_reply=False):
+    def launch_process(
+        self,
+        process_class,
+        init_args=None,
+        init_kwargs=None,
+        persist=False,
+        loader=None,
+        nowait=False,
+        no_reply=False
+    ):
         # pylint: disable=too-many-arguments
         """
         Launch the process
@@ -394,13 +392,9 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
         return self.task_send(message, no_reply=no_reply)
 
-    def execute_process(self,
-                        process_class,
-                        init_args=None,
-                        init_kwargs=None,
-                        loader=None,
-                        nowait=False,
-                        no_reply=False):
+    def execute_process(
+        self, process_class, init_args=None, init_kwargs=None, loader=None, nowait=False, no_reply=False
+    ):
         """
         Execute a process.  This call will first send a create task and then a continue task over
         the communicator.  This means that if communicator messages are durable then the process
@@ -443,7 +437,7 @@ class RemoteProcessThreadController(object):  # pylint: disable=useless-object-i
         return self._communicator.task_send(message, no_reply=no_reply)
 
 
-class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
+class ProcessLauncher:
     """
     Takes incoming task messages and uses them to launch processes.
 
@@ -488,12 +482,12 @@ class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
         task_type = task[TASK_KEY]
         if task_type == LAUNCH_TASK:
             raise gen.Return((yield self._launch(communicator, **task.get(TASK_ARGS, {}))))
-        elif task_type == CONTINUE_TASK:
+        if task_type == CONTINUE_TASK:
             raise gen.Return((yield self._continue(communicator, **task.get(TASK_ARGS, {}))))
-        elif task_type == CREATE_TASK:
+        if task_type == CREATE_TASK:
             raise gen.Return((yield self._create(communicator, **task.get(TASK_ARGS, {}))))
-        else:
-            raise communications.TaskRejected
+
+        raise communications.TaskRejected
 
     @gen.coroutine
     def _launch(self, _communicator, process_class, persist, nowait, init_args=None, init_kwargs=None):
@@ -509,7 +503,7 @@ class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
         :return: the pid of the created process or the outputs (if nowait=False)
         """
         if persist and not self._persister:
-            raise communications.TaskRejected("Cannot persist process, no persister")
+            raise communications.TaskRejected('Cannot persist process, no persister')
 
         if init_args is None:
             init_args = ()
@@ -540,7 +534,7 @@ class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
         """
         if not self._persister:
             LOGGER.warning('rejecting task: cannot continue process<%d> because no persister is available', pid)
-            raise communications.TaskRejected("Cannot continue process, no persister")
+            raise communications.TaskRejected('Cannot continue process, no persister')
 
         # Do not catch exceptions here, because if these operations fail, the continue task should except and bubble up
         saved_state = self._persister.load_checkpoint(pid, tag)
@@ -566,7 +560,7 @@ class ProcessLauncher(object):  # pylint: disable=useless-object-inheritance
         :return: the pid of the created process
         """
         if persist and not self._persister:
-            raise communications.TaskRejected("Cannot persist process, no persister")
+            raise communications.TaskRejected('Cannot persist process, no persister')
 
         if init_args is None:
             init_args = ()

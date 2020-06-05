@@ -1,16 +1,15 @@
-from __future__ import absolute_import
-
+# -*- coding: utf-8 -*-
 from plumpy.ports import PortNamespace
 from plumpy.processes import Process
 from plumpy.process_spec import ProcessSpec
-from plumpy.test_utils import NewLoopProcess
-from . import utils
+from test.test_utils import NewLoopProcess
+from test import utils
 
 
 class TestExposeProcess(utils.TestCaseWithLoop):
 
     def setUp(self):
-        super(TestExposeProcess, self).setUp()
+        super().setUp()
 
         def validator_function(input, port):
             pass
@@ -19,7 +18,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(BaseNamespaceProcess, cls).define(spec)
+                super().define(spec)
                 spec.input('top')
                 spec.input('namespace.sub_one')
                 spec.input('namespace.sub_two')
@@ -30,7 +29,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(BaseProcess, cls).define(spec)
+                super().define(spec)
                 spec.input('a', valid_type=str, default='a')
                 spec.input('b', valid_type=str, default='b')
                 spec.inputs.dynamic = True
@@ -40,7 +39,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExposeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseProcess, namespace='base.name.space')
                 spec.input('c', valid_type=int, default=1)
                 spec.input('d', valid_type=int, default=2)
@@ -133,7 +132,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExcludeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseProcess, exclude=('a',))
                 spec.input('c', valid_type=int, default=1)
                 spec.input('d', valid_type=int, default=2)
@@ -151,7 +150,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExcludeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseProcess, include=('b',))
                 spec.input('c', valid_type=int, default=1)
                 spec.input('d', valid_type=int, default=2)
@@ -169,7 +168,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExcludeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseProcess, exclude=('a',), include=('b',))
                 spec.input('c', valid_type=int, default=1)
                 spec.input('d', valid_type=int, default=2)
@@ -208,7 +207,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
             namespace=None,
             exclude=(),
             include=None,
-            namespace_options={})
+            namespace_options={}
+        )
 
         # Verify that all the ports are there
         self.assertIn('a', ParentProcessSpec.inputs)
@@ -262,7 +262,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 'dynamic': False,
                 'default': None,
                 'help': None,
-            })
+            }
+        )
 
         # Verify that all the ports are there
         self.assertIn('a', ParentProcessSpec.inputs)
@@ -308,7 +309,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
             namespace='namespace',
             exclude=(),
             include=None,
-            namespace_options={})
+            namespace_options={}
+        )
 
         # Verify that all the ports are there
         self.assertIn('a', ParentProcessSpec.inputs['namespace'])
@@ -342,7 +344,8 @@ class TestExposeProcess(utils.TestCaseWithLoop):
                 include=None,
                 namespace_options={
                     'non_existent': None,
-                })
+                }
+            )
 
     def test_expose_nested_include_top_level(self):
         """Test the include rules can be nested and are properly unwrapped."""
@@ -352,7 +355,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExposeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseNamespaceProcess, namespace='base', include=('top',))
 
         self.check_ports(ExposeProcess, None, ['base'])
@@ -366,7 +369,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExposeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseNamespaceProcess, namespace='base', include=('namespace',))
 
         self.check_ports(ExposeProcess, None, ['base'])
@@ -382,7 +385,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExposeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseNamespaceProcess, namespace='base', include=('namespace.sub_two',))
 
         self.check_ports(ExposeProcess, None, ['base'])
@@ -398,7 +401,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExposeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseNamespaceProcess, namespace='base', include=('namespace.sub_two', 'top'))
 
         self.check_ports(ExposeProcess, None, ['base'])
@@ -414,7 +417,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExposeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseNamespaceProcess, namespace='base', exclude=('top',))
 
         self.check_ports(ExposeProcess, None, ['base'])
@@ -430,7 +433,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExposeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseNamespaceProcess, namespace='base', exclude=('namespace',))
 
         self.check_ports(ExposeProcess, None, ['base'])
@@ -444,7 +447,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExposeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseNamespaceProcess, namespace='base', exclude=('namespace.sub_two',))
 
         self.check_ports(ExposeProcess, None, ['base'])
@@ -460,7 +463,7 @@ class TestExposeProcess(utils.TestCaseWithLoop):
 
             @classmethod
             def define(cls, spec):
-                super(ExposeProcess, cls).define(spec)
+                super().define(spec)
                 spec.expose_inputs(BaseNamespaceProcess, namespace='base', exclude=('namespace.sub_two', 'top'))
 
         self.check_ports(ExposeProcess, None, ['base'])

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 __all__ = ['KilledError', 'UnsuccessfulResult', 'InvalidStateError', 'PersistenceError', 'ClosedError']
 
 
@@ -12,7 +13,7 @@ class InvalidStateError(Exception):
     """
 
 
-class UnsuccessfulResult(object):
+class UnsuccessfulResult:
     """The result of the process was unsuccessful"""
 
     def __init__(self, result=None):

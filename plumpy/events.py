@@ -1,5 +1,5 @@
+# -*- coding: utf-8 -*-
 """Event and loop related classes and functions"""
-from __future__ import absolute_import
 import sys
 from tornado import ioloop
 import tornado.gen
@@ -29,7 +29,7 @@ def run_until_complete(future, loop=None):
     return loop.run_sync(lambda: future)
 
 
-class ProcessCallback(object):  # pylint: disable=useless-object-inheritance
+class ProcessCallback:
     """Object returned by callback registration methods."""
 
     __slots__ = ('_callback', '_args', '_kwargs', '_process', '_cancelled', '__weakref__')

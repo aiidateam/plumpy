@@ -1,6 +1,6 @@
+# -*- coding: utf-8 -*-
 """Plumpy tests"""
 
-from __future__ import absolute_import
 import logging
 import tempfile
 import os
@@ -10,5 +10,5 @@ try:
     os.remove(LOGFILE)
 except OSError:
     pass
-FORMAT = "[%(filename)s:%(lineno)s - %(funcName)s()] %(message)s"
+FORMAT = '[%(filename)s:%(lineno)s - %(funcName)s()] %(message)s'
 logging.basicConfig(filename=LOGFILE, level=logging.DEBUG, format=FORMAT)
