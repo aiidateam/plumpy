@@ -32,7 +32,7 @@ setup(
         'tornado>=4.1, <5.0',
         'pyyaml~=5.1.2',
         'pika>=1.0.0',
-        'kiwipy[rmq]>=0.5.2',
+        'kiwipy[rmq]~=0.5.4',
     ],
     extras_require={
         'dev': ['pytest~=5.4', 'pre-commit~=1.20', 'prospector~=1.2', 'yapf~=0.29', 'shortuuid'],
