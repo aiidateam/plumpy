@@ -216,13 +216,12 @@ class TestPortNamespace(TestCase):
             self.port_namespace.create_port_namespace('sub.nested.space.' + self.BASE_PORT_NAME + '.further')
 
     def test_port_namespace_set_valid_type(self):
-        """
-        Setting a valid type for a PortNamespace should automatically mark it as dynamic. Conversely, setting
-        the valid_type equal to None should revert dynamic to False
-        """
+        """Setting a valid type for a PortNamespace should automatically mark it as dynamic."""
         self.assertFalse(self.port_namespace.dynamic)
         self.assertIsNone(self.port_namespace.valid_type)
 
+        # Setting the `valid_type` should automatically set `dynamic=True` because it does not make sense to define a
+        # a specific type but then not allow any values whatsoever.
         self.port_namespace.valid_type = int
 
         self.assertTrue(self.port_namespace.dynamic)
@@ -230,7 +229,8 @@ class TestPortNamespace(TestCase):
 
         self.port_namespace.valid_type = None
 
-        self.assertFalse(self.port_namespace.dynamic)
+        # Setting `valid_type` to `None` however does not automatically revert the `dynamic` attribute
+        self.assertTrue(self.port_namespace.dynamic)
         self.assertIsNone(self.port_namespace.valid_type)
 
     def test_port_namespace_validate(self):
