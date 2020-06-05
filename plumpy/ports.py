@@ -9,7 +9,7 @@ import warnings
 
 from plumpy.utils import is_mutable_property, type_check
 
-__all__ = ['UNSPECIFIED', 'PortValidationError', 'Port', 'InputPort', 'OutputPort']
+__all__ = ['UNSPECIFIED', 'PortValidationError', 'PortNamespace', 'Port', 'InputPort', 'OutputPort']
 
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
@@ -231,7 +231,7 @@ class InputPort(Port):
         )
 
         if required is not InputPort.required_override(required, default):
-            _LOGGER.info(
+            _LOGGER.debug(
                 "the required attribute for the input port '%s' was overridden because a default was specified", name
             )
 

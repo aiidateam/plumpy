@@ -633,14 +633,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if self._communicator:
             from_label = from_state.LABEL.value if from_state is not None else None
+            subject = 'state_changed.{}.{}'.format(from_label, self.state.value)
+            self.logger.info('Broadcasting state change of %d: %s', self.pid, subject)
             try:
-                self._communicator.broadcast_send(
-                    body=None, sender=self.pid, subject='state_changed.{}.{}'.format(from_label, self.state.value)
-                )
+                self._communicator.broadcast_send(body=None, sender=self.pid, subject=subject)
             except ConnectionClosed:
-                self.logger.info(
-                    'no connection available to broadcast state change from %s to %s', from_label, self.state.value
-                )
+                message = 'no connection available to broadcast state change from %s to %s'
+                self.logger.info(message, from_label, self.state.value)
 
     def on_exiting(self):
         state = self.state

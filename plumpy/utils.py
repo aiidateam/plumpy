@@ -12,7 +12,7 @@ import frozendict
 from .settings import check_protected, check_override
 from . import lang
 
-__all__ = []
+__all__ = ['AttributesDict']
 
 protected = lang.protected(check=check_protected)  # pylint: disable=invalid-name
 override = lang.override(check=check_override)  # pylint: disable=invalid-name
