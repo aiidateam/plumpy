@@ -5,13 +5,13 @@ __author__ = 'Martin Uhrin'
 __license__ = 'GPLv3 and MIT, see LICENSE file'
 __contributors__ = 'Sebastiaan Huber, Leopold Talirz, Dominik Gresch'
 
-about = {}
+ABOUT = {}
 with open('plumpy/version.py') as f:
-    exec(f.read(), about)
+    exec(f.read(), ABOUT)  # pylint: disable=exec-used
 
 setup(
     name='plumpy',
-    version=about['__version__'],
+    version=ABOUT['__version__'],
     description='A python workflow library',
     long_description=open('README.rst').read(),
     url='https://github.com/muhrin/plumpy.git',
@@ -35,13 +35,14 @@ setup(
         'kiwipy[rmq]~=0.5.4',
     ],
     extras_require={
-        'dev': ['pytest~=5.4', 'pre-commit~=1.20', 'prospector~=1.2', 'yapf~=0.29', 'shortuuid'],
         'docs': [
             'Sphinx==1.8.4',
             'Pygments==2.3.1',
             'docutils==0.14',
             'sphinx-rtd-theme==0.4.3',
         ],
+        'pre-commit': ['pre-commit~=2.2', 'pylint==2.5.2'],
+        'tests': ['pytest~=5.4', 'shortuuid']
     },
     packages=['plumpy', 'plumpy/base'],
     test_suite='test'
