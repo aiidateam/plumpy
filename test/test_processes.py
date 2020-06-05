@@ -125,6 +125,47 @@ class TestProcess(utils.AsyncTestCase):
             self.assertIn('input', p.inputs)
             self.assertEqual(p.inputs['input'], def_val)
 
+    def test_optional_namespace(self):
+        """Process with an optional namespace should not have that in `self.inputs` if not explicitly passed."""
+
+        class SomeProcess(Process):
+            """Process with single dynamic optional namespace."""
+
+            @classmethod
+            def define(cls, spec):
+                super(SomeProcess, cls).define(spec)
+                spec.input_namespace('namespace', required=False, valid_type=int, dynamic=True)
+
+        # If a value is specified for `namespace` it should be present in parsed inputs
+        process = SomeProcess(inputs={'namespace': {'a': 1}})
+        self.assertIn('namespace', process.inputs)
+        self.assertIn('a', process.inputs['namespace'])
+        self.assertEqual(process.inputs['namespace']['a'], 1)
+
+        # If nothing is passed, it should not be present
+        process = SomeProcess()
+        self.assertNotIn('namespace', process.inputs)
+
+        # However, if something is passed it should be there even if it is just an empty mapping
+        process = SomeProcess(inputs={'namespace': {}})
+        self.assertIn('namespace', process.inputs)
+
+        class SomeDefaultProcess(Process):
+            """Process with single dynamic optional namespace, but with one concrete port with a default."""
+
+            @classmethod
+            def define(cls, spec):
+                super(SomeDefaultProcess, cls).define(spec)
+                spec.input_namespace('namespace', required=False, valid_type=int, dynamic=True)
+                spec.input('namespace.b', default=5)
+
+        # Even though `namespace` is optional and it is not explicitly passed as input, because the port `b` nested
+        # within it has a default, the `namespace` mapping should be present in the parsed inputs.
+        process = SomeDefaultProcess()
+        self.assertIn('namespace', process.inputs)
+        self.assertIn('b', process.inputs['namespace'])
+        self.assertEqual(process.inputs['namespace']['b'], 5)
+
     def test_nested_namespace_defaults(self):
         """Process with a default in a nested namespace should be created, even if top level namespace not supplied."""
 
