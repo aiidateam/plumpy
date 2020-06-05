@@ -87,10 +87,7 @@ def wrap_communicator(communicator, loop=None):
 
 
 class LoopCommunicator(kiwipy.Communicator):
-    """
-    This wrapper takes a kiwipy Communicator and schedules any subscriber messages on a given
-    event loop.
-    """
+    """Wrapper around a `kiwipy.Communicator` that schedules any subscriber messages on a given event loop."""
 
     def __init__(self, communicator, loop=None):
         """
@@ -125,12 +122,10 @@ class LoopCommunicator(kiwipy.Communicator):
 
     def add_broadcast_subscriber(self, subscriber, identifier=None):
         converted = convert_to_comm(subscriber, self._loop)
-        identifier = self._communicator.add_broadcast_subscriber(converted, identifier)
-        self._subscribers[identifier] = converted
-        return identifier
+        return self._communicator.add_broadcast_subscriber(converted, identifier)
 
     def remove_broadcast_subscriber(self, identifier):
-        self._communicator.remove_task_subscriber(self._subscribers.pop(identifier))
+        self._communicator.remove_broadcast_subscriber(identifier)
 
     def task_send(self, task, no_reply=False):
         return self._communicator.task_send(task, no_reply)
