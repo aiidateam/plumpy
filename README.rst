@@ -5,6 +5,10 @@ plumpy
     :target: https://travis-ci.org/muhrin/plumpy
     :alt: Travis CI
 
+.. image:: https://readthedocs.org/projects/plumpy/badge
+    :target: http://plumpy.readthedocs.io/
+    :alt: Docs status
+
 .. image:: https://img.shields.io/pypi/v/plumpy.svg
     :target: https://pypi.python.org/pypi/plumpy/
     :alt: Latest Version
