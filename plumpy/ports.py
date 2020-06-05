@@ -230,7 +230,7 @@ class InputPort(Port):
         )
 
         if required is not InputPort.required_override(required, default):
-            _LOGGER.info(
+            _LOGGER.debug(
                 "the required attribute for the input port '%s' was overridden because a default was specified", name
             )
 
