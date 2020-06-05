@@ -27,7 +27,7 @@ jobs:
 
         -   name: Install python dependencies
             run:
-                pip install -e .[dev,docs]
+                pip install -e .[docs,tests]
 
         -   name: Build documentation
             env:
@@ -58,7 +58,7 @@ jobs:
 
         -   name: Install python dependencies
             run:
-                pip install -e .[dev]
+                pip install -e .[pre-commit,tests]
 
         -   name: Run pre-commit
             run:
@@ -97,7 +97,7 @@ jobs:
 
         -   name: Install python dependencies
             run:
-                pip install -e .[dev]
+                pip install -e .[tests]
 
         -   name: Run pytest
             run:

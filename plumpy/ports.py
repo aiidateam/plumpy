@@ -382,7 +382,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         else:
             self.dynamic = True
 
-        super(PortNamespace, self.__class__).valid_type.fset(self, valid_type)
+        super(PortNamespace, self.__class__).valid_type.fset(self, valid_type)  # pylint: disable=no-member
 
     @property
     def populate_defaults(self):

@@ -8,22 +8,34 @@ repos:
     -   id: mixed-line-ending
     -   id: trailing-whitespace
 
--   repo: https://github.com/PyCQA/prospector
-    rev: 1.2.0
+-   repo: https://github.com/PyCQA/pylint
+    rev: pylint-2.5.2
     hooks:
-    -   id: prospector
+    -   id: pylint
         language: system
+        args: [
+            '--max-line-length=120',
+            '--disable=import-outside-toplevel',
+            '--disable=missing-docstring',
+            '--disable=bad-continuation',
+            '--disable=global-statement',
+            '--disable=too-few-public-methods',
+            '--disable=inconsistent-return-statements',
+            '--disable=locally-disabled',
+            '--disable=too-many-ancestors',
+            '--disable=too-many-arguments',
+            '--disable=too-many-instance-attributes',
+        ]
         exclude: &exclude_files >
             (?x)^(
                 docs/source/conf.py|
                 test/.*|
             )$
 
--   repo: local
+-   repo: https://github.com/pre-commit/mirrors-yapf
+    rev: v0.30.0
     hooks:
     -   id: yapf
         name: yapf
-        entry: yapf
-        language: system
         types: [python]
         args: ['-i']

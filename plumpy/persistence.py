@@ -157,7 +157,7 @@ class PicklePersister(Persister):
 
         try:
             PicklePersister.ensure_pickle_directory(pickle_directory)
-        except OSError as exception:
+        except OSError:
             raise ValueError('failed to create the pickle directory at {}'.format(pickle_directory))
 
         self._pickle_directory = pickle_directory
