@@ -3,7 +3,8 @@ import unittest
 import asyncio
 
 import shortuuid
-import kiwipy.rmq
+import kiwipy
+from kiwipy import rmq
 
 import plumpy
 import plumpy.communications
@@ -17,90 +18,103 @@ except ImportError:
     aio_pika = None
 
 
-@unittest.skipIf(not aio_pika, 'Requires pika library and RabbitMQ')
-class TestRemoteProcessController(unittest.TestCase):
+@pytest.fixture
+def thread_communicator():
+    message_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
+    task_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
+    task_queue = '{}.{}'.format(__file__, shortuuid.uuid())
 
-    def setUp(self):
-        super().setUp()
+    communicator = rmq.RmqThreadCommunicator.connect(
+        connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
+        message_exchange=message_exchange,
+        task_exchange=task_exchange,
+        task_queue=task_queue,
+        testing_mode=True
+    )
 
-        message_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
-        task_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
-        task_queue = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
+    yield communicator
 
-        self.communicator = kiwipy.rmq.connect(
-            connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-            message_exchange=message_exchange,
-            task_exchange=task_exchange,
-            task_queue=task_queue,
-            testing_mode=True
-        )
-        self.process_controller = process_comms.RemoteProcessController(self.communicator)
+    communicator.close()
 
-    def tearDown(self):
-        # Close the connector before calling super because it will
-        # close the loop
-        self.communicator.stop()
-        super().tearDown()
+
+@pytest.fixture
+def async_controller(thread_communicator: rmq.RmqThreadCommunicator):
+    yield process_comms.RemoteProcessController(thread_communicator)
+
+
+@pytest.fixture
+def sync_controller(thread_communicator: rmq.RmqThreadCommunicator):
+    yield process_comms.RemoteProcessThreadController(thread_communicator)
+
+
+class TestRemoteProcessController:
 
     @pytest.mark.asyncio
-    async def test_pause(self):
-        proc = utils.WaitForSignalProcess(communicator=self.communicator)
+    async def test_pause(self, thread_communicator, async_controller):
+        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
         asyncio.ensure_future(proc.step_until_terminated())
         # Send a pause message
-        result = await self.process_controller.pause_process(proc.pid)
+        result = await async_controller.pause_process(proc.pid)
 
         # Check that it all went well
-        self.assertTrue(result)
-        self.assertTrue(proc.paused)
+        assert result
+        assert proc.paused
 
     @pytest.mark.asyncio
-    async def test_play(self):
-        proc = utils.WaitForSignalProcess(communicator=self.communicator)
+    async def test_play(self, thread_communicator, async_controller):
+        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
         asyncio.ensure_future(proc.step_until_terminated())
-        self.assertTrue(proc.pause())
+        assert proc.pause()
 
         # Send a play message
-        result = await self.process_controller.play_process(proc.pid)
+        result = await async_controller.play_process(proc.pid)
 
         # Check that all is as we expect
-        self.assertTrue(result)
-        self.assertEqual(proc.state, plumpy.ProcessState.WAITING)
+        assert result
+        assert proc.state == plumpy.ProcessState.WAITING
+
+        # if not close the background process will raise exception
+        # make sure proc reach the final state
+        await async_controller.kill_process(proc.pid)
 
     @pytest.mark.asyncio
-    async def test_kill(self):
-        proc = utils.WaitForSignalProcess(communicator=self.communicator)
+    async def test_kill(self, thread_communicator, async_controller):
+        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the event loop
         asyncio.ensure_future(proc.step_until_terminated())
 
         # Send a kill message and wait for it to be done
-        result = await self.process_controller.kill_process(proc.pid)
+        result = await async_controller.kill_process(proc.pid)
 
         # Check the outcome
-        self.assertTrue(result)
-        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
+        assert result
+        assert proc.state == plumpy.ProcessState.KILLED
 
     @pytest.mark.asyncio
-    async def test_status(self):
-        proc = utils.WaitForSignalProcess(communicator=self.communicator)
+    async def test_status(self, thread_communicator, async_controller):
+        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
         asyncio.ensure_future(proc.step_until_terminated())
 
         # Send a status message
-        status = await self.process_controller.get_status(proc.pid)
+        status = await async_controller.get_status(proc.pid)
 
-        self.assertIsNotNone(status)
+        assert status is not None
 
-    def test_broadcast(self):
+        # make sure proc reach the final state
+        await async_controller.kill_process(proc.pid)
+
+    def test_broadcast(self, thread_communicator):
         messages = []
 
         def on_broadcast_receive(**msg):
             messages.append(msg)
 
-        self.communicator.add_broadcast_subscriber(on_broadcast_receive)
+        thread_communicator.add_broadcast_subscriber(on_broadcast_receive)
 
-        proc = utils.DummyProcess(communicator=self.communicator)
+        proc = utils.DummyProcess(communicator=thread_communicator)
         proc.execute()
 
         expected_subjects = []
@@ -112,120 +126,98 @@ class TestRemoteProcessController(unittest.TestCase):
             self.assertEqual(message['subject'], expected_subjects[i])
 
 
-@unittest.skipIf(not aio_pika, 'Requires pika library and RabbitMQ')
-class TestRemoteProcessThreadController(unittest.TestCase):
-
-    def setUp(self):
-        super().setUp()
-
-        message_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
-        task_exchange = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
-        task_queue = '{}.{}'.format(self.__class__.__name__, shortuuid.uuid())
-
-        self.communicator = kiwipy.rmq.connect(
-            connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-            message_exchange=message_exchange,
-            task_exchange=task_exchange,
-            task_queue=task_queue,
-            testing_mode=True
-        )
-
-        self.process_controller = process_comms.RemoteProcessThreadController(self.communicator)
-
-    def tearDown(self):
-        # Close the connector before calling super because it will
-        # close the loop
-        self.communicator.stop()
-        super().tearDown()
+class TestRemoteProcessThreadController:
 
     @pytest.mark.asyncio
-    async def test_pause(self):
-        proc = utils.WaitForSignalProcess(communicator=self.communicator)
+    async def test_pause(self, thread_communicator, sync_controller):
+        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
 
         # Send a pause message
-        pause_future = self.process_controller.pause_process(proc.pid)
-        self.assertIsInstance(pause_future, kiwipy.Future)
+        pause_future = sync_controller.pause_process(proc.pid)
+        assert isinstance(pause_future, kiwipy.Future)
         future = await asyncio.wrap_future(pause_future)
         result = future.result()
-        self.assertIsInstance(result, bool)
 
         # Check that it all went well
-        self.assertTrue(result)
-        self.assertTrue(proc.paused)
+        assert result
+        assert proc.paused
 
     @pytest.mark.asyncio
-    async def test_pause_all(self):
+    async def test_pause_all(self, thread_communicator, sync_controller):
         """Test pausing all processes on a communicator"""
         procs = []
         for _ in range(10):
-            procs.append(utils.WaitForSignalProcess(communicator=self.communicator))
+            procs.append(utils.WaitForSignalProcess(communicator=thread_communicator))
 
-        self.process_controller.pause_all("Slow yo' roll")
+        sync_controller.pause_all("Slow yo' roll")
         # Wait until they are all paused
         await utils.wait_util(lambda: all([proc.paused for proc in procs]))
 
     @pytest.mark.asyncio
-    async def test_play_all(self):
+    async def test_play_all(self, thread_communicator, sync_controller):
         """Test pausing all processes on a communicator"""
         procs = []
         for _ in range(10):
-            proc = utils.WaitForSignalProcess(communicator=self.communicator)
+            proc = utils.WaitForSignalProcess(communicator=thread_communicator)
             procs.append(proc)
             proc.pause('hold tight')
 
-        self.assertTrue(all([proc.paused for proc in procs]))
-        self.process_controller.play_all()
+        assert all([proc.paused for proc in procs])
+        sync_controller.play_all()
         # Wait until they are all paused
         await utils.wait_util(lambda: all([not proc.paused for proc in procs]))
 
     @pytest.mark.asyncio
-    async def test_play(self):
-        proc = utils.WaitForSignalProcess(communicator=self.communicator)
-        self.assertTrue(proc.pause())
+    async def test_play(self, thread_communicator, sync_controller):
+        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+        assert proc.pause()
 
         # Send a play message
-        play_future = self.process_controller.play_process(proc.pid)
+        play_future = sync_controller.play_process(proc.pid)
         # Allow the process to respond to the request
         result = await asyncio.wrap_future(play_future)
 
         # Check that all is as we expect
-        self.assertTrue(result)
-        self.assertEqual(proc.state, plumpy.ProcessState.CREATED)
+        assert result
+        assert proc.state == plumpy.ProcessState.CREATED
 
     @pytest.mark.asyncio
-    async def test_kill(self):
-        proc = utils.WaitForSignalProcess(communicator=self.communicator)
+    async def test_kill(self, thread_communicator, sync_controller):
+        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
 
         # Send a kill message
-        kill_future = self.process_controller.kill_process(proc.pid)
+        kill_future = sync_controller.kill_process(proc.pid)
         # Allow the process to respond to the request
         result = await asyncio.wrap_future(kill_future)
 
         # Check the outcome
-        self.assertTrue(result)
+        assert result
         # Occasionally fail
-        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
+        assert proc.state == plumpy.ProcessState.KILLED
 
     @pytest.mark.asyncio
-    async def test_kill_all(self):
+    async def test_kill_all(self, thread_communicator, sync_controller):
         """Test pausing all processes on a communicator"""
         procs = []
         for _ in range(10):
-            procs.append(utils.WaitForSignalProcess(communicator=self.communicator))
+            procs.append(utils.WaitForSignalProcess(communicator=thread_communicator))
 
-        self.process_controller.kill_all('bang bang, I shot you down')
+        sync_controller.kill_all('bang bang, I shot you down')
         await utils.wait_util(lambda: all([proc.killed() for proc in procs]))
-        self.assertTrue(all([proc.state == plumpy.ProcessState.KILLED for proc in procs]))
+        assert all([proc.state == plumpy.ProcessState.KILLED for proc in procs])
 
     @pytest.mark.asyncio
-    async def test_status(self):
-        proc = utils.WaitForSignalProcess(communicator=self.communicator)
+    async def test_status(self, thread_communicator, sync_controller):
+        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
         asyncio.ensure_future(proc.step_until_terminated())
 
         # Send a status message
-        status_future = self.process_controller.get_status(proc.pid)
+        status_future = sync_controller.get_status(proc.pid)
         # Let the process respond
         status = await asyncio.wrap_future(status_future)
 
-        self.assertIsNotNone(status)
+        assert status is not None
+
+        kill_future = sync_controller.kill_process(proc.pid)
+        await asyncio.wrap_future(kill_future)
