@@ -96,8 +96,9 @@ jobs:
                 python-version: ${{ matrix.python-version }}
 
         -   name: Install python dependencies
-            run:
+            run: |
                 pip install -e .[tests]
+                pip install --upgrade git+https://github.com/unkcpz/nest_asyncio.git@master
 
         -   name: Run pytest
             run:

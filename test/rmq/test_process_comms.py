@@ -34,7 +34,7 @@ def thread_communicator():
 
     yield communicator
 
-    communicator.close()
+    communicator.stop()
 
 
 @pytest.fixture
