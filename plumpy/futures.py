@@ -7,6 +7,8 @@ from concurrent import futures
 
 import kiwipy
 
+from . import utils
+
 __all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError', 'create_task']
 
 CancelledError = kiwipy.CancelledError
@@ -59,11 +61,11 @@ class CancellableAction(Future):
             self._action = None
 
 
-def create_task(coro, loop=None):
+def create_task(fct, loop=None):
     """
-    Schedule a call to a coroutine in the event loop and wrap the outcome
-    in a future.
-    :param coro: the coroutine to schedule
+    Schedule a call to a task in the event loop and wrap the outcome
+    in a future. Task should be a coroutine function, if not, converted to.
+    :param task: the task to schedule
     :param loop: the event loop to schedule it in
     :return: the future representing the outcome of the coroutine
     :rtype: :class:`plumpy.Future`
@@ -71,10 +73,11 @@ def create_task(coro, loop=None):
     loop = loop or asyncio.get_event_loop()
 
     future = Future()
+    coro = utils.ensure_coroutine(fct)
 
     async def run_task():
         with kiwipy.capture_exceptions(future):
-            future.set_result((await coro()))
+            future.set_result(await coro())
 
     asyncio.run_coroutine_threadsafe(run_task(), loop)
     return future

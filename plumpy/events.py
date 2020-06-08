@@ -10,9 +10,9 @@ new_event_loop = asyncio.new_event_loop  # pylint: disable=invalid-name
 set_event_loop = asyncio.set_event_loop  # pylint: disable=invalid-name
 
 
-def run_until_complete(fut, loop=None):
-    loop = loop or asyncio.get_event_loop()
-    return loop.run_until_complete(fut)
+def run_until_complete(future, loop=None):
+    loop = loop or get_event_loop()
+    return loop.run_until_complete(future)
 
 
 class ProcessCallback:

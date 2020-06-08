@@ -4,6 +4,7 @@ import inspect
 import logging
 import threading
 import types
+import functools
 from collections import deque, defaultdict
 
 import asyncio
@@ -222,12 +223,28 @@ def type_check(obj, expected_type):
         raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
 
 
-def ensure_coroutine(wrapped):
-    if asyncio.iscoroutinefunction(wrapped):
-        return wrapped
+def ensure_coroutine(fct):
+    """
+    Ensure that the given function ``fct`` is a coroutine
+
+    If the passed function is not already a coroutine, it will be made to be a coroutine
+
+    :param fct: the function
+    :returns: the coroutine
+    """
+    if isinstance(fct, functools.partial):
+        obj = fct.func
+        if asyncio.iscoroutinefunction(obj):
+            return fct
+        if asyncio.iscoroutinefunction(obj.__call__):
+            return fct
+    if asyncio.iscoroutinefunction(fct):
+        return fct
+    if asyncio.iscoroutinefunction(fct.__call__):
+        return fct
 
     async def wrapper(*args, **kwargs):
-        return wrapped(*args, **kwargs)
+        return fct(*args, **kwargs)
 
     return wrapper
 

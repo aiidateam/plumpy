@@ -3,6 +3,7 @@ import unittest
 import asyncio
 
 import shortuuid
+import pytest
 import kiwipy
 from kiwipy import rmq
 
@@ -10,12 +11,8 @@ import plumpy
 import plumpy.communications
 from plumpy import process_comms
 from .. import utils
-import pytest
 
-try:
-    import aio_pika
-except ImportError:
-    aio_pika = None
+import aio_pika
 
 
 @pytest.fixture

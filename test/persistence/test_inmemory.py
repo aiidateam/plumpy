@@ -53,7 +53,6 @@ class TestInMemoryPersister(unittest.TestCase):
         checkpoint_a = plumpy.PersistedCheckpoint(process_a.pid, tag_a)
         checkpoint_b = plumpy.PersistedCheckpoint(process_b.pid, tag_b)
 
-        # import pdb; pdb.set_trace()
         checkpoints = [checkpoint_a, checkpoint_b]
 
         persister = plumpy.InMemoryPersister()

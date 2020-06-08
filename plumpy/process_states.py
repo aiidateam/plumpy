@@ -197,7 +197,6 @@ class Running(State):
         self.args = args
         self.kwargs = kwargs
         self._run_handle = None
-        # import pdb; pdb.set_trace()
 
     def save_instance_state(self, out_state, save_context):
         super().save_instance_state(out_state, save_context)
@@ -214,7 +213,7 @@ class Running(State):
     def interrupt(self, reason):
         return False
 
-    async def execute(self):  #pylint: disable=invalid-overridden-method
+    async def execute(self):  # pylint: disable=invalid-overridden-method
         if self._command is not None:
             command = self._command
         else:
@@ -302,7 +301,7 @@ class Waiting(State):
         # This will cause the future in execute() to raise the exception
         self._waiting_future.set_exception(reason)
 
-    async def execute(self):  #pylint: disable=invalid-overridden-method
+    async def execute(self):  # pylint: disable=invalid-overridden-method
         try:
             result = await self._waiting_future
         except Interruption:

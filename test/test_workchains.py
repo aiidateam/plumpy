@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 import inspect
+import unittest
+import asyncio
 
+import pytest
 import plumpy
 from plumpy.workchains import *
 from plumpy.process_listener import ProcessListener
-import unittest
-import pytest
-import asyncio
 
 from . import utils
 
@@ -225,10 +225,7 @@ class TestWorkchain(unittest.TestCase):
                 spec.outline(cls.s1, cls.s2, cls.s3)
 
             def s1(self):
-                r1 = self.launch(ReturnA)
-                r2 = self.launch(ReturnB)
-                # return ToContext(r1=self.launch(ReturnA), r2=self.launch(ReturnB))
-                return ToContext(r1=r1, r2=r2)
+                return ToContext(r1=self.launch(ReturnA), r2=self.launch(ReturnB))
 
             def s2(self):
                 assert self.ctx.r1['res'] == A

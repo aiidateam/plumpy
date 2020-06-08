@@ -10,11 +10,11 @@ import sys
 import uuid
 import asyncio
 
-from aiocontextvars import ContextVar
-import kiwipy
-from pika.exceptions import ConnectionClosed
 import yaml
 import nest_asyncio
+from aiocontextvars import ContextVar
+from aio_pika.exceptions import ConnectionClosed
+import kiwipy
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -64,7 +64,7 @@ def ensure_not_closed(func):
 
     @functools.wraps(func)
     def func_wrapper(self, *args, **kwargs):
-        # pylint: disable=protected-access, useless-suppression
+        # pylint: disable=protected-access
         if self._closed:
             raise exceptions.ClosedError('Process is closed')
         return func(self, *args, **kwargs)
@@ -470,13 +470,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         stack_copy = PROCESS_STACK.get().copy()
         stack_copy.append(self)
         PROCESS_STACK.set(stack_copy)
-        # print('before yield: ')
-        # print([self], 'before coro: ', PROCESS_STACK.get())
         try:
             yield
         finally:
-            # print('finally:')
-            # print([self], 'after coro: ', PROCESS_STACK.get())
             assert Process.current() is self, \
                 'Somehow, the process at the top of the stack is not me, ' \
                 'but another process! ({} != {})'.format(self, Process.current())

@@ -3,7 +3,7 @@ import tempfile
 import functools
 import asyncio
 
-import kiwipy
+from kiwipy import rmq
 import plumpy
 
 
@@ -22,9 +22,10 @@ class DummyProcessWithOutput(plumpy.Process):
 
 
 def main():
-    with kiwipy.rmq.connect('amqp://127.0.0.1') as comm:
+    with rmq.RmqThreadCommunicator.connect(connection_params={'url': 'amqp://127.0.0.1'}
+                                           ) as comm, tempfile.TemporaryDirectory() as tmpdir:
         loop = asyncio.get_event_loop()
-        persister = plumpy.PicklePersister(tempfile.mkdtemp())
+        persister = plumpy.PicklePersister(tmpdir)
         task_receiver = plumpy.ProcessLauncher(loop=loop, persister=persister)
 
         def callback(*args, **kwargs):
@@ -36,8 +37,6 @@ def main():
         process_controller = plumpy.RemoteProcessThreadController(comm)
 
         future = process_controller.launch_process(DummyProcessWithOutput)
-        while not future.done():
-            pass
 
         async def task():
             result = await asyncio.wrap_future(future.result())

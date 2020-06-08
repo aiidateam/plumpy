@@ -422,6 +422,12 @@ class Savable:
 
     @classmethod
     def create_obj(cls):
+        """
+        create_obj create a brand new object without calling initializer by just giving
+        the class. Since we are not sure about the number of parameters to initialize it.
+        If the default `__new__` method can not be used, overwriting it with available
+        initializer.
+        """
         return cls.__new__(cls)
 
     @staticmethod

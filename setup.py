@@ -29,12 +29,11 @@ setup(
     keywords='workflow multithreaded rabbitmq',
     python_requires='>=3.5',
     install_requires=[
-        'frozendict',
+        'frozendict~=1.2',
         'pyyaml~=5.1.2',
-        'pika>=1.0.0',
-        'nest_asyncio',
-        'aio-pika',
-        'aiocontextvars',
+        'nest_asyncio~=1.3.3',
+        'aio-pika~=6.6.1',
+        'aiocontextvars~=0.2.2',
         'kiwipy[rmq]~=0.5.5',
     ],
     extras_require={

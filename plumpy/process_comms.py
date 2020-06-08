@@ -160,7 +160,9 @@ class RemoteProcessController:
             message[MESSAGE_KEY] = msg
 
         pause_future = self._communicator.rpc_send(pid, message)
+        # rpc_send return a thread future from communicator
         future = await asyncio.wrap_future(pause_future)
+        # future is just returned from rpc call which return a kiwipy future
         result = await asyncio.wrap_future(future)
         return result
 
