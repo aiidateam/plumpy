@@ -34,7 +34,6 @@ def subscriber():
     return Subscriber()
 
 
-@pytest.mark.skip('Re-enable when https://github.com/aiidateam/kiwipy/issues/61 is resolved.')
 def test_add_rpc_subscriber(loop_communicator, subscriber):
     """Test the `LoopCommunicator.add_rpc_subscriber` method."""
     assert loop_communicator.add_rpc_subscriber(subscriber) is not None
@@ -43,7 +42,6 @@ def test_add_rpc_subscriber(loop_communicator, subscriber):
     assert loop_communicator.add_rpc_subscriber(subscriber, identifier) == identifier
 
 
-@pytest.mark.skip('Re-enable when https://github.com/aiidateam/kiwipy/issues/61 is resolved.')
 def test_remove_rpc_subscriber(loop_communicator, subscriber):
     """Test the `LoopCommunicator.remove_rpc_subscriber` method."""
     identifier = loop_communicator.add_rpc_subscriber(subscriber)
