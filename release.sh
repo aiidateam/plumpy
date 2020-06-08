@@ -1,5 +1,8 @@
+#/usr/bin/env bash
+set -e
 
-
+# Install `twine` through `pip` if it hasn't been installed yet
+command -v twine >/dev/null 2>&1 || pip install twine
 
 PACKAGE="plumpy"
 VERSION_FILE=${PACKAGE}/version.py
@@ -14,7 +17,6 @@ while true; do
     esac
 done
 
-
 sed -i "1 s/__version__* =.*/__version__ = \"${version}\"/" $VERSION_FILE
 
 current_branch=`git rev-parse --abbrev-ref HEAD`
@@ -27,7 +29,6 @@ echo Releasing version $version
 git checkout -b $relbranch
 git add ${VERSION_FILE}
 git commit --no-verify -m "Release ${version}"
-
 
 # Merge into master
 git checkout master
