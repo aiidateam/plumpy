@@ -61,4 +61,3 @@
 ### Bug fixes
 - Fix bug in process spec validation with default and validator [[#106]](https://github.com/aiidateam/aiida-core/pull/106)
 - Fix call of `Portnamespace.validator` [[#104]](https://github.com/aiidateam/aiida-core/pull/104)
-
