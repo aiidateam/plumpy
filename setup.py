@@ -27,6 +27,7 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
     keywords='workflow multithreaded rabbitmq',
+    python_requires='>=3.5',
     install_requires=[
         'frozendict',
         'tornado>=4.1, <5.0',
