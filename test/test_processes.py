@@ -701,6 +701,29 @@ class TestProcessSaving(unittest.TestCase):
         loop.create_task(nsync_comeback.step_until_terminated())
         loop.run_until_complete(async_test())
 
+    def test_save_future(self):
+        """
+        test `SavableFuture` is initialized with the event loop of process
+        """
+        loop = asyncio.new_event_loop()
+        nsync_comeback = SavePauseProc(loop=loop)
+
+        bundle = plumpy.Bundle(nsync_comeback)
+        # if loop is not specified will use the default asyncio loop
+        proc_unbundled = bundle.unbundle(plumpy.LoadSaveContext(loop=loop))
+
+        async def async_test():
+            await utils.run_until_paused(proc_unbundled)
+
+            # here the future should be a SavableFuture in process loop
+            proc_unbundled.play()
+            await proc_unbundled.future()
+
+            self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
+
+        loop.create_task(proc_unbundled.step_until_terminated())
+        loop.run_until_complete(async_test())
+
     def test_created_bundle(self):
         """
         Check that the bundle after just creating a process is as we expect

@@ -7,6 +7,8 @@ import fnmatch
 import inspect
 import os
 import pickle
+import asyncio
+from asyncio import futures as base_futures
 
 import yaml
 
@@ -22,6 +24,11 @@ __all__ = [
 ]
 
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
+
+# pylint: disable=protected-access
+_PENDING = base_futures._PENDING
+_CANCELLED = base_futures._CANCELLED
+_FINISHED = base_futures._FINISHED
 
 
 class Bundle(dict):
@@ -420,16 +427,6 @@ class Savable:
     _auto_persist = None
     _persist_configured = False
 
-    @classmethod
-    def create_obj(cls):
-        """
-        create_obj create a brand new object without calling initializer by just giving
-        the class. Since we are not sure about the number of parameters to initialize it.
-        If the default `__new__` method can not be used, overwriting it with available
-        initializer.
-        """
-        return cls.__new__(cls)
-
     @staticmethod
     def load(saved_state, load_context=None):
         """
@@ -474,7 +471,7 @@ class Savable:
         """
         load_context = _ensure_object_loader(load_context, saved_state)
         # create object of a Savable class without specify attributes
-        obj = cls.create_obj()
+        obj = cls.__new__(cls)
         base.call_with_super_check(obj.load_instance_state, saved_state, load_context)
         return obj
 
@@ -596,24 +593,54 @@ class SavableFuture(futures.Future, Savable):
     """
     EXCEPTION = 'exception'
 
-    @classmethod
-    def create_obj(cls):
-        return cls()
-
     def save_instance_state(self, out_state, save_context):
         super().save_instance_state(out_state, save_context)
         if self.done() and self.exception() is not None:
             out_state[self.EXCEPTION] = self.exception()
 
+    @classmethod
+    def recreate_from(cls, saved_state, load_context=None):
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+        :type load_context: :class:`LoadSaveContext`
+        :return: The recreated instance
+        :rtype: :class:`Savable`
+        """
+        load_context = _ensure_object_loader(load_context, saved_state)
+
+        try:
+            loop = load_context.loop
+        except AttributeError:
+            loop = asyncio.get_event_loop()
+
+        state = saved_state['_state']
+
+        if state == _PENDING:
+            obj = cls(loop=loop)
+
+        if state == _FINISHED:
+            obj = cls(loop=loop)
+            result = saved_state['_result']
+
+            try:
+                exception = saved_state[obj.EXCEPTION]
+                obj.set_exception(exception)
+            except KeyError:
+                obj.set_result(result)
+
+        if state == _CANCELLED:
+            obj = cls(loop=loop)
+            obj.cancel()
+
+        return obj
+
     def load_instance_state(self, saved_state, load_context):
         # pylint: disable=attribute-defined-outside-init
         super().load_instance_state(saved_state, load_context)
-        try:
-            exception = saved_state[self.EXCEPTION]
-            self._exception = exception
-        except KeyError:
-            self._exception = None
 
-        self._log_traceback = False  # Used for Python >= 3.4
-
-        self._callbacks = []
+        if self._callbacks:
+            for callback in self._callbacks:
+                self.remove_done_callback(callback)

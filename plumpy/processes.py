@@ -257,7 +257,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._creation_time = None
 
         # Runtime variables
-        self._future = persistence.SavableFuture()
+        self._future = persistence.SavableFuture(loop=self._loop)
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = logger
         self._communicator = communicator
