@@ -591,12 +591,11 @@ class SavableFuture(futures.Future, Savable):
 
     .. note: This does not save any assigned done callbacks.
     """
-    EXCEPTION = 'exception'
 
     def save_instance_state(self, out_state, save_context):
         super().save_instance_state(out_state, save_context)
         if self.done() and self.exception() is not None:
-            out_state[self.EXCEPTION] = self.exception()
+            out_state['exception'] = self.exception()
 
     @classmethod
     def recreate_from(cls, saved_state, load_context=None):
@@ -626,7 +625,7 @@ class SavableFuture(futures.Future, Savable):
             result = saved_state['_result']
 
             try:
-                exception = saved_state[obj.EXCEPTION]
+                exception = saved_state['exception']
                 obj.set_exception(exception)
             except KeyError:
                 obj.set_result(result)

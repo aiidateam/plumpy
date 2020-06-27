@@ -34,7 +34,7 @@ setup(
         'nest_asyncio~=1.3.3',
         'aio-pika~=6.6.1',
         'aiocontextvars~=0.2.2',
-        'kiwipy[rmq]~=0.5.5',
+        'kiwipy[rmq]~=0.6.1',
     ],
     extras_require={
         'docs': [

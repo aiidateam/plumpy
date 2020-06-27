@@ -49,7 +49,7 @@ def loop_communicator():
 
     yield communicator
 
-    thread_communicator.stop()
+    thread_communicator.close()
 
 
 @pytest.fixture
