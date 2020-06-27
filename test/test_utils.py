@@ -2,6 +2,7 @@
 import unittest
 import inspect
 import functools
+import asyncio
 
 from plumpy.utils import AttributesFrozendict, ensure_coroutine
 
@@ -58,11 +59,21 @@ class TestEnsureCoroutine(unittest.TestCase):
         coro = ensure_coroutine(AsyncDummy)
         assert coro is AsyncDummy
 
-    def test_functools_partial(self):
-        fct_wrap = functools.partial(async_fct)
-        coro = ensure_coroutine(fct_wrap)
-        assert coro is fct_wrap
+    def test_callable_object(self):
+        """
+        """
 
+        class AsyncDummy:
+
+            async def __call__(self):
+                pass
+
+        obj = AsyncDummy()
+        coro = ensure_coroutine(obj)
+        assert coro is obj
+
+    def test_functools_partial(self):
         fct_wrap = functools.partial(fct)
         coro = ensure_coroutine(fct_wrap)
         assert coro is not fct_wrap
+        assert asyncio.iscoroutine(coro())

@@ -6,6 +6,7 @@ import functools
 import kiwipy
 
 from . import futures
+from .utils import ensure_coroutine
 
 __all__ = [
     'Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'plum_to_kiwi_future', 'wrap_communicator'
@@ -53,9 +54,10 @@ def convert_to_comm(callback, loop=None):
     :param callback: the function to convert
     :return: a new callback function that returns a future
     """
+    coro = ensure_coroutine(callback)
 
     def converted(communicator, *args, **kwargs):
-        msg_fn = functools.partial(callback, communicator, *args, **kwargs)
+        msg_fn = functools.partial(coro, communicator, *args, **kwargs)
         task_future = futures.create_task(msg_fn, loop)
         return plum_to_kiwi_future(task_future)
 

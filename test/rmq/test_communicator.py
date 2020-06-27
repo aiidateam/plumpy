@@ -84,29 +84,6 @@ class TestLoopCommunicator:
         assert result == BROADCAST
 
     @pytest.mark.asyncio
-    async def test_async_broadcast(self, loop_communicator):
-        BROADCAST = {'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420}
-        broadcast_future = plumpy.Future()
-
-        loop = asyncio.get_event_loop()
-
-        async def get_broadcast(_comm, body, sender, subject, correlation_id):
-            assert loop is asyncio.get_event_loop()
-
-            broadcast_future.set_result({
-                'body': body,
-                'sender': sender,
-                'subject': subject,
-                'correlation_id': correlation_id
-            })
-
-        loop_communicator.add_broadcast_subscriber(get_broadcast)
-        loop_communicator.broadcast_send(**BROADCAST)
-
-        result = await broadcast_future
-        assert result == BROADCAST
-
-    @pytest.mark.asyncio
     async def test_rpc(self, loop_communicator):
         MSG = 'rpc this'
         rpc_future = plumpy.Future()

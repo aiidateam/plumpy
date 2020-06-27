@@ -223,7 +223,7 @@ def type_check(obj, expected_type):
         raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
 
 
-def ensure_coroutine(fct):
+def ensure_coroutine(coro_or_fn):
     """
     Ensure that the given function ``fct`` is a coroutine
 
@@ -232,21 +232,23 @@ def ensure_coroutine(fct):
     :param fct: the function
     :returns: the coroutine
     """
-    if isinstance(fct, functools.partial):
-        obj = fct.func
-        if asyncio.iscoroutinefunction(obj):
-            return fct
-        if asyncio.iscoroutinefunction(obj.__call__):
-            return fct
-    if asyncio.iscoroutinefunction(fct):
-        return fct
-    if asyncio.iscoroutinefunction(fct.__call__):
-        return fct
+    if asyncio.iscoroutinefunction(coro_or_fn):
+        return coro_or_fn
 
-    async def wrapper(*args, **kwargs):
-        return fct(*args, **kwargs)
+    if asyncio.iscoroutinefunction(coro_or_fn.__call__):
+        return coro_or_fn
 
-    return wrapper
+    if callable(coro_or_fn):
+        if inspect.isclass(coro_or_fn):
+            coro_or_fn = coro_or_fn.__call__
+
+        @functools.wraps(coro_or_fn)
+        async def wrap(*args, **kwargs):
+            return coro_or_fn(*args, **kwargs)
+
+        return wrap
+
+    raise TypeError('coro_or_fn must be a callable')
 
 
 def is_mutable_property(cls, attribute):
