@@ -3,6 +3,7 @@
 Module containing future related methods and classes
 """
 import asyncio
+from typing import Coroutine
 
 import kiwipy
 
@@ -53,7 +54,7 @@ class CancellableAction(Future):
             self._action = None
 
 
-def create_task(coro, loop=None):
+def create_task(coro: Coroutine, loop=None):
     """
     Schedule a call to a coro in the event loop and wrap the outcome
     in a future.

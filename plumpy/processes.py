@@ -9,12 +9,13 @@ import time
 import sys
 import uuid
 import asyncio
+from typing import Union
 
-import yaml
-import nest_asyncio
 from aiocontextvars import ContextVar
 from aio_pika.exceptions import ConnectionClosed
+import yaml
 import kiwipy
+import nest_asyncio
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -879,13 +880,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
 
-    def pause(self, msg=None):
+    def pause(self, msg: Union[str, None] = None) -> Union[bool, asyncio.Future]:
         """
         Pause the process.  Returns True if after this call the process is paused, False otherwise
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
             `_pre_paused_status attribute`, such that it can be restored when the process is played again.
-        :return: True paused, False otherwise
         """
         if self.has_terminated():
             return False
@@ -993,11 +993,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace_back)
 
-    def kill(self, msg=None):
+    def kill(self, msg: Union[str, None] = None) -> Union[bool, asyncio.Future]:
         """
         Kill the process
         :param msg: An optional kill message
-        :type msg: str
         """
         if self.state == process_states.ProcessState.KILLED:
             # Already killed

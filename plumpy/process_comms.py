@@ -433,9 +433,6 @@ class RemoteProcessThreadController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the response from the remote side (if no_reply=False)
         """
-        if no_reply:
-            return self._communicator.task_send(message, no_reply=no_reply)
-
         return self._communicator.task_send(message, no_reply=no_reply)
 
 
