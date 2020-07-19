@@ -31,7 +31,7 @@ setup(
     install_requires=[
         'frozendict~=1.2',
         'pyyaml~=5.1.2',
-        'nest_asyncio~=1.3.3',
+        'nest_asyncio~=1.4.0',
         'aio-pika~=6.6.1',
         'aiocontextvars~=0.2.2',
         'kiwipy[rmq]~=0.6.1',

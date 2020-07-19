@@ -98,7 +98,6 @@ jobs:
         -   name: Install python dependencies
             run: |
                 pip install -e .[tests]
-                pip install --upgrade git+https://github.com/unkcpz/nest_asyncio.git@master
 
         -   name: Run pytest
             run:
