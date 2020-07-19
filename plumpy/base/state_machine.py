@@ -245,7 +245,9 @@ class StateMachine(metaclass=StateMachineMeta):
 
     @super_check
     def init(self):
-        """ Called after entering initial state. """
+        """
+        Called after entering initial state in `__call__` method of `StateMachineMeta`
+        """
 
     def __str__(self):
         return '<{}> ({})'.format(self.__class__.__name__, self.state)
