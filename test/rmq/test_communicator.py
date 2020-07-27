@@ -43,7 +43,7 @@ class CommunicatorTestCase(AsyncTestCase):
 
     def tearDown(self):
         # Close the connector before calling super because it will close the loop
-        self.rmq_communicator.stop()
+        self.rmq_communicator.close()
         super().tearDown()
 
 

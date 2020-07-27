@@ -33,7 +33,7 @@ setup(
         'tornado>=4.1, <5.0',
         'pyyaml~=5.1.2',
         'pika>=1.0.0',
-        'kiwipy[rmq]~=0.5.5',
+        'kiwipy[rmq]~=0.6.0',
     ],
     extras_require={
         'docs': [

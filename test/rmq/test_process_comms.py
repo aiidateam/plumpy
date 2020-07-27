@@ -31,7 +31,7 @@ class TestRemoteProcessController(utils.AsyncTestCase):
     def tearDown(self):
         # Close the connector before calling super because it will
         # close the loop
-        self.communicator.stop()
+        self.communicator.close()
         super().tearDown()
 
     @testing.gen_test
@@ -128,7 +128,7 @@ class TestRemoteProcessThreadController(testing.AsyncTestCase):
     def tearDown(self):
         # Close the connector before calling super because it will
         # close the loop
-        self.communicator.stop()
+        self.communicator.close()
         super().tearDown()
 
     @testing.gen_test
