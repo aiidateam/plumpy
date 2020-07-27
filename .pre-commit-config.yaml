@@ -8,6 +8,14 @@ repos:
     -   id: mixed-line-ending
     -   id: trailing-whitespace
 
+-   repo: https://github.com/pre-commit/mirrors-yapf
+    rev: v0.30.0
+    hooks:
+    -   id: yapf
+        name: yapf
+        types: [python]
+        args: ['-i']
+
 -   repo: https://github.com/PyCQA/pylint
     rev: pylint-2.5.2
     hooks:
@@ -31,11 +39,3 @@ repos:
                 docs/source/conf.py|
                 test/.*|
             )$
-
--   repo: https://github.com/pre-commit/mirrors-yapf
-    rev: v0.30.0
-    hooks:
-    -   id: yapf
-        name: yapf
-        types: [python]
-        args: ['-i']
