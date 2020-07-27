@@ -51,7 +51,7 @@ class Bundle(dict):
         return Savable.load(self, load_context)
 
 
-_BUNDLE_TAG = u'!plumpy:Bundle'
+_BUNDLE_TAG = '!plumpy:Bundle'
 
 
 def _bundle_representer(dumper, node):
