@@ -2,9 +2,10 @@
 """
 Module containing future related methods and classes
 """
+import asyncio
+from typing import Coroutine
 
 import kiwipy
-from tornado import concurrent, gen, ioloop
 
 __all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError', 'create_task']
 
@@ -17,38 +18,9 @@ class InvalidStateError(Exception):
 
 copy_future = kiwipy.copy_future  # pylint: disable=invalid-name
 chain = kiwipy.chain  # pylint: disable=invalid-name
-gather = lambda *args: gen.multi(args)  # pylint: disable=invalid-name
+gather = asyncio.gather  # pylint: disable=invalid-name
 
-
-class Future(concurrent.Future):
-    """
-    Plumpy future.  This subclasses tornado's futures to allow for cancellation.
-    """
-    _cancelled = False
-
-    def result(self, timeout=None):
-        if self._cancelled:
-            raise CancelledError()
-
-        return super().result(timeout)
-
-    def cancel(self):
-        """Cancel the future and schedule callbacks.
-        If the future is already done or cancelled, return False.  Otherwise,
-        change the future's state to cancelled, schedule the callbacks and
-        return True.
-        """
-        if self.done():
-            return False
-        self._cancelled = True
-        self._set_done()
-        return True
-
-    def cancelled(self):
-        return self._cancelled
-
-    def remove_done_callback(self, callback):
-        self._callbacks.remove(callback)
+Future = asyncio.Future  # pylint: disable=invalid-name
 
 
 class CancellableAction(Future):
@@ -82,26 +54,25 @@ class CancellableAction(Future):
             self._action = None
 
 
-def create_task(coro, loop=None):
+def create_task(coro: Coroutine, loop=None):
     """
-    Schedule a call to a coroutine in the event loop and wrap the outcome
+    Schedule a call to a coro in the event loop and wrap the outcome
     in a future.
-
-    :param coro: the coroutine to schedule
+    :param coro: the coro to schedule
     :param loop: the event loop to schedule it in
     :return: the future representing the outcome of the coroutine
-    :rtype: :class:`tornado.concurrent.Future`
+    :rtype: :class:`plumpy.Future`
     """
-    loop = loop or ioloop.IOLoop.current()
+    loop = loop or asyncio.get_event_loop()
 
-    future = concurrent.Future()
+    future = loop.create_future()
 
-    @gen.coroutine
-    def run_task():
+    async def run_task():
         with kiwipy.capture_exceptions(future):
-            future.set_result((yield coro()))
+            res = await coro()
+            future.set_result(res)
 
-    loop.add_callback(run_task)
+    asyncio.run_coroutine_threadsafe(run_task(), loop)
     return future
 
 
@@ -112,7 +83,6 @@ def unwrap_kiwi_future(future):
     future will not resolve to a value until the final chain of futures is not a future
     but a concrete value.  If at any point in the chain a future resolves to an exception
     then the returned future will also resolve to that exception.
-
     :param future: the future to unwrap
     :type future: :class:`kiwipy.Future`
     :return: the unwrapping future
