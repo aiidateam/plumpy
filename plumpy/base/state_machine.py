@@ -76,7 +76,6 @@ def event(from_states='*', to_states='*'):
 
         @functools.wraps(wrapped)
         def transition(self, *a, **kw):
-            # pylint: disable=protected-access
             initial = self._state
 
             if from_states != '*' and not any(isinstance(self._state, state) for state in from_states):

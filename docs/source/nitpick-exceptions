@@ -38,7 +38,4 @@ py:class  plumpy.ports.PortNamespace
 py:func   save_instance_state
 py:func   load_instance_state
 
-py:class  tornado.concurrent.Future
-py:class  tornado.ioloop.IOLoop
-
 py:class  concurrent.futures._base.Error

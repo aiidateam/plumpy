@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=protected-access
 __all__ = ['super_check', 'call_with_super_check']
 
 
