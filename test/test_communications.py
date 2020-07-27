@@ -64,10 +64,10 @@ def test_remove_broadcast_subscriber(loop_communicator, subscriber):
 
 def test_add_task_subscriber(loop_communicator, subscriber):
     """Test the `LoopCommunicator.add_task_subscriber` method."""
-    assert loop_communicator.add_task_subscriber(subscriber) is None
+    assert loop_communicator.add_task_subscriber(subscriber) is not None
 
 
 def test_remove_task_subscriber(loop_communicator, subscriber):
     """Test the `LoopCommunicator.remove_task_subscriber` method."""
-    loop_communicator.add_task_subscriber(subscriber)
-    loop_communicator.remove_task_subscriber(subscriber)
+    identifier = loop_communicator.add_task_subscriber(subscriber)
+    loop_communicator.remove_task_subscriber(identifier)
