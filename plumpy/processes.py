@@ -368,10 +368,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @ensure_not_closed
     def launch(self, process_class, inputs=None, pid=None, logger=None):
-        process = process_class(
-            inputs=inputs, pid=pid, logger=logger, loop=self.loop(), communicator=self._communicator
-        )
-        self.loop().create_task(process.step_until_terminated())
+        process = process_class(inputs=inputs, pid=pid, logger=logger, loop=self.loop, communicator=self._communicator)
+        self.loop.create_task(process.step_until_terminated())
         return process
 
     # region State introspection methods
@@ -443,6 +441,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region loop methods
 
+    @property
     def loop(self):
         return self._loop
 
@@ -454,7 +453,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         args = (callback,) + args
         handle = events.ProcessCallback(self, self._run_task, args, kwargs)
-        self.loop().create_task(handle.run())
+        self.loop.create_task(handle.run())
         return handle
 
     def callback_excepted(self, _callback, exception, trace):
@@ -848,7 +847,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 kiwi_future.set_result(result)
 
         # Schedule the task and give back a kiwi future
-        asyncio.run_coroutine_threadsafe(run_callback(), self.loop())
+        asyncio.run_coroutine_threadsafe(run_callback(), self.loop)
 
         return kiwi_future
 
@@ -1053,7 +1052,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: None if not terminated, otherwise `self.outputs`
         """
         if not self.has_terminated():
-            self.loop().run_until_complete(self.step_until_terminated())
+            self.loop.run_until_complete(self.step_until_terminated())
 
         return self.future().result()
 
