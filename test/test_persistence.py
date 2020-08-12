@@ -87,7 +87,7 @@ class TestBundle(unittest.TestCase):
 
         loop2 = asyncio.new_event_loop()
         proc2 = bundle.unbundle(plumpy.LoadSaveContext(loop=loop2))
-        self.assertIs(loop2, proc2.loop())
+        self.assertIs(loop2, proc2.loop)
 
     def test_bundle_yaml(self):
         bundle = plumpy.Bundle(Save1())
