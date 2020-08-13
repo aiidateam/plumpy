@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 """Module for general kiwipy communication methods"""
-
+import asyncio
 import functools
-
-from tornado import concurrent, ioloop
 
 import kiwipy
 
 from . import futures
+from .utils import ensure_coroutine
 
 __all__ = [
     'Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'plum_to_kiwi_future', 'wrap_communicator'
@@ -37,7 +36,7 @@ def plum_to_kiwi_future(plum_future):
             else:
                 result = plum_future.result()
                 # Did we get another future?  In which case convert it too
-                if concurrent.is_future(result):
+                if isinstance(result, futures.Future):
                     result = plum_to_kiwi_future(result)
                 kiwi_future.set_result(result)
 
@@ -55,10 +54,10 @@ def convert_to_comm(callback, loop=None):
     :param callback: the function to convert
     :return: a new callback function that returns a future
     """
-    loop = loop or ioloop.IOLoop.current()
+    coro = ensure_coroutine(callback)
 
     def converted(communicator, *args, **kwargs):
-        msg_fn = functools.partial(callback, communicator, *args, **kwargs)
+        msg_fn = functools.partial(coro, communicator, *args, **kwargs)
         task_future = futures.create_task(msg_fn, loop)
         return plum_to_kiwi_future(task_future)
 
@@ -76,7 +75,7 @@ def wrap_communicator(communicator, loop=None):
     :param communicator: the communicator to wrap
     :type communicator: :class:`kiwipy.Communicator`
     :param loop: the event loop to schedule callbacks on
-    :type loop: :class:`tornado.ioloop.IOLoop`
+    :type loop: the asyncio event loop
     :return: a communicator wrapper
     :rtype: :class:`plumpy.LoopCommunicator`
     """
@@ -93,13 +92,13 @@ class LoopCommunicator(kiwipy.Communicator):
         """
         :param communicator: The kiwipy communicator
         :type communicator: :class:`kiwipy.Communicator`
-        :param loop: The tornado event loop to schedule callbacks on
-        :type loop: :class:`tornado.ioloop.IOLoop`
+        :param loop: The event loop to schedule callbacks on
+        :type loop: The asyncio event loop
         """
         assert communicator is not None
 
         self._communicator = communicator
-        self._loop = loop or ioloop.IOLoop.current()
+        self._loop = loop or asyncio.get_event_loop()
 
     def loop(self):
         return self._loop
