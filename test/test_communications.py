@@ -9,6 +9,9 @@ from plumpy.communications import LoopCommunicator
 class Subscriber:
     """Test class that mocks a subscriber."""
 
+    def __call__(self):
+        pass
+
 
 class Communicator(CommunicatorHelper):
 

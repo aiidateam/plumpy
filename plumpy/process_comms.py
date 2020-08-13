@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """Module for process level communication functions and classes"""
-
+import asyncio
 import copy
 import logging
 
-from tornado import gen
 import kiwipy
 
 from . import loaders
@@ -138,18 +137,17 @@ class RemoteProcessController:
     def __init__(self, communicator):
         self._communicator = communicator
 
-    @gen.coroutine
-    def get_status(self, pid):
+    async def get_status(self, pid):
         """
         Get the status of a process with the given PID
         :param pid: the process id
         :return: the status response from the process
         """
-        result = yield self._communicator.rpc_send(pid, STATUS_MSG)
-        raise gen.Return(result)
+        future = self._communicator.rpc_send(pid, STATUS_MSG)
+        result = await asyncio.wrap_future(future)
+        return result
 
-    @gen.coroutine
-    def pause_process(self, pid, msg=None):
+    async def pause_process(self, pid, msg=None):
         """
         Pause the process
 
@@ -161,24 +159,26 @@ class RemoteProcessController:
         if msg is not None:
             message[MESSAGE_KEY] = msg
 
-        pause_future = yield self._communicator.rpc_send(pid, message)
-        result = yield pause_future
-        raise gen.Return(result)
+        pause_future = self._communicator.rpc_send(pid, message)
+        # rpc_send return a thread future from communicator
+        future = await asyncio.wrap_future(pause_future)
+        # future is just returned from rpc call which return a kiwipy future
+        result = await asyncio.wrap_future(future)
+        return result
 
-    @gen.coroutine
-    def play_process(self, pid):
+    async def play_process(self, pid):
         """
         Play the process
 
         :param pid: the pid of the process to play
         :return: True if played, False otherwise
         """
-        play_future = yield self._communicator.rpc_send(pid, PLAY_MSG)
-        result = yield play_future
-        raise gen.Return(result)
+        play_future = self._communicator.rpc_send(pid, PLAY_MSG)
+        future = await asyncio.wrap_future(play_future)
+        result = await asyncio.wrap_future(future)
+        return result
 
-    @gen.coroutine
-    def kill_process(self, pid, msg=None):
+    async def kill_process(self, pid, msg=None):
         """
         Kill the process
 
@@ -191,14 +191,14 @@ class RemoteProcessController:
             message[MESSAGE_KEY] = msg
 
         # Wait for the communication to go through
-        kill_future = yield self._communicator.rpc_send(pid, message)
+        kill_future = self._communicator.rpc_send(pid, message)
+        future = await asyncio.wrap_future(kill_future)
         # Now wait for the kill to be enacted
-        result = yield kill_future
+        result = await asyncio.wrap_future(future)
 
-        raise gen.Return(result)
+        return result
 
-    @gen.coroutine
-    def continue_process(self, pid, tag=None, nowait=False, no_reply=False):
+    async def continue_process(self, pid, tag=None, nowait=False, no_reply=False):
         """
         Continue the process
 
@@ -208,17 +208,17 @@ class RemoteProcessController:
         """
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
-        continue_future = yield self._communicator.task_send(message, no_reply=no_reply)
+        continue_future = self._communicator.task_send(message, no_reply=no_reply)
+        future = await asyncio.wrap_future(continue_future)
 
         if no_reply:
             return
 
         # Now wait for the result of the task
-        result = yield continue_future
-        raise gen.Return(result)
+        result = await asyncio.wrap_future(future)
+        return result
 
-    @gen.coroutine
-    def launch_process(
+    async def launch_process(
         self,
         process_class,
         init_args=None,
@@ -242,16 +242,16 @@ class RemoteProcessController:
         """
         # pylint: disable=too-many-arguments
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
-        launch_future = yield self._communicator.task_send(message, no_reply=no_reply)
+        launch_future = self._communicator.task_send(message, no_reply=no_reply)
+        future = await asyncio.wrap_future(launch_future)
 
         if no_reply:
             return
 
-        result = yield launch_future
-        raise gen.Return(result)
+        result = await asyncio.wrap_future(future)
+        return result
 
-    @gen.coroutine
-    def execute_process(
+    async def execute_process(
         self, process_class, init_args=None, init_kwargs=None, loader=None, nowait=False, no_reply=False
     ):
         """
@@ -270,17 +270,19 @@ class RemoteProcessController:
         # pylint: disable=too-many-arguments
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
-        create_future = yield self._communicator.task_send(message)
-        pid = yield create_future
+        create_future = self._communicator.task_send(message)
+        future = await asyncio.wrap_future(create_future)
+        pid = await asyncio.wrap_future(future)
 
         message = create_continue_body(pid, nowait=nowait)
-        continue_future = yield self._communicator.task_send(message, no_reply=no_reply)
+        continue_future = self._communicator.task_send(message, no_reply=no_reply)
+        future = await asyncio.wrap_future(continue_future)
 
         if no_reply:
             return
 
-        result = yield continue_future
-        raise gen.Return(result)
+        result = await asyncio.wrap_future(future)
+        return result
 
 
 class RemoteProcessThreadController:
@@ -431,9 +433,6 @@ class RemoteProcessThreadController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the response from the remote side (if no_reply=False)
         """
-        if no_reply:
-            return self._communicator.task_send(message, no_reply=no_reply)
-
         return self._communicator.task_send(message, no_reply=no_reply)
 
 
@@ -473,24 +472,22 @@ class ProcessLauncher:
         else:
             self._loader = loaders.get_object_loader()
 
-    @gen.coroutine
-    def __call__(self, communicator, task):
+    async def __call__(self, communicator, task):
         """
         Receive a task.
         :param task: The task message
         """
         task_type = task[TASK_KEY]
         if task_type == LAUNCH_TASK:
-            raise gen.Return((yield self._launch(communicator, **task.get(TASK_ARGS, {}))))
+            return await self._launch(communicator, **task.get(TASK_ARGS, {}))
         if task_type == CONTINUE_TASK:
-            raise gen.Return((yield self._continue(communicator, **task.get(TASK_ARGS, {}))))
+            return await self._continue(communicator, **task.get(TASK_ARGS, {}))
         if task_type == CREATE_TASK:
-            raise gen.Return((yield self._create(communicator, **task.get(TASK_ARGS, {}))))
+            return await self._create(communicator, **task.get(TASK_ARGS, {}))
 
         raise communications.TaskRejected
 
-    @gen.coroutine
-    def _launch(self, _communicator, process_class, persist, nowait, init_args=None, init_kwargs=None):
+    async def _launch(self, _communicator, process_class, persist, nowait, init_args=None, init_kwargs=None):
         """
         Launch the process
 
@@ -516,14 +513,14 @@ class ProcessLauncher:
             self._persister.save_checkpoint(proc)
 
         if nowait:
-            self._loop.add_callback(proc.step_until_terminated)
-            raise gen.Return(proc.pid)
+            asyncio.ensure_future(proc.step_until_terminated())
+            return proc.pid
 
-        yield proc.step_until_terminated()
-        raise gen.Return(proc.future().result())
+        await proc.step_until_terminated()
 
-    @gen.coroutine
-    def _continue(self, _communicator, pid, nowait, tag=None):
+        return proc.future().result()
+
+    async def _continue(self, _communicator, pid, nowait, tag=None):
         """
         Continue the process
 
@@ -541,14 +538,14 @@ class ProcessLauncher:
         proc = saved_state.unbundle(self._load_context)
 
         if nowait:
-            self._loop.add_callback(proc.step_until_terminated)
-            raise gen.Return(proc.pid)
+            asyncio.ensure_future(proc.step_until_terminated())
+            return proc.pid
 
-        yield proc.step_until_terminated()
-        raise gen.Return(proc.future().result())
+        await proc.step_until_terminated()
 
-    @gen.coroutine
-    def _create(self, _communicator, process_class, persist, init_args=None, init_kwargs=None):
+        return proc.future().result()
+
+    async def _create(self, _communicator, process_class, persist, init_args=None, init_kwargs=None):
         """
         Create the process
 
@@ -572,4 +569,4 @@ class ProcessLauncher:
         if persist:
             self._persister.save_checkpoint(proc)
 
-        raise gen.Return(proc.pid)
+        return proc.pid

@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
 """Process tests"""
-from tornado import gen, testing
-
+import unittest
+import pytest
+import asyncio
 import enum
 import kiwipy
 
 import plumpy
 from plumpy import Process, ProcessState, BundleKeys
 from plumpy.utils import AttributesFrozendict
-from test import test_utils
-from . import utils
-
-# pylint: disable=missing-docstring, invalid-name
+from test import utils
 
 
 class ForgetToCallParent(plumpy.Process):
@@ -41,21 +39,44 @@ class ForgetToCallParent(plumpy.Process):
             super().on_kill(msg)
 
 
-class TestProcess(utils.AsyncTestCase):
+@pytest.mark.asyncio
+async def test_process_scope():
+
+    class ProcessTaskInterleave(plumpy.Process):
+
+        async def task(self, steps: list):
+            steps.append('[{}] started'.format(self.pid))
+            assert plumpy.Process.current() is self
+            steps.append('[{}] sleeping'.format(self.pid))
+            await asyncio.sleep(0.1)
+            assert plumpy.Process.current() is self
+            steps.append('[{}] finishing'.format(self.pid))
+
+    p1 = ProcessTaskInterleave()
+    p2 = ProcessTaskInterleave()
+
+    p1steps = []
+    p2steps = []
+    p1task = asyncio.ensure_future(p1._run_task(p1.task, p1steps))
+    p2task = asyncio.ensure_future(p2._run_task(p2.task, p2steps))
+    await p1task, p2task
+
+
+class TestProcess(unittest.TestCase):
 
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
         """
-        proc = test_utils.DummyProcess()
-        self.assertIsNot(test_utils.DummyProcess.spec(), Process.spec())
-        self.assertIs(proc.spec(), test_utils.DummyProcess.spec())
+        proc = utils.DummyProcess()
+        self.assertIsNot(utils.DummyProcess.spec(), Process.spec())
+        self.assertIs(proc.spec(), utils.DummyProcess.spec())
 
-        class Proc(test_utils.DummyProcess):
+        class Proc(utils.DummyProcess):
             pass
 
         self.assertIsNot(Proc.spec(), Process.spec())
-        self.assertIsNot(Proc.spec(), test_utils.DummyProcess.spec())
+        self.assertIsNot(Proc.spec(), utils.DummyProcess.spec())
         p = Proc()
         self.assertIs(p.spec(), Proc.spec())
 
@@ -95,7 +116,7 @@ class TestProcess(utils.AsyncTestCase):
 
     def test_inputs_default(self):
 
-        class Proc(test_utils.DummyProcess):
+        class Proc(utils.DummyProcess):
 
             @classmethod
             def define(cls, spec):
@@ -103,27 +124,12 @@ class TestProcess(utils.AsyncTestCase):
                 spec.input('input', default=5, required=False)
 
         # Supply a value
-        p = Proc(inputs={'input': 2}, loop=self.loop)
+        p = Proc(inputs={'input': 2})
         self.assertEqual(p.inputs['input'], 2)
 
         # Don't supply, use default
         p = Proc()
         self.assertEqual(p.inputs['input'], 5)
-
-    def test_inputs_default_that_evaluate_to_false(self):
-        for def_val in (True, False, 0, 1):
-
-            class Proc(test_utils.DummyProcess):
-
-                @classmethod
-                def define(cls, spec):
-                    super().define(spec)
-                    spec.input('input', default=def_val)
-
-            # Don't supply, use default
-            p = Proc()
-            self.assertIn('input', p.inputs)
-            self.assertEqual(p.inputs['input'], def_val)
 
     def test_optional_namespace(self):
         """Process with an optional namespace should not have that in `self.inputs` if not explicitly passed."""
@@ -166,6 +172,21 @@ class TestProcess(utils.AsyncTestCase):
         self.assertIn('b', process.inputs['namespace'])
         self.assertEqual(process.inputs['namespace']['b'], 5)
 
+    def test_inputs_default_that_evaluate_to_false(self):
+        for def_val in (True, False, 0, 1):
+
+            class Proc(utils.DummyProcess):
+
+                @classmethod
+                def define(cls, spec):
+                    super().define(spec)
+                    spec.input('input', default=def_val)
+
+            # Don't supply, use default
+            p = Proc()
+            self.assertIn('input', p.inputs)
+            self.assertEqual(p.inputs['input'], def_val)
+
     def test_nested_namespace_defaults(self):
         """Process with a default in a nested namespace should be created, even if top level namespace not supplied."""
 
@@ -199,7 +220,7 @@ class TestProcess(utils.AsyncTestCase):
             BrokenProcess.spec()
 
     def test_execute(self):
-        proc = test_utils.DummyProcessWithOutput()
+        proc = utils.DummyProcessWithOutput()
         proc.execute()
 
         self.assertTrue(proc.done())
@@ -208,7 +229,7 @@ class TestProcess(utils.AsyncTestCase):
 
     def test_run_from_class(self):
         # Test running through class method
-        proc = test_utils.DummyProcessWithOutput()
+        proc = utils.DummyProcessWithOutput()
         proc.execute()
         results = proc.outputs
         self.assertEqual(results['default'], 5)
@@ -227,19 +248,19 @@ class TestProcess(utils.AsyncTestCase):
 
     def test_pid(self):
         # Test auto generation of pid
-        process = test_utils.DummyProcessWithOutput()
+        process = utils.DummyProcessWithOutput()
         self.assertIsNotNone(process.pid)
 
         # Test using integer as pid
-        process = test_utils.DummyProcessWithOutput(pid=5)
+        process = utils.DummyProcessWithOutput(pid=5)
         self.assertEqual(process.pid, 5)
 
         # Test using string as pid
-        process = test_utils.DummyProcessWithOutput(pid='a')
+        process = utils.DummyProcessWithOutput(pid='a')
         self.assertEqual(process.pid, 'a')
 
     def test_exception(self):
-        proc = test_utils.ExceptionProcess()
+        proc = utils.ExceptionProcess()
         with self.assertRaises(RuntimeError):
             proc.execute()
         self.assertEqual(proc.state, ProcessState.EXCEPTED)
@@ -257,7 +278,7 @@ class TestProcess(utils.AsyncTestCase):
                 super().define(spec)
                 spec.input('a', default=1)
 
-        for proc_class in test_utils.TEST_PROCESSES:
+        for proc_class in utils.TEST_PROCESSES:
             desc = proc_class.get_description()
             self.assertIsInstance(desc, dict)
 
@@ -287,7 +308,7 @@ class TestProcess(utils.AsyncTestCase):
         proc.execute()
 
     def test_kill(self):
-        proc = test_utils.DummyProcess(loop=self.loop)
+        proc = utils.DummyProcess()
 
         proc.kill('Farewell!')
         self.assertTrue(proc.killed())
@@ -295,28 +316,28 @@ class TestProcess(utils.AsyncTestCase):
         self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_wait_continue(self):
-        proc = test_utils.WaitForSignalProcess()
+        proc = utils.WaitForSignalProcess()
         # Wait - Execute the process and wait until it is waiting
 
         listener = plumpy.ProcessListener()
         listener.on_process_waiting = lambda proc: proc.resume()
-
         proc.add_process_listener(listener)
-        self.loop.run_sync(proc.step_until_terminated)
+
+        proc.execute()
 
         # Check it's done
         self.assertTrue(proc.done())
         self.assertEqual(proc.state, ProcessState.FINISHED)
 
     def test_exc_info(self):
-        proc = test_utils.ExceptionProcess()
+        proc = utils.ExceptionProcess()
         try:
             proc.execute()
         except RuntimeError as e:
             self.assertEqual(proc.exception(), e)
 
     def test_run_done(self):
-        proc = test_utils.DummyProcess()
+        proc = utils.DummyProcess()
         proc.execute()
         self.assertTrue(proc.done())
 
@@ -325,16 +346,14 @@ class TestProcess(utils.AsyncTestCase):
         Test that if you pause a process that and its awaitable finishes that it
         completes correctly when played again.
         """
-        proc = test_utils.WaitForSignalProcess()
-        loop = self.loop
-        loop.add_callback(proc.step_until_terminated)
+        loop = asyncio.get_event_loop()
+        proc = utils.WaitForSignalProcess()
 
-        @gen.coroutine
-        def async_test():
-            yield test_utils.run_until_waiting(proc)
+        async def async_test():
+            await utils.run_until_waiting(proc)
             self.assertEqual(proc.state, ProcessState.WAITING)
 
-            result = yield proc.pause()
+            result = await proc.pause()
             self.assertTrue(result)
             self.assertTrue(proc.paused)
 
@@ -344,13 +363,14 @@ class TestProcess(utils.AsyncTestCase):
 
             proc.resume()
             # Wait until the process is terminated
-            yield proc.future()
+            await proc.future()
 
             # Check it's done
             self.assertTrue(proc.done())
             self.assertEqual(proc.state, ProcessState.FINISHED)
 
-        loop.run_sync(async_test)
+        loop.create_task(proc.step_until_terminated())
+        loop.run_until_complete(async_test())
 
     def test_pause_play_status_messaging(self):
         """
@@ -362,17 +382,15 @@ class TestProcess(utils.AsyncTestCase):
         PLAY_STATUS = 'process was played by Hans Klok'
         PAUSE_STATUS = 'process was paused by Evel Knievel'
 
-        proc = test_utils.WaitForSignalProcess()
+        loop = asyncio.get_event_loop()
+        proc = utils.WaitForSignalProcess()
         proc.set_status(PLAY_STATUS)
-        loop = self.loop
-        loop.add_callback(proc.step_until_terminated)
 
-        @gen.coroutine
-        def async_test():
-            yield test_utils.run_until_waiting(proc)
+        async def async_test():
+            await utils.run_until_waiting(proc)
             self.assertEqual(proc.state, ProcessState.WAITING)
 
-            result = yield proc.pause(PAUSE_STATUS)
+            result = await proc.pause(PAUSE_STATUS)
             self.assertTrue(result)
             self.assertTrue(proc.paused)
             self.assertEqual(proc.status, PAUSE_STATUS)
@@ -383,13 +401,14 @@ class TestProcess(utils.AsyncTestCase):
 
             proc.resume()
             # Wait until the process is terminated
-            yield proc.future()
+            await proc.future()
 
-            # Check it's done
-            self.assertTrue(proc.done())
-            self.assertEqual(proc.state, ProcessState.FINISHED)
+        # Check it's done
+        loop.create_task(proc.step_until_terminated())
+        loop.run_until_complete(async_test())
 
-        loop.run_sync(async_test)
+        self.assertTrue(proc.done())
+        self.assertEqual(proc.state, ProcessState.FINISHED)
 
     def test_kill_in_run(self):
 
@@ -424,15 +443,15 @@ class TestProcess(utils.AsyncTestCase):
         self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_kill_when_paused(self):
-        proc = test_utils.WaitForSignalProcess()
+        loop = asyncio.get_event_loop()
+        proc = utils.WaitForSignalProcess()
 
-        @gen.coroutine
-        def run_async(proc):
-            yield test_utils.run_until_waiting(proc)
+        async def async_test():
+            await utils.run_until_waiting(proc)
 
             saved_state = plumpy.Bundle(proc)
 
-            result = yield proc.pause()
+            result = await proc.pause()
             self.assertTrue(result)
             self.assertTrue(proc.paused)
 
@@ -440,28 +459,28 @@ class TestProcess(utils.AsyncTestCase):
             proc.kill()
 
             with self.assertRaises(plumpy.KilledError):
-                result = yield proc.future()
+                result = await proc.future()
 
-            self.assertEqual(proc.state, ProcessState.KILLED)
+        loop.create_task(proc.step_until_terminated())
+        loop.run_until_complete(async_test())
 
-        self.loop.add_callback(proc.step_until_terminated)
-        self.loop.run_sync(lambda: run_async(proc))
+        self.assertEqual(proc.state, ProcessState.KILLED)
 
-    @testing.gen_test
     def test_run_multiple(self):
         # Create and play some processes
+        loop = asyncio.get_event_loop()
+
         procs = []
-        for proc_class in test_utils.TEST_PROCESSES:
-            proc = proc_class(loop=self.loop)
-            self.loop.add_callback(proc.step_until_terminated)
+        for proc_class in utils.TEST_PROCESSES:
+            proc = proc_class()
+            loop.create_task(proc.step_until_terminated())
             procs.append(proc)
 
-        # Check that they all run
-        futures = [proc.future() for proc in procs]
-        yield futures
+        tasks = asyncio.gather(*[p.future() for p in procs])
+        results = loop.run_until_complete(tasks)
 
-        for future, proc_class in zip(futures, test_utils.TEST_PROCESSES):
-            self.assertDictEqual(proc_class.EXPECTED_OUTPUTS, future.result())
+        for result, proc_class in zip(results, utils.TEST_PROCESSES):
+            self.assertDictEqual(proc_class.EXPECTED_OUTPUTS, result)
 
     def test_invalid_output(self):
 
@@ -475,7 +494,7 @@ class TestProcess(utils.AsyncTestCase):
             proc.execute()
 
     def test_missing_output(self):
-        proc = test_utils.MissingOutputProcess()
+        proc = utils.MissingOutputProcess()
 
         with self.assertRaises(plumpy.InvalidStateError):
             proc.successful()
@@ -503,7 +522,6 @@ class TestProcess(utils.AsyncTestCase):
 
     def test_pause_in_process(self):
         """ Test that we can pause and cancel that by playing within the process """
-
         test_case = self
 
         class TestPausePlay(plumpy.Process):
@@ -512,19 +530,22 @@ class TestProcess(utils.AsyncTestCase):
                 fut = self.pause()
                 test_case.assertIsInstance(fut, plumpy.Future)
 
+        loop = asyncio.get_event_loop()
+
         listener = plumpy.ProcessListener()
-        listener.on_process_paused = lambda _proc: self.loop.stop()
+        listener.on_process_paused = lambda _proc: loop.stop()
 
         proc = TestPausePlay()
         proc.add_process_listener(listener)
 
-        self.loop.add_callback(proc.step_until_terminated)
-        self.loop.start()
+        loop.create_task(proc.step_until_terminated())
+        loop.run_forever()
+
         self.assertTrue(proc.paused)
         self.assertEqual(plumpy.ProcessState.FINISHED, proc.state)
 
     def test_pause_play_in_process(self):
-        """ Test that we can pause and cancel that by playing within the process """
+        """ Test that we can pause and play that by playing within the process """
 
         test_case = self
 
@@ -538,7 +559,7 @@ class TestProcess(utils.AsyncTestCase):
 
         proc = TestPausePlay()
 
-        self.loop.run_sync(proc.step_until_terminated)
+        proc.execute()
         self.assertFalse(proc.paused)
         self.assertEqual(plumpy.ProcessState.FINISHED, proc.state)
 
@@ -557,28 +578,55 @@ class TestProcess(utils.AsyncTestCase):
         """
         Run multiple and nested processes to make sure the process stack is always correct
         """
-        test_case = self
+        expect_true = []
 
         def test_nested(process):
-            test_case.assertIs(process, Process.current())
+            expect_true.append(process == Process.current())
 
         class StackTest(plumpy.Process):
 
             def run(self):
-                test_case.assertIs(self, Process.current())
+                # TODO: unexpected behaviour here
+                # if assert error happend here not raise
+                # it will be handled by try except clause in process
+                # is there better way to handle this?
+                expect_true.append(self == Process.current())
                 test_nested(self)
 
         class ParentProcess(plumpy.Process):
 
             def run(self):
-                test_case.assertIs(self, Process.current())
+                expect_true.append(self == Process.current())
                 StackTest().execute()
 
         to_run = []
-        for _ in range(100):
+        n_run = 3
+        for _ in range(n_run):
             to_run.append(ParentProcess().step_until_terminated())
 
-        self.loop.run_sync(gen.coroutine(lambda: (yield gen.multi(to_run))))
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.gather(*to_run))
+
+        assert all(expect_true)
+
+        self.assertEqual(len(expect_true), n_run * 3)
+
+    def test_process_nested(self):
+        """
+        Run multiple and nested processes to make sure the process stack is always correct
+        """
+
+        class StackTest(plumpy.Process):
+
+            def run(self):
+                pass
+
+        class ParentProcess(plumpy.Process):
+
+            def run(self):
+                StackTest().execute()
+
+        ParentProcess().execute()
 
     def test_call_soon(self):
 
@@ -594,7 +642,7 @@ class TestProcess(utils.AsyncTestCase):
 
     def test_execute_twice(self):
         """Test a process that is executed once finished raises a ClosedError"""
-        proc = test_utils.DummyProcess()
+        proc = utils.DummyProcess()
         proc.execute()
         with self.assertRaises(plumpy.ClosedError):
             proc.execute()
@@ -617,47 +665,70 @@ class SavePauseProc(plumpy.Process):
         self.steps_ran.append(self.step2.__name__)
 
 
-class TestProcessSaving(utils.AsyncTestCase):
+class TestProcessSaving(unittest.TestCase):
     maxDiff = None
 
-    @testing.gen_test
     def test_running_save_instance_state(self):
+        loop = asyncio.get_event_loop()
         nsync_comeback = SavePauseProc()
-        self.loop.add_callback(nsync_comeback.step_until_terminated)
 
-        yield test_utils.run_until_paused(nsync_comeback)
+        async def async_test():
+            await utils.run_until_paused(nsync_comeback)
 
-        # Create a checkpoint
+            # Create a checkpoint
+            bundle = plumpy.Bundle(nsync_comeback)
+            self.assertListEqual([SavePauseProc.run.__name__], nsync_comeback.steps_ran)
+
+            nsync_comeback.play()
+            await nsync_comeback.future()
+
+            self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], nsync_comeback.steps_ran)
+
+            proc_unbundled = bundle.unbundle()
+
+            # At bundle time the Process was paused, the future of which will be persisted to the bundle.
+            # As a result the process, recreated from that bundle, will also be paused and will have to be played
+            proc_unbundled.play()
+            self.assertEqual(0, len(proc_unbundled.steps_ran))
+            await proc_unbundled.step_until_terminated()
+            self.assertEqual([SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
+
+        loop.create_task(nsync_comeback.step_until_terminated())
+        loop.run_until_complete(async_test())
+
+    def test_save_future(self):
+        """
+        test `SavableFuture` is initialized with the event loop of process
+        """
+        loop = asyncio.new_event_loop()
+        nsync_comeback = SavePauseProc(loop=loop)
+
         bundle = plumpy.Bundle(nsync_comeback)
-        self.assertListEqual([SavePauseProc.run.__name__], nsync_comeback.steps_ran)
+        # if loop is not specified will use the default asyncio loop
+        proc_unbundled = bundle.unbundle(plumpy.LoadSaveContext(loop=loop))
 
-        nsync_comeback.play()
-        yield nsync_comeback.future()
+        async def async_test():
+            await utils.run_until_paused(proc_unbundled)
 
-        self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], nsync_comeback.steps_ran)
+            # here the future should be a SavableFuture in process loop
+            proc_unbundled.play()
+            await proc_unbundled.future()
 
-        proc_unbundled = bundle.unbundle()
+            self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
 
-        # At bundle time the Process was paused, the future of which will be persisted to the bundle.
-        # As a result the process, recreated from that bundle, will also be paused and will have to be played
-        proc_unbundled.play()
-        self.assertEqual(0, len(proc_unbundled.steps_ran))
-        yield proc_unbundled.step_until_terminated()
-        self.assertEqual([SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
-
-        # self.loop.add_callback(nsync.step_until_terminated)
-        # self.loop.run_sync(lambda: run_async(nsync))
+        loop.create_task(proc_unbundled.step_until_terminated())
+        loop.run_until_complete(async_test())
 
     def test_created_bundle(self):
         """
         Check that the bundle after just creating a process is as we expect
         """
-        self._check_round_trip(test_utils.DummyProcess())
+        self._check_round_trip(utils.DummyProcess())
 
     def test_instance_state_with_outputs(self):
-        proc = test_utils.DummyProcessWithOutput()
+        proc = utils.DummyProcessWithOutput()
 
-        saver = test_utils.ProcessSaver(proc)
+        saver = utils.ProcessSaver(proc)
         proc.execute()
 
         self._check_round_trip(proc)
@@ -671,65 +742,65 @@ class TestProcessSaving(utils.AsyncTestCase):
         self.assertIsNot(proc.outputs, saver.snapshots[-1].get(BundleKeys.OUTPUTS, {}))
 
     def test_saving_each_step(self):
-        for proc_class in test_utils.TEST_PROCESSES:
+        loop = asyncio.get_event_loop()
+        for proc_class in utils.TEST_PROCESSES:
             proc = proc_class()
-            saver = test_utils.ProcessSaver(proc)
+            saver = utils.ProcessSaver(proc)
             saver.capture()
             self.assertEqual(proc.state, ProcessState.FINISHED)
-            self.assertTrue(test_utils.check_process_against_snapshots(self.loop, proc_class, saver.snapshots))
+            self.assertTrue(utils.check_process_against_snapshots(loop, proc_class, saver.snapshots))
 
-    def test_saving_each_step_interleaved(self):
-        for ProcClass in test_utils.TEST_PROCESSES:
-            proc = ProcClass()
-            saver = test_utils.ProcessSaver(proc)
-            saver.capture()
-
-            self.assertTrue(test_utils.check_process_against_snapshots(self.loop, ProcClass, saver.snapshots))
-
-    @testing.gen_test
     def test_restart(self):
+        loop = asyncio.get_event_loop()
         proc = _RestartProcess()
-        self.loop.add_callback(proc.step_until_terminated)
 
-        yield test_utils.run_until_waiting(proc)
+        async def async_test():
+            await utils.run_until_waiting(proc)
 
-        # Save the state of the process
-        saved_state = plumpy.Bundle(proc)
+            # Save the state of the process
+            saved_state = plumpy.Bundle(proc)
 
-        # Load a process from the saved state
-        loaded_proc = saved_state.unbundle()
-        self.assertEqual(loaded_proc.state, ProcessState.WAITING)
+            # Load a process from the saved state
+            loaded_proc = saved_state.unbundle()
+            self.assertEqual(loaded_proc.state, ProcessState.WAITING)
 
-        # Now resume it
-        loaded_proc.resume()
-        yield loaded_proc.step_until_terminated()
-        self.assertEqual(loaded_proc.outputs, {'finished': True})
+            # Now resume it
+            loaded_proc.resume()
+            await loaded_proc.step_until_terminated()
+            self.assertEqual(loaded_proc.outputs, {'finished': True})
 
-    @testing.gen_test
+        loop.create_task(proc.step_until_terminated())
+        loop.run_until_complete(async_test())
+
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
-        proc = test_utils.WaitForSignalProcess()
-        self.loop.add_callback(proc.step_until_terminated)
+        loop = asyncio.get_event_loop()
+        proc = utils.WaitForSignalProcess()
 
-        yield test_utils.run_until_waiting(proc)
+        async def async_test():
+            await utils.run_until_waiting(proc)
 
-        saved_state = plumpy.Bundle(proc)
+            saved_state = plumpy.Bundle(proc)
 
-        # Run the process to the end
-        proc.resume()
-        result1 = yield proc.future()
+            # Run the process to the end
+            proc.resume()
+            result1 = await proc.future()
 
-        # Load from saved state and run again
-        proc2 = saved_state.unbundle(plumpy.LoadSaveContext(loop=self.loop))
-        self.loop.add_callback(proc2.step_until_terminated)
-        proc2.resume()
-        result2 = yield proc2.future()
+            # Load from saved state and run again
+            loader = plumpy.get_object_loader()
+            proc2 = saved_state.unbundle(plumpy.LoadSaveContext(loader))
+            asyncio.ensure_future(proc2.step_until_terminated())
+            proc2.resume()
+            result2 = await proc2.future()
 
-        # Check results match
-        self.assertEqual(result1, result2)
+            # Check results match
+            self.assertEqual(result1, result2)
+
+        loop.create_task(proc.step_until_terminated())
+        loop.run_until_complete(async_test())
 
     def test_killed(self):
-        proc = test_utils.DummyProcess()
+        proc = utils.DummyProcess()
         proc.kill()
         self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
         self._check_round_trip(proc)
@@ -744,7 +815,7 @@ class TestProcessSaving(utils.AsyncTestCase):
         self.assertDictEqual(bundle1, bundle2)
 
 
-class TestProcessNamespace(utils.TestCaseWithLoop):
+class TestProcessNamespace(unittest.TestCase):
 
     def test_namespaced_process(self):
         """
@@ -895,38 +966,34 @@ class TestProcessNamespace(utils.TestCaseWithLoop):
         self.assertEqual(process.outputs['integer']['namespace']['two'], 2)
 
 
-class TestProcessEvents(utils.AsyncTestCase):
+class TestProcessEvents(unittest.TestCase):
 
-    def setUp(self):
-        super().setUp()
-        self.proc = test_utils.DummyProcessWithOutput(loop=self.loop)
-
-    @testing.gen_test
     def test_basic_events(self):
-        events_tester = test_utils.ProcessListenerTester(
-            process=self.proc, expected_events=('running', 'output_emitted', 'finished')
+        proc = utils.DummyProcessWithOutput()
+        events_tester = utils.ProcessListenerTester(
+            process=proc, expected_events=('running', 'output_emitted', 'finished')
         )
-        yield self.proc.step_until_terminated()
+        proc.execute()
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_killed(self):
-        events_tester = test_utils.ProcessListenerTester(self.proc, ('killed',))
-        self.assertTrue(self.proc.kill())
+        proc = utils.DummyProcessWithOutput()
+        events_tester = utils.ProcessListenerTester(proc, ('killed',))
+        self.assertTrue(proc.kill())
 
         # Do the checks
-        self.assertTrue(self.proc.killed())
+        self.assertTrue(proc.killed())
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
-    @testing.gen_test
     def test_excepted(self):
-        proc = test_utils.ExceptionProcess()
-        events_tester = test_utils.ProcessListenerTester(proc, (
+        proc = utils.ExceptionProcess()
+        events_tester = utils.ProcessListenerTester(proc, (
             'excepted',
             'running',
             'output_emitted',
         ))
         with self.assertRaises(RuntimeError):
-            yield proc.step_until_terminated()
+            proc.execute()
             proc.result()
 
         # Do the checks
@@ -934,13 +1001,13 @@ class TestProcessEvents(utils.AsyncTestCase):
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_paused(self):
-        events_tester = test_utils.ProcessListenerTester(self.proc, ('paused',))
-        self.assertTrue(self.proc.pause())
+        proc = utils.DummyProcessWithOutput()
+        events_tester = utils.ProcessListenerTester(proc, ('paused',))
+        self.assertTrue(proc.pause())
 
         # Do the checks
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
-    @testing.gen_test
     def test_broadcast(self):
         communicator = kiwipy.LocalCommunicator()
 
@@ -950,19 +1017,19 @@ class TestProcessEvents(utils.AsyncTestCase):
             messages.append({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
         communicator.add_broadcast_subscriber(on_broadcast_receive)
-        proc = test_utils.DummyProcess(communicator=communicator)
-        yield proc.step_until_terminated()
+        proc = utils.DummyProcess(communicator=communicator)
+        proc.execute()
 
         expected_subjects = []
-        for i, state in enumerate(test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
-            from_state = test_utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
+        for i, state in enumerate(utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
+            from_state = utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
             expected_subjects.append('state_changed.{}.{}'.format(from_state, state.value))
 
         for i, message in enumerate(messages):
             self.assertEqual(message['subject'], expected_subjects[i])
 
 
-class _RestartProcess(test_utils.WaitForSignalProcess):
+class _RestartProcess(utils.WaitForSignalProcess):
 
     @classmethod
     def define(cls, spec):

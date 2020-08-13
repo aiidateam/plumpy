@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
+import unittest
+import asyncio
 import tempfile
 
 if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
 
 import plumpy
-from test.test_utils import ProcessWithCheckpoint
-from test.utils import TestCaseWithLoop
+from test.utils import ProcessWithCheckpoint
 
 
-class TestPicklePersister(TestCaseWithLoop):
+class TestPicklePersister(unittest.TestCase):
 
     def test_save_load_roundtrip(self):
         """
         Test the plumpy.PicklePersister by taking a dummpy process, saving a checkpoint
         and recreating it from the same checkpoint
         """
+        loop = asyncio.get_event_loop()
         process = ProcessWithCheckpoint()
 
         with tempfile.TemporaryDirectory() as directory:
@@ -23,7 +25,7 @@ class TestPicklePersister(TestCaseWithLoop):
             persister.save_checkpoint(process)
 
             bundle = persister.load_checkpoint(process.pid)
-            load_context = plumpy.LoadSaveContext(loop=self.loop)
+            load_context = plumpy.LoadSaveContext(loop=loop)
             recreated = bundle.unbundle(load_context)
 
     def test_get_checkpoints_without_tags(self):

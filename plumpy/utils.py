@@ -4,9 +4,10 @@ import inspect
 import logging
 import threading
 import types
+import functools
 from collections import deque, defaultdict
 
-import tornado.gen
+import asyncio
 import frozendict
 
 from .settings import check_protected, check_override
@@ -222,15 +223,32 @@ def type_check(obj, expected_type):
         raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
 
 
-def ensure_coroutine(wrapped):
-    if tornado.gen.is_coroutine_function(wrapped):
-        return wrapped
+def ensure_coroutine(coro_or_fn):
+    """
+    Ensure that the given function ``fct`` is a coroutine
 
-    @tornado.gen.coroutine
-    def wrapper(*args, **kwargs):
-        raise tornado.gen.Return(wrapped(*args, **kwargs))
+    If the passed function is not already a coroutine, it will be made to be a coroutine
 
-    return wrapper
+    :param fct: the function
+    :returns: the coroutine
+    """
+    if asyncio.iscoroutinefunction(coro_or_fn):
+        return coro_or_fn
+
+    if asyncio.iscoroutinefunction(coro_or_fn.__call__):
+        return coro_or_fn
+
+    if callable(coro_or_fn):
+        if inspect.isclass(coro_or_fn):
+            coro_or_fn = coro_or_fn.__call__
+
+        @functools.wraps(coro_or_fn)
+        async def wrap(*args, **kwargs):
+            return coro_or_fn(*args, **kwargs)
+
+        return wrap
+
+    raise TypeError('coro_or_fn must be a callable')
 
 
 def is_mutable_property(cls, attribute):

@@ -1,23 +1,26 @@
 # -*- coding: utf-8 -*-
+import unittest
 import plumpy
-from test.test_utils import ProcessWithCheckpoint
-from test.utils import TestCaseWithLoop
+import asyncio
+
+from test.utils import ProcessWithCheckpoint
 
 
-class TestInMemoryPersister(TestCaseWithLoop):
+class TestInMemoryPersister(unittest.TestCase):
 
     def test_save_load_roundtrip(self):
         """
         Test the plumpy.PicklePersister by taking a dummpy process, saving a checkpoint
         and recreating it from the same checkpoint
         """
+        loop = asyncio.get_event_loop()
         process = ProcessWithCheckpoint()
 
         persister = plumpy.InMemoryPersister()
         persister.save_checkpoint(process)
 
         bundle = persister.load_checkpoint(process.pid)
-        load_context = plumpy.LoadSaveContext(loop=self.loop)
+        load_context = plumpy.LoadSaveContext(loop=loop)
         recreated = bundle.unbundle(load_context)
 
     def test_get_checkpoints_without_tags(self):
@@ -50,7 +53,6 @@ class TestInMemoryPersister(TestCaseWithLoop):
         checkpoint_a = plumpy.PersistedCheckpoint(process_a.pid, tag_a)
         checkpoint_b = plumpy.PersistedCheckpoint(process_b.pid, tag_b)
 
-        # import pdb; pdb.set_trace()
         checkpoints = [checkpoint_a, checkpoint_b]
 
         persister = plumpy.InMemoryPersister()
