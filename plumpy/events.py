@@ -1,32 +1,18 @@
 # -*- coding: utf-8 -*-
 """Event and loop related classes and functions"""
 import sys
-from tornado import ioloop
-import tornado.gen
+import asyncio
 
 __all__ = ['new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete']
 
-get_event_loop = ioloop.IOLoop.current  # pylint: disable=invalid-name
-
-
-def new_event_loop():
-    loop = ioloop.IOLoop()
-    loop.make_current()
-    return loop
-
-
-def set_event_loop(loop):
-    if loop is None:
-        ioloop.IOLoop.clear_instance()
-    else:
-        loop.make_current()
+get_event_loop = asyncio.get_event_loop  # pylint: disable=invalid-name
+new_event_loop = asyncio.new_event_loop  # pylint: disable=invalid-name
+set_event_loop = asyncio.set_event_loop  # pylint: disable=invalid-name
 
 
 def run_until_complete(future, loop=None):
-    if loop is None:
-        loop = get_event_loop()
-
-    return loop.run_sync(lambda: future)
+    loop = loop or get_event_loop()
+    return loop.run_until_complete(future)
 
 
 class ProcessCallback:
@@ -49,12 +35,11 @@ class ProcessCallback:
     def cancelled(self):
         return self._cancelled
 
-    @tornado.gen.coroutine
-    def run(self):
+    async def run(self):
         """Run the callback"""
         if not self._cancelled:
             try:
-                yield self._callback(*self._args, **self._kwargs)
+                await self._callback(*self._args, **self._kwargs)
             except Exception:  # pylint: disable=broad-except
                 exc_info = sys.exc_info()
                 self._process.callback_excepted(self._callback, exc_info[1], exc_info[2])

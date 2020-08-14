@@ -29,11 +29,8 @@ setup(
     keywords='workflow multithreaded rabbitmq',
     python_requires='>=3.5',
     install_requires=[
-        'frozendict',
-        'tornado>=4.1, <5.0',
-        'pyyaml~=5.1.2',
-        'pika>=1.0.0',
-        'kiwipy[rmq]~=0.5.5',
+        'frozendict~=1.2', 'pyyaml~=5.1.2', 'nest_asyncio~=1.4.0', 'aio-pika~=6.6.1', 'aiocontextvars~=0.2.2',
+        'kiwipy[rmq]~=0.6.0'
     ],
     extras_require={
         'docs': [
@@ -43,7 +40,7 @@ setup(
             'sphinx-rtd-theme==0.4.3',
         ],
         'pre-commit': ['pre-commit~=2.2', 'pylint==2.5.2'],
-        'tests': ['pytest~=5.4', 'shortuuid']
+        'tests': ['pytest~=5.4', 'shortuuid', 'pytest-asyncio']
     },
     packages=['plumpy', 'plumpy/base'],
     test_suite='test'

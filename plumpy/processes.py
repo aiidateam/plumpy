@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
-
 import abc
 import contextlib
 import functools
@@ -8,15 +7,15 @@ import copy
 import logging
 import time
 import sys
-import threading
 import uuid
+import asyncio
+from typing import Union
 
-from pika.exceptions import ConnectionClosed
-from tornado import concurrent, gen
-import tornado.stack_context
+from aiocontextvars import ContextVar
+from aio_pika.exceptions import ConnectionClosed
 import yaml
-
 import kiwipy
+import nest_asyncio
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -39,6 +38,7 @@ from . import utils
 __all__ = ['Process', 'ProcessSpec', 'BundleKeys', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
+PROCESS_STACK = ContextVar('process stack', default=[])
 
 
 class BundleKeys:
@@ -53,21 +53,6 @@ class BundleKeys:
     OUTPUTS = 'OUTPUTS'
 
 
-# Use thread-local storage for the stack
-_thread_local = threading.local()  # pylint: disable=invalid-name
-
-
-def _process_stack():
-    """Access the private live stack"""
-    global _thread_local  # pylint: disable=global-statement, invalid-name
-    # Lazily create the first time it's used
-    try:
-        return _thread_local.process_stack
-    except AttributeError:
-        _thread_local.process_stack = []
-        return _thread_local.process_stack
-
-
 class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
     pass
 
@@ -80,7 +65,8 @@ def ensure_not_closed(func):
 
     @functools.wraps(func)
     def func_wrapper(self, *args, **kwargs):
-        if self._closed:  # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        if self._closed:
             raise exceptions.ClosedError('Process is closed')
         return func(self, *args, **kwargs)
 
@@ -147,8 +133,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: the currently running process
         :rtype: :class:`plumpy.Process`
         """
-        if _process_stack():
-            return _process_stack()[-1]
+        if PROCESS_STACK.get():
+            return PROCESS_STACK.get()[-1]
 
         return None
 
@@ -254,7 +240,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        self._loop = loop if loop is not None else events.get_event_loop()
+        self._loop = loop if loop is not None else asyncio.get_event_loop()
+        nest_asyncio.apply(self._loop)
 
         self._setup_event_hooks()
 
@@ -271,7 +258,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._creation_time = None
 
         # Runtime variables
-        self._future = persistence.SavableFuture()
+        self._future = persistence.SavableFuture(loop=self._loop)
         self.__event_helper = utils.EventHelper(ProcessListener)
         self._logger = logger
         self._communicator = communicator
@@ -381,10 +368,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @ensure_not_closed
     def launch(self, process_class, inputs=None, pid=None, logger=None):
-        process = process_class(
-            inputs=inputs, pid=pid, logger=logger, loop=self.loop(), communicator=self._communicator
-        )
-        self.loop().add_callback(process.step_until_terminated)
+        process = process_class(inputs=inputs, pid=pid, logger=logger, loop=self.loop, communicator=self._communicator)
+        self.loop.create_task(process.step_until_terminated())
         return process
 
     # region State introspection methods
@@ -456,6 +441,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region loop methods
 
+    @property
     def loop(self):
         return self._loop
 
@@ -467,7 +453,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         args = (callback,) + args
         handle = events.ProcessCallback(self, self._run_task, args, kwargs)
-        self._loop.add_callback(handle.run)
+        self.loop.create_task(handle.run())
         return handle
 
     def callback_excepted(self, _callback, exception, trace):
@@ -481,17 +467,20 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         meaning that globally someone can ask for Process.current() to get the last process
         that is on the call stack.
         """
-        _process_stack().append(self)
+        stack_copy = PROCESS_STACK.get().copy()
+        stack_copy.append(self)
+        PROCESS_STACK.set(stack_copy)
         try:
             yield
         finally:
             assert Process.current() is self, \
                 'Somehow, the process at the top of the stack is not me, ' \
                 'but another process! ({} != {})'.format(self, Process.current())
-            _process_stack().pop()
+            stack_copy = PROCESS_STACK.get().copy()
+            stack_copy.pop()
+            PROCESS_STACK.set(stack_copy)
 
-    @gen.coroutine
-    def _run_task(self, callback, *args, **kwargs):
+    async def _run_task(self, callback, *args, **kwargs):
         """
         This method should be used to run all Process related functions and coroutines.
         If there is an exception the process will enter the EXCEPTED state.
@@ -503,10 +492,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         # Make sure execute is a coroutine
         coro = utils.ensure_coroutine(callback)
-        result = yield tornado.stack_context.run_with_stack_context(
-            tornado.stack_context.StackContext(self._process_scope), functools.partial(coro, *args, **kwargs)
-        )
-        raise gen.Return(result)
+        with self._process_scope():
+            result = await coro(*args, **kwargs)
+        return result
 
     # endregion
 
@@ -550,7 +538,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if 'loop' in load_context:
             self._loop = load_context.loop
         else:
-            self._loop = events.get_event_loop()
+            self._loop = asyncio.get_event_loop()
 
         self._state = self.recreate_state(saved_state['_state'])
 
@@ -850,17 +838,17 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         kiwi_future = kiwipy.Future()
 
-        @gen.coroutine
-        def run_callback():
+        async def run_callback():
             with kiwipy.capture_exceptions(kiwi_future):
                 result = callback(*args, **kwargs)
-                while concurrent.is_future(result):
-                    result = yield result
+                while asyncio.isfuture(result):
+                    result = await result
 
                 kiwi_future.set_result(result)
 
         # Schedule the task and give back a kiwi future
-        self.loop().add_callback(run_callback)
+        asyncio.run_coroutine_threadsafe(run_callback(), self.loop)
+
         return kiwi_future
 
     # endregion
@@ -891,13 +879,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
 
-    def pause(self, msg=None):
+    def pause(self, msg: Union[str, None] = None) -> Union[bool, asyncio.Future]:
         """
         Pause the process.  Returns True if after this call the process is paused, False otherwise
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
             `_pre_paused_status attribute`, such that it can be restored when the process is played again.
-        :return: True paused, False otherwise
         """
         if self.has_terminated():
             return False
@@ -1005,11 +992,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace_back)
 
-    def kill(self, msg=None):
+    def kill(self, msg: Union[str, None] = None) -> Union[bool, asyncio.Future]:
         """
         Kill the process
         :param msg: An optional kill message
-        :type msg: str
         """
         if self.state == process_states.ProcessState.KILLED:
             # Already killed
@@ -1066,23 +1052,22 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: None if not terminated, otherwise `self.outputs`
         """
         if not self.has_terminated():
-            self.loop().run_sync(self.step_until_terminated)
+            self.loop.run_until_complete(self.step_until_terminated())
 
         return self.future().result()
 
     @ensure_not_closed
-    @gen.coroutine
-    def step(self):
+    async def step(self):
         assert not self.has_terminated(), 'Cannot step, already terminated'
 
         if self.paused:
-            yield self._paused
+            await self._paused
 
         try:
             self._stepping = True
             next_state = None
             try:
-                next_state = yield self._run_task(self._state.execute)
+                next_state = await self._run_task(self._state.execute)
             except process_states.Interruption as exception:
                 # If the interruption was caused by a call to a Process method then there should
                 # be an interrupt action ready to be executed, so just check if the cookie matches
@@ -1111,10 +1096,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._stepping = False
             self._set_interrupt_action(None)
 
-    @gen.coroutine
-    def step_until_terminated(self):
+    async def step_until_terminated(self):
         while not self.has_terminated():
-            yield self.step()
+            await self.step()
 
     # endregion
 
