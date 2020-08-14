@@ -3,15 +3,14 @@ from enum import Enum
 import sys
 import traceback
 
+import yaml
+
 try:
     import tblib
 
     _HAS_TBLIB = True
 except ImportError:
     _HAS_TBLIB = False
-
-from tornado.gen import coroutine, Return
-import yaml
 
 from . import futures
 from .base import state_machine
@@ -214,8 +213,7 @@ class Running(State):
     def interrupt(self, reason):
         return False
 
-    @coroutine
-    def execute(self):
+    async def execute(self):  # pylint: disable=invalid-overridden-method
         if self._command is not None:
             command = self._command
         else:
@@ -228,9 +226,9 @@ class Running(State):
             except Interruption:
                 # Let this bubble up to the caller
                 raise
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 excepted = self.create_state(ProcessState.EXCEPTED, *sys.exc_info()[1:])
-                raise Return(excepted)
+                return excepted
             else:
                 if not isinstance(result, Command):
                     if isinstance(result, exceptions.UnsuccessfulResult):
@@ -242,7 +240,7 @@ class Running(State):
                 command = result
 
         next_state = self._action_command(command)
-        raise Return(next_state)
+        return next_state
 
     def _action_command(self, command):
         if isinstance(command, Kill):
@@ -303,10 +301,9 @@ class Waiting(State):
         # This will cause the future in execute() to raise the exception
         self._waiting_future.set_exception(reason)
 
-    @coroutine
-    def execute(self):
+    async def execute(self):  # pylint: disable=invalid-overridden-method
         try:
-            result = yield self._waiting_future
+            result = await self._waiting_future
         except Interruption:
             # Deal with the interruption (by raising) but make sure our internal
             # state is back to how it was before the interruption so that we can be
@@ -319,7 +316,7 @@ class Waiting(State):
         else:
             next_state = self.create_state(ProcessState.RUNNING, self.done_callback, result)
 
-        raise Return(next_state)
+        return next_state
 
     def resume(self, value=NULL):
         assert self._waiting_future is not None, 'Not yet waiting'

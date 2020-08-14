@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
-from kiwipy import rmq
-from tornado import testing
+import asyncio
+import unittest
 
+from kiwipy import rmq
+
+import pytest
 import plumpy
+
 from plumpy import communications, process_comms
-from test import test_utils
+from test import utils
+
+from kiwipy import rmq
 
 
 class Process(plumpy.Process):
@@ -28,35 +34,31 @@ class CustomObjectLoader(plumpy.DefaultObjectLoader):
             return super().identify_object(obj)
 
 
-class TestProcessLauncher(testing.AsyncTestCase):
+@pytest.mark.asyncio
+async def test_continue():
+    persister = plumpy.InMemoryPersister()
+    load_context = plumpy.LoadSaveContext()
+    launcher = plumpy.ProcessLauncher(persister=persister, load_context=load_context)
 
-    def setUp(self):
-        super().setUp()
-        self.loop = self.io_loop
+    process = utils.DummyProcess()
+    pid = process.pid
+    persister.save_checkpoint(process)
+    del process
+    process = None
 
-    @testing.gen_test
-    def test_continue(self):
-        persister = plumpy.InMemoryPersister()
-        load_context = plumpy.LoadSaveContext(loop=self.loop)
-        launcher = plumpy.ProcessLauncher(persister=persister, load_context=load_context)
+    result = await launcher._continue(None, **plumpy.create_continue_body(pid)[process_comms.TASK_ARGS])
+    assert result == utils.DummyProcess.EXPECTED_OUTPUTS
 
-        process = test_utils.DummyProcess(loop=self.loop)
-        pid = process.pid
-        persister.save_checkpoint(process)
-        del process
-        process = None
 
-        result = yield launcher._continue(None, **plumpy.create_continue_body(pid)[process_comms.TASK_ARGS])
-        self.assertEqual(test_utils.DummyProcess.EXPECTED_OUTPUTS, result)
+@pytest.mark.asyncio
+async def test_loader_is_used():
+    """ Make sure that the provided class loader is used by the process launcher """
+    loader = CustomObjectLoader()
+    proc = Process()
+    persister = plumpy.InMemoryPersister(loader=loader)
+    persister.save_checkpoint(proc)
+    launcher = plumpy.ProcessLauncher(persister=persister, loader=loader)
 
-    @testing.gen_test
-    def test_loader_is_used(self):
-        """ Make sure that the provided class loader is used by the process launcher """
-        loader = CustomObjectLoader()
-        proc = Process()
-        persister = plumpy.InMemoryPersister(loader=loader)
-        persister.save_checkpoint(proc)
-        launcher = plumpy.ProcessLauncher(persister=persister, loader=loader)
-
-        continue_task = plumpy.create_continue_body(proc.pid)
-        yield launcher._continue(None, **continue_task[process_comms.TASK_ARGS])
+    continue_task = plumpy.create_continue_body(proc.pid)
+    result = await launcher._continue(None, **continue_task[process_comms.TASK_ARGS])
+    assert result == utils.DummyProcess.EXPECTED_OUTPUTS

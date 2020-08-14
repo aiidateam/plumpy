@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import inspect
-from tornado import gen
+import unittest
+import asyncio
 
+import pytest
 import plumpy
 from plumpy.workchains import *
 from plumpy.process_listener import ProcessListener
-import unittest
 
-from test import test_utils
 from . import utils
 
 
@@ -131,7 +131,7 @@ class TestContext(unittest.TestCase):
             wc.ctx['new_attr']
 
 
-class TestWorkchain(utils.TestCaseWithLoop):
+class TestWorkchain(unittest.TestCase):
     maxDiff = None
 
     def test_run(self):
@@ -381,12 +381,10 @@ class TestWorkchain(utils.TestCaseWithLoop):
         workchain.execute()
 
     def test_if_block_persistence(self):
-        wc = IfTest()
-        self.loop.add_callback(wc.step_until_terminated)
+        workchain = IfTest()
 
-        @gen.coroutine
-        def run_async(workchain):
-            yield test_utils.run_until_paused(workchain)
+        async def async_test():
+            await utils.run_until_paused(workchain)
             self.assertTrue(workchain.ctx.s1)
             self.assertFalse(workchain.ctx.s2)
 
@@ -402,11 +400,13 @@ class TestWorkchain(utils.TestCaseWithLoop):
             self.assertDictEqual(bundle, bundle2)
 
             workchain.play()
-            yield workchain.future()
+            await workchain.future()
             self.assertTrue(workchain.ctx.s1)
             self.assertTrue(workchain.ctx.s2)
 
-        self.loop.run_sync(lambda: run_async(wc))
+        loop = asyncio.get_event_loop()
+        loop.create_task(workchain.step_until_terminated())
+        loop.run_until_complete(async_test())
 
     def test_to_context(self):
         val = 5
@@ -467,7 +467,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
                 spec.outline(cls.begin, cls.check)
 
             def begin(self):
-                self.to_context(result_a=self.launch(test_utils.ExceptionProcess))
+                self.to_context(result_a=self.launch(utils.ExceptionProcess))
 
             def check(self):
                 raise my_exception
@@ -540,7 +540,7 @@ class TestWorkchain(utils.TestCaseWithLoop):
         self.assertListEqual(collector.stepper_strings, stepper_strings)
 
 
-class TestImmutableInputWorkchain(utils.TestCaseWithLoop):
+class TestImmutableInputWorkchain(unittest.TestCase):
     """
     Test that inputs cannot be modified
     """

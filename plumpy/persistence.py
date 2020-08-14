@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import abc
+import asyncio
 import collections
 import copy
 import errno
@@ -576,30 +577,62 @@ class Savable:
         return value
 
 
-@auto_persist('_done', '_result')
+@auto_persist('_state', '_result')
 class SavableFuture(futures.Future, Savable):
     """
     A savable future.
 
     .. note: This does not save any assigned done callbacks.
     """
-    EXCEPTION = 'exception'
 
     def save_instance_state(self, out_state, save_context):
         super().save_instance_state(out_state, save_context)
         if self.done() and self.exception() is not None:
-            out_state[self.EXCEPTION] = self.exception()
+            out_state['exception'] = self.exception()
+
+    @classmethod
+    def recreate_from(cls, saved_state, load_context=None):
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+        :type load_context: :class:`LoadSaveContext`
+        :return: The recreated instance
+        :rtype: :class:`Savable`
+        """
+        load_context = _ensure_object_loader(load_context, saved_state)
+
+        try:
+            loop = load_context.loop
+        except AttributeError:
+            loop = asyncio.get_event_loop()
+
+        state = saved_state['_state']
+
+        if state == asyncio.futures._PENDING:  # pylint: disable=protected-access
+            obj = cls(loop=loop)
+
+        if state == asyncio.futures._FINISHED:  # pylint: disable=protected-access
+            obj = cls(loop=loop)
+            result = saved_state['_result']
+
+            try:
+                exception = saved_state['exception']
+                obj.set_exception(exception)
+            except KeyError:
+                obj.set_result(result)
+
+        if state == asyncio.futures._CANCELLED:  # pylint: disable=protected-access
+            obj = cls(loop=loop)
+            obj.cancel()
+
+        return obj
 
     def load_instance_state(self, saved_state, load_context):
         # pylint: disable=attribute-defined-outside-init
         super().load_instance_state(saved_state, load_context)
-        try:
-            exception = saved_state[self.EXCEPTION]
-            self._exc_info = (type(exception), exception, None)
-        except KeyError:
-            self._exc_info = None
 
-        self._log_traceback = False  # Used for Python >= 3.4
-        self._tb_logger = None  # Used for Python <= 3.3
-
-        self._callbacks = []
+        if self._callbacks:
+            for callback in self._callbacks:
+                self.remove_done_callback(callback)
