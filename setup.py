@@ -3,7 +3,7 @@ from setuptools import setup
 
 __author__ = 'Martin Uhrin'
 __license__ = 'GPLv3 and MIT, see LICENSE file'
-__contributors__ = 'Sebastiaan Huber, Leopold Talirz, Dominik Gresch'
+__contributors__ = 'Sebastiaan Huber, Jason Yu, Leopold Talirz, Dominik Gresch'
 
 ABOUT = {}
 with open('plumpy/version.py') as f:
