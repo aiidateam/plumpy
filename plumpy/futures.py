@@ -2,7 +2,6 @@
 """
 Module containing future related methods and classes
 """
-
 import kiwipy
 from tornado import concurrent, gen, ioloop
 
@@ -83,9 +82,7 @@ class CancellableAction(Future):
 
 
 def create_task(coro, loop=None):
-    """
-    Schedule a call to a coroutine in the event loop and wrap the outcome
-    in a future.
+    """Schedule a call to a coroutine in the event loop and wrap the outcome in a future.
 
     :param coro: the coroutine to schedule
     :param loop: the event loop to schedule it in
@@ -93,13 +90,19 @@ def create_task(coro, loop=None):
     :rtype: :class:`tornado.concurrent.Future`
     """
     loop = loop or ioloop.IOLoop.current()
-
     future = concurrent.Future()
 
     @gen.coroutine
     def run_task():
-        with kiwipy.capture_exceptions(future):
-            future.set_result((yield coro()))
+        # Note, due to a bug in Python 3.5 through 3.7 in the `contextlib._GeneratorContextManager` class, where the
+        # `sys` module becomes unloaded too early, the exception `'NoneType' object has no attribute 'exc_info'` will
+        # be thrown. We capture it here and silence it, because it can be very noisy.
+        try:
+            with kiwipy.capture_exceptions(future):
+                future.set_result((yield coro()))
+        except AttributeError as exc:
+            if str(exc) != "'NoneType' object has no attribute 'exc_info'":
+                raise
 
     loop.add_callback(run_task)
     return future
