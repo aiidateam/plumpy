@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.15.1
+
+### Bug fixes
+- Suppress exception thrown in generator exit in `create_task` [[#169]](https://github.com/aiidateam/aiida-core/pull/169)
+
 
 ## v0.15.0
 
