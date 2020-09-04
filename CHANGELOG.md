@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.16.1
+
+### Changes
+- Dependencies: relax the requirement on `aio-pika` to `aio-pika~=6.6`. [[#171]](https://github.com/aiidateam/plumpy/pull/171)
+
+
 ## v0.16.0
 
 ### Changes
