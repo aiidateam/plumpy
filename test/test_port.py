@@ -32,6 +32,16 @@ class TestPort(TestCase):
         self.assertIsNone(spec.validate(5))
         self.assertIsNotNone(spec.validate('s'))
 
+    def test_validator_not_required(self):
+        """Verify that a validator is not called if no value is specified for a port that is not required."""
+
+        def validate(value, port):
+            raise RuntimeError
+
+        spec = Port('valid_with_validator', validator=validate, required=False)
+
+        self.assertIsNone(spec.validate(UNSPECIFIED))
+
 
 class TestInputPort(TestCase):
 
@@ -153,6 +163,10 @@ class TestPortNamespace(TestCase):
         # The explicit ports will be validated first before the namespace validator is called.
         self.assertIsNone(self.port_namespace.validate({'explicit': 1, 'dynamic': 5}))
         self.assertIsNotNone(self.port_namespace.validate({'dynamic': -5}))
+
+        # Validator should not be called if the namespace is not required and no value is specified for the namespace
+        self.port_namespace.required = False
+        self.assertIsNone(self.port_namespace.validate())
 
     def test_port_namespace_dynamic(self):
         """

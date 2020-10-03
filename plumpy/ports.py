@@ -188,7 +188,7 @@ class Port:
                 self.name, type(value), self._valid_type
             )
 
-        if not validation_error and self._validator is not None:
+        if not validation_error and self._validator is not None and value is not UNSPECIFIED:
             spec = inspect.getfullargspec(self.validator)
             if len(spec[0]) == 1:
                 warnings.warn(VALIDATOR_SIGNATURE_DEPRECATION_WARNING.format(self.validator.__name__))
