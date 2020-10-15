@@ -8,6 +8,7 @@ import kiwipy
 
 import plumpy
 from plumpy import Process, ProcessState, BundleKeys
+from plumpy import reentrant_on, reentrant_off
 from plumpy.utils import AttributesFrozendict
 from test import utils
 
@@ -604,8 +605,10 @@ class TestProcess(unittest.TestCase):
         for _ in range(n_run):
             to_run.append(ParentProcess().step_until_terminated())
 
+        reentrant_on()
         loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.gather(*to_run))
+        reentrant_off()
 
         assert all(expect_true)
 
@@ -613,7 +616,7 @@ class TestProcess(unittest.TestCase):
 
     def test_process_nested(self):
         """
-        Run multiple and nested processes to make sure the process stack is always correct
+        Run nested processes with loop reentrant by nest_asyncio
         """
 
         class StackTest(plumpy.Process):
@@ -626,7 +629,30 @@ class TestProcess(unittest.TestCase):
             def run(self):
                 StackTest().execute()
 
+        reentrant_on()
         ParentProcess().execute()
+        reentrant_off()
+
+        with self.assertRaises(RuntimeError):
+            ParentProcess().execute()
+
+    def test_process_nested_except(self):
+        """
+        Run nested processes without loop reentrant stack is wrong
+        """
+
+        class StackTest(plumpy.Process):
+
+            def run(self):
+                pass
+
+        class ParentProcess(plumpy.Process):
+
+            def run(self):
+                StackTest().execute()
+
+        with self.assertRaises(RuntimeError):
+            ParentProcess().execute()
 
     def test_call_soon(self):
 
