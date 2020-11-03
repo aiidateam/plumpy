@@ -8,7 +8,7 @@ import kiwipy
 
 import plumpy
 from plumpy import Process, ProcessState, BundleKeys
-from plumpy import reentrant_on, reentrant_off
+from plumpy import set_policy, reset_policy
 from plumpy.utils import AttributesFrozendict
 from test import utils
 
@@ -63,7 +63,36 @@ async def test_process_scope():
     await p1task, p2task
 
 
+class TestProcessWithoutReentrant(unittest.TestCase):
+
+    def test_process_nested_except(self):
+        """
+        Run nested processes without loop reentrant stack is wrong
+        """
+
+        class StackTest(plumpy.Process):
+
+            def run(self):
+                pass
+
+        class ParentProcess(plumpy.Process):
+
+            def run(self):
+                StackTest().execute()
+
+        with self.assertRaises(RuntimeError):
+            ParentProcess().execute()
+
+
 class TestProcess(unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        set_policy()
+
+    def tearDown(self) -> None:
+        super().setUp()
+        reset_policy()
 
     def test_spec(self):
         """
@@ -587,7 +616,6 @@ class TestProcess(unittest.TestCase):
         class StackTest(plumpy.Process):
 
             def run(self):
-                # TODO: unexpected behaviour here
                 # if assert error happend here not raise
                 # it will be handled by try except clause in process
                 # is there better way to handle this?
@@ -605,10 +633,8 @@ class TestProcess(unittest.TestCase):
         for _ in range(n_run):
             to_run.append(ParentProcess().step_until_terminated())
 
-        reentrant_on()
         loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.gather(*to_run))
-        reentrant_off()
 
         assert all(expect_true)
 
@@ -629,30 +655,7 @@ class TestProcess(unittest.TestCase):
             def run(self):
                 StackTest().execute()
 
-        reentrant_on()
         ParentProcess().execute()
-        reentrant_off()
-
-        with self.assertRaises(RuntimeError):
-            ParentProcess().execute()
-
-    def test_process_nested_except(self):
-        """
-        Run nested processes without loop reentrant stack is wrong
-        """
-
-        class StackTest(plumpy.Process):
-
-            def run(self):
-                pass
-
-        class ParentProcess(plumpy.Process):
-
-            def run(self):
-                StackTest().execute()
-
-        with self.assertRaises(RuntimeError):
-            ParentProcess().execute()
 
     def test_call_soon(self):
 

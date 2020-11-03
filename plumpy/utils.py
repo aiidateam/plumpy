@@ -9,11 +9,12 @@ from collections import deque, defaultdict
 
 import asyncio
 import frozendict
+import nest_asyncio
 
 from .settings import check_protected, check_override
 from . import lang
 
-__all__ = ['AttributesDict', 'reentrant_on', 'reentrant_off']
+__all__ = ['AttributesDict', 'set_policy', 'reset_policy', 'PlumpyEventLoopPolicy']
 
 protected = lang.protected(check=check_protected)  # pylint: disable=invalid-name
 override = lang.override(check=check_override)  # pylint: disable=invalid-name
@@ -268,23 +269,33 @@ def is_mutable_property(cls, attribute):
     return isinstance(attr, property) and attr.fset is not None
 
 
-def reentrant_on():
+class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+
+    def __init__(self):
+        super().__init__()
+        self._loop = None
+
+    def get_event_loop(self):
+        if self._loop is None:
+            self._loop = super().get_event_loop()
+
+        nest_asyncio.apply(self._loop)
+        return self._loop
+
+    def new_event_loop(self):
+        self._loop = super().new_event_loop()
+        nest_asyncio.apply(self._loop)
+        return self._loop
+
+
+def set_policy():
     """
     Use PlumpyEventLoopPolicy which use the single loop and the loop is reentrant
     """
-    import nest_asyncio
-
-    class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
-
-        def get_event_loop(self):
-            loop = super().get_event_loop()
-            nest_asyncio.apply(loop)
-            return loop
-
     asyncio.set_event_loop_policy(PlumpyEventLoopPolicy())
 
 
-def reentrant_off():
+def reset_policy():
     """
     Reset event loop policy to default. Since nest_asyncio reset the
     attributes of BaseEventLoop class, we need to set it back.
