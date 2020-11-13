@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.17.0
+
+### Changes
+- Add support for Python 3.9 [[#176]](https://github.com/aiidateam/plumpy/pull/176)
+- Make application of `nest_asyncio` patch explicit [[#179]](https://github.com/aiidateam/plumpy/pull/179)
+
+### Bug fixes
+- `Port`: do not call validator if unspecified and port not required [[#173]](https://github.com/aiidateam/plumpy/pull/173)
+
+
 ## v0.16.1
 
 ### Changes
