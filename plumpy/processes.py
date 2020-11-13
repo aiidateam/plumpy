@@ -15,7 +15,6 @@ from aiocontextvars import ContextVar
 from aio_pika.exceptions import ConnectionClosed
 import yaml
 import kiwipy
-import nest_asyncio
 
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -241,7 +240,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self.spec().seal()
 
         self._loop = loop if loop is not None else asyncio.get_event_loop()
-        nest_asyncio.apply(self._loop)
 
         self._setup_event_hooks()
 
