@@ -70,4 +70,4 @@ jobs:
 
         -   name: Run pytest
             run:
-                pytest -sv test
+                pytest -sv --cov=plumpy test
