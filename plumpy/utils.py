@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-from collections import deque, defaultdict
+from collections import deque
 import functools
 import importlib
 import inspect
 import logging
 import types
-from typing import Any, Callable, Hashable, List, Mapping, MutableMapping, Optional, Tuple, Type, TYPE_CHECKING
+from typing import Any, Callable, Hashable, List, MutableMapping, Optional, Tuple, Type, TYPE_CHECKING
 from typing import Set  # pylint: disable=unused-import
 
 import asyncio
@@ -173,18 +173,7 @@ def load_module(fullname: str) -> Tuple[types.ModuleType, deque]:
     return mod, remainder
 
 
-def wrap_dict(flat_dict: Mapping, separator: str = '.') -> dict:
-    sub_dicts: defaultdict = defaultdict(dict)
-    res: dict = {}
-    for key, value in flat_dict.items():
-        if separator in key:
-            namespace, sub_key = key.split(separator, 1)
-            sub_dicts[namespace][sub_key] = value
-        else:
-            res[key] = value
-    for namespace, sub_dict in sub_dicts.items():
-        res[namespace] = wrap_dict(sub_dict)
-    return res
+# TODO wrap_dict removed, because its not used or tested any where in this code base, or in aiida-core
 
 
 def type_check(obj: Any, expected_type: Type) -> None:
