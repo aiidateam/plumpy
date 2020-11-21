@@ -2,7 +2,7 @@
 """Module for general kiwipy communication methods"""
 import asyncio
 import functools
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import Any, Callable, Hashable, Optional, TYPE_CHECKING
 
 import kiwipy
 
@@ -19,15 +19,15 @@ TaskRejected = kiwipy.TaskRejected
 Communicator = kiwipy.Communicator
 
 if TYPE_CHECKING:
+    # identifiers for subscribers
+    ID_TYPE = Hashable  # pylint: disable=invalid-name
     Subscriber = Callable[..., Any]
     # RPC subscriber params: communicator, msg
     RpcSubscriber = Callable[[kiwipy.Communicator, Any], Any]
     # Task subscriber params: communicator, task
     TaskSubscriber = Callable[[kiwipy.Communicator, Any], Any]
     # Broadcast subscribers params: communicator, body, sender, subject, correlation id
-    BroadcastSubscriber = Callable[[kiwipy.Communicator, Any, Any, Any, Any], Any]
-    # TODO identifier type?
-    Identifier = Any
+    BroadcastSubscriber = Callable[[kiwipy.Communicator, Any, Any, Any, ID_TYPE], Any]
 
 
 def plum_to_kiwi_future(plum_future: futures.Future) -> kiwipy.Future:
@@ -116,31 +116,27 @@ class LoopCommunicator(kiwipy.Communicator):
     def loop(self) -> asyncio.AbstractEventLoop:
         return self._loop
 
-    def add_rpc_subscriber(
-        self, subscriber: 'RpcSubscriber', identifier: Optional['Identifier'] = None
-    ) -> 'Identifier':
+    def add_rpc_subscriber(self, subscriber: 'RpcSubscriber', identifier: Optional['ID_TYPE'] = None) -> 'ID_TYPE':
         converted = convert_to_comm(subscriber, self._loop)
         return self._communicator.add_rpc_subscriber(converted, identifier)
 
-    def remove_rpc_subscriber(self, identifier: 'Identifier') -> None:
+    def remove_rpc_subscriber(self, identifier: 'ID_TYPE') -> None:
         return self._communicator.remove_rpc_subscriber(identifier)
 
-    def add_task_subscriber(
-        self, subscriber: 'TaskSubscriber', identifier: Optional['Identifier'] = None
-    ) -> 'Identifier':
+    def add_task_subscriber(self, subscriber: 'TaskSubscriber', identifier: Optional['ID_TYPE'] = None) -> 'ID_TYPE':
         converted = convert_to_comm(subscriber, self._loop)
         return self._communicator.add_task_subscriber(converted, identifier)
 
-    def remove_task_subscriber(self, identifier: 'Identifier') -> None:
+    def remove_task_subscriber(self, identifier: 'ID_TYPE') -> None:
         return self._communicator.remove_task_subscriber(identifier)
 
     def add_broadcast_subscriber(
-        self, subscriber: 'BroadcastSubscriber', identifier: Optional[str] = None
-    ) -> 'Identifier':
+        self, subscriber: 'BroadcastSubscriber', identifier: Optional['ID_TYPE'] = None
+    ) -> 'ID_TYPE':
         converted = convert_to_comm(subscriber, self._loop)
         return self._communicator.add_broadcast_subscriber(converted, identifier)
 
-    def remove_broadcast_subscriber(self, identifier: 'Identifier') -> None:
+    def remove_broadcast_subscriber(self, identifier: 'ID_TYPE') -> None:
         return self._communicator.remove_broadcast_subscriber(identifier)
 
     # TODO type of task and msg; dict?
@@ -148,15 +144,15 @@ class LoopCommunicator(kiwipy.Communicator):
     def task_send(self, task: Any, no_reply: bool = False) -> futures.Future:
         return self._communicator.task_send(task, no_reply)
 
-    def rpc_send(self, recipient_id: 'Identifier', msg: Any) -> futures.Future:
+    def rpc_send(self, recipient_id: 'ID_TYPE', msg: Any) -> futures.Future:
         return self._communicator.rpc_send(recipient_id, msg)
 
     def broadcast_send(
         self,
-        body: Optional[str],
+        body: Optional[Any],
         sender: Optional[str] = None,
         subject: Optional[str] = None,
-        correlation_id: Optional[int] = None
+        correlation_id: Optional['ID_TYPE'] = None
     ) -> futures.Future:
         return self._communicator.broadcast_send(body, sender, subject, correlation_id)
 
