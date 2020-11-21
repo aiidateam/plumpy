@@ -54,14 +54,15 @@ class CancellableAction(Future):
             self._action = None  # type: ignore
 
 
-def create_task(coro: Coroutine, loop: Optional[asyncio.AbstractEventLoop] = None) -> Future:
+def create_task(coro: Callable[[], Coroutine], loop: Optional[asyncio.AbstractEventLoop] = None) -> Future:
     """
     Schedule a call to a coro in the event loop and wrap the outcome
     in a future.
-    :param coro: the coro to schedule
+
+    :param coro: a function which creates the coroutine to schedule
     :param loop: the event loop to schedule it in
     :return: the future representing the outcome of the coroutine
-    :rtype: :class:`plumpy.Future`
+
     """
     loop = loop or asyncio.get_event_loop()
 
@@ -69,8 +70,7 @@ def create_task(coro: Coroutine, loop: Optional[asyncio.AbstractEventLoop] = Non
 
     async def run_task() -> None:
         with kiwipy.capture_exceptions(future):
-            # TODO error: "Coroutine[Any, Any, Any]" not callable
-            res = await coro()  # type: ignore
+            res = await coro()
             future.set_result(res)
 
     asyncio.run_coroutine_threadsafe(run_task(), loop)
@@ -84,10 +84,10 @@ def unwrap_kiwi_future(future: kiwipy.Future) -> kiwipy.Future:
     future will not resolve to a value until the final chain of futures is not a future
     but a concrete value.  If at any point in the chain a future resolves to an exception
     then the returned future will also resolve to that exception.
+
     :param future: the future to unwrap
-    :type future: :class:`kiwipy.Future`
     :return: the unwrapping future
-    :rtype: :class:`kiwipy.Future`
+
     """
     unwrapping = kiwipy.Future()
 

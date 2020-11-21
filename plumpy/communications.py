@@ -71,7 +71,7 @@ def convert_to_comm(callback: 'Subscriber',
 
     def converted(communicator: kiwipy.Communicator, *args: Any, **kwargs: Any) -> kiwipy.Future:
         msg_fn = functools.partial(coro, communicator, *args, **kwargs)
-        task_future = futures.create_task(msg_fn, loop)  # type: ignore
+        task_future = futures.create_task(msg_fn, loop)
         return plum_to_kiwi_future(task_future)
 
     return converted
