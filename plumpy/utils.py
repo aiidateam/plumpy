@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
+from collections import deque, defaultdict
+import functools
 import importlib
 import inspect
 import logging
-import threading
 import types
-import functools
-from collections import deque, defaultdict
+from typing import Any, Callable, Hashable, List, Mapping, MutableMapping, Optional, Tuple, Type, TYPE_CHECKING
+from typing import Set  # pylint: disable=unused-import
 
 import asyncio
 import frozendict
 
 from .settings import check_protected, check_override
 from . import lang
+
+if TYPE_CHECKING:
+    from .processes import ProcessListener  # pylint: disable=cyclic-import
 
 __all__ = ['AttributesDict']
 
@@ -20,30 +24,40 @@ override = lang.override(check=check_override)  # pylint: disable=invalid-name
 
 _LOGGER = logging.getLogger(__name__)
 
+SAVED_STATE_TYPE = MutableMapping[str, Any]  # pylint: disable=invalid-name
+PID_TYPE = Hashable
+
 
 class EventHelper:
 
-    def __init__(self, listener_type):
+    def __init__(self, listener_type: 'Type[ProcessListener]'):
         assert listener_type is not None, 'Must provide valid listener type'
 
         self._listener_type = listener_type
-        self._listeners = set()
+        self._listeners: 'Set[ProcessListener]' = set()
 
-    def add_listener(self, listener):
+    def add_listener(self, listener: 'ProcessListener') -> None:
         assert isinstance(listener, self._listener_type), 'Listener is not of right type'
         self._listeners.add(listener)
 
-    def remove_listener(self, listener):
+    def remove_listener(self, listener: 'ProcessListener') -> None:
         self._listeners.discard(listener)
 
-    def remove_all_listeners(self):
+    def remove_all_listeners(self) -> None:
         self._listeners.clear()
 
     @property
-    def listeners(self):
+    def listeners(self) -> 'Set[ProcessListener]':
         return self._listeners
 
-    def fire_event(self, event_function, *args, **kwargs):
+    def fire_event(self, event_function: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+        """Call an event method on all listeners.
+
+        :param event_function: the method of the ProcessListener
+        :param args: arguments to pass to the method
+        :param kwargs: keyword arguments to pass to the method
+
+        """
         if event_function is None:
             raise ValueError('Must provide valid event method')
 
@@ -55,62 +69,17 @@ class EventHelper:
                 _LOGGER.error("Listener '%s' produced an exception:\n%s", listener, exception)
 
 
-class ListenContext:
-    """
-    A context manager for listening to producer that can generate messages.
-    The requirements for the producer are that it has methods:
-    * start_listening(..), and,
-    * stop_listening(..)
-    and that these methods take zero or more arguments that identify the
-    listener and perhaps what it wants to listen to if this make sense for
-    the producer/listener combination.
-
-    A typical usage would be:
-    with ListenContext(producer, listener):
-        # Producer generates messages that the listener gets
-        pass
-    """
-
-    def __init__(self, producer, *args, **kwargs):
-        self._producer = producer
-        self._args = args
-        self._kwargs = kwargs
-
-    def __enter__(self):
-        self._producer.add_listener(*self._args, **self._kwargs)
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        self._producer.remove_listener(*self._args, **self._kwargs)
-
-
-class ThreadSafeCounter:
-
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.counter = 0
-
-    def increment(self):
-        with self.lock:
-            self.counter += 1
-
-    def decrement(self):
-        with self.lock:
-            self.counter -= 1
-
-    @property
-    def value(self):
-        with self.lock:
-            return self.counter
+# TODO I deleted ListenContext and ThreadSafeCounter,
+# because they not used or tested any where in this code base, or in aiida-core
 
 
 class AttributesFrozendict(frozendict.frozendict):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
-        self._initialised = True
+        self._initialised: bool = True
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> Any:
         """
         Read a key as an attribute. Raise AttributeError on missing key.
         Called only for attributes that do not exist.
@@ -126,7 +95,7 @@ class AttributesFrozendict(frozendict.frozendict):
             errmsg = "'{}' object has no attribute '{}'".format(self.__class__.__name__, attr)
             raise AttributeError(errmsg)
 
-    def __dir__(self):
+    def __dir__(self) -> List[str]:
         """
         So we get tab completion.
         :return: The keys of the dict
@@ -136,26 +105,26 @@ class AttributesFrozendict(frozendict.frozendict):
 
 class AttributesDict(types.SimpleNamespace):
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Any) -> None:
         setattr(self, key, value)
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: str) -> Any:
         try:
             return getattr(self, item)
         except AttributeError:
             raise KeyError("No key '{}'".format(item))
 
-    def __delitem__(self, item):
+    def __delitem__(self, item: str) -> None:
         return delattr(self, item)
 
-    def setdefault(self, key, value):
+    def setdefault(self, key: str, value: Any) -> Any:
         return self.__dict__.setdefault(key, value)
 
-    def get(self, *args, **kwargs):
+    def get(self, *args: Any, **kwargs: Any) -> Any:
         return self.__dict__.get(*args, **kwargs)
 
 
-def load_function(name, instance=None):
+def load_function(name: str, instance: Optional[Any] = None) -> Callable[..., Any]:
     obj = load_object(name)
     if inspect.ismethod(obj):
         if instance is not None:
@@ -169,7 +138,7 @@ def load_function(name, instance=None):
     raise ValueError("Invalid function name '{}'".format(name))
 
 
-def load_object(fullname):
+def load_object(fullname: str) -> Any:
     """
     Load a class from a string
     """
@@ -185,12 +154,12 @@ def load_object(fullname):
     return obj
 
 
-def load_module(fullname):
+def load_module(fullname: str) -> Tuple[types.ModuleType, deque]:
     parts = fullname.split('.')
 
     # Try to find the module, working our way from the back
     mod = None
-    remainder = deque()
+    remainder: deque = deque()
     for _ in range(len(parts)):
         try:
             mod = importlib.import_module('.'.join(parts))
@@ -204,9 +173,9 @@ def load_module(fullname):
     return mod, remainder
 
 
-def wrap_dict(flat_dict, separator='.'):
-    sub_dicts = defaultdict(dict)
-    res = {}
+def wrap_dict(flat_dict: Mapping, separator: str = '.') -> dict:
+    sub_dicts: defaultdict = defaultdict(dict)
+    res: dict = {}
     for key, value in flat_dict.items():
         if separator in key:
             namespace, sub_key = key.split(separator, 1)
@@ -218,12 +187,12 @@ def wrap_dict(flat_dict, separator='.'):
     return res
 
 
-def type_check(obj, expected_type):
+def type_check(obj: Any, expected_type: Type) -> None:
     if not isinstance(obj, expected_type):
         raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
 
 
-def ensure_coroutine(coro_or_fn):
+def ensure_coroutine(coro_or_fn: Any) -> Callable[..., Any]:
     """
     Ensure that the given function ``fct`` is a coroutine
 
@@ -243,7 +212,7 @@ def ensure_coroutine(coro_or_fn):
             coro_or_fn = coro_or_fn.__call__
 
         @functools.wraps(coro_or_fn)
-        async def wrap(*args, **kwargs):
+        async def wrap(*args: Any, **kwargs: Any) -> Callable[..., Any]:
             return coro_or_fn(*args, **kwargs)
 
         return wrap
@@ -251,7 +220,7 @@ def ensure_coroutine(coro_or_fn):
     raise TypeError('coro_or_fn must be a callable')
 
 
-def is_mutable_property(cls, attribute):
+def is_mutable_property(cls: Any, attribute: str) -> bool:
     """
     Determine whether the given attribute is a mutable property of cls. That is to say that
     the attribute corresponds to a property whose fset attribute is not None.

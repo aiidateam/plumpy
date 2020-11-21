@@ -3,7 +3,7 @@
 Module containing future related methods and classes
 """
 import asyncio
-from typing import Coroutine
+from typing import Any, Callable, Coroutine, Optional
 
 import kiwipy
 
@@ -28,19 +28,19 @@ class CancellableAction(Future):
     An action that can be launched and potentially cancelled
     """
 
-    def __init__(self, action, cookie=None):
+    def __init__(self, action: Callable[..., Any], cookie: Any = None):
         super().__init__()
         self._action = action
         self._cookie = cookie
 
     @property
-    def cookie(self):
+    def cookie(self) -> Any:
         """ A cookie that can be used to correlate the actions with something """
         return self._cookie
 
-    def run(self, *args, **kwargs):
-        """
-        Runt he action
+    def run(self, *args: Any, **kwargs: Any) -> None:
+        """Run the action
+
         :param args: the positional arguments to the action
         :param kwargs: the keyword arguments to the action
         """
@@ -51,10 +51,10 @@ class CancellableAction(Future):
             with kiwipy.capture_exceptions(self):
                 self.set_result(self._action(*args, **kwargs))
         finally:
-            self._action = None
+            self._action = None  # type: ignore
 
 
-def create_task(coro: Coroutine, loop=None):
+def create_task(coro: Coroutine, loop: Optional[asyncio.AbstractEventLoop] = None) -> Future:
     """
     Schedule a call to a coro in the event loop and wrap the outcome
     in a future.
@@ -67,16 +67,17 @@ def create_task(coro: Coroutine, loop=None):
 
     future = loop.create_future()
 
-    async def run_task():
+    async def run_task() -> None:
         with kiwipy.capture_exceptions(future):
-            res = await coro()
+            # TODO error: "Coroutine[Any, Any, Any]" not callable
+            res = await coro()  # type: ignore
             future.set_result(res)
 
     asyncio.run_coroutine_threadsafe(run_task(), loop)
     return future
 
 
-def unwrap_kiwi_future(future):
+def unwrap_kiwi_future(future: kiwipy.Future) -> kiwipy.Future:
     """
     Create a kiwi future that represents the final results of a nested series of futures,
     meaning that if the futures provided itself resolves to a future the returned
@@ -90,7 +91,7 @@ def unwrap_kiwi_future(future):
     """
     unwrapping = kiwipy.Future()
 
-    def unwrap(fut):
+    def unwrap(fut: kiwipy.Future) -> None:
         if fut.cancelled():
             unwrapping.cancel()
         else:

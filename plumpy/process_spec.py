@@ -2,8 +2,12 @@
 import collections
 import json
 import logging
+from typing import Any, cast, Dict, Optional, Sequence, Type, TYPE_CHECKING, Union
 
-from .ports import PortNamespace, InputPort, OutputPort
+from .ports import Port, PortNamespace, InputPort, OutputPort
+
+if TYPE_CHECKING:
+    from .processes import Process  # pylint: disable=cyclic-import
 
 
 class ProcessSpec:
@@ -16,43 +20,43 @@ class ProcessSpec:
 
     Every Process class has one of these.
     """
-    NAME_INPUTS_PORT_NAMESPACE = 'inputs'
-    NAME_OUTPUTS_PORT_NAMESPACE = 'outputs'
+    NAME_INPUTS_PORT_NAMESPACE: str = 'inputs'
+    NAME_OUTPUTS_PORT_NAMESPACE: str = 'outputs'
     PORT_NAMESPACE_TYPE = PortNamespace
     INPUT_PORT_TYPE = InputPort
     OUTPUT_PORT_TYPE = OutputPort
 
-    def __init__(self):
-        self._ports = self.PORT_NAMESPACE_TYPE()
-        self._validator = None
-        self._sealed = False
+    def __init__(self) -> None:
+        self._ports: PortNamespace = self.PORT_NAMESPACE_TYPE()
+        # self._validator = None  # this is never used
+        self._sealed: bool = False
         self._logger = logging.getLogger(__name__)
 
         # Create the input and output port namespace
         self._ports.create_port_namespace(self.NAME_INPUTS_PORT_NAMESPACE)
         self._ports.create_port_namespace(self.NAME_OUTPUTS_PORT_NAMESPACE)
-        self._exposed_inputs = collections.defaultdict(lambda: collections.defaultdict(list))
-        self._exposed_outputs = collections.defaultdict(lambda: collections.defaultdict(list))
+        self._exposed_inputs: dict = collections.defaultdict(lambda: collections.defaultdict(list))
+        self._exposed_outputs: dict = collections.defaultdict(lambda: collections.defaultdict(list))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return json.dumps(self.get_description(), sort_keys=True, indent=4)
 
     @property
-    def namespace_separator(self):
+    def namespace_separator(self) -> str:
         return self.PORT_NAMESPACE_TYPE.NAMESPACE_SEPARATOR
 
     @property
-    def logger(self):
+    def logger(self) -> logging.Logger:
         return self._logger
 
-    def seal(self):
+    def seal(self) -> None:
         """
         Seal this specification disallowing any further changes
         """
         self._sealed = True
 
     @property
-    def sealed(self):
+    def sealed(self) -> bool:
         """
         Indicates if the spec is sealed or not
 
@@ -61,7 +65,7 @@ class ProcessSpec:
         """
         return self._sealed
 
-    def get_description(self):
+    def get_description(self) -> Dict[str, Any]:
         """
         Get a description of this process specification
 
@@ -72,28 +76,30 @@ class ProcessSpec:
         return description
 
     @property
-    def ports(self):
+    def ports(self) -> PortNamespace:
         return self._ports
 
     @property
-    def inputs(self):
+    def inputs(self) -> PortNamespace:
         """
         Get the input port namespace of the process specification
 
         :return: the input PortNamespace
         """
-        return self._ports[self.NAME_INPUTS_PORT_NAMESPACE]
+        return cast(PortNamespace, self._ports[self.NAME_INPUTS_PORT_NAMESPACE])
 
     @property
-    def outputs(self):
+    def outputs(self) -> PortNamespace:
         """
         Get the output port namespace of the process specification
 
         :return: the outputs PortNamespace
         """
-        return self._ports[self.NAME_OUTPUTS_PORT_NAMESPACE]
+        return cast(PortNamespace, self._ports[self.NAME_OUTPUTS_PORT_NAMESPACE])
 
-    def _create_port(self, port_namespace, port_class, name, **kwargs):
+    def _create_port(
+        self, port_namespace: PortNamespace, port_class: Type[Union[Port, PortNamespace]], name: str, **kwargs: Any
+    ) -> None:
         """
         Create a new Port of a given class and name in a given PortNamespace
 
@@ -105,16 +111,16 @@ class ProcessSpec:
         if self.sealed:
             raise RuntimeError('Cannot add an output port after the spec has been sealed')
 
-        namespace = name.split(self.namespace_separator)
-        port_name = namespace.pop()
+        namespace_parts = name.split(self.namespace_separator)
+        port_name = namespace_parts.pop()
 
-        if namespace:
-            namespace = self.namespace_separator.join(namespace)
+        if namespace_parts:
+            namespace = self.namespace_separator.join(namespace_parts)
             port_namespace = port_namespace.create_port_namespace(namespace)
 
         port_namespace[port_name] = port_class(port_name, **kwargs)
 
-    def input(self, name, **kwargs):
+    def input(self, name: str, **kwargs: Any) -> None:
         """
         Define an input port in the input port namespace
 
@@ -123,7 +129,7 @@ class ProcessSpec:
         """
         self._create_port(self.inputs, self.INPUT_PORT_TYPE, name, **kwargs)
 
-    def output(self, name, **kwargs):
+    def output(self, name: str, **kwargs: Any) -> None:
         """
         Define an output port in the output port namespace
 
@@ -132,7 +138,7 @@ class ProcessSpec:
         """
         self._create_port(self.outputs, self.OUTPUT_PORT_TYPE, name, **kwargs)
 
-    def input_namespace(self, name, **kwargs):
+    def input_namespace(self, name: str, **kwargs: Any) -> None:
         """
         Create a new PortNamespace in the input port namespace. The keyword arguments will be
         passed to the PortNamespace constructor. Any intermediate port namespaces that need to
@@ -143,7 +149,7 @@ class ProcessSpec:
         """
         self._create_port(self.inputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
 
-    def output_namespace(self, name, **kwargs):
+    def output_namespace(self, name: str, **kwargs: Any) -> None:
         """
         Create a new PortNamespace in the output port namespace. The keyword arguments will be
         passed to the PortNamespace constructor. Any intermediate port namespaces that need to
@@ -154,7 +160,7 @@ class ProcessSpec:
         """
         self._create_port(self.outputs, self.PORT_NAMESPACE_TYPE, name, **kwargs)
 
-    def has_input(self, name):
+    def has_input(self, name: str) -> bool:
         """
         Return whether the input port namespace contains a port with the given name
 
@@ -162,7 +168,7 @@ class ProcessSpec:
         """
         return name in self.inputs
 
-    def has_output(self, name):
+    def has_output(self, name: str) -> bool:
         """
         Return whether the output port namespace contains a port with the given name
 
@@ -170,7 +176,14 @@ class ProcessSpec:
         """
         return name in self.outputs
 
-    def expose_inputs(self, process_class, namespace=None, exclude=None, include=None, namespace_options=None):
+    def expose_inputs(
+        self,
+        process_class: Type['Process'],
+        namespace: Optional[str] = None,
+        exclude: Optional[Sequence[str]] = None,
+        include: Optional[Sequence[str]] = None,
+        namespace_options: Optional[dict] = None
+    ) -> None:
         """
         This method allows one to automatically add the inputs from another Process to this ProcessSpec.
         The optional namespace argument can be used to group the exposed inputs in a separated PortNamespace.
@@ -179,8 +192,8 @@ class ProcessSpec:
 
         :param process_class: the Process class whose inputs to expose
         :param namespace: a namespace in which to place the exposed inputs
-        :param exclude: list or tuple of input ports that are to be excluded
-        :param include: list or tuple of input ports that are to be included
+        :param exclude: input ports that are to be excluded
+        :param include: input ports that are to be included
         :param namespace_options: a dictionary with mutable PortNamespace property values to override
         """
         self._expose_ports(
@@ -194,7 +207,14 @@ class ProcessSpec:
             namespace_options=namespace_options,
         )
 
-    def expose_outputs(self, process_class, namespace=None, exclude=None, include=None, namespace_options=None):
+    def expose_outputs(
+        self,
+        process_class: Type['Process'],
+        namespace: Optional[str] = None,
+        exclude: Optional[Sequence[str]] = None,
+        include: Optional[Sequence[str]] = None,
+        namespace_options: Optional[dict] = None
+    ) -> None:
         """
         This method allows one to automatically add the ouputs from another Process to this ProcessSpec.
         The optional namespace argument can be used to group the exposed outputs in a separated PortNamespace.
@@ -203,8 +223,8 @@ class ProcessSpec:
 
         :param process_class: the Process class whose outputs to expose
         :param namespace: a namespace in which to place the exposed outputs
-        :param exclude: list or tuple of input ports that are to be excluded
-        :param include: list or tuple of input ports that are to be included
+        :param exclude: input ports that are to be excluded
+        :param include: input ports that are to be included
         :param namespace_options: a dictionary with mutable PortNamespace property values to override
         """
         self._expose_ports(
@@ -220,15 +240,15 @@ class ProcessSpec:
 
     @staticmethod
     def _expose_ports(
-        process_class,
-        source,
-        destination,
-        expose_memory,
-        namespace,
-        exclude,
-        include,
-        namespace_options=None
-    ):  # pylint: disable=too-many-arguments
+        process_class: Type['Process'],
+        source: PortNamespace,
+        destination: PortNamespace,
+        expose_memory: dict,
+        namespace: Optional[str],
+        exclude: Optional[Sequence[str]],
+        include: Optional[Sequence[str]],
+        namespace_options: Optional[dict] = None
+    ) -> None:  # pylint: disable=too-many-arguments
         """
         Expose ports from a source PortNamespace of the ProcessSpec of a Process class into the destination
         PortNamespace of this ProcessSpec. If the namespace is specified, the ports will be exposed in that sub
@@ -240,8 +260,8 @@ class ProcessSpec:
         :param source: the PortNamespace whose ports are to be exposed
         :param destination: the PortNamespace into which the ports are to be exposed
         :param namespace: a namespace in which to place PortNamespace with the exposed outputs
-        :param exclude: list or tuple of input ports that are to be excluded
-        :param include: list or tuple of input ports that are to be included
+        :param exclude: input ports that are to be excluded
+        :param include: input ports that are to be included
         :param namespace_options: a dictionary with mutable PortNamespace property values to override
         """
         if namespace_options is None:

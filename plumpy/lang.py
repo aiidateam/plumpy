@@ -4,11 +4,12 @@ Python language utilities and tools.
 """
 import functools
 import inspect
+from typing import Any, Callable
 
 
-def protected(check=False):
+def protected(check: bool = False) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
 
-    def wrap(func):
+    def wrap(func: Callable[..., Any]) -> Callable[..., Any]:
         if isinstance(func, property):
             raise RuntimeError('Protected must go after @property decorator')
 
@@ -21,7 +22,7 @@ def protected(check=False):
         if check and inspect.currentframe() is not None:
 
             @functools.wraps(func)
-            def wrapped_fn(self, *args, **kwargs):
+            def wrapped_fn(self: Any, *args: Any, **kwargs: Any) -> Callable[..., Any]:
                 try:
                     calling_class = inspect.stack()[1][0].f_locals['self']
                     assert self is calling_class
@@ -40,9 +41,9 @@ def protected(check=False):
     return wrap
 
 
-def override(check=False):
+def override(check: bool = False) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
 
-    def wrap(func):
+    def wrap(func: Callable[..., Any]) -> Callable[..., Any]:
         if isinstance(func, property):
             raise RuntimeError('Override must go after @property decorator')
 
@@ -53,7 +54,7 @@ def override(check=False):
         if check:
 
             @functools.wraps(func)
-            def wrapped_fn(self, *args, **kwargs):
+            def wrapped_fn(self: Any, *args: Any, **kwargs: Any) -> Callable[..., Any]:
                 try:
                     getattr(super(self.__class__, self), func.__name__)
                 except AttributeError:
@@ -70,7 +71,7 @@ def override(check=False):
 
 class __NULL:  # pylint: disable=invalid-name
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         return isinstance(other, self.__class__)
 
 

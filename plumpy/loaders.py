@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import abc
 import importlib
+from typing import Any, Optional
 
 __all__ = ['ObjectLoader', 'DefaultObjectLoader', 'set_object_loader', 'get_object_loader']
 
@@ -12,7 +13,7 @@ class ObjectLoader(metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
-    def load_object(self, identifier):
+    def load_object(self, identifier: str) -> Any:
         """
         Given an identifier load an object.
 
@@ -23,7 +24,7 @@ class ObjectLoader(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def identify_object(self, obj):
+    def identify_object(self, obj: Any) -> str:
         """
         Get an identifier for an object.
 
@@ -40,29 +41,29 @@ class DefaultObjectLoader(ObjectLoader):
     classes, functions and constants.
     """
 
-    def load_object(self, identifier):
-        mod, name = identifier.split(':')
+    def load_object(self, identifier: str) -> Any:
+        mod_name, name = identifier.split(':')
         try:
-            mod = importlib.import_module(mod)
+            mod = importlib.import_module(mod_name)
         except ImportError:
-            raise ValueError("module '{}' from identifier '{}' could not be loaded".format(mod, identifier))
+            raise ValueError(f"module '{mod}' from identifier '{identifier}' could not be loaded")
         else:
             try:
                 return getattr(mod, name)
             except AttributeError:
-                raise ValueError("object '{}' form identifier '{}' could not be loaded".format(name, identifier))
+                raise ValueError(f"object '{name}' form identifier '{identifier}' could not be loaded")
 
-    def identify_object(self, obj):
+    def identify_object(self, obj: Any) -> str:
         identifier = '{}:{}'.format(obj.__module__, obj.__name__)
         # Make sure we can load the object
         self.load_object(identifier)
         return identifier
 
 
-OBJECT_LOADER = None
+OBJECT_LOADER: Optional[ObjectLoader] = None
 
 
-def get_object_loader():
+def get_object_loader() -> ObjectLoader:
     """
     Get the plumpy global class loader
 
@@ -75,7 +76,7 @@ def get_object_loader():
     return OBJECT_LOADER
 
 
-def set_object_loader(loader):
+def set_object_loader(loader: Optional[ObjectLoader]) -> None:
     """
     Set the plumpy global object loader
 

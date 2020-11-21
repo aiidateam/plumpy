@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=undefined-variable
+# type: ignore
 from .state_machine import *
 from .utils import *
 
