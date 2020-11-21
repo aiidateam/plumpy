@@ -9,6 +9,8 @@ from .ports import Port, PortNamespace, InputPort, OutputPort
 if TYPE_CHECKING:
     from .processes import Process  # pylint: disable=cyclic-import
 
+EXPOSED_TYPE = Dict[Optional[str], Dict[Type['Process'], Sequence[str]]]  # pylint: disable=invalid-name
+
 
 class ProcessSpec:
     """
@@ -35,8 +37,8 @@ class ProcessSpec:
         # Create the input and output port namespace
         self._ports.create_port_namespace(self.NAME_INPUTS_PORT_NAMESPACE)
         self._ports.create_port_namespace(self.NAME_OUTPUTS_PORT_NAMESPACE)
-        self._exposed_inputs: dict = collections.defaultdict(lambda: collections.defaultdict(list))
-        self._exposed_outputs: dict = collections.defaultdict(lambda: collections.defaultdict(list))
+        self._exposed_inputs: EXPOSED_TYPE = collections.defaultdict(lambda: collections.defaultdict(list))
+        self._exposed_outputs: EXPOSED_TYPE = collections.defaultdict(lambda: collections.defaultdict(list))
 
     def __str__(self) -> str:
         return json.dumps(self.get_description(), sort_keys=True, indent=4)
@@ -243,7 +245,7 @@ class ProcessSpec:
         process_class: Type['Process'],
         source: PortNamespace,
         destination: PortNamespace,
-        expose_memory: dict,
+        expose_memory: EXPOSED_TYPE,
         namespace: Optional[str],
         exclude: Optional[Sequence[str]],
         include: Optional[Sequence[str]],

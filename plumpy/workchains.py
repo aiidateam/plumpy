@@ -384,7 +384,7 @@ class _Conditional:
 
     @property
     def body(self) -> _Block:
-        assert self._body is not None  # TODO this was added
+        assert self._body is not None, 'Instructions have not yet been set'
         return self._body
 
     @property
@@ -395,7 +395,7 @@ class _Conditional:
         return self._predicate(workflow)
 
     def __call__(self, *instructions: Union[_Instruction, WC_COMMAND_TYPE]) -> _Instruction:
-        assert self._body is None
+        assert self._body is None, 'Instructions have already been set'
         self._body = _Block(instructions)
         return self._parent
 

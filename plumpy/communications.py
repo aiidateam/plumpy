@@ -35,9 +35,8 @@ def plum_to_kiwi_future(plum_future: futures.Future) -> kiwipy.Future:
     Return a kiwi future that resolves to the outcome of the plum future
 
     :param plum_future: the plum future
-    :type plum_future: :class:`plumpy.Future`
     :return: the kiwipy future
-    :rtype: :class:`kiwipy.Future`
+
     """
     kiwi_future = kiwipy.Future()
 
