@@ -525,7 +525,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         Ask the process to save its current instance state.
 
         :param out_state: A bundle to save the state to
-        :type out_state: :class:`plumpy.Bundle`
         :param save_context: The save context
         """
         super().save_instance_state(out_state, save_context)

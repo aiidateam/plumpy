@@ -643,7 +643,7 @@ class SavableFuture(futures.Future, Savable):
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext) -> None:
         # pylint: disable=attribute-defined-outside-init
         super().load_instance_state(saved_state, load_context)
-        # TODO according to types self._callbacks should first be called, i.e. self._callbacks()
         if self._callbacks:
+            # typing says asyncio.Future._callbacks needs to be called, but in the python 3.7 code it is a simple list
             for callback in self._callbacks:  # type: ignore
                 self.remove_done_callback(callback)
