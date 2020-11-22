@@ -405,7 +405,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if isinstance(self._state, process_states.Finished):
             return self._state.result
         if isinstance(self._state, process_states.Killed):
-            raise exceptions.KilledError()
+            raise exceptions.KilledError(self._state.msg)
         if isinstance(self._state, process_states.Excepted):
             raise (self._state.exception or Exception('process excepted'))
 
@@ -435,7 +435,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     def killed(self) -> bool:
         return self.state == process_states.ProcessState.KILLED
 
-    def killed_msg(self) -> str:
+    def killed_msg(self) -> Optional[str]:
         if isinstance(self._state, process_states.Killed):
             return self._state.msg
 
@@ -763,7 +763,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._fire_event(ProcessListener.on_process_excepted, str(self.future().exception()))
 
     @super_check
-    def on_kill(self, msg: str) -> None:
+    def on_kill(self, msg: Optional[str]) -> None:
         self.set_status(msg)
         self.future().set_exception(exceptions.KilledError(msg))
 

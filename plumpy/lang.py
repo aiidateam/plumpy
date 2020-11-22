@@ -42,6 +42,7 @@ def protected(check: bool = False) -> Callable[[Callable[..., Any]], Callable[..
 
 
 def override(check: bool = False) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Decorator to override a superclass method."""
 
     def wrap(func: Callable[..., Any]) -> Callable[..., Any]:
         if isinstance(func, property):

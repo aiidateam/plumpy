@@ -250,8 +250,7 @@ class Running(State):
 
     def _action_command(self, command: Union[Kill, Stop, Wait, Continue]) -> State:
         if isinstance(command, Kill):
-            # TODO error: "Kill" has no attribute "result"/"successful"
-            state = self.create_state(ProcessState.FINISHED, command.result, command.successful)  # type: ignore
+            state = self.create_state(ProcessState.KILLED, command.msg)
         # elif isinstance(command, Pause):
         #     self.pause()
         elif isinstance(command, Stop):
@@ -400,7 +399,7 @@ class Finished(State):
 class Killed(State):
     LABEL = ProcessState.KILLED
 
-    def __init__(self, process: 'Process', msg: str):
+    def __init__(self, process: 'Process', msg: Optional[str]):
         """
         :param process: The associated process
         :param msg: Optional kill message
