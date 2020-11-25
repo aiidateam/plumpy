@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.17.1
+
+### Bug fixes
+- Dependencies: only require `aiocontextvars` for Python < 3.7 [[#181]](https://github.com/aiidateam/plumpy/pull/181)
+
+
 ## v0.17.0
 
 ### Changes
