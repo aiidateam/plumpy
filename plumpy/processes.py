@@ -11,7 +11,11 @@ import uuid
 import asyncio
 from typing import Union
 
-from aiocontextvars import ContextVar
+try:
+    from aiocontextvars import ContextVar
+except ModuleNotFoundError:
+    from contextvars import ContextVar
+
 from aio_pika.exceptions import ConnectionClosed
 import yaml
 import kiwipy
@@ -399,8 +403,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         try:
             return self._state.successful
-        except AttributeError:
-            raise exceptions.InvalidStateError('process is not in the finished state')
+        except AttributeError as exception:
+            raise exceptions.InvalidStateError('process is not in the finished state') from exception
 
     @property
     def is_successful(self):
