@@ -31,12 +31,12 @@ def plum_to_kiwi_future(plum_future):
 
     def on_done(_plum_future):
         with kiwipy.capture_exceptions(kiwi_future):
-            if plum_future.cancelled():
+            if _plum_future.cancelled():
                 kiwi_future.cancel()
             else:
-                result = plum_future.result()
+                result = _plum_future.result()
                 # Did we get another future?  In which case convert it too
-                if isinstance(result, futures.Future):
+                if asyncio.isfuture(result):
                     result = plum_to_kiwi_future(result)
                 kiwi_future.set_result(result)
 
