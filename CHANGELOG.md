@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.18.0
+
+### Changes
+- Drop support for Python 3.5 [[#187]](https://github.com/aiidateam/plumpy/pull/187)
+
+### Dependencies
+- Dependencies: update requirement `kiwipy~=0.7.1` [[#184]](https://github.com/aiidateam/plumpy/pull/184)
+
+
 ## v0.17.1
 
 ### Bug fixes
