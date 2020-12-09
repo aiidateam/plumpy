@@ -21,14 +21,13 @@ setup(
     classifiers=[
         'License :: OSI Approved :: MIT License',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
     ],
     keywords='workflow multithreaded rabbitmq',
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     install_requires=[
         'frozendict~=1.2', 'pyyaml~=5.1.2', 'nest_asyncio~=1.4.0', 'aio-pika~=6.6',
         'aiocontextvars~=0.2.2; python_version<"3.7"', 'kiwipy[rmq]~=0.6.0'
