@@ -30,7 +30,7 @@ setup(
     python_requires='>=3.6',
     install_requires=[
         'frozendict~=1.2', 'pyyaml~=5.1.2', 'nest_asyncio~=1.4.0', 'aio-pika~=6.6',
-        'aiocontextvars~=0.2.2; python_version<"3.7"', 'kiwipy[rmq]~=0.6.0'
+        'aiocontextvars~=0.2.2; python_version<"3.7"', 'kiwipy[rmq]~=0.7.1'
     ],
     extras_require={
         'docs': [
