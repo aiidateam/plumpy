@@ -19,7 +19,6 @@ from .utils import *
 from .version import *
 from .workchains import *
 
-# TODO I deleted stack.py, because is not used or tested any where in this code base, or in aiida-core
 
 __all__ = (
     events.__all__ + exceptions.__all__ + processes.__all__ + utils.__all__ + futures.__all__ + mixins.__all__ +
