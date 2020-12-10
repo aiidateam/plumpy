@@ -422,7 +422,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         try:
             return self._state.successful  # type: ignore
-        except AttributeError  as exception:
+        except AttributeError as exception:
             raise exceptions.InvalidStateError('process is not in the finished state') from exception
 
     @property

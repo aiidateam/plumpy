@@ -225,7 +225,7 @@ class RemoteProcessController:
         tag: Optional[str] = None,
         nowait: bool = False,
         no_reply: bool = False
-    ) -> 'ProcessResult':
+    ) -> Optional['ProcessResult']:
         """
         Continue the process
 

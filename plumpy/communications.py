@@ -140,10 +140,10 @@ class LoopCommunicator(kiwipy.Communicator):
 
     # TODO type of task and msg; dict?
 
-    def task_send(self, task: Any, no_reply: bool = False) -> futures.Future:
+    def task_send(self, task: Any, no_reply: bool = False) -> kiwipy.Future:
         return self._communicator.task_send(task, no_reply)
 
-    def rpc_send(self, recipient_id: 'ID_TYPE', msg: Any) -> futures.Future:
+    def rpc_send(self, recipient_id: 'ID_TYPE', msg: Any) -> kiwipy.Future:
         return self._communicator.rpc_send(recipient_id, msg)
 
     def broadcast_send(
