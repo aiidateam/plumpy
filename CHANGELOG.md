@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.18.1
+
+### Bug fixes
+- Trigger application of nest patch in `set_event_loop_policy` to make it compatible with Jupyter notebooks [[#189]](https://github.com/aiidateam/plumpy/pull/189)
+
+
 ## v0.18.0
 
 ### Changes
