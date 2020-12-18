@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the :mod:`plumpy.events` module."""
 import asyncio
+import pathlib
 
 import pytest
 
@@ -40,3 +41,12 @@ def test_new_event_loop():
     """Test the ``new_event_loop`` raises ``NotImplementedError``."""
     with pytest.raises(NotImplementedError):
         new_event_loop()
+
+
+def test_get_event_loop_jupyter_notebook(nb_regression):
+    """Test that ``asyncio.get_event_loop`` returns same loop instance every time it is called once policy is set."""
+    nb_regression.diff_color_words = False
+    nb_regression.diff_ignore = ('/metadata/language_info/version',)
+
+    with open(pathlib.Path(__file__).parent / 'notebooks' / 'get_event_loop.ipynb') as handle:
+        nb_regression.check(handle)
