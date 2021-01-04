@@ -42,6 +42,9 @@ class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):  # type: ignore
 def set_event_loop_policy() -> None:
     """Enable plumpy's event loop policy that will make event loop's reentrant."""
     asyncio.set_event_loop_policy(PlumpyEventLoopPolicy())
+    # Need to call the following explicitly for `asyncio.get_event_loop` to start calling the method of the new policy
+    # in case an loop is already active.
+    asyncio.get_event_loop_policy().get_event_loop()
 
 
 def reset_event_loop_policy() -> None:

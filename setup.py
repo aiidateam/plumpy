@@ -38,7 +38,7 @@ setup(
             'sphinx-rtd-theme~=0.5.0',
         ],
         'pre-commit': ['mypy==0.790', 'pre-commit~=2.2', 'pylint==2.5.2'],
-        'tests': ['pytest~=5.4', 'shortuuid', 'pytest-asyncio', 'pytest-cov']
+        'tests': ['pytest~=5.4', 'shortuuid', 'pytest-asyncio', 'pytest-cov', 'pytest-notebook']
     },
     packages=['plumpy', 'plumpy/base'],
     test_suite='test'
