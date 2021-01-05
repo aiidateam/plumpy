@@ -138,8 +138,6 @@ class LoopCommunicator(kiwipy.Communicator):
     def remove_broadcast_subscriber(self, identifier: 'ID_TYPE') -> None:
         return self._communicator.remove_broadcast_subscriber(identifier)
 
-    # TODO type of task and msg; dict?
-
     def task_send(self, task: Any, no_reply: bool = False) -> kiwipy.Future:
         return self._communicator.task_send(task, no_reply)
 

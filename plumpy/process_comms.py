@@ -28,8 +28,7 @@ __all__ = [
 if TYPE_CHECKING:
     from .processes import Process  # pylint: disable=cyclic-import
 
-# TODO process result/status type?
-ProcessResult = Any  # bool
+ProcessResult = Any
 ProcessStatus = Any
 
 INTENT_KEY = 'intent'
@@ -239,7 +238,7 @@ class RemoteProcessController:
         future = await asyncio.wrap_future(continue_future)
 
         if no_reply:
-            return
+            return None
 
         # Now wait for the result of the task
         result = await asyncio.wrap_future(future)

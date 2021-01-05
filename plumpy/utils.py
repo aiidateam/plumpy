@@ -69,10 +69,6 @@ class EventHelper:
                 _LOGGER.error("Listener '%s' produced an exception:\n%s", listener, exception)
 
 
-# TODO I deleted ListenContext and ThreadSafeCounter,
-# because they not used or tested any where in this code base, or in aiida-core
-
-
 class AttributesFrozendict(frozendict.frozendict):
 
     def __init__(self, *args: Any, **kwargs: Any):
@@ -171,9 +167,6 @@ def load_module(fullname: str) -> Tuple[types.ModuleType, deque]:
         raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
 
     return mod, remainder
-
-
-# TODO wrap_dict removed, because its not used or tested any where in this code base, or in aiida-core
 
 
 def type_check(obj: Any, expected_type: Type) -> None:

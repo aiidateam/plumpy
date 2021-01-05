@@ -247,14 +247,14 @@ class StateMachine(metaclass=StateMachineMeta):
             assert label not in cls._STATES_MAP, "Duplicate label '{}'".format(label)  # pylint: disable=unsupported-membership-test
             cls._STATES_MAP[label] = state_cls  # pylint: disable=unsupported-assignment-operation
 
-        # TODO should class initialise sealed = False?
+        # should class initialise sealed = False?
         cls.sealed = True  # type: ignore
 
     def __init__(self) -> None:
         super().__init__()
         self.__ensure_built()
         self._state: Optional[State] = None
-        self._exception_handler = None  # TODO this appears to never be used?
+        self._exception_handler = None  # Note this appears to never be used
         self.set_debug((not sys.flags.ignore_environment and bool(os.environ.get('PYTHONSMDEBUG'))))
         self._transitioning = False
         self._event_callbacks: Dict[Hashable, List[EVENT_CALLBACK_TYPE]] = {}

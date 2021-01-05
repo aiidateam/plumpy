@@ -303,7 +303,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
     def __init__(
         self,
-        name: str = '',  # TODO this was set to None, but that would fail if you tried to compute breadcrumbs
+        name: str = '',  # Note this was set to None, but that would fail if you tried to compute breadcrumbs
         help: Optional[str] = None,  # pylint: disable=redefined-builtin
         required: bool = True,
         validator: Optional[VALIDATOR_TYPE] = None,
