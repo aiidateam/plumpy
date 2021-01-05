@@ -1,41 +1,14 @@
-py:class  Exception
-py:class  ProcessState
-py:class  persistence.LoadSaveContext
-py:class  Bundle
-py:class  Process
-py:class  PersistedPickle
-py:class  StateMachine
+py:class builtins.dict
 
-py:class  kiwipy.Communicator
-py:class  kiwipy.Future
+py:class typing.Any
+py:class typing.Callable
+py:class typing.Optional
+py:class typing.Tuple
 
-py:class  dict
-py:class  str
-py:class  object
-py:class  bool
-py:class  type
-py:class  tuple
+py:class _asyncio.Future
+py:class asyncio.unix_events._UnixDefaultEventLoopPolicy
+py:class concurrent.futures._base.Error
 
-py:class  builtins.dict
-
-py:obj str
-
-py:class  logging.Logger
-py:class  enum.Enum
-py:class  typing.Optional
-py:class  typing.Tuple
-py:class  typing.Any
-py:class  typing.Callable
-py:class  ValidationError
-
-py:class  plumpy.InterruptException
-py:class  plumpy.CancellableAction
-py:class  plumpy.process_states.Command
-py:class  plumpy.process_states.State
-py:class  plumpy.LoopCommunicator
-py:class  plumpy.ports.PortNamespace
-
-py:func   save_instance_state
-py:func   load_instance_state
-
-py:class  concurrent.futures._base.Error
+# unavailable forward references
+py:class plumpy.process_states.Command
+py:class plumpy.process_states.State

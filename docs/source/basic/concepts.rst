@@ -23,7 +23,7 @@ A process can be in one of the following states:
 * EXCEPTED
 * KILLED
 
-as defined in the :class:`ProcessState` enum.
+as defined in the :class:`~plumpy.process_states.ProcessState` enum.
 
 ::
 
@@ -45,9 +45,8 @@ as defined in the :class:`ProcessState` enum.
 Workchain
 ---------
 
-`WorkChain` is `Process`, however, not only the `Process`.
-
-A WorkChain is a series of instructions carried out with the ability to save state in between.
+A ``WorkChain`` is a sub-class of `Process`, which additionally defines a ``outline`` in its process specification.
+This is a series of instructions carried out with the ability to save state in between.
 
 The `outline` can give a succinct summary of the logical steps that the workchain will perform.
 WorkChain supporting using `If_` and `While_` to control the state flow of certain processes.

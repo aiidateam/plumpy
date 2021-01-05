@@ -1,30 +1,34 @@
 # -*- coding: utf-8 -*-
 """Event and loop related classes and functions"""
-import sys
 import asyncio
+import sys
+from typing import Any, Callable, Dict, Optional, Sequence, TYPE_CHECKING
 
 __all__ = [
     'new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete', 'set_event_loop_policy',
     'reset_event_loop_policy', 'PlumpyEventLoopPolicy'
 ]
 
+if TYPE_CHECKING:
+    from .processes import Process  # pylint: disable=cyclic-import
+
 get_event_loop = asyncio.get_event_loop  # pylint: disable=invalid-name
 
 
-def set_event_loop(*args, **kwargs):
+def set_event_loop(*args: Any, **kwargs: Any) -> None:
     raise NotImplementedError('this method is not implemented because `plumpy` uses a single reentrant loop')
 
 
-def new_event_loop(*args, **kwargs):
+def new_event_loop(*args: Any, **kwargs: Any) -> asyncio.AbstractEventLoop:
     raise NotImplementedError('this method is not implemented because `plumpy` uses a single reentrant loop')
 
 
-class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):  # type: ignore
     """Custom event policy that always returns the same event loop that is made reentrant by ``nest_asyncio``."""
 
-    _loop = None
+    _loop: Optional[asyncio.AbstractEventLoop] = None
 
-    def get_event_loop(self):
+    def get_event_loop(self) -> asyncio.AbstractEventLoop:
         """Return the patched event loop."""
         import nest_asyncio
 
@@ -35,7 +39,7 @@ class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
         return self._loop
 
 
-def set_event_loop_policy():
+def set_event_loop_policy() -> None:
     """Enable plumpy's event loop policy that will make event loop's reentrant."""
     asyncio.set_event_loop_policy(PlumpyEventLoopPolicy())
     # Need to call the following explicitly for `asyncio.get_event_loop` to start calling the method of the new policy
@@ -43,28 +47,29 @@ def set_event_loop_policy():
     asyncio.get_event_loop_policy().get_event_loop()
 
 
-def reset_event_loop_policy():
+def reset_event_loop_policy() -> None:
     """Reset the event loop policy to the default."""
     loop = get_event_loop()
 
     # pylint: disable=protected-access
     cls = loop.__class__
-    cls._run_once = cls._run_once_orig
-    cls.run_forever = cls._run_forever_orig
-    cls.run_until_complete = cls._run_until_complete_orig
+    cls._run_once = cls._run_once_orig  # type: ignore
+    cls.run_forever = cls._run_forever_orig  # type: ignore
+    cls.run_until_complete = cls._run_until_complete_orig  # type: ignore
 
-    del cls._check_running
-    del cls._check_runnung  # typo in Python 3.7 source
-    del cls._run_once_orig
-    del cls._run_forever_orig
-    del cls._run_until_complete_orig
-    del cls._nest_patched
+    del cls._check_running  # type: ignore
+    # typo in Python 3.7 source
+    del cls._check_runnung  # type: ignore
+    del cls._run_once_orig  # type: ignore
+    del cls._run_forever_orig  # type: ignore
+    del cls._run_until_complete_orig  # type: ignore
+    del cls._nest_patched  # type: ignore
     # pylint: enable=protected-access
 
     asyncio.set_event_loop_policy(None)
 
 
-def run_until_complete(future, loop=None):
+def run_until_complete(future: asyncio.Future, loop: Optional[asyncio.AbstractEventLoop] = None) -> Any:
     loop = loop or get_event_loop()
     return loop.run_until_complete(future)
 
@@ -74,22 +79,24 @@ class ProcessCallback:
 
     __slots__ = ('_callback', '_args', '_kwargs', '_process', '_cancelled', '__weakref__')
 
-    def __init__(self, process, callback, args, kwargs):
-        self._process = process
-        self._callback = callback
-        self._args = args
-        self._kwargs = kwargs
-        self._cancelled = False
+    def __init__(
+        self, process: 'Process', callback: Callable[..., Any], args: Sequence[Any], kwargs: Dict[str, Any]
+    ) -> None:
+        self._process: 'Process' = process
+        self._callback: Callable[..., Any] = callback
+        self._args: Sequence[Any] = args
+        self._kwargs: Dict[str, Any] = kwargs
+        self._cancelled: bool = False
 
-    def cancel(self):
+    def cancel(self) -> None:
         if not self._cancelled:
             self._cancelled = True
             self._done()
 
-    def cancelled(self):
+    def cancelled(self) -> bool:
         return self._cancelled
 
-    async def run(self):
+    async def run(self) -> None:
         """Run the callback"""
         if not self._cancelled:
             try:
@@ -100,11 +107,11 @@ class ProcessCallback:
             finally:
                 self._done()
 
-    def _done(self):
+    def _done(self) -> None:
         self._cleanup()
 
-    def _cleanup(self):
-        self._process = None
-        self._callback = None
-        self._args = None
-        self._kwargs = None
+    def _cleanup(self) -> None:
+        self._process = None  # type: ignore
+        self._callback = None  # type: ignore
+        self._args = None  # type: ignore
+        self._kwargs = None  # type: ignore
