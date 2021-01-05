@@ -265,6 +265,11 @@ class TestProcess(unittest.TestCase):
             proc.execute()
         self.assertEqual(proc.state, ProcessState.EXCEPTED)
 
+    def test_run_kill(self):
+        proc = utils.KillProcess()
+        with pytest.raises(plumpy.KilledError, match='killed'):
+            proc.execute()
+
     def test_get_description(self):
 
         class ProcWithoutSpec(Process):
@@ -416,13 +421,13 @@ class TestProcess(unittest.TestCase):
             after_kill = False
 
             def run(self, **kwargs):
-                self.kill()
+                self.kill('killed')
                 # The following line should be executed because kill will not
                 # interrupt execution of a method call in the RUNNING state
                 self.after_kill = True
 
         proc = KillProcess()
-        with self.assertRaises(plumpy.KilledError):
+        with pytest.raises(plumpy.KilledError, match='killed'):
             proc.execute()
 
         self.assertTrue(proc.after_kill)

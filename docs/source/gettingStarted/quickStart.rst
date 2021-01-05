@@ -21,10 +21,10 @@ Process can wait, pause, play and resume
 
 The example below shows how process state transition with different action:
 
-.. literalinclude:: ../../../examples/process_waitAndResume.py
+.. literalinclude:: ../../../examples/process_wait_and_resume.py
 
-Remote controled process
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Remote controlled process
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 process start.
 

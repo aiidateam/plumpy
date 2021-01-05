@@ -42,11 +42,7 @@ release = plumpy.__version__
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 
-extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.doctest',
-    'sphinx.ext.viewcode',
-]
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.viewcode', 'sphinx.ext.intersphinx']
 # Add any paths that contain templates here, relative to this directory.
 
 # The suffix(es) of source filenames.
@@ -132,6 +128,11 @@ latex_elements = {
 latex_documents = [
     (master_doc, 'plumpy.tex', 'plumpy Documentation', 'Martin Uhrin', 'manual'),
 ]
+
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3.8', None),
+    'kiwipy': ('https://kiwipy.readthedocs.io/en/latest/', None)
+}
 
 
 def run_apidoc(_):
@@ -219,7 +220,7 @@ epub_exclude_files = ['search.html']
 
 # Warnings to ignore when using the -n (nitpicky) option
 # We should ignore any python built-in exception, for instance
-nitpick_ignore = [('py:class', 'Warning'), ('py:class', 'exceptions.Warning')]
+nitpick_ignore = []
 
 for line in open('nitpick-exceptions'):
     if line.strip() == '' or line.startswith('#'):

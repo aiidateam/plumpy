@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=undefined-variable
+# type: ignore
 import logging
 
 from .loaders import *

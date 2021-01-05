@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """The state machine for processes"""
-from collections.abc import Iterable
 import enum
 import functools
 import inspect
 import logging
 import os
 import sys
+from types import TracebackType
+from typing import Any, Callable, cast, Dict, Hashable, Iterable, List, Optional, Sequence, Set, Type, Union
 
 from plumpy.futures import Future
 from .utils import call_with_super_check, super_check
@@ -14,6 +15,9 @@ from .utils import call_with_super_check, super_check
 __all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
+
+LABEL_TYPE = Union[None, enum.Enum, str]  # pylint: disable=invalid-name
+EVENT_CALLBACK_TYPE = Callable[['StateMachine', Hashable, Optional['State']], None]  # pylint: disable=invalid-name
 
 
 class StateMachineError(Exception):
@@ -25,7 +29,7 @@ class StateEntryFailed(Exception):
     Failed to enter a state, can provide the next state to go to via this exception
     """
 
-    def __init__(self, state=None, *args, **kwargs):  # pylint: disable=keyword-arg-before-vararg
+    def __init__(self, state: Hashable = None, *args: Any, **kwargs: Any) -> None:  # pylint: disable=keyword-arg-before-vararg
         super().__init__('failed to enter state')
         self.state = state
         self.args = args
@@ -38,7 +42,7 @@ class InvalidStateError(Exception):
 
 class EventError(StateMachineError):
 
-    def __init__(self, evt, msg):
+    def __init__(self, evt: str, msg: str):
         super().__init__(msg)
         self.event = evt
 
@@ -46,44 +50,53 @@ class EventError(StateMachineError):
 class TransitionFailed(Exception):
     """A state transition failed"""
 
-    def __init__(self, initial_state, final_state=None, traceback_str=None):
+    def __init__(
+        self,
+        initial_state: 'State',
+        final_state: Optional['State'] = None,
+        traceback_str: Optional[str] = None
+    ) -> None:
         self.initial_state = initial_state
         self.final_state = final_state
         self.traceback_str = traceback_str
         super().__init__(self._format_msg())
 
-    def _format_msg(self):
+    def _format_msg(self) -> str:
         msg = ['{} -> {}'.format(self.initial_state, self.final_state)]
         if self.traceback_str is not None:
             msg.append(self.traceback_str)
         return '\n'.join(msg)
 
 
-def event(from_states='*', to_states='*'):
+def event(
+    from_states: Union[str, Type['State'], Iterable[Type['State']]] = '*',
+    to_states: Union[str, Type['State'], Iterable[Type['State']]] = '*'
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """A decorator to check for correct transitions, raising ``EventError`` on invalid transitions."""
     if from_states != '*':
         if inspect.isclass(from_states):
-            from_states = (from_states,)
-        if not all(issubclass(state, State) for state in from_states):
-            raise TypeError()
+            from_states = (from_states,)  # type: ignore
+        if not all(issubclass(state, State) for state in from_states):  # type: ignore
+            raise TypeError(f'from_states: {from_states}')
     if to_states != '*':
         if inspect.isclass(to_states):
-            to_states = (to_states,)
-        if not all(issubclass(state, State) for state in to_states):
-            raise TypeError()
+            to_states = (to_states,)  # type: ignore
+        if not all(issubclass(state, State) for state in to_states):  # type: ignore
+            raise TypeError(f'to_states: {to_states}')
 
-    def wrapper(wrapped):
+    def wrapper(wrapped: Callable[..., Any]) -> Callable[..., Any]:
         evt_label = wrapped.__name__
 
         @functools.wraps(wrapped)
-        def transition(self, *a, **kw):
+        def transition(self: Any, *a: Any, **kw: Any) -> Any:
             initial = self._state
 
-            if from_states != '*' and not any(isinstance(self._state, state) for state in from_states):
+            if from_states != '*' and not any(isinstance(self._state, state) for state in from_states):  # type: ignore
                 raise EventError(evt_label, 'Event {} invalid in state {}'.format(evt_label, initial.LABEL))
 
             result = wrapped(self, *a, **kw)
             if not (result is False or isinstance(result, Future)):
-                if to_states != '*' and not any(isinstance(self._state, state) for state in to_states):
+                if to_states != '*' and not any(isinstance(self._state, state) for state in to_states):  # type: ignore
                     if self._state == initial:
                         raise EventError(evt_label, 'Machine did not transition')
 
@@ -97,61 +110,60 @@ def event(from_states='*', to_states='*'):
         return transition
 
     if inspect.isfunction(from_states):
-        return wrapper(from_states)
+        return wrapper(from_states)  # type: ignore
 
     return wrapper
 
 
 class State:
-    LABEL = None
+    LABEL: LABEL_TYPE = None
     # A set containing the labels of states that can be entered
     # from this one
-    ALLOWED = set()
+    ALLOWED: Set[LABEL_TYPE] = set()
 
     @classmethod
-    def is_terminal(cls):
+    def is_terminal(cls) -> bool:
         return not cls.ALLOWED
 
-    def __init__(self, state_machine):
+    def __init__(self, state_machine: 'StateMachine', *args: Any, **kwargs: Any):  # pylint: disable=unused-argument
         """
         :param state_machine: The process this state belongs to
-        :type state_machine: :class:`StateMachine`
         """
         self.state_machine = state_machine
-        self.in_state = False
+        self.in_state: bool = False
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.LABEL)
 
     @property
-    def label(self):
+    def label(self) -> LABEL_TYPE:
         """ Convenience property to get the state label """
         return self.LABEL
 
     @super_check
-    def enter(self):
+    def enter(self) -> None:
         """ Entering the state """
 
-    def execute(self):
+    def execute(self) -> Optional['State']:
         """
-        Execute the state, performing the actions that this state is responsible
-        for.  Return a state to transition to or None if finished.
+        Execute the state, performing the actions that this state is responsible for.
+        :returns: a state to transition to or None if finished.
         """
 
     @super_check
-    def exit(self):
+    def exit(self) -> None:
         """ Exiting the state """
         if self.is_terminal():
             raise InvalidStateError('Cannot exit a terminal state {}'.format(self.LABEL))
 
-    def create_state(self, state_label, *args, **kwargs):
+    def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'State':
         return self.state_machine.create_state(state_label, *args, **kwargs)
 
-    def do_enter(self):
+    def do_enter(self) -> None:
         call_with_super_check(self.enter)
         self.in_state = True
 
-    def do_exit(self):
+    def do_exit(self) -> None:
         call_with_super_check(self.exit)
         self.in_state = False
 
@@ -162,14 +174,14 @@ class StateEventHook(enum.Enum):
     procedure.  The callback will be passed a state instance whose meaning will differ depending
     on the hook as commented below.
     """
-    ENTERING_STATE = 0  # State passed will be the state that is being entered
-    ENTERED_STATE = 1  # State passed will be the last state that we entered from
-    EXITING_STATE = 2  # State passed will be the next state that will be entered (or None for terminal)
+    ENTERING_STATE: int = 0  # State passed will be the state that is being entered
+    ENTERED_STATE: int = 1  # State passed will be the last state that we entered from
+    EXITING_STATE: int = 2  # State passed will be the next state that will be entered (or None for terminal)
 
 
 class StateMachineMeta(type):
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args: Any, **kwargs: Any) -> 'StateMachine':
         """
         Create the state machine and enter the initial state.
 
@@ -184,36 +196,39 @@ class StateMachineMeta(type):
 
 
 class StateMachine(metaclass=StateMachineMeta):
-    STATES = None
-    _STATES_MAP = None
+    STATES: Optional[Sequence[Type[State]]] = None
+    _STATES_MAP: Optional[Dict[Hashable, Type[State]]] = None
 
     _transitioning = False
     _transition_failing = False
 
     @classmethod
-    def get_states_map(cls):
+    def get_states_map(cls) -> Dict[Hashable, Type[State]]:
         cls.__ensure_built()
+        assert cls._STATES_MAP is not None  # required for type checking
         return cls._STATES_MAP
 
     @classmethod
-    def get_states(cls):
+    def get_states(cls) -> Sequence[Type[State]]:
         if cls.STATES is not None:
             return cls.STATES
 
         raise RuntimeError('States not defined')
 
     @classmethod
-    def initial_state_label(cls):
+    def initial_state_label(cls) -> LABEL_TYPE:
         cls.__ensure_built()
+        assert cls.STATES is not None
         return cls.STATES[0].LABEL  # pylint: disable=unsubscriptable-object
 
     @classmethod
-    def get_state_class(cls, label):
+    def get_state_class(cls, label: LABEL_TYPE) -> Type[State]:
         cls.__ensure_built()
+        assert cls._STATES_MAP is not None
         return cls._STATES_MAP[label]  # pylint: disable=unsubscriptable-object
 
     @classmethod
-    def __ensure_built(cls):
+    def __ensure_built(cls) -> None:
         try:
             # Check if it's already been built (and therefore sealed)
             if cls.__getattribute__(cls, 'sealed'):
@@ -222,7 +237,7 @@ class StateMachine(metaclass=StateMachineMeta):
             pass
 
         cls.STATES = cls.get_states()
-        assert isinstance(cls.STATES, Iterable)
+        assert isinstance(cls.STATES, Iterable)  # pylint: disable=isinstance-second-argument-not-valid-type
 
         # Build the states map
         cls._STATES_MAP = {}
@@ -232,34 +247,35 @@ class StateMachine(metaclass=StateMachineMeta):
             assert label not in cls._STATES_MAP, "Duplicate label '{}'".format(label)  # pylint: disable=unsupported-membership-test
             cls._STATES_MAP[label] = state_cls  # pylint: disable=unsupported-assignment-operation
 
-        cls.sealed = True
+        # should class initialise sealed = False?
+        cls.sealed = True  # type: ignore
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.__ensure_built()
-        self._state = None
-        self._exception_handler = None
+        self._state: Optional[State] = None
+        self._exception_handler = None  # Note this appears to never be used
         self.set_debug((not sys.flags.ignore_environment and bool(os.environ.get('PYTHONSMDEBUG'))))
         self._transitioning = False
-        self._event_callbacks = {}
+        self._event_callbacks: Dict[Hashable, List[EVENT_CALLBACK_TYPE]] = {}
 
     @super_check
-    def init(self):
+    def init(self) -> None:
         """ Called after entering initial state. """
 
-    def __str__(self):
+    def __str__(self) -> str:
         return '<{}> ({})'.format(self.__class__.__name__, self.state)
 
-    def create_initial_state(self):
+    def create_initial_state(self) -> State:
         return self.get_state_class(self.initial_state_label())(self)
 
     @property
-    def state(self):
+    def state(self) -> Optional[LABEL_TYPE]:
         if self._state is None:
             return None
         return self._state.LABEL
 
-    def add_state_event_callback(self, hook, callback):
+    def add_state_event_callback(self, hook: Hashable, callback: EVENT_CALLBACK_TYPE) -> None:
         """
         Add a callback to be called on a particular state event hook.
         The callback should have form fn(state_machine, hook, state)
@@ -269,21 +285,21 @@ class StateMachine(metaclass=StateMachineMeta):
         """
         self._event_callbacks.setdefault(hook, []).append(callback)
 
-    def remove_state_event_callback(self, hook, callback):
+    def remove_state_event_callback(self, hook: Hashable, callback: EVENT_CALLBACK_TYPE) -> None:
         try:
             self._event_callbacks[hook].remove(callback)
         except (KeyError, ValueError):
             raise ValueError("Callback not set for hook '{}'".format(hook))
 
-    def _fire_state_event(self, hook, state):
+    def _fire_state_event(self, hook: Hashable, state: Optional[State]) -> None:
         for callback in self._event_callbacks.get(hook, []):
             callback(self, hook, state)
 
     @super_check
-    def on_terminated(self):
+    def on_terminated(self) -> None:
         """ Called when a terminal state is entered """
 
-    def transition_to(self, new_state, *args, **kwargs):
+    def transition_to(self, new_state: Union[Hashable, State, Type[State]], *args: Any, **kwargs: Any) -> None:
         assert not self._transitioning, \
             'Cannot call transition_to when already transitioning state'
 
@@ -300,14 +316,13 @@ class StateMachine(metaclass=StateMachineMeta):
             try:
                 self._enter_next_state(new_state)
             except StateEntryFailed as exception:
-                new_state = exception.state
                 # Make sure we have a state instance
-                new_state = self._create_state_instance(new_state, *exception.args, **exception.kwargs)
+                new_state = self._create_state_instance(exception.state, *exception.args, **exception.kwargs)
                 label = new_state.LABEL
                 self._exit_current_state(new_state)
                 self._enter_next_state(new_state)
 
-            if self._state.is_terminal():
+            if self._state is not None and self._state.is_terminal():
                 call_with_super_check(self.on_terminated)
         except Exception:  # pylint: disable=broad-except
             self._transitioning = False
@@ -320,29 +335,31 @@ class StateMachine(metaclass=StateMachineMeta):
             self._transitioning = False
 
     @staticmethod
-    def transition_failed(initial_state, final_state, exception, trace):
+    def transition_failed(
+        initial_state: Hashable, final_state: Hashable, exception: Exception, trace: TracebackType
+    ) -> None:
         """
         Called when a state transitions fails.  This method can be overwritten
         to change the default behaviour which is to raise the exception.
 
         :param exception: The transition failed exception
-        :type exception: :class:`Exception`
+
         """
         raise exception.with_traceback(trace)
 
-    def get_debug(self):
+    def get_debug(self) -> bool:
         return self._debug
 
-    def set_debug(self, enabled):
-        self._debug = enabled
+    def set_debug(self, enabled: bool) -> None:
+        self._debug: bool = enabled
 
-    def create_state(self, state_label, *args, **kwargs):
+    def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> State:
         try:
             return self.get_states_map()[state_label](self, *args, **kwargs)  # pylint: disable=unsubscriptable-object
         except KeyError:
             raise ValueError('{} is not a valid state'.format(state_label))
 
-    def _exit_current_state(self, next_state):
+    def _exit_current_state(self, next_state: State) -> None:
         """ Exit the given state """
 
         # If we're just being constructed we may not have a state yet to exit,
@@ -357,7 +374,7 @@ class StateMachine(metaclass=StateMachineMeta):
         self._fire_state_event(StateEventHook.EXITING_STATE, next_state)
         self._state.do_exit()
 
-    def _enter_next_state(self, next_state):
+    def _enter_next_state(self, next_state: State) -> None:
         last_state = self._state
         self._fire_state_event(StateEventHook.ENTERING_STATE, next_state)
         # Enter the new state
@@ -365,7 +382,7 @@ class StateMachine(metaclass=StateMachineMeta):
         self._state = next_state
         self._fire_state_event(StateEventHook.ENTERED_STATE, last_state)
 
-    def _create_state_instance(self, state, *args, **kwargs):
+    def _create_state_instance(self, state: Union[Hashable, State, Type[State]], *args: Any, **kwargs: Any) -> State:
         if isinstance(state, State):
             # It's already a state instance
             return state
@@ -374,11 +391,11 @@ class StateMachine(metaclass=StateMachineMeta):
         state_cls = self._ensure_state_class(state)
         return state_cls(self, *args, **kwargs)
 
-    def _ensure_state_class(self, state):
-        if inspect.isclass(state) and issubclass(state, State):
-            return state
+    def _ensure_state_class(self, state: Union[Hashable, Type[State]]) -> Type[State]:
+        if inspect.isclass(state) and issubclass(state, State):  # type: ignore
+            return cast(Type[State], state)
 
         try:
-            return self.get_states_map()[state]  # pylint: disable=unsubscriptable-object
+            return self.get_states_map()[cast(Hashable, state)]  # pylint: disable=unsubscriptable-object
         except KeyError:
             raise ValueError('{} is not a valid state'.format(state))

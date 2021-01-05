@@ -34,8 +34,23 @@ repos:
             '--disable=too-many-arguments',
             '--disable=too-many-instance-attributes',
         ]
-        exclude: &exclude_files >
+        exclude: >
             (?x)^(
                 docs/source/conf.py|
                 test/.*|
+            )$
+
+-   repo: local
+    hooks:
+    -   id: mypy
+        name: mypy
+        entry: mypy
+        args: [--config-file=tox.ini]
+        language: python
+        types: [python]
+        require_serial: true
+        pass_filenames: true
+        files: >
+            (?x)^(
+                plumpy/.*py|
             )$

@@ -4,7 +4,7 @@ import inspect
 import functools
 import asyncio
 
-from plumpy.utils import AttributesFrozendict, ensure_coroutine
+from plumpy.utils import AttributesFrozendict, ensure_coroutine, load_function
 
 
 class TestAttributesFrozendict(unittest.TestCase):
@@ -77,3 +77,8 @@ class TestEnsureCoroutine(unittest.TestCase):
         coro = ensure_coroutine(fct_wrap)
         assert coro is not fct_wrap
         assert asyncio.iscoroutine(coro())
+
+
+def test_load_function():
+    func = load_function('plumpy.utils.load_function')
+    assert func == load_function

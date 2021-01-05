@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from typing import Optional
+
 __all__ = ['KilledError', 'UnsuccessfulResult', 'InvalidStateError', 'PersistenceError', 'ClosedError']
 
 
@@ -16,7 +18,12 @@ class InvalidStateError(Exception):
 class UnsuccessfulResult:
     """The result of the process was unsuccessful"""
 
-    def __init__(self, result=None):
+    def __init__(self, result: Optional[int] = None):
+        """Initialise.
+
+        :param result: the exit code of the process
+
+        """
         self.result = result
 
 

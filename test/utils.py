@@ -83,6 +83,13 @@ class WaitForSignalProcess(processes.Process):
         pass
 
 
+class KillProcess(processes.Process):
+
+    @utils.override
+    def run(self):
+        return process_states.Kill('killed')
+
+
 class MissingOutputProcess(processes.Process):
     """ A process that does not generate a required output """
 
