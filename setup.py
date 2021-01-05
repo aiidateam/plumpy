@@ -34,8 +34,9 @@ setup(
     ],
     extras_require={
         'docs': [
-            'Sphinx~=2.0',
-            'sphinx-rtd-theme~=0.5.0',
+            'sphinx~=3.2.0',
+            'myst-parser~=0.13.1',
+            'sphinx-book-theme~=0.0.39',
         ],
         'pre-commit': ['mypy==0.790', 'pre-commit~=2.2', 'pylint==2.5.2'],
         'tests': ['pytest~=5.4', 'shortuuid', 'pytest-asyncio', 'pytest-cov', 'pytest-notebook']

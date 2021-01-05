@@ -1182,7 +1182,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @protected
     def encode_input_args(self, inputs: Any) -> Any:
         """
-        Encode input arguments such that they may be saved in a :class:`plumpy.Bundle`.
+        Encode input arguments such that they may be saved in a :class:`plumpy.persistence.Bundle`.
         The encoded inputs should contain no reference to the inputs that were passed in.
         This often will mean making a deepcopy of the input dictionary.
 
@@ -1195,7 +1195,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @protected
     def decode_input_args(self, encoded: Any) -> Any:
         """
-        Decode saved input arguments as they came from the saved instance state :class:`plumpy.Bundle`.
+        Decode saved input arguments as they came from the saved instance state :class:`plumpy.persistence.Bundle`.
         The decoded inputs should contain no reference to the encoded inputs that were passed in.
         This often will mean making a deepcopy of the encoded input dictionary.
 
