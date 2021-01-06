@@ -99,6 +99,7 @@ def run_apidoc(app):
 
     source_dir = Path(os.path.abspath(__file__)).parent
     apidoc_dir = source_dir / 'apidoc'
+    apidoc_dir.mkdir(exist_ok=True)
     package_dir = source_dir.parent.parent / 'plumpy'
 
     # we write to a temporary folder first then only move across files that have changed
