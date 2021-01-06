@@ -196,7 +196,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @classmethod
     def define(cls, _spec: ProcessSpec) -> None:
         """Define the specification of the process.
-        
+
         Normally should be overridden by subclasses.
         """
         cls.__called = True
@@ -286,7 +286,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @super_check
     def init(self) -> None:
         """Common initialisation logic, after create or load, goes here.
-        
+
         This method is called in :class:`plumpy.base.state_machine.StateMachineMeta`
         """
         self._cleanups = []  # a list of functions to be ran on terminated
@@ -398,7 +398,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def future(self) -> persistence.SavableFuture:
         """Return a savable future representing an eventual result of an asynchronous operation.
-        
+
         The result is set at the terminal state.
         """
         return self._future
@@ -412,7 +412,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         logger: Optional[logging.Logger] = None
     ) -> 'Process':
         """Start running the nested process.
-        
+
         The process is started asynchronously, without blocking other task in the event loop.
         """
         process = process_class(inputs=inputs, pid=pid, logger=logger, loop=self.loop, communicator=self._communicator)
@@ -579,7 +579,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @protected
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         """Load the process from its saved instance state.
-    
+
         :param saved_state: A bundle to load the state from
         :param load_context: The load context
 
@@ -634,7 +634,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def add_process_listener(self, listener: ProcessListener) -> None:
         """Add a process listener to the process.
-        
+
         The listener defines the actions to take when the process is triggering
         the specific state condition.
 
@@ -1134,7 +1134,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """This function will be run when the process is triggered.
         It should be overridden by a subclass.
         """
-        pass
 
     @ensure_not_closed
     def execute(self) -> Optional[Dict[str, Any]]:
@@ -1151,7 +1150,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @ensure_not_closed
     async def step(self) -> None:
         """Run a step.
-        
+
         The step is run synchronously with steps in its own process,
         and asynchronously with steps in other processes.
 

@@ -33,6 +33,3 @@ In production environment, only thread communicator is used, since thread commun
 In case of long time no responding in RabbitMQ will be considered a network connection is broken.
 
 Here is an example of launching and pausing process by controller.
-
-
-

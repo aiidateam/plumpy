@@ -31,8 +31,9 @@ release = plumpy.__version__
 
 master_doc = 'index'
 language = None
-extensions = ['myst_parser', 'sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.viewcode', 'sphinx.ext.intersphinx']
-
+extensions = [
+    'myst_parser', 'sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.viewcode', 'sphinx.ext.intersphinx'
+]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -47,11 +48,11 @@ intersphinx_mapping = {
     'kiwipy': ('https://kiwipy.readthedocs.io/en/latest/', None)
 }
 
-myst_enable_extensions = ["colon_fence", "deflist", "smartquotes", "substitution"]
-myst_url_schemes = ("http", "https", "mailto")
+myst_enable_extensions = ['colon_fence', 'deflist', 'smartquotes', 'substitution']
+myst_url_schemes = ('http', 'https', 'mailto')
 myst_substitutions = {
-    "rabbitmq": "[RabbitMQ](https://www.rabbitmq.com/)",
-    "kiwipy": "[kiwipy](https://kiwipy.readthedocs.io)"
+    'rabbitmq': '[RabbitMQ](https://www.rabbitmq.com/)',
+    'kiwipy': '[kiwipy](https://kiwipy.readthedocs.io)'
 }
 
 # Warnings to ignore when using the -n (nitpicky) option
@@ -68,21 +69,22 @@ for line in open('nitpick-exceptions'):
 # -- Options for HTML output -------------------------------------------------
 
 html_static_path = ['_static']
-html_theme = "sphinx_book_theme"
-html_logo = "_static/logo.svg"
-html_favicon = "_static/logo.svg"
+html_theme = 'sphinx_book_theme'
+html_logo = '_static/logo.svg'
+html_favicon = '_static/logo.svg'
 html_theme_options = {
-    "home_page_in_toc": True,
-    "repository_url": "https://github.com/aiidateam/plumpy",
-    "repository_branch": "develop",
-    "use_repository_button": True,
-    "use_issues_button": True,
-    "path_to_docs": "docs",
-    "use_edit_page_button": True,
-    "extra_navbar": ""
+    'home_page_in_toc': True,
+    'repository_url': 'https://github.com/aiidateam/plumpy',
+    'repository_branch': 'develop',
+    'use_repository_button': True,
+    'use_issues_button': True,
+    'path_to_docs': 'docs',
+    'use_edit_page_button': True,
+    'extra_navbar': ''
 }
 
 # API Documentation
+
 
 def run_apidoc(app):
     """Runs sphinx-apidoc when building the documentation.
@@ -106,25 +108,17 @@ def run_apidoc(app):
     # this ensures that document rebuilds are not triggered every time (due to change in file mtime)
     with tempfile.TemporaryDirectory() as tmpdirname:
         options = [
-            '-o',
-            tmpdirname,
-            str(package_dir),
-            '--private',
-            '--force',
-            '--module-first',
-            '--separate',
-            '--no-toc',
-            '--maxdepth',
-            '4',
+            '-o', tmpdirname,
+            str(package_dir), '--private', '--force', '--module-first', '--separate', '--no-toc', '--maxdepth', '4',
             '-q'
         ]
 
         os.environ['SPHINX_APIDOC_OPTIONS'] = 'members,special-members,private-members,undoc-members,show-inheritance'
         main(options)
 
-        for path in Path(tmpdirname).glob("*"):
+        for path in Path(tmpdirname).glob('*'):
             if not (apidoc_dir / path.name).exists() or not filecmp.cmp(path, apidoc_dir / path.name):
-                logger.info(f"Writing: {apidoc_dir / path.name}")
+                logger.info(f'Writing: {apidoc_dir / path.name}')
                 shutil.move(path, apidoc_dir / path.name)
 
 
