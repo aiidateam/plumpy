@@ -11,7 +11,7 @@ how to save and reserve from checkpoint
 State machine
 -------------
 
-A process is also a `state machine<https://en.wikipedia.org/wiki/Finite-state_machine>`_ which can be in one of the following states:
+A process is also a `state machine <https://en.wikipedia.org/wiki/Finite-state_machine>`_ which can be in one of the following states:
 
 * CREATED
 * RUNNING
@@ -20,7 +20,7 @@ A process is also a `state machine<https://en.wikipedia.org/wiki/Finite-state_ma
 * EXCEPTED
 * KILLED
 
-as defined in the :class:`ProcessState` enum.
+as defined in the :class:`plumpy.process_states.ProcessState` enum.
 
 ::
 
