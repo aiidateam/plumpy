@@ -69,7 +69,7 @@ yaml.representer.Representer.add_representer(ProcessStateMachineMeta, yaml.repre
 
 
 def ensure_not_closed(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Raise if the Process is closed."""
+    """Decorator to check that the process is not closed before running the method."""
 
     @functools.wraps(func)
     def func_wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
@@ -150,6 +150,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @classmethod
     def get_states(cls) -> Sequence[Type[process_states.State]]:
+        """Return all allowed states of the process."""
         state_classes = cls.get_state_classes()
         return (
             state_classes[process_states.ProcessState.CREATED],
@@ -189,10 +190,15 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @classmethod
     def get_name(cls) -> str:
+        """Return the process class name."""
         return cls.__name__
 
     @classmethod
     def define(cls, _spec: ProcessSpec) -> None:
+        """Define the specification of the process.
+
+        Normally should be overridden by subclasses.
+        """
         cls.__called = True
 
     @classmethod
@@ -279,7 +285,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @super_check
     def init(self) -> None:
-        """ Any common initialisation stuff after create or load goes here """
+        """Common initialisation logic, after create or load, goes here.
+
+        This method is called in :class:`plumpy.base.state_machine.StateMachineMeta`
+        """
         self._cleanups = []  # a list of functions to be ran on terminated
 
         if self._communicator is not None:
@@ -307,6 +316,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._future.add_done_callback(try_killing)
 
     def _setup_event_hooks(self) -> None:
+        """Set the event hooks to process, when it is created or loaded(recreated)."""
         self.add_state_event_callback(
             state_machine.StateEventHook.ENTERING_STATE,
             lambda _s, _h, state: self.on_entering(cast(process_states.State, state))
@@ -329,18 +339,22 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @property
     def pid(self) -> Optional[PID_TYPE]:
+        """Return the pid of the process."""
         return self._pid
 
     @property
     def uuid(self) -> Optional[uuid.UUID]:
+        """Return the UUID of the process """
         return self._uuid
 
     @property
     def raw_inputs(self) -> Optional[utils.AttributesFrozendict]:
+        """The `AttributesFrozendict` of inputs (if not None)."""
         return self._raw_inputs
 
     @property
     def inputs(self) -> Optional[utils.AttributesFrozendict]:
+        """Return the parsed inputs."""
         return self._parsed_inputs
 
     @property
@@ -356,8 +370,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @property
     def logger(self) -> logging.Logger:
-        """
-        Get the logger for this class.  Can be None.
+        """Return the logger for this class.
+
+        If not set, return the default logger.
 
         :return: The logger.
 
@@ -369,16 +384,23 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @property
     def status(self) -> Optional[str]:
+        """Return the status massage of the process."""
         return self._status
 
     def set_status(self, status: Optional[str]) -> None:
+        """Set the status message of the process."""
         self._status = status
 
     @property
     def paused(self) -> bool:
+        """Return whether the process was being paused."""
         return self._paused is not None
 
     def future(self) -> persistence.SavableFuture:
+        """Return a savable future representing an eventual result of an asynchronous operation.
+
+        The result is set at the terminal state.
+        """
         return self._future
 
     @ensure_not_closed
@@ -389,6 +411,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         pid: Optional[PID_TYPE] = None,
         logger: Optional[logging.Logger] = None
     ) -> 'Process':
+        """Start running the nested process.
+
+        The process is started asynchronously, without blocking other task in the event loop.
+        """
         process = process_class(inputs=inputs, pid=pid, logger=logger, loop=self.loop, communicator=self._communicator)
         self.loop.create_task(process.step_until_terminated())
         return process
@@ -396,6 +422,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     # region State introspection methods
 
     def has_terminated(self) -> bool:
+        """Return whether the process was terminated."""
         return self._state.is_terminal()
 
     def result(self) -> Any:
@@ -437,15 +464,18 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             return False
 
     def killed(self) -> bool:
+        """Return whether the process is killed."""
         return self.state == process_states.ProcessState.KILLED
 
     def killed_msg(self) -> Optional[str]:
+        """Return the killed message."""
         if isinstance(self._state, process_states.Killed):
             return self._state.msg
 
         raise exceptions.InvalidStateError('Has not been killed')
 
     def exception(self) -> Optional[BaseException]:
+        """Return exception, if the process is terminated in excepted state."""
         if isinstance(self._state, process_states.Excepted):
             return self._state.exception
 
@@ -463,6 +493,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
+        """Return the event loop of the process."""
         return self._loop
 
     def call_soon(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> events.ProcessCallback:
@@ -547,6 +578,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @protected
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
+        """Load the process from its saved instance state.
+
+        :param saved_state: A bundle to load the state from
+        :param load_context: The load context
+
+        """
         # First make sure the state machine constructor is called
         super().__init__()
 
@@ -596,18 +633,27 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     # endregion
 
     def add_process_listener(self, listener: ProcessListener) -> None:
+        """Add a process listener to the process.
+
+        The listener defines the actions to take when the process is triggering
+        the specific state condition.
+
+        """
         assert (listener != self), 'Cannot listen to yourself!'
         self.__event_helper.add_listener(listener)
 
     def remove_process_listener(self, listener: ProcessListener) -> None:
+        """Remove a process listener from the process."""
         self.__event_helper.remove_listener(listener)
 
     @protected
     def set_logger(self, logger: logging.Logger) -> None:
+        """Set the logger of the process."""
         self._logger = logger
 
     @protected
     def log_with_pid(self, level: int, msg: str) -> None:
+        """Log the message with the process pid."""
         self.logger.log(level, '%s: %s', self.pid, msg)
 
     # region Events
@@ -661,6 +707,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @super_check
     def on_create(self) -> None:
+        """Entering the CREATED state."""
         self._creation_time = time.time()
 
         # This will parse the inputs with respect to the input portnamespace of the spec and validate them
@@ -714,7 +761,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @super_check
     def on_paused(self, msg: Optional[str] = None) -> None:
-        """The process was paused """
+        """The process was paused."""
         self._pausing = None
 
         # Create a future to represent the duration of the paused state
@@ -729,7 +776,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @super_check
     def on_playing(self) -> None:
-        """ The process was played """
+        """The process was played."""
         # Done being paused
         if self._paused is not None:
             self._paused.set_result(True)
@@ -742,7 +789,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @super_check
     def on_finish(self, result: Any, successful: bool) -> None:
-        """ Entering the FINISHED state """
+        """Entering the FINISHED state."""
         if successful:
             validation_error = self.spec().outputs.validate(self.outputs)
             if validation_error:
@@ -752,30 +799,35 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @super_check
     def on_finished(self) -> None:
-        """ Entered the FINISHED state """
+        """Entered the FINISHED state."""
         self._fire_event(ProcessListener.on_process_finished, self.future().result())
 
     @super_check
     def on_except(self, exc_info: Tuple[Any, Exception, TracebackType]) -> None:
+        """Entering the EXCEPTED state."""
         exception = exc_info[1]
         exception.__traceback__ = exc_info[2]
         self.future().set_exception(exception)
 
     @super_check
     def on_excepted(self) -> None:
+        """Entered the EXCEPTED state."""
         self._fire_event(ProcessListener.on_process_excepted, str(self.future().exception()))
 
     @super_check
     def on_kill(self, msg: Optional[str]) -> None:
+        """Entering the KILLED state."""
         self.set_status(msg)
         self.future().set_exception(exceptions.KilledError(msg))
 
     @super_check
     def on_killed(self) -> None:
+        """Entered the KILLED state."""
         self._killing = None
         self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
 
     def on_terminated(self) -> None:
+        """Call when a terminal state is reached."""
         super().on_terminated()
         self.close()
 
@@ -854,6 +906,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         a future that resolves to the final result (even after one or more layer of futures being
         returned) of the callback.
 
+        The callback will be scheduled at the working
+        thread where the process event loop runs.
+
         :param callback: the callback function or coroutine
         :param args: the positional arguments to the callback
         :param kwargs: the keyword arguments to the callback
@@ -879,6 +934,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @ensure_not_closed
     def add_cleanup(self, cleanup: Callable[[], None]) -> None:
+        """Add callback, which will be run when the process is being closed."""
         assert self._cleanups is not None
         self._cleanups.append(cleanup)
 
@@ -906,12 +962,15 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
 
-    def pause(self, msg: Union[str, None] = None) -> Union[None, bool, futures.CancellableAction]:
-        """
-        Pause the process.  Returns True if after this call the process is paused, False otherwise
+    def pause(self, msg: Union[str, None] = None) -> Union[bool, futures.CancellableAction]:
+        """Pause the process.
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
             `_pre_paused_status attribute`, such that it can be restored when the process is played again.
+
+        :return: False if process is already terminated,
+                 True if already paused or pausing,
+                 a `CancellableAction` to pause if the process was running steps
         """
         if self.has_terminated():
             return False
@@ -932,7 +991,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._pausing = self._interrupt_action
             # Try to interrupt the state
             self._state.interrupt(interrupt_exception)
-            return self._interrupt_action
+            return cast(futures.CancellableAction, self._interrupt_action)
 
         return self._do_pause(msg)
 
@@ -1007,7 +1066,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @event(from_states=(process_states.Running, process_states.Waiting))
     def resume(self, *args: Any) -> None:
-        """Start running the process again"""
+        """Start running the process again."""
         return self._state.resume(*args)  # type: ignore
 
     @event(to_states=process_states.Excepted)
@@ -1051,6 +1110,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         # endregion
 
     def create_initial_state(self) -> process_states.State:
+        """This method is here to override its superclass.
+
+        Automatically enter the CREATED state when the process is created.
+
+        :return: A Created state
+        """
         return cast(process_states.State, self.get_state_class(process_states.ProcessState.CREATED)(self, self.run))
 
     def recreate_state(self, saved_state: persistence.Bundle) -> process_states.State:
@@ -1068,7 +1133,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     # region Execution related methods
 
     def run(self) -> Any:
-        pass
+        """This function will be run when the process is triggered.
+        It should be overridden by a subclass.
+        """
 
     @ensure_not_closed
     def execute(self) -> Optional[Dict[str, Any]]:
@@ -1084,6 +1151,14 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @ensure_not_closed
     async def step(self) -> None:
+        """Run a step.
+
+        The step is run synchronously with steps in its own process,
+        and asynchronously with steps in other processes.
+
+        The execute function running in this method is dependent on the state of the process.
+
+        """
         assert not self.has_terminated(), 'Cannot step, already terminated'
 
         if self.paused and self._paused is not None:
@@ -1123,6 +1198,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._set_interrupt_action(None)
 
     async def step_until_terminated(self) -> None:
+        """If the process has not terminated,
+        run the current step and wait until the step finished.
+
+        This is the function run by the event loop (not ``step``).
+
+        """
         while not self.has_terminated():
             await self.step()
 
@@ -1182,7 +1263,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @protected
     def encode_input_args(self, inputs: Any) -> Any:
         """
-        Encode input arguments such that they may be saved in a :class:`plumpy.Bundle`.
+        Encode input arguments such that they may be saved in a :class:`plumpy.persistence.Bundle`.
         The encoded inputs should contain no reference to the inputs that were passed in.
         This often will mean making a deepcopy of the input dictionary.
 
@@ -1195,7 +1276,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     @protected
     def decode_input_args(self, encoded: Any) -> Any:
         """
-        Decode saved input arguments as they came from the saved instance state :class:`plumpy.Bundle`.
+        Decode saved input arguments as they came from the saved instance state :class:`plumpy.persistence.Bundle`.
         The decoded inputs should contain no reference to the encoded inputs that were passed in.
         This often will mean making a deepcopy of the encoded input dictionary.
 
@@ -1206,6 +1287,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         return copy.deepcopy(encoded)
 
     def get_status_info(self, out_status_info: dict) -> None:
+        """Return updated status information of process.
+
+        :param out_status_info: the old status
+
+        """
         out_status_info.update({
             'ctime': self.creation_time,
             'paused': self.paused,

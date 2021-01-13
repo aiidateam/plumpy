@@ -62,6 +62,8 @@ target/
 #Ipython Notebook
 .ipynb_checkpoints
 
+# OSX
+.DS_Store
 
 # JetBrains IDE stuff
 .idea/
