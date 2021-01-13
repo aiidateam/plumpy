@@ -33,10 +33,7 @@ setup(
         'aiocontextvars~=0.2.2; python_version<"3.7"', 'kiwipy[rmq]~=0.7.1'
     ],
     extras_require={
-        'docs': [
-            'Sphinx~=2.0',
-            'sphinx-rtd-theme~=0.5.0',
-        ],
+        'docs': ['sphinx~=3.2.0', 'myst-nb~=0.11.0', 'sphinx-book-theme~=0.0.39', 'ipython~=7.0'],
         'pre-commit': ['mypy==0.790', 'pre-commit~=2.2', 'pylint==2.5.2'],
         'tests': ['pytest~=5.4', 'shortuuid', 'pytest-asyncio', 'pytest-cov', 'pytest-notebook']
     },

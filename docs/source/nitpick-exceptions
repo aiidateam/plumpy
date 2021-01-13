@@ -1,4 +1,6 @@
 py:class builtins.dict
+py:class method
+py:class traceback
 
 py:class typing.Any
 py:class typing.Callable
@@ -7,8 +9,26 @@ py:class typing.Tuple
 
 py:class _asyncio.Future
 py:class asyncio.unix_events._UnixDefaultEventLoopPolicy
+py:class asyncio.events.AbstractEventLoop
 py:class concurrent.futures._base.Error
+py:class concurrent.futures._base.Future
+
+# kiwipy
+py:class kiwipy.communications.Communicator
 
 # unavailable forward references
 py:class plumpy.process_states.Command
 py:class plumpy.process_states.State
+py:class plumpy.base.state_machine.State
+py:class State
+py:class Process
+py:class plumpy.futures.CancellableAction
+py:class plumpy.communications.LoopCommunicator
+py:class plumpy.persistence.PersistedPickle
+py:class plumpy.utils.AttributesFrozendict
+py:class plumpy.workchains._FunctionCall
+py:class plumpy.workchains._If
+py:class plumpy.workchains._While
+py:class plumpy.workchains._Instruction
+py:class _Instruction
+py:class plumpy.events.ProcessCallback

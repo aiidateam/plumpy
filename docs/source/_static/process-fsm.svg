@@ -1,0 +1,114 @@
+<svg version="1.1" viewBox="0 0 400 400">
+
+    <defs>
+        <marker id="arrow" markerWidth="4" markerHeight="10" viewBox="-2 -4 4 4" refX="0" refY="0"
+            markerUnits="strokeWidth" orient="auto">
+            <polyline points="-2,2 0,0 -2,-2" stroke="#443c3d" stroke-width="0.75px" fill="none" />
+        </marker>
+    </defs>
+
+    <g class="box-group">
+
+        <g transform="translate(4,0)">
+            <rect fill="#0e00cc" x="2" y="25" rx="3" ry="3" width="90" height="50" />
+            <text x="10" y="55" font-size="14" stroke="none" fill="#f5f3e7" font-weight="900">CREATED
+            </text>
+        </g>
+
+        <!-- to running -->
+        <line x1="95" x2="150" y1="50" y2="50" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to killed -->
+        <line x1="45" x2="45" y1="75" y2="170" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="45" x2="75" y1="170" y2="170" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to excepted -->
+        <line x1="40" x2="40" y1="75" y2="210" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="40" x2="225" y1="210" y2="210" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <g transform="translate(150,0)">
+            <rect fill="#0e00cc" x="2" y="25" rx="3" ry="3" width="90" height="50" />
+            <text x="10" y="55" font-size="14" stroke="none" fill="#f5f3e7" font-weight="900">RUNNING
+            </text>
+        </g>
+
+        <!-- to finished -->
+        <line x1="241" x2="300" y1="50" y2="50" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to waiting -->
+        <line x1="215" x2="215" y1="75" y2="120" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="215" x2="230" y1="120" y2="120" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to killed -->
+        <line x1="190" x2="190" y1="75" y2="170" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="190" x2="168" y1="170" y2="170" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to excepted -->
+        <line x1="195" x2="195" y1="75" y2="200" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="195" x2="225" y1="200" y2="200" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to running -->
+        <line x1="175" x2="175" y1="25" y2="10" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="175" x2="215" y1="10" y2="10" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="215" x2="215" y1="10" y2="25" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <g transform="translate(300,0)">
+            <rect fill="#66cc00" x="2" y="25" rx="3" ry="3" width="90" height="50" />
+            <text x="9" y="55" font-size="14" stroke="none" fill="#f5f3e7" font-weight="900">FINISHED
+            </text>
+        </g>
+
+        <g transform="translate(230,75)">
+            <rect fill="#cc9c00" x="2" y="25" rx="3" ry="3" width="90" height="50" />
+            <text x="10" y="55" font-size="14" stroke="none" fill="#f5f3e7" font-weight="900">WAITING
+            </text>
+        </g>
+
+        <!-- to finished -->
+        <line x1="321" x2="355" y1="125" y2="125" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="355" x2="355" y1="125" y2="75" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to running -->
+        <line x1="235" x2="235" y1="100" y2="75" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to waiting -->
+        <line x1="255" x2="255" y1="100" y2="85" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="255" x2="295" y1="85" y2="85" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="295" x2="295" y1="85" y2="100" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to excepted -->
+        <line x1="275" x2="275" y1="150" y2="175" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <!-- to killed -->
+        <line x1="120" x2="185" y1="130" y2="130" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="200" x2="231" y1="130" y2="130" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1" />
+        <line x1="120" x2="120" y1="130" y2="145" stroke-width="2" stroke="#443c3d" stroke-dasharray="2,1"
+            marker-end="url(#arrow)" />
+
+        <g transform="translate(75,120)">
+            <rect fill="#cc0000" x="2" y="25" rx="3" ry="3" width="90" height="50" />
+            <text x="17" y="55" font-size="14" stroke="none" fill="#f5f3e7" font-weight="900">KILLED
+            </text>
+        </g>
+
+        <g transform="translate(225,150)">
+            <rect fill="#cc0000" x="2" y="25" rx="3" ry="3" width="100" height="50" />
+            <text x="11" y="55" font-size="14" stroke="none" fill="#f5f3e7" font-weight="900">EXCEPTED
+            </text>
+        </g>
+
+    </g>
+
+</svg>

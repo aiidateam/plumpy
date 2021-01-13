@@ -100,6 +100,15 @@ class AttributesFrozendict(frozendict.frozendict):
 
 
 class AttributesDict(types.SimpleNamespace):
+    """Works like a dictionary, but items can also be added / accessed as attributes.
+
+    For example::
+
+        dct = AttributeDict()
+        dct["key1"] = "value"
+        dct.key2 = "value"
+
+    """
 
     def __setitem__(self, key: str, value: Any) -> None:
         setattr(self, key, value)
