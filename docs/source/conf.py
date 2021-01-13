@@ -32,7 +32,8 @@ release = plumpy.__version__
 master_doc = 'index'
 language = None
 extensions = [
-    'myst_parser', 'sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.viewcode', 'sphinx.ext.intersphinx'
+    'myst_nb', 'sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.viewcode', 'sphinx.ext.intersphinx',
+    'IPython.sphinxext.ipython_console_highlighting'
 ]
 
 # List of patterns, relative to source directory, that match files and
@@ -48,12 +49,15 @@ intersphinx_mapping = {
     'kiwipy': ('https://kiwipy.readthedocs.io/en/latest/', None)
 }
 
-myst_enable_extensions = ['colon_fence', 'deflist', 'smartquotes', 'substitution']
+myst_enable_extensions = ['colon_fence', 'deflist', 'html_image', 'smartquotes', 'substitution']
 myst_url_schemes = ('http', 'https', 'mailto')
 myst_substitutions = {
     'rabbitmq': '[RabbitMQ](https://www.rabbitmq.com/)',
     'kiwipy': '[kiwipy](https://kiwipy.readthedocs.io)'
 }
+jupyter_execute_notebooks = 'cache'
+execution_show_tb = 'READTHEDOCS' in os.environ
+execution_timeout = 60
 
 # Warnings to ignore when using the -n (nitpicky) option
 # We should ignore any python built-in exception, for instance

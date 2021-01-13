@@ -9,6 +9,8 @@ Features
    - Process can be saved between steps and continued later
    - Optional explicit specification of inputs and outputs including their types, validation functions, help strings, etc.
 
+- It support writing `Process`, with well defined inputs and outputs, that can be chained together to create complex workflows.
+
 ## Installation
 
 It is recommended to install plumpy into a [virtual environment](https://virtualenv.pypa.io):
@@ -29,28 +31,15 @@ For remote controlled processes, you will also need to install and start the {{r
 
 ## Getting Started
 
-After you have successfully installed plumpy, you can try out some of the examples in [user guide section](basic/examples.md) to help you on your way.
+After you have successfully installed plumpy, you can walk-through the [user tutorial](./tutorial.ipynb) to help you on your way.
 
-The design concepts behind plumpy can be found in [concepts section](basic/concepts.rst), and the complete [API documentation](apidoc/plumpy.rst) is also provided.
-
-```{toctree}
-:caption: Basic
-:hidden:
-
-basic/introduction
-basic/concepts
-basic/process
-basic/workchain
-basic/controller
-basic/examples
-```
+The design concepts behind plumpy can be found in [concepts section](./concepts.md), and the complete [API documentation](apidoc/plumpy.rst) is also provided.
 
 ```{toctree}
-:caption: Advanced
 :hidden:
 
-advanced/process
-advanced/workchain
+tutorial
+concepts
 API Reference <apidoc/plumpy>
 ```
 

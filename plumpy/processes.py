@@ -962,12 +962,15 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
 
-    def pause(self, msg: Union[str, None] = None) -> Union[None, bool, futures.CancellableAction]:
+    def pause(self, msg: Union[str, None] = None) -> Union[bool, futures.CancellableAction]:
         """Pause the process.
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
             `_pre_paused_status attribute`, such that it can be restored when the process is played again.
-        :return: True if after this call the process is paused, False otherwise
+
+        :return: False if process is already terminated,
+                 True if already paused or pausing,
+                 a `CancellableAction` to pause if the process was running steps
         """
         if self.has_terminated():
             return False
@@ -988,7 +991,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._pausing = self._interrupt_action
             # Try to interrupt the state
             self._state.interrupt(interrupt_exception)
-            return self._interrupt_action
+            return cast(futures.CancellableAction, self._interrupt_action)
 
         return self._do_pause(msg)
 
@@ -1061,7 +1064,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         call_with_super_check(self.on_playing)
         return True
 
-    # TODO only Waiting?
     @event(from_states=(process_states.Running, process_states.Waiting))
     def resume(self, *args: Any) -> None:
         """Start running the process again."""

@@ -121,7 +121,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     ) -> None:
         super().__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
         self._stepper: Optional[Stepper] = None
-        self._awaitables: Dict[Hashable, str] = {}
+        self._awaitables: Dict[Union[asyncio.Future, processes.Process], str] = {}
 
     @classmethod
     def spec(cls) -> WorkChainSpec:
@@ -149,7 +149,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         if stepper_state is not None:
             self._stepper = self.spec().get_outline().recreate_stepper(stepper_state, self)
 
-    def to_context(self, **kwargs: Union[Hashable, processes.Process]) -> None:
+    def to_context(self, **kwargs: Union[asyncio.Future, processes.Process]) -> None:
         """
         This is a convenience method that provides syntactic sugar, for
         a user to add multiple intersteps that will assign a certain value
