@@ -32,17 +32,21 @@ if TYPE_CHECKING:
 
 class Bundle(dict):
 
-    def __init__(self, savable: 'Savable', save_context: Optional['LoadSaveContext'] = None):
+    def __init__(self, savable: 'Savable', save_context: Optional['LoadSaveContext'] = None, dereference: bool = False):
         """
         Create a bundle from a savable.  Optionally keep information about the
         class loader that can be used to load the classes in the bundle.
 
         :param savable: The savable object to bundle
         :param save_context: The optional save context to use
+        :param dereference: Remove refrences from the data, by deep copying
 
         """
         super().__init__()
-        self.update(savable.save(save_context))
+        if dereference:
+            self.update(copy.deepcopy(savable.save(save_context)))
+        else:
+            self.update(savable.save(save_context))
 
     def unbundle(self, load_context: Optional['LoadSaveContext'] = None) -> 'Savable':
         """
@@ -307,7 +311,7 @@ class InMemoryPersister(Persister):
         self._save_context = LoadSaveContext(loader=loader)
 
     def save_checkpoint(self, process: 'Process', tag: Optional[str] = None) -> None:
-        self._checkpoints.setdefault(process.pid, {})[tag] = Bundle(process, self._save_context)
+        self._checkpoints.setdefault(process.pid, {})[tag] = Bundle(process, self._save_context, dereference=True)
 
     def load_checkpoint(self, pid: PID_TYPE, tag: Optional[str] = None) -> Bundle:
         return self._checkpoints[pid][tag]
