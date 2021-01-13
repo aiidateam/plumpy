@@ -28,7 +28,6 @@ class ContextMixin(persistence.Savable):
         self, out_state: SAVED_STATE_TYPE, save_context: Optional[persistence.LoadSaveContext]
     ) -> None:
         """Add the instance state to ``out_state``.
-        
         .. important::
 
             The instance state will contain a pointer to the ``ctx``,
