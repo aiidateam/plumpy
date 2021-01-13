@@ -1,11 +1,10 @@
 name: continuous-deployment
 
-# deploy on creating a release on master with tag vX.Y.Z
+# deploy on creating a release tag vX.Y.Z
 # will only be published to PyPi if the tests pass
 
 on:
   push:
-    branches: [master]
     tags:
       - "v*"
 
