@@ -1,56 +1,56 @@
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.5.0
-    hooks:
-    -   id: double-quote-string-fixer
-    -   id: end-of-file-fixer
-    -   id: fix-encoding-pragma
-    -   id: mixed-line-ending
-    -   id: trailing-whitespace
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v2.5.0
+      hooks:
+          - id: double-quote-string-fixer
+          - id: end-of-file-fixer
+          - id: fix-encoding-pragma
+          - id: mixed-line-ending
+          - id: trailing-whitespace
 
--   repo: https://github.com/pre-commit/mirrors-yapf
-    rev: v0.30.0
-    hooks:
-    -   id: yapf
-        name: yapf
-        types: [python]
-        args: ['-i']
+    - repo: https://github.com/pre-commit/mirrors-yapf
+      rev: v0.30.0
+      hooks:
+          - id: yapf
+            name: yapf
+            types: [python]
+            args: ["-i"]
 
--   repo: https://github.com/PyCQA/pylint
-    rev: pylint-2.5.2
-    hooks:
-    -   id: pylint
-        language: system
-        args: [
-            '--max-line-length=120',
-            '--disable=import-outside-toplevel',
-            '--disable=missing-docstring',
-            '--disable=bad-continuation',
-            '--disable=global-statement',
-            '--disable=too-few-public-methods',
-            '--disable=inconsistent-return-statements',
-            '--disable=locally-disabled',
-            '--disable=too-many-ancestors',
-            '--disable=too-many-arguments',
-            '--disable=too-many-instance-attributes',
-        ]
-        exclude: >
-            (?x)^(
-                docs/source/conf.py|
-                test/.*|
-            )$
+    - repo: https://github.com/PyCQA/pylint
+      rev: pylint-2.5.2
+      hooks:
+          - id: pylint
+            additional_dependencies: [
+                "frozendict~=1.2", "pyyaml~=5.1.2", "nest_asyncio~=1.4.0", "aio-pika~=6.6",
+                "aiocontextvars~=0.2.2; python_version<'3.7'", "kiwipy[rmq]~=0.7.1"
+            ]
+            args:
+                [
+                    "--max-line-length=120",
+                    "--disable=import-outside-toplevel",
+                    "--disable=missing-docstring",
+                    "--disable=bad-continuation",
+                    "--disable=global-statement",
+                    "--disable=too-few-public-methods",
+                    "--disable=inconsistent-return-statements",
+                    "--disable=locally-disabled",
+                    "--disable=too-many-ancestors",
+                    "--disable=too-many-arguments",
+                    "--disable=too-many-instance-attributes",
+                ]
+            exclude: >
+                (?x)^(
+                    docs/source/conf.py|
+                    test/.*|
+                )$
 
--   repo: local
-    hooks:
-    -   id: mypy
-        name: mypy
-        entry: mypy
-        args: [--config-file=tox.ini]
-        language: python
-        types: [python]
-        require_serial: true
-        pass_filenames: true
-        files: >
-            (?x)^(
-                plumpy/.*py|
-            )$
+    - repo: https://github.com/pre-commit/mirrors-mypy
+      rev: v0.790
+      hooks:
+          - id: mypy
+            args: [--config-file=tox.ini]
+            additional_dependencies: ["aio_pika~=6.6"]
+            files: >
+                (?x)^(
+                    plumpy/.*py|
+                )$

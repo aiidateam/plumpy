@@ -3,38 +3,18 @@ name: continuous-integration
 on: [push, pull_request]
 
 jobs:
-
     pre-commit:
-
         runs-on: ubuntu-latest
 
         steps:
-        -   uses: actions/checkout@v1
-
-        -   name: Cache python dependencies
-            id: cache-pip
-            uses: actions/cache@v1
-            with:
-                path: ~/.cache/pip
-                key: pip-pre-commit-${{ hashFiles('**/setup.json') }}
-                restore-keys:
-                    pip-pre-commit-
-
-        -   name: Set up Python
-            uses: actions/setup-python@v2
-            with:
-                python-version: 3.8
-
-        -   name: Install python dependencies
-            run:
-                pip install -e .[pre-commit,tests]
-
-        -   name: Run pre-commit
-            run:
-                pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
+            - uses: actions/checkout@v2
+            - name: Set up Python 3.8
+              uses: actions/setup-python@v2
+              with:
+                  python-version: 3.8
+            - uses: pre-commit/action@v2.0.0
 
     tests:
-
         runs-on: ubuntu-latest
 
         strategy:
@@ -45,39 +25,28 @@ jobs:
             rabbitmq:
                 image: rabbitmq:latest
                 ports:
-                -   5672:5672
+                    - 5672:5672
 
         steps:
-        -   uses: actions/checkout@v2
+            - uses: actions/checkout@v2
 
-        -   name: Cache python dependencies
-            id: cache-pip
-            uses: actions/cache@v1
-            with:
-                path: ~/.cache/pip
-                key: pip-${{ matrix.python-version }}-tests-${{ hashFiles('**/setup.json') }}
-                restore-keys:
-                    pip-${{ matrix.python-version }}-tests
+            - name: Set up Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v2
+              with:
+                  python-version: ${{ matrix.python-version }}
 
-        -   name: Set up Python ${{ matrix.python-version }}
-            uses: actions/setup-python@v2
-            with:
-                python-version: ${{ matrix.python-version }}
+            - name: Install python dependencies
+              run: pip install -e .[tests]
 
-        -   name: Install python dependencies
-            run:
-                pip install -e .[tests]
+            - name: Run pytest
+              run: pytest -sv --cov=plumpy test
 
-        -   name: Run pytest
-            run:
-                pytest -sv --cov=plumpy test
+            - name: Create xml coverage
+              run: coverage xml
 
-        -   name: Create xml coverage
-            run: coverage xml
-
-        -   name: Upload coverage to Codecov
-            if: github.repository == 'aiidateam/plumpy'
-            uses: codecov/codecov-action@v1
-            with:
-                file: ./coverage.xml
-                name: plumpy
+            - name: Upload coverage to Codecov
+              if: github.repository == 'aiidateam/plumpy'
+              uses: codecov/codecov-action@v1
+              with:
+                  file: ./coverage.xml
+                  name: plumpy
