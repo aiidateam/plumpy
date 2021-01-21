@@ -39,5 +39,6 @@ setup(
         'tests': ['pytest~=5.4', 'shortuuid', 'pytest-asyncio', 'pytest-cov', 'pytest-notebook']
     },
     packages=['plumpy', 'plumpy/base'],
+    include_package_data=True,
     test_suite='test'
 )

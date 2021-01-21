@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.18.3 - 2021-01-21
+## v0.18.4 - 2021-01-21
 
 Minor update, to add `py.typed` file to distribution, in accordance with [PEP-561](https://www.python.org/dev/peps/pep-0561/) [[#195]](https://github.com/aiidateam/plumpy/pull/195)
 
