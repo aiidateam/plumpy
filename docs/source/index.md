@@ -45,6 +45,7 @@ The design concepts behind plumpy can be found in [concepts section](./concepts.
 tutorial
 concepts
 API Reference <apidoc/plumpy>
+_changelog
 ```
 
 ## Indices and tables
