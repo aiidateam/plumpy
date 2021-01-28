@@ -317,17 +317,17 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def _setup_event_hooks(self) -> None:
         """Set the event hooks to process, when it is created or loaded(recreated)."""
-        self.add_state_event_callback(
-            state_machine.StateEventHook.ENTERING_STATE,
-            lambda _s, _h, state: self.on_entering(cast(process_states.State, state))
-        )
-        self.add_state_event_callback(
-            state_machine.StateEventHook.ENTERED_STATE,
-            lambda _s, _h, from_state: self.on_entered(cast(Optional[process_states.State], from_state))
-        )
-        self.add_state_event_callback(
-            state_machine.StateEventHook.EXITING_STATE, lambda _s, _h, _state: self.on_exiting()
-        )
+        event_hooks = {
+            state_machine.StateEventHook.ENTERING_STATE:
+            lambda _s, _h, state: self.on_entering(cast(process_states.State, state)),
+            state_machine.StateEventHook.ENTERED_STATE:
+            lambda _s, _h, from_state: self.on_entered(cast(Optional[process_states.State], from_state)),
+            state_machine.StateEventHook.EXITING_STATE:
+            lambda _s, _h, _state: self.on_exiting()
+        }
+        for hook, callback in event_hooks.items():
+            self.add_state_event_callback(hook, callback)
+            self.add_cleanup(functools.partial(self.remove_state_event_callback, hook, callback))
 
     @property
     def creation_time(self) -> Optional[float]:
@@ -837,6 +837,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         Called when the Process is being closed an will not be ran anymore.  This is an opportunity
         to free any runtime resources
         """
+        # remove state machine call backs
         try:
             for cleanup in self._cleanups or []:
                 try:
