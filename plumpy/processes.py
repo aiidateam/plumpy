@@ -1107,7 +1107,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self.transition_to(process_states.ProcessState.KILLED, msg)
         return True
 
-        # endregion
+    @property
+    def is_killing(self) -> bool:
+        """Return if the process is already being killed."""
+        return self._killing is not None
+
+    # endregion
 
     def create_initial_state(self) -> process_states.State:
         """This method is here to override its superclass.
