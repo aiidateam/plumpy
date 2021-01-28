@@ -837,7 +837,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         Called when the Process is being closed an will not be ran anymore.  This is an opportunity
         to free any runtime resources
         """
-        # remove state machine call backs
         try:
             for cleanup in self._cleanups or []:
                 try:
