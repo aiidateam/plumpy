@@ -327,7 +327,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         }
         for hook, callback in event_hooks.items():
             self.add_state_event_callback(hook, callback)
-            self.add_cleanup(functools.partial(self.remove_state_event_callback, hook, callback))
 
     @property
     def creation_time(self) -> Optional[float]:
@@ -845,6 +844,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                     self.logger.exception('Exception calling cleanup method %s', cleanup)
             self._cleanups = None
         finally:
+            self._event_callbacks = {}
             self._closed = True
 
     def _fire_event(self, evt: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
