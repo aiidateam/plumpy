@@ -145,7 +145,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         """
         if PROCESS_STACK.get():
-            return PROCESS_STACK.get()[-1]
+            return PROCESS_STACK.get()[-1]()
 
         return None
 
