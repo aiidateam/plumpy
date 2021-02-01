@@ -520,11 +520,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         meaning that globally someone can ask for Process.current() to get the last process
         that is on the call stack.
         """
+        _LOGGER.debug("Entering _process_scope for process %s \nPROCESS_STACK %s", self, PROCESS_STACK)
         stack_copy = PROCESS_STACK.get().copy()
         stack_copy.append(self)
         PROCESS_STACK.set(stack_copy)
-        import traceback
-        _LOGGER.debug("Entering _process_scope for process %s \n%s", self, traceback.print_stack(limit=10))
+        #import traceback
+
         try:
             yield None
         finally:
@@ -534,7 +535,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             stack_copy = PROCESS_STACK.get().copy()
             stack_copy.pop()
             PROCESS_STACK.set(stack_copy)
-            _LOGGER.debug("Exited _process_scope for process %s \n%s", self, traceback.print_stack(limit=10))
+            _LOGGER.debug("Exited _process_scope for process %s \nPROCESS_STACK %s", self, PROCESS_STACK)
 
     async def _run_task(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """
