@@ -261,7 +261,7 @@ class StateMachine(metaclass=StateMachineMeta):
 
     @super_check
     def init(self) -> None:
-        """ Called after entering initial state. """
+        """Called after entering initial state in `__call__` method of `StateMachineMeta`"""
 
     def __str__(self) -> str:
         return '<{}> ({})'.format(self.__class__.__name__, self.state)
@@ -286,6 +286,9 @@ class StateMachine(metaclass=StateMachineMeta):
         self._event_callbacks.setdefault(hook, []).append(callback)
 
     def remove_state_event_callback(self, hook: Hashable, callback: EVENT_CALLBACK_TYPE) -> None:
+        if getattr(self, '_closed', False):
+            # if the process is closed, then all callbacks have already been removed
+            return None
         try:
             self._event_callbacks[hook].remove(callback)
         except (KeyError, ValueError):

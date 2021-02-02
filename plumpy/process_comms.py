@@ -332,6 +332,11 @@ class RemoteProcessThreadController:
         self._communicator = communicator
 
     def get_status(self, pid: 'PID_TYPE') -> kiwipy.Future:
+        """Get the status of a process with the given PID.
+
+        :param pid: the process id
+        :return: the status response from the process
+        """
         return self._communicator.rpc_send(pid, STATUS_MSG)
 
     def pause_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> kiwipy.Future:
