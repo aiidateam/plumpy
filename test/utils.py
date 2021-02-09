@@ -2,6 +2,7 @@
 """Utilities for tests"""
 import asyncio
 import collections
+from collections.abc import Mapping
 import shortuuid
 import unittest
 
@@ -370,7 +371,7 @@ def compare_dictionaries(bundle1, bundle2, dict1, dict2, exclude=None):
 
 
 def compare_value(bundle1, bundle2, v1, v2, exclude=None):
-    if isinstance(v1, collections.Mapping) and isinstance(v2, collections.Mapping):
+    if isinstance(v1, Mapping) and isinstance(v2, Mapping):
         compare_dictionaries(bundle1, bundle2, v1, v2, exclude)
     elif isinstance(v1, list) and isinstance(v2, list):
         for vv1, vv2 in zip(v1, v2):

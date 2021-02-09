@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 from collections import deque
+from collections.abc import Mapping
 import functools
 import importlib
 import inspect
 import logging
 import types
-from typing import Any, Callable, Hashable, List, MutableMapping, Optional, Tuple, Type, TYPE_CHECKING
+from typing import Any, Callable, Hashable, Iterator, List, MutableMapping, Optional, Tuple, Type, TYPE_CHECKING
 from typing import Set  # pylint: disable=unused-import
 
 import asyncio
-import frozendict
 
 from .settings import check_protected, check_override
 from . import lang
@@ -69,7 +69,44 @@ class EventHelper:
                 _LOGGER.error("Listener '%s' produced an exception:\n%s", listener, exception)
 
 
-class AttributesFrozendict(frozendict.frozendict):
+class Frozendict(Mapping):
+    """
+    An immutable wrapper around dictionaries that implements the complete :py:class:`collections.Mapping`
+    interface. It can be used as a drop-in replacement for dictionaries where immutability is desired.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._dict = dict(*args, **kwargs)
+        self._hash: Optional[int] = None
+
+    def __getitem__(self, key: str) -> Any:
+        return self._dict[key]
+
+    def __contains__(self, key: Any) -> bool:
+        return key in self._dict
+
+    def copy(self, **add_or_replace: Any) -> 'Frozendict':
+        return self.__class__(self, **add_or_replace)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._dict)
+
+    def __len__(self) -> int:
+        return len(self._dict)
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} {self._dict!r}>'
+
+    def __hash__(self) -> int:
+        if self._hash is None:
+            hashed = 0
+            for key, value in self._dict.items():
+                hashed ^= hash((key, value))
+            self._hash = hashed
+        return self._hash
+
+
+class AttributesFrozendict(Frozendict):
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
