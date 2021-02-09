@@ -44,6 +44,7 @@ The design concepts behind plumpy can be found in [concepts section](./concepts.
 
 tutorial
 concepts
+design_rationale
 API Reference <apidoc/plumpy>
 _changelog
 ```
