@@ -71,8 +71,10 @@ class EventHelper:
 
 class Frozendict(Mapping):
     """
-    An immutable wrapper around dictionaries that implements the complete :py:class:`collections.Mapping`
+    An immutable wrapper around dictionaries that implements the complete :py:class:`collections.abc.Mapping`
     interface. It can be used as a drop-in replacement for dictionaries where immutability is desired.
+
+    Adapted from: slezica/python-frozendict
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
