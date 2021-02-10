@@ -125,11 +125,11 @@ class State:
     def is_terminal(cls) -> bool:
         return not cls.ALLOWED
 
-    def __init__(self, state_machine: 'StateMachine', *args: Any, **kwargs: Any):  # pylint: disable=unused-argument
+    def __init__(self, state_machine: Optional['StateMachine'], *args: Any, **kwargs: Any):  # pylint: disable=unused-argument
         """
         :param state_machine: The process this state belongs to
         """
-        self.state_machine = state_machine
+        self.state_machine: Optional[StateMachine] = state_machine
         self.in_state: bool = False
 
     def __str__(self) -> str:
@@ -157,6 +157,8 @@ class State:
             raise InvalidStateError('Cannot exit a terminal state {}'.format(self.LABEL))
 
     def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'State':
+        if self.state_machine is None:
+            raise ValueError('State machine not set for {self}')
         return self.state_machine.create_state(state_label, *args, **kwargs)
 
     def do_enter(self) -> None:
