@@ -823,6 +823,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     def on_killed(self) -> None:
         """Entered the KILLED state."""
         self._killing = None
+        self.future().exception()  # exception must be retrieved
         self._fire_event(ProcessListener.on_process_killed, self.killed_msg())
 
     def on_terminated(self) -> None:
