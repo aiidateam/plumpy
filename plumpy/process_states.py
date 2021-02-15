@@ -145,6 +145,8 @@ class State(state_machine.State, persistence.Savable):
         """
         :return: The process
         """
+        if self.state_machine is None:
+            raise ValueError('Process not set for {self}')
         return self.state_machine
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
@@ -342,14 +344,17 @@ class Excepted(State):
     TRACEBACK = 'traceback'
 
     def __init__(
-        self, process: 'Process', exception: Optional[BaseException], trace_back: Optional[TracebackType] = None
+        self,
+        process: 'Process',  # pylint: disable=unused-argument
+        exception: Optional[BaseException],
+        trace_back: Optional[TracebackType] = None
     ):
         """
         :param process: The associated process
         :param exception: The exception instance
         :param trace_back: An optional exception traceback
         """
-        super().__init__(process)
+        super().__init__(None)  # terminal state does not require process ref
         self.exception = exception
         self.traceback = trace_back
 
@@ -389,8 +394,8 @@ class Excepted(State):
 class Finished(State):
     LABEL = ProcessState.FINISHED
 
-    def __init__(self, process: 'Process', result: Any, successful: bool) -> None:
-        super().__init__(process)
+    def __init__(self, process: 'Process', result: Any, successful: bool) -> None:  # pylint: disable=unused-argument
+        super().__init__(None)  # terminal state does not require process ref
         self.result = result
         self.successful = successful
 
@@ -399,13 +404,13 @@ class Finished(State):
 class Killed(State):
     LABEL = ProcessState.KILLED
 
-    def __init__(self, process: 'Process', msg: Optional[str]):
+    def __init__(self, process: 'Process', msg: Optional[str]):  # pylint: disable=unused-argument
         """
         :param process: The associated process
         :param msg: Optional kill message
 
         """
-        super().__init__(process)
+        super().__init__(None)  # terminal state does not require process ref
         self.msg = msg
 
 
