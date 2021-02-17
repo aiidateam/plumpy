@@ -4,6 +4,8 @@
 
 Minor improvements and bug fixes:
 
+- 🐛 FIX: retrieve future exception on_killed
+  The exception set on the future should be retrieved, otherwise it will be caught by the loop's exception handler.
 - 🐛 FIX: Clean-up process event hooks:
   On Process close/cleanup event hooks are removed,
   in part to not persist cyclic dependencies of hooks <-> Process.
