@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.18.5 - 2021-02-15
+
+Minor improvements and bug fixes:
+
+- 🐛 FIX: retrieve future exception on_killed
+  The exception set on the future should be retrieved, otherwise it will be caught by the loop's exception handler.
+- 🐛 FIX: Clean-up process event hooks:
+  On Process close/cleanup event hooks are removed,
+  in part to not persist cyclic dependencies of hooks <-> Process.
+  Once a process is closed, it will also not raise an Exception if a hook tries to un-register itself (but has already been removed by the clean-up).
+- 👌 IMPROVE: Add `Process.is_killing` property
+- 👌 IMPROVE: remove RUNNING from allowed states of `resume`:
+  Since there is no `resume` method implemented for the `Running` class.
+- 🔧 MAINTAIN: Remove frozendict dependency
+
 ## v0.18.4 - 2021-01-21
 
 Minor update, to add `py.typed` file to distribution, in accordance with [PEP-561](https://www.python.org/dev/peps/pep-0561/) [[#195]](https://github.com/aiidateam/plumpy/pull/195)
