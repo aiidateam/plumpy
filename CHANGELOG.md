@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.18.6 - 2021-02-24
+
+👌 IMPROVE: Catch state change broadcast timeout
+
+When using an RMQ communicator, the broadcast can timeout on heavy loads to RMQ
+(for example see <https://github.com/aiidateam/aiida-core/issues/4745>).
+This broadcast is not critical to the running of the process,
+and so a timeout should not except it.
+
+Also ensure the process PID is included in all log messages.
+
 ## v0.18.5 - 2021-02-15
 
 Minor improvements and bug fixes:
