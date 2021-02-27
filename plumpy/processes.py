@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
 import abc
+import asyncio
 import contextlib
+import copy
 import enum
 import functools
-import copy
 import logging
-import time
+import re
 import sys
+import time
 import uuid
-import asyncio
 from types import TracebackType
 from typing import (
     Any, Awaitable, Callable, cast, Dict, Generator, Hashable, List, Optional, Sequence, Tuple, Type, Union
@@ -299,9 +300,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 self.logger.exception('Process<%s>: failed to register as an RPC subscriber', self.pid)
 
             try:
-                identifier = self._communicator.add_broadcast_subscriber(
-                    self.broadcast_receive, identifier=str(self.pid)
-                )
+                # filter out state change broadcasts
+                subscriber = kiwipy.BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
+                identifier = self._communicator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
                 self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
             except kiwipy.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
