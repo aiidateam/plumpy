@@ -62,29 +62,16 @@ def convert_to_comm(callback: 'Subscriber',
     on the given even loop and return a kiwi future representing the future outcome
     of the original method.
 
-    :param loop: the even loop to schedule the callback in
     :param callback: the function to convert
+    :param loop: the even loop to schedule the callback in
     :return: a new callback function that returns a future
     """
     if isinstance(callback, kiwipy.BroadcastFilter):
 
         def _passthrough(*args: Any, **kwargs: Any) -> bool:
-            # pylint: disable=protected-access
             sender = kwargs.get('sender', args[1])
             subject = kwargs.get('subject', args[2])
-            if subject is not None and callback._subject_filters and not any(  # type: ignore[attr-defined]
-                [
-                    check(subject) for check in callback._subject_filters  # type: ignore[attr-defined]
-                ]
-            ):
-                return True
-            if sender is not None and callback._sender_filters and not any(  # type: ignore[attr-defined]
-                [
-                    check(sender) for check in callback._sender_filters  # type: ignore[attr-defined]
-                ]
-            ):
-                return True
-            return False
+            return callback.is_filtered(sender, subject)  # type: ignore[attr-defined]
     else:
 
         def _passthrough(*args: Any, **kwargs: Any) -> bool:  # pylint: disable=unused-argument

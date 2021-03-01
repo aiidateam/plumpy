@@ -31,7 +31,7 @@ setup(
     python_requires='>=3.6',
     install_requires=[
         'pyyaml~=5.1.2', 'nest_asyncio~=1.4.0', 'aio-pika~=6.6', 'aiocontextvars~=0.2.2; python_version<"3.7"',
-        'kiwipy[rmq]~=0.7.1'
+        'kiwipy[rmq]~=0.7.4'
     ],
     extras_require={
         'docs': ['sphinx~=3.2.0', 'myst-nb~=0.11.0', 'sphinx-book-theme~=0.0.39', 'ipython~=7.0'],
