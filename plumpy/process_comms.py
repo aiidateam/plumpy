@@ -4,12 +4,14 @@ import asyncio
 import copy
 import logging
 from typing import Any, cast, Dict, Optional, Sequence, TYPE_CHECKING, Union
+from weakref import WeakValueDictionary
 
 import kiwipy
 
-from . import loaders
+from . import exceptions
 from . import communications
 from . import futures
+from . import loaders
 from . import persistence
 from .utils import PID_TYPE
 
@@ -27,6 +29,7 @@ __all__ = [
 
 if TYPE_CHECKING:
     from .processes import Process  # pylint: disable=cyclic-import
+    ProcessCacheType = WeakValueDictionary[PID_TYPE, Process]  # pylint: disable=unsubscriptable-object
 
 ProcessResult = Any
 ProcessStatus = Any
@@ -527,6 +530,20 @@ class ProcessLauncher:
         else:
             self._loader = loaders.get_object_loader()
 
+        # using a weak reference ensures the processes can be garbage cleaned on completion
+        self._process_cache: 'ProcessCacheType' = WeakValueDictionary()
+
+    @property
+    def process_cache(self) -> 'ProcessCacheType':
+        """Return a dictionary mapping PIDs to launched processes that are still in memory.
+
+        The mapping uses a `WeakValueDictionary`, meaning that processes can be removed,
+        once they are no longer referenced anywhere else.
+        This means the dictionary will always contain all processes still running,
+        but potentially also processes that have terminated but have not yet been garbage collected.
+        """
+        return copy.copy(self._process_cache)
+
     async def __call__(self, communicator: kiwipy.Communicator, task: Dict[str, Any]) -> Union[PID_TYPE, ProcessResult]:
         """
         Receive a task.
@@ -571,9 +588,15 @@ class ProcessLauncher:
             init_kwargs = {}
 
         proc_class = self._loader.load_object(process_class)
-        proc = proc_class(*init_args, **init_kwargs)
+        proc: Process = proc_class(*init_args, **init_kwargs)
+
+        if proc.pid in self._process_cache and not self._process_cache[proc.pid].has_terminated():
+            raise exceptions.DuplicateProcess(f'Process<{proc.pid}> is already running')
+
         if persist and self._persister is not None:
             self._persister.save_checkpoint(proc)
+
+        self._process_cache[proc.pid] = proc
 
         if nowait:
             asyncio.ensure_future(proc.step_until_terminated())
@@ -602,9 +625,14 @@ class ProcessLauncher:
             LOGGER.warning('rejecting task: cannot continue process<%d> because no persister is available', pid)
             raise communications.TaskRejected('Cannot continue process, no persister')
 
+        if pid in self._process_cache and not self._process_cache[pid].has_terminated():
+            raise exceptions.DuplicateProcess(f'Process<{pid}> is already running')
+
         # Do not catch exceptions here, because if these operations fail, the continue task should except and bubble up
         saved_state = self._persister.load_checkpoint(pid, tag)
         proc = cast('Process', saved_state.unbundle(self._load_context))
+
+        self._process_cache[proc.pid] = proc
 
         if nowait:
             asyncio.ensure_future(proc.step_until_terminated())
