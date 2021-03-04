@@ -602,7 +602,10 @@ class ProcessLauncher:
             asyncio.ensure_future(proc.step_until_terminated())
             return proc.pid
 
-        await proc.step_until_terminated()
+        try:
+            await proc.step_until_terminated()
+        finally:
+            self._process_cache.pop(proc.pid, None)
 
         return proc.future().result()
 
@@ -638,7 +641,10 @@ class ProcessLauncher:
             asyncio.ensure_future(proc.step_until_terminated())
             return proc.pid
 
-        await proc.step_until_terminated()
+        try:
+            await proc.step_until_terminated()
+        finally:
+            self._process_cache.pop(proc.pid, None)
 
         return proc.future().result()
 
