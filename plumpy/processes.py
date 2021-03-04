@@ -1193,7 +1193,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             except KeyboardInterrupt:  # pylint: disable=try-except-raise
                 raise
-            except futures.CancelledError:
+            except asyncio.CancelledError:
                 # note this re-raise is only required in python<=3.7,
                 # where asyncio.CancelledError == concurrent.futures.CancelledError
                 # it is encountered when the run_task is cancelled

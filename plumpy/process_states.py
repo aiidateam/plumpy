@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 from enum import Enum
 import sys
 import traceback
@@ -229,7 +230,7 @@ class Running(State):
                     result = self.run_fn(*self.args, **self.kwargs)
                 finally:
                     self._running = False
-            except Interruption:
+            except (Interruption, asyncio.CancelledError):
                 # Let this bubble up to the caller
                 raise
             except Exception:  # pylint: disable=broad-except
@@ -316,7 +317,7 @@ class Waiting(State):
     async def execute(self) -> State:  # type: ignore # pylint: disable=invalid-overridden-method
         try:
             result = await self._waiting_future
-        except Interruption:
+        except (Interruption, asyncio.CancelledError):
             # Deal with the interruption (by raising) but make sure our internal
             # state is back to how it was before the interruption so that we can be
             # re-executed
