@@ -233,7 +233,7 @@ class Running(State):
             except Interruption:
                 # Let this bubble up to the caller
                 raise
-            except asyncio.CancelledError:
+            except asyncio.CancelledError:  # pylint: disable=try-except-raise
                 # note this re-raise is only required in python<=3.7,
                 # for python>=3.8 asyncio.CancelledError does not inherit from Exception,
                 # so will not be caught below
