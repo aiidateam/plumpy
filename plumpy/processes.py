@@ -9,6 +9,7 @@ import logging
 import time
 import sys
 import uuid
+import weakref
 import asyncio
 from types import TracebackType
 from typing import (
@@ -144,7 +145,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         """
         if PROCESS_STACK.get():
-            return PROCESS_STACK.get()[-1]
+            return PROCESS_STACK.get()[-1]()
 
         return None
 
@@ -518,9 +519,15 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         This context manager function is used to make sure the process stack is correct
         meaning that globally someone can ask for Process.current() to get the last process
         that is on the call stack.
+
+        Note: A weak reference to the process is used in order to avoid that the 'process stack' context variable
+        itself can keep the process in memory.
+        Asynchronous function executions scheduled by asyncio's `call_soon`, `call_later` or `call_at` get individual
+        copies of the context, which stay in memory as long as the corresponding handler stays in memory
+        (even if the execution was cancelled). See https://www.python.org/dev/peps/pep-0567/#asyncio .
         """
         stack_copy = PROCESS_STACK.get().copy()
-        stack_copy.append(self)
+        stack_copy.append(weakref.ref(self))
         PROCESS_STACK.set(stack_copy)
         try:
             yield None
