@@ -273,7 +273,7 @@ class ProcessSaver(plumpy.ProcessListener, Saver):
 
     def capture(self):
         self._save(self.process)
-        if not self.process.done():
+        if not self.process.has_terminated():
             try:
                 self.process.execute()
             except Exception:
