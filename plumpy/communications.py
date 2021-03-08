@@ -68,6 +68,10 @@ def convert_to_comm(callback: 'Subscriber',
     """
     if isinstance(callback, kiwipy.BroadcastFilter):
 
+        # if the broadcast is filtered for this callback,
+        # we don't want to go through the (costly) process
+        # of setting up async tasks and callbacks
+
         def _passthrough(*args: Any, **kwargs: Any) -> bool:
             sender = kwargs.get('sender', args[1])
             subject = kwargs.get('subject', args[2])
