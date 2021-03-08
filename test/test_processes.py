@@ -223,7 +223,7 @@ class TestProcess(unittest.TestCase):
         proc = utils.DummyProcessWithOutput()
         proc.execute()
 
-        self.assertTrue(proc.done())
+        self.assertTrue(proc.has_terminated())
         self.assertEqual(proc.state, ProcessState.FINISHED)
         self.assertEqual(proc.outputs, {'default': 5})
 
@@ -331,7 +331,7 @@ class TestProcess(unittest.TestCase):
         proc.execute()
 
         # Check it's done
-        self.assertTrue(proc.done())
+        self.assertTrue(proc.has_terminated())
         self.assertEqual(proc.state, ProcessState.FINISHED)
 
     def test_exc_info(self):
@@ -344,7 +344,7 @@ class TestProcess(unittest.TestCase):
     def test_run_done(self):
         proc = utils.DummyProcess()
         proc.execute()
-        self.assertTrue(proc.done())
+        self.assertTrue(proc.has_terminated())
 
     def test_wait_pause_play_resume(self):
         """
@@ -371,7 +371,7 @@ class TestProcess(unittest.TestCase):
             await proc.future()
 
             # Check it's done
-            self.assertTrue(proc.done())
+            self.assertTrue(proc.has_terminated())
             self.assertEqual(proc.state, ProcessState.FINISHED)
 
         loop.create_task(proc.step_until_terminated())
@@ -412,7 +412,7 @@ class TestProcess(unittest.TestCase):
         loop.create_task(proc.step_until_terminated())
         loop.run_until_complete(async_test())
 
-        self.assertTrue(proc.done())
+        self.assertTrue(proc.has_terminated())
         self.assertEqual(proc.state, ProcessState.FINISHED)
 
     def test_kill_in_run(self):
