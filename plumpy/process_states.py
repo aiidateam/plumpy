@@ -322,7 +322,7 @@ class Waiting(State):
     async def execute(self) -> State:  # type: ignore # pylint: disable=invalid-overridden-method
         try:
             result = await self._waiting_future
-        except (Interruption, asyncio.CancelledError):
+        except Interruption:
             # Deal with the interruption (by raising) but make sure our internal
             # state is back to how it was before the interruption so that we can be
             # re-executed
