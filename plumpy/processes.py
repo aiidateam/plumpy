@@ -7,6 +7,7 @@ import copy
 import enum
 import functools
 import logging
+import re
 import sys
 import time
 from types import TracebackType
@@ -300,9 +301,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 self.logger.exception('Process<%s>: failed to register as an RPC subscriber', self.pid)
 
             try:
-                identifier = self._communicator.add_broadcast_subscriber(
-                    self.broadcast_receive, identifier=str(self.pid)
-                )
+                # filter out state change broadcasts
+                subscriber = kiwipy.BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
+                identifier = self._communicator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
                 self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
             except kiwipy.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)

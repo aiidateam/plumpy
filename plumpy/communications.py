@@ -62,13 +62,34 @@ def convert_to_comm(callback: 'Subscriber',
     on the given even loop and return a kiwi future representing the future outcome
     of the original method.
 
-    :param loop: the even loop to schedule the callback in
     :param callback: the function to convert
+    :param loop: the even loop to schedule the callback in
     :return: a new callback function that returns a future
     """
+    if isinstance(callback, kiwipy.BroadcastFilter):
+
+        # if the broadcast is filtered for this callback,
+        # we don't want to go through the (costly) process
+        # of setting up async tasks and callbacks
+
+        def _passthrough(*args: Any, **kwargs: Any) -> bool:
+            sender = kwargs.get('sender', args[1])
+            subject = kwargs.get('subject', args[2])
+            return callback.is_filtered(sender, subject)  # type: ignore[attr-defined]
+    else:
+
+        def _passthrough(*args: Any, **kwargs: Any) -> bool:  # pylint: disable=unused-argument
+            return False
+
     coro = ensure_coroutine(callback)
 
     def converted(communicator: kiwipy.Communicator, *args: Any, **kwargs: Any) -> kiwipy.Future:
+
+        if _passthrough(*args, **kwargs):
+            kiwi_future = kiwipy.Future()
+            kiwi_future.set_result(None)
+            return kiwi_future
+
         msg_fn = functools.partial(coro, communicator, *args, **kwargs)
         task_future = futures.create_task(msg_fn, loop)
         return plum_to_kiwi_future(task_future)
