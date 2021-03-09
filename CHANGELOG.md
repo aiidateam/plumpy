@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.19.0 - 2021-03-09
+
+- ‼️ DEPRECATE: `Process.done` method:
+  This method is a duplicate of `Process.has_terminated`, and is not used anywhere in plumpy (or aiida-core).
+
+- 🐛 FIX: `Task.cancel` should not set state as `EXCEPTED`
+  `asyncio.CancelledError` are generated when an async task is cancelled.
+  In python 3.7 this exception class inherits from `Exception`, whereas in python 3.8+ it inherits from `BaseException`.
+  This meant it python 3.7 it was being caught by `except Exception`, and setting the process state to `EXCEPTED`,
+  whereas in python 3.8+ it was being re-raised to the caller.
+  We now ensure in both versions it is re-raised (particularly because aiida-core currently relies on this behaviour).
+
+- 👌 IMPROVE: Process broadcast subscriber
+  Filter out `state_changed` broadcasts, and allow these to pass-through without generating a (costly) asynchronous task.
+  Note this also required an update in the minimal kiwipy version, to `0.7.4`
+
 ## v0.18.6 - 2021-02-24
 
 👌 IMPROVE: Catch state change broadcast timeout
