@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
 import abc
+import asyncio
 import contextlib
+import copy
 import enum
 import functools
-import copy
 import logging
-import time
 import sys
-import uuid
-import asyncio
+import time
 from types import TracebackType
 from typing import (
     Any, Awaitable, Callable, cast, Dict, Generator, Hashable, List, Optional, Sequence, Tuple, Type, Union
 )
+import uuid
+import warnings
 
 try:
     from aiocontextvars import ContextVar
@@ -481,9 +482,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         return None
 
     def done(self) -> bool:
+        """Return True if the call was successfully killed or finished running.
+
+        .. deprecated:: 0.18.6
+            Use the `has_terminated` method instead
         """
-        Return True if the call was successfully killed or finished running.
-        """
+        warnings.warn('method is deprecated, use `has_terminated` instead', DeprecationWarning)  # pylint: disable=no-member
         return self._state.is_terminal()
 
     # endregion
@@ -1192,6 +1196,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                     self._set_interrupt_action_from_exception(exception)
 
             except KeyboardInterrupt:  # pylint: disable=try-except-raise
+                raise
+            except asyncio.CancelledError:  # pylint: disable=try-except-raise
+                # note this re-raise is only required in python<=3.7,
+                # where asyncio.CancelledError == concurrent.futures.CancelledError
+                # it is encountered when the run_task is cancelled
+                # for python>=3.8 asyncio.CancelledError does not inherit from Exception, so will not be caught below
                 raise
             except Exception:  # pylint: disable=broad-except
                 # Overwrite the next state to go to excepted directly
