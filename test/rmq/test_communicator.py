@@ -6,8 +6,8 @@ import uuid
 import asyncio
 import shortuuid
 
+from kiwipy import BroadcastFilter, RemoteException, rmq
 import pytest
-from kiwipy import RemoteException, rmq
 
 import plumpy
 from plumpy import communications, process_comms
@@ -77,6 +77,33 @@ class TestLoopCommunicator:
 
         result = await broadcast_future
         assert result == BROADCAST
+
+    @pytest.mark.asyncio
+    async def test_broadcast_filter(self, loop_communicator):
+
+        broadcast_future = plumpy.Future()
+
+        loop = asyncio.get_event_loop()
+
+        def ignore_broadcast(_comm, body, sender, subject, correlation_id):
+            broadcast_future.set_exception(AssertionError('broadcast received'))
+
+        def get_broadcast(_comm, body, sender, subject, correlation_id):
+            broadcast_future.set_result(True)
+
+        loop_communicator.add_broadcast_subscriber(BroadcastFilter(ignore_broadcast, subject='other'))
+        loop_communicator.add_broadcast_subscriber(get_broadcast)
+        loop_communicator.broadcast_send(
+            **{
+                'body': 'present',
+                'sender': 'Martin',
+                'subject': 'sup',
+                'correlation_id': 420
+            }
+        )
+
+        result = await broadcast_future
+        assert result is True
 
     @pytest.mark.asyncio
     async def test_rpc(self, loop_communicator):
