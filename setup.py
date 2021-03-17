@@ -30,13 +30,13 @@ setup(
     keywords='workflow multithreaded rabbitmq',
     python_requires='>=3.6',
     install_requires=[
-        'pyyaml~=5.1.2', 'nest_asyncio~=1.4.0', 'aio-pika~=6.6', 'aiocontextvars~=0.2.2; python_version<"3.7"',
+        'pyyaml~=5.4', 'nest_asyncio~=1.4.0', 'aio-pika~=6.6', 'aiocontextvars~=0.2.2; python_version<"3.7"',
         'kiwipy[rmq]~=0.7.4'
     ],
     extras_require={
         'docs': ['sphinx~=3.2.0', 'myst-nb~=0.11.0', 'sphinx-book-theme~=0.0.39', 'ipython~=7.0'],
         'pre-commit': ['mypy==0.790', 'pre-commit~=2.2', 'pylint==2.5.2'],
-        'tests': ['pytest~=5.4', 'shortuuid', 'pytest-asyncio', 'pytest-cov', 'pytest-notebook']
+        'tests': ['pytest~=5.4', 'shortuuid', 'pytest-asyncio', 'pytest-cov', 'pytest-notebook', 'ipykernel']
     },
     packages=['plumpy', 'plumpy/base'],
     include_package_data=True,
