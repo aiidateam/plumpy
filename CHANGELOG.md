@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.15.2
+
+### Bug fixes
+- Limited the upper version for the `frozendict` dependency to `<2.0` since that breaks the implementation of `plumpy.utils.AttributesFrozenDict` [[#218]](https://github.com/aiidateam/aiida-core/pull/218)
+
+
 ## v0.15.1
 
 ### Bug fixes
