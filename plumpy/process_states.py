@@ -7,6 +7,7 @@ from types import TracebackType
 from typing import Any, Callable, cast, Optional, Tuple, Type, TYPE_CHECKING, Union
 
 import yaml
+from yaml.loader import Loader
 
 try:
     import tblib
@@ -373,7 +374,7 @@ class Excepted(State):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
-        self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=yaml.FullLoader)
+        self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=Loader)
         if _HAS_TBLIB:
             try:
                 self.traceback = \
