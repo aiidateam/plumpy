@@ -1318,6 +1318,5 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             'ctime': self.creation_time,
             'paused': self.paused,
             'process_string': str(self),
-            'state': self.state,
-            'state_info': str(self._state)
+            'state': str(self.state),
         })
