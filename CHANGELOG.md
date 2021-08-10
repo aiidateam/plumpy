@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.20.0 - 2021-08-10
+
+- 🔧 MAINTAIN: update requirement to `pyyaml~=5.4` (#221)
+  The versions of `pyyaml` up to v5.4 contained severe security issues where the default loaders could be abused for arbitrary code execution.
+  The default `FullLoader` was patched to no longer allow this behavior, but as a result, data sets that could be successfully deserialized with it, now will fail.
+  This required using the unsafe `Loader` in for the deserialization of the exception state of a process.
+
+
 ## v0.19.0 - 2021-03-09
 
 - ‼️ DEPRECATE: `Process.done` method:
