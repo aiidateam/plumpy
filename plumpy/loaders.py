@@ -42,16 +42,20 @@ class DefaultObjectLoader(ObjectLoader):
     """
 
     def load_object(self, identifier: str) -> Any:
-        mod_name, name = identifier.split(':')
+        try:
+            mod_name, name = identifier.split(':')
+        except ValueError as exc:
+            raise ValueError(f'identifier `{identifier}` has an invalid format.') from exc
+
         try:
             mod = importlib.import_module(mod_name)
-        except ImportError:
-            raise ValueError(f"module '{mod}' from identifier '{identifier}' could not be loaded")
+        except ImportError as exc:
+            raise ValueError(f'module `{mod_name}` from identifier `{identifier}` could not be loaded.') from exc
         else:
             try:
                 return getattr(mod, name)
-            except AttributeError:
-                raise ValueError(f"object '{name}' form identifier '{identifier}' could not be loaded")
+            except AttributeError as exc:
+                raise ValueError(f'object `{name}` form identifier `{identifier}` could not be loaded.') from exc
 
     def identify_object(self, obj: Any) -> str:
         identifier = '{}:{}'.format(obj.__module__, obj.__name__)
