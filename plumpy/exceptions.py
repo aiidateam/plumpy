@@ -33,3 +33,7 @@ class PersistenceError(Exception):
 
 class ClosedError(Exception):
     """Raised when an mutable operation is attempted on a closed process"""
+
+
+class DuplicateProcess(Exception):
+    """Raised when an ProcessLauncher is asked to launch a process it is already running."""

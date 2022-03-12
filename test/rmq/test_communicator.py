@@ -8,8 +8,8 @@ import shortuuid
 import functools
 import yaml
 
+from kiwipy import BroadcastFilter, RemoteException, rmq
 import pytest
-from kiwipy import BroadcastFilter, rmq
 
 import plumpy
 from plumpy import communications, process_comms
@@ -207,3 +207,15 @@ class TestTaskActions:
         # Let the process run to the end
         result = await async_controller.continue_process(pid)
         assert result, utils.DummyProcessWithOutput.EXPECTED_OUTPUTS
+
+    @pytest.mark.asyncio
+    async def test_duplicate_process(self, loop_communicator, async_controller, persister):
+        loop = asyncio.get_event_loop()
+        launcher = plumpy.ProcessLauncher(loop, persister=persister)
+        loop_communicator.add_task_subscriber(launcher)
+        process = utils.DummyProcessWithOutput()
+        persister.save_checkpoint(process)
+        launcher._process_cache[process.pid] = process
+        assert process.pid in launcher.process_cache
+        with pytest.raises(RemoteException, match='already running'):
+            await async_controller.continue_process(process.pid)
