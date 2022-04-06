@@ -36,7 +36,10 @@ setup(
     extras_require={
         'docs': ['sphinx~=3.2.0', 'myst-nb~=0.11.0', 'sphinx-book-theme~=0.0.39', 'ipython~=7.0'],
         'pre-commit': ['mypy==0.790', 'pre-commit~=2.2', 'pylint==2.5.2'],
-        'tests': ['pytest~=5.4', 'shortuuid', 'pytest-asyncio', 'pytest-cov', 'pytest-notebook', 'ipykernel']
+        'tests': [
+            'pytest==6.2.5', 'shortuuid==1.0.8', 'pytest-asyncio==0.16.0', 'pytest-cov==3.0.0',
+            'pytest-notebook==0.7.0', 'ipykernel==6.12.1'
+        ]
     },
     packages=['plumpy', 'plumpy/base'],
     include_package_data=True,
