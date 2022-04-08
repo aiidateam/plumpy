@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-import unittest
-import inspect
-import functools
 import asyncio
+import functools
+import inspect
+import unittest
 
 from plumpy.utils import AttributesFrozendict, ensure_coroutine, load_function
 

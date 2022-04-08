@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-import unittest
 import asyncio
 import tempfile
+import unittest
 
 if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
 
-import plumpy
 from test.utils import ProcessWithCheckpoint
+
+import plumpy
 
 
 class TestPicklePersister(unittest.TestCase):

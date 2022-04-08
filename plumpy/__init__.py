@@ -5,18 +5,18 @@ __version__ = '0.20.0'
 
 import logging
 
-from .loaders import *
 from .communications import *
 from .events import *
 from .exceptions import *
 from .futures import *
+from .loaders import *
+from .mixins import *
 from .persistence import *
 from .ports import *
-from .processes import *
-from .process_states import *
 from .process_comms import *
 from .process_listener import *
-from .mixins import *
+from .process_states import *
+from .processes import *
 from .utils import *
 from .workchains import *
 

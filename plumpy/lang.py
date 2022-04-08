@@ -27,10 +27,7 @@ def protected(check: bool = False) -> Callable[[Callable[..., Any]], Callable[..
                     calling_class = inspect.stack()[1][0].f_locals['self']
                     assert self is calling_class
                 except (KeyError, AssertionError):
-                    raise RuntimeError(
-                        'Cannot access protected function {} from outside'
-                        ' class hierarchy'.format(func.__name__)
-                    )
+                    raise RuntimeError(f'Cannot access protected function {func.__name__} from outside class hierarchy')
 
                 return func(self, *args, **kwargs)
         else:
@@ -59,7 +56,7 @@ def override(check: bool = False) -> Callable[[Callable[..., Any]], Callable[...
                 try:
                     getattr(super(self.__class__, self), func.__name__)
                 except AttributeError:
-                    raise RuntimeError('Function {} does not override a superclass method'.format(func))
+                    raise RuntimeError(f'Function {func} does not override a superclass method')
 
                 return func(self, *args, **kwargs)
         else:

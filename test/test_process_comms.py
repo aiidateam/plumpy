@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from test import utils
 import unittest
 
 from kiwipy import rmq
-
 import pytest
+
 import plumpy
-
 from plumpy import communications, process_comms
-from test import utils
-
-from kiwipy import rmq
 
 
 class Process(plumpy.Process):

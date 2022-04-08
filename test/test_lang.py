@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from plumpy.lang import override, protected
+
 from .utils import TestCase
-from plumpy.lang import protected, override
 
 
 class A:

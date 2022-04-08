@@ -58,7 +58,7 @@ class DefaultObjectLoader(ObjectLoader):
                 raise ValueError(f'object `{name}` form identifier `{identifier}` could not be loaded.') from exc
 
     def identify_object(self, obj: Any) -> str:
-        identifier = '{}:{}'.format(obj.__module__, obj.__name__)
+        identifier = f'{obj.__module__}:{obj.__name__}'
         # Make sure we can load the object
         self.load_object(identifier)
         return identifier

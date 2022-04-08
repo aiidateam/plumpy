@@ -9,15 +9,13 @@ import inspect
 import os
 import pickle
 from types import MethodType
-from typing import (Any, Callable, Dict, Generator, Iterable, List, Optional, Set, Type, TYPE_CHECKING, Union)
+from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterable, List, Optional, Set, Type, Union
 
 import yaml
 
-from . import loaders
-from . import futures
-from . import utils
+from . import futures, loaders, utils
+from .base.utils import call_with_super_check, super_check
 from .utils import PID_TYPE, SAVED_STATE_TYPE
-from .base.utils import super_check, call_with_super_check
 
 __all__ = [
     'Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable', 'SavableFuture', 'LoadSaveContext',
@@ -167,7 +165,7 @@ class PicklePersister(Persister):
         try:
             PicklePersister.ensure_pickle_directory(pickle_directory)
         except OSError:
-            raise ValueError('failed to create the pickle directory at {}'.format(pickle_directory))
+            raise ValueError(f'failed to create the pickle directory at {pickle_directory}')
 
         self._pickle_directory = pickle_directory
 
@@ -204,9 +202,9 @@ class PicklePersister(Persister):
         and optional checkpoint tag
         """
         if tag is not None:
-            filename = '{}.{}.{}'.format(pid, tag, _PICKLE_SUFFIX)
+            filename = f'{pid}.{tag}.{_PICKLE_SUFFIX}'
         else:
-            filename = '{}.{}'.format(pid, _PICKLE_SUFFIX)
+            filename = f'{pid}.{_PICKLE_SUFFIX}'
 
         return filename
 
@@ -255,7 +253,7 @@ class PicklePersister(Persister):
         :return: list of PersistedCheckpoint
         """
         checkpoints = []
-        file_pattern = '*.{}'.format(_PICKLE_SUFFIX)
+        file_pattern = f'*.{_PICKLE_SUFFIX}'
 
         for _, _, files in os.walk(self._pickle_directory):
             for filename in fnmatch.filter(files, file_pattern):
@@ -398,7 +396,7 @@ class LoadSaveContext:
         try:
             return self._values[item]
         except KeyError:
-            raise AttributeError("item '{}' not found".format(item))
+            raise AttributeError(f"item '{item}' not found")
 
     def __iter__(self) -> Iterable[Any]:
         return self._value.__iter__()
@@ -551,7 +549,7 @@ class Savable:
         try:
             return saved_state[META][name]
         except KeyError:
-            raise ValueError("Unknown meta key '{}'".format(name))
+            raise ValueError(f"Unknown meta key '{name}'")
 
     @staticmethod
     def _get_create_meta(out_state: SAVED_STATE_TYPE) -> Dict[str, Any]:

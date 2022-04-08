@@ -2,7 +2,7 @@
 """Module for general kiwipy communication methods"""
 import asyncio
 import functools
-from typing import Any, Callable, Hashable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Optional
 
 import kiwipy
 

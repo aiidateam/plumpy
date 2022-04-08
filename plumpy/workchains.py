@@ -7,11 +7,7 @@ import logging
 import re
 import six
 
-from . import lang
-from . import mixins
-from . import persistence
-from . import processes
-from . import process_states
+from . import lang, mixins, persistence, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
 
 __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
@@ -257,7 +253,7 @@ class _FunctionCall(_Instruction):
         try:
             args = inspect.getargspec(func)[0]
         except TypeError:
-            raise TypeError('func is not a function, got {}'.format(type(func)))
+            raise TypeError(f'func is not a function, got {type(func)}')
         if len(args) != 1:
             raise TypeError('Step must take one argument only: self')
 
@@ -274,7 +270,7 @@ class _FunctionCall(_Instruction):
         desc = self._fn.__name__
         if self._fn.__doc__:
             doc = re.sub(r'\n\s*', ' ', self._fn.__doc__).strip()
-            desc += '({})'.format(doc)
+            desc += f'({doc})'
 
         return desc
 
@@ -504,9 +500,9 @@ class _If(_Instruction, collections.abc.Sequence):
     def get_description(self) -> Mapping[str, Any]:
         description = collections.OrderedDict()
 
-        description['if({})'.format(self._ifs[0].predicate.__name__)] = self._ifs[0].body.get_description()
+        description[f'if({self._ifs[0].predicate.__name__})'] = self._ifs[0].body.get_description()
         for conditional in self._ifs[1:]:
-            description['elif({})'.format(conditional.predicate.__name__)] = conditional.body.get_description()
+            description[f'elif({conditional.predicate.__name__})'] = conditional.body.get_description()
 
         return description
 
@@ -574,7 +570,7 @@ class _While(_Conditional, _Instruction, collections.abc.Sequence):
         return cast(_WhileStepper, _WhileStepper.recreate_from(saved_state, load_context))
 
     def get_description(self) -> Dict[str, Any]:
-        return {'while({})'.format(self.predicate.__name__): self.body.get_description()}
+        return {f'while({self.predicate.__name__})': self.body.get_description()}
 
 
 class _PropagateReturn(BaseException):

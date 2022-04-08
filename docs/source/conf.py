@@ -10,8 +10,8 @@ import filecmp
 import os
 from pathlib import Path
 import shutil
-import sys
 import subprocess
+import sys
 import tempfile
 
 import plumpy

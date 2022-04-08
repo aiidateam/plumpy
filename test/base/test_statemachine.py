@@ -30,7 +30,7 @@ class Playing(state_machine.State):
     def __str__(self):
         if self.in_state:
             self._update_time()
-        return '> {} ({}s)'.format(self.track, self._played)
+        return f'> {self.track} ({self._played}s)'
 
     def enter(self):
         super().enter()
@@ -61,7 +61,7 @@ class Paused(state_machine.State):
         self.playing_state = playing_state
 
     def __str__(self):
-        return '|| ({})'.format(self.playing_state)
+        return f'|| ({self.playing_state})'
 
     def play(self, track=None):
         if track is not None:
@@ -95,11 +95,11 @@ class CdPlayer(state_machine.StateMachine):
         self.add_state_event_callback(state_machine.StateEventHook.EXITING_STATE, lambda _s, _h, _st: self.exiting())
 
     def entering(self, state):
-        print('Entering {}'.format(state))
+        print(f'Entering {state}')
         print(self._state)
 
     def exiting(self):
-        print('Exiting {}'.format(self.state))
+        print(f'Exiting {self.state}')
         print(self._state)
 
     @state_machine.event(to_states=Playing)

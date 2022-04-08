@@ -11,22 +11,22 @@ class HelloWorld(plumpy.Process):
         spec.output('greeting', valid_type=str)
 
     def run(self):
-        self.out('greeting', 'Hello {:}!'.format(self.inputs.name))
+        self.out('greeting', f'Hello {self.inputs.name}!')
         return plumpy.Stop(None, True)
 
 
 def launch():
     process = HelloWorld(inputs={'name': 'foobar'})
-    print('Process State: {:}'.format(process.state))
+    print(f'Process State: {process.state}')
     process.execute()
 
-    print('Process State: {:}'.format(process.state))
-    print('{:}'.format(process.outputs['greeting']))
+    print(f'Process State: {process.state}')
+    print(f"{process.outputs['greeting']}")
 
     # default inputs
     process = HelloWorld()
     process.execute()
-    print('{:}'.format(process.outputs['greeting']))
+    print(f"{process.outputs['greeting']}")
 
 
 if __name__ == '__main__':

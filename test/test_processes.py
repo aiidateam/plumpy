@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """Process tests"""
-import unittest
-import pytest
 import asyncio
 import enum
+from test import utils
+import unittest
+
 import kiwipy
+import pytest
 
 import plumpy
-from plumpy import Process, ProcessState, BundleKeys
+from plumpy import BundleKeys, Process, ProcessState
 from plumpy.utils import AttributesFrozendict
-from test import utils
 
 
 class ForgetToCallParent(plumpy.Process):
@@ -45,12 +46,12 @@ async def test_process_scope():
     class ProcessTaskInterleave(plumpy.Process):
 
         async def task(self, steps: list):
-            steps.append('[{}] started'.format(self.pid))
+            steps.append(f'[{self.pid}] started')
             assert plumpy.Process.current() is self
-            steps.append('[{}] sleeping'.format(self.pid))
+            steps.append(f'[{self.pid}] sleeping')
             await asyncio.sleep(0.1)
             assert plumpy.Process.current() is self
-            steps.append('[{}] finishing'.format(self.pid))
+            steps.append(f'[{self.pid}] finishing')
 
     p1 = ProcessTaskInterleave()
     p2 = ProcessTaskInterleave()
@@ -1028,7 +1029,7 @@ class TestProcessEvents(unittest.TestCase):
         expected_subjects = []
         for i, state in enumerate(utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
             from_state = utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
-            expected_subjects.append('state_changed.{}.{}'.format(from_state, state.value))
+            expected_subjects.append(f'state_changed.{from_state}.{state.value}')
 
         for i, message in enumerate(messages):
             self.assertEqual(message['subject'], expected_subjects[i])

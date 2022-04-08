@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 from typing import Any
 
-from .utils import AttributesDict, Optional
-
 from . import persistence
-from .utils import SAVED_STATE_TYPE
+from .utils import SAVED_STATE_TYPE, AttributesDict, Optional
 
 __all__ = ['ContextMixin']
 

@@ -2,8 +2,8 @@
 """Plumpy tests"""
 
 import logging
-import tempfile
 import os
+import tempfile
 
 LOGFILE = os.path.join(tempfile.gettempdir(), 'plumpy_unittest.log')
 try:

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import abc
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 __all__ = ['ProcessListener']
 

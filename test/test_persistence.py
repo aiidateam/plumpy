@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import unittest
+
+import yaml
 
 import plumpy
-import unittest
-import yaml
 
 from . import utils
 

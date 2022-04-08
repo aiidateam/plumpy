@@ -11,7 +11,7 @@ def super_check(wrapped: Callable[..., Any]) -> Callable[..., Any]:
     """
 
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> None:
-        msg = "The function '{}' was not called through call_with_super_check".format(wrapped.__name__)
+        msg = f"The function '{wrapped.__name__}' was not called through call_with_super_check"
         assert getattr(self, '_called', 0) >= 1, msg
         wrapped(self, *args, **kwargs)
         self._called -= 1
@@ -27,7 +27,5 @@ def call_with_super_check(wrapped: Callable[..., Any], *args: Any, **kwargs: Any
     call_count = getattr(self, '_called', 0)
     self._called = call_count + 1
     wrapped(*args, **kwargs)
-    msg = "Base '{}' was not called from '{}'\nHint: Did you forget to call the superclass method?".format(
-        wrapped.__name__, self.__class__
-    )
+    msg = f"Base '{wrapped.__name__}' was not called from '{self.__class__}'\nHint: Did you forget to call the super?"
     assert self._called == call_count, msg

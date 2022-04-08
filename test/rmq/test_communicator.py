@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 """Tests for the :mod:`plumpy.rmq.communicator` module."""
+import asyncio
+import functools
 import shutil
 import tempfile
 import uuid
-import asyncio
-import shortuuid
-import functools
-import yaml
 
-import pytest
 from kiwipy import BroadcastFilter, rmq
+import pytest
+import shortuuid
+import yaml
 
 import plumpy
 from plumpy import communications, process_comms
+
 from .. import utils
 
 
@@ -28,9 +29,9 @@ def persister():
 
 @pytest.fixture
 def loop_communicator():
-    message_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
-    task_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
-    task_queue = '{}.{}'.format(__file__, shortuuid.uuid())
+    message_exchange = f'{__file__}.{shortuuid.uuid()}'
+    task_exchange = f'{__file__}.{shortuuid.uuid()}'
+    task_queue = f'{__file__}.{shortuuid.uuid()}'
 
     thread_communicator = rmq.RmqThreadCommunicator.connect(
         connection_params={'url': 'amqp://guest:guest@localhost:5672/'},

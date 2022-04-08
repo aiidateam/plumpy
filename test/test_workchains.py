@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import inspect
 import unittest
-import asyncio
 
 import pytest
+
 import plumpy
-from plumpy.workchains import *
 from plumpy.process_listener import ProcessListener
+from plumpy.workchains import *
 
 from . import utils
 
@@ -145,21 +146,21 @@ class TestWorkchain(unittest.TestCase):
         # Check the steps that should have been run
         for step, finished in Wf.finished_steps.items():
             if step not in ['s3', 's4', 'isB']:
-                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
+                self.assertTrue(finished, f'Step {step} was not called by workflow')
 
         # Try the elif(..) part
         finished_steps = Wf(inputs=dict(value=B, n=three)).execute()
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 's4']:
-                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
+                self.assertTrue(finished, f'Step {step} was not called by workflow')
 
         # Try the else... part
         finished_steps = Wf(inputs=dict(value=C, n=three)).execute()
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 'isB', 's3']:
-                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
+                self.assertTrue(finished, f'Step {step} was not called by workflow')
 
     def test_incorrect_outline(self):
 
@@ -266,21 +267,21 @@ class TestWorkchain(unittest.TestCase):
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['s3', 's4', 'isB']:
-                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
+                self.assertTrue(finished, f'Step {step} was not called by workflow')
 
         # Try the elif(..) part
         finished_steps = self._run_with_checkpoints(Wf, inputs={'value': B, 'n': three})
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 's4']:
-                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
+                self.assertTrue(finished, f'Step {step} was not called by workflow')
 
         # Try the else... part
         finished_steps = self._run_with_checkpoints(Wf, inputs={'value': C, 'n': three})
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 'isB', 's3']:
-                self.assertTrue(finished, 'Step {} was not called by workflow'.format(step))
+                self.assertTrue(finished, f'Step {step} was not called by workflow')
 
     def test_return_in_outline(self):
 
