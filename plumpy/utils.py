@@ -25,7 +25,7 @@ override = lang.override(check=check_override)  # pylint: disable=invalid-name
 _LOGGER = logging.getLogger(__name__)
 
 SAVED_STATE_TYPE = MutableMapping[str, Any]  # pylint: disable=invalid-name
-PID_TYPE = Hashable
+PID_TYPE = Hashable  # pylint: disable=invalid-name
 
 
 class EventHelper:

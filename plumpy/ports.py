@@ -555,7 +555,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
             if isinstance(port, PortNamespace):
 
                 # If the name does not appear at the start of any of the include rules we continue:
-                if include and not any([rule.startswith(port_name) for rule in include]):
+                if include and not any(rule.startswith(port_name) for rule in include):
                     continue
 
                 # Determine the sub exclude and include rules for this specific namespace
@@ -613,8 +613,8 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         :param port_values: an arbitrarily nested dictionary of parsed port values
         :param breadcrumbs: a tuple of the path to having reached this point in validation
         :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
-
         """
+        # pylint: disable=arguments-renamed
         breadcrumbs_local = (*breadcrumbs, self.name)
         message: Optional[str]
 

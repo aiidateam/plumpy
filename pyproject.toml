@@ -1,0 +1,111 @@
+[build-system]
+requires = ['flit_core >=3.4,<4']
+build-backend = 'flit_core.buildapi'
+
+[project]
+name = 'plumpy'
+dynamic = ['version']
+description = 'A Python workflow library.'
+authors = [
+    {name = 'Martin Uhrin', email = 'martin.uhrin@gmail.com'},
+    {name = 'Sebastiaan Huber'},
+    {name = 'Jason Yu'},
+    {name = 'Leopold Talirz'},
+    {name = 'Dominik Gresch'},
+]
+readme = 'README.md'
+license = {file = 'LICENSE'}
+classifiers = [
+    'Development Status :: 5 - Production/Stable',
+    'License :: OSI Approved :: MIT License',
+    'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+]
+keywords = ['workflow', 'multithreaded', 'rabbitmq']
+requires-python = '>=3.7'
+dependencies = [
+    'aio-pika~=6.6',
+    'kiwipy[rmq]~=0.7.4',
+    'nest_asyncio~=1.5',
+    'pyyaml~=5.4',
+]
+
+[project.urls]
+Home = 'https://github.com/aiidateam/plumpy'
+Source = 'https://github.com/aiidateam/plumpy'
+Documentation = 'https://plumpy.readthedocs.io'
+
+[project.optional-dependencies]
+docs = [
+    'ipython~=7.0',
+    'jinja2==2.11.3',
+    'markupsafe==2.0.1',
+    'myst-nb~=0.11.0',
+    'sphinx~=3.2.0',
+    'sphinx-book-theme~=0.0.39',
+]
+pre-commit = [
+    'mypy==0.790',
+    'pre-commit~=2.2',
+    'pylint==2.12.2',
+]
+tests = [
+    'ipykernel==6.12.1',
+    'pytest==6.2.5',
+    'pytest-asyncio==0.16.0',
+    'pytest-cov==3.0.0',
+    'pytest-notebook==0.7.0',
+    'shortuuid==1.0.8',
+]
+
+[tool.flit.module]
+name = 'plumpy'
+
+[tool.flit.sdist]
+exclude = [
+    'docs/',
+    'examples/',
+    'test/',
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.messages_control]
+disable = [
+    'bad-continuation',
+    'consider-using-f-string',
+    'duplicate-code',
+    'global-statement',
+    'import-outside-toplevel',
+    'inconsistent-return-statements',
+    'locally-disabled',
+    'missing-docstring',
+    'protected-access',
+    'raise-missing-from',
+    'too-few-public-methods',
+    'too-many-ancestors',
+    'too-many-arguments',
+    'too-many-instance-attributes',
+]
+
+[tool.pytest.ini_options]
+minversion = '6.0'
+testpaths = [
+    'test',
+]
+filterwarnings = [
+    'ignore::DeprecationWarning:frozendict:',
+]
+
+[tool.yapf]
+align_closing_bracket_with_visual_indent = true
+based_on_style = 'google'
+coalesce_brackets = true
+column_limit = 120
+dedent_closing_brackets = true
+indent_dictionary_value = false
+split_arguments_when_comma_terminated = true
