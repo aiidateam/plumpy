@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import types
-from .utils import TestCase
 
-from plumpy.ports import Port, InputPort, OutputPort, PortNamespace, UNSPECIFIED
+from plumpy.ports import UNSPECIFIED, InputPort, OutputPort, Port, PortNamespace
+
+from .utils import TestCase
 
 
 class TestPort(TestCase):

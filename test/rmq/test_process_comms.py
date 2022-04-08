@@ -1,22 +1,23 @@
 # -*- coding: utf-8 -*-
 import asyncio
 
-import shortuuid
-import pytest
 import kiwipy
 from kiwipy import rmq
+import pytest
+import shortuuid
 
 import plumpy
-import plumpy.communications
 from plumpy import process_comms
+import plumpy.communications
+
 from .. import utils
 
 
 @pytest.fixture
 def thread_communicator():
-    message_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
-    task_exchange = '{}.{}'.format(__file__, shortuuid.uuid())
-    task_queue = '{}.{}'.format(__file__, shortuuid.uuid())
+    message_exchange = f'{__file__}.{shortuuid.uuid()}'
+    task_exchange = f'{__file__}.{shortuuid.uuid()}'
+    task_queue = f'{__file__}.{shortuuid.uuid()}'
 
     communicator = rmq.RmqThreadCommunicator.connect(
         connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
@@ -114,7 +115,7 @@ class TestRemoteProcessController:
         expected_subjects = []
         for i, state in enumerate(utils.DummyProcess.EXPECTED_STATE_SEQUENCE):
             from_state = utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
-            expected_subjects.append('state_changed.{}.{}'.format(from_state, state.value))
+            expected_subjects.append(f'state_changed.{from_state}.{state.value}')
 
         for i, message in enumerate(messages):
             self.assertEqual(message['subject'], expected_subjects[i])

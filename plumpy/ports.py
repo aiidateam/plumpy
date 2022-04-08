@@ -5,7 +5,7 @@ import copy
 import inspect
 import json
 import logging
-from typing import Any, Callable, cast, Dict, Iterator, List, Mapping, MutableMapping, Optional, Sequence, Type, Union
+from typing import Any, Callable, Dict, Iterator, List, Mapping, MutableMapping, Optional, Sequence, Type, Union, cast
 import warnings
 
 from plumpy.utils import AttributesFrozendict, is_mutable_property, type_check
@@ -91,14 +91,14 @@ class Port:
 
         """
         description = {
-            'name': '{}'.format(self.name),
+            'name': f'{self.name}',
             'required': str(self.required),
         }
 
         if self.valid_type:
-            description['valid_type'] = '{}'.format(self.valid_type)
+            description['valid_type'] = f'{self.valid_type}'
         if self.help:
-            description['help'] = '{}'.format(self.help.strip())
+            description['help'] = f'{self.help.strip()}'
 
         return description
 
@@ -188,10 +188,10 @@ class Port:
         validation_error = None
 
         if value is UNSPECIFIED and self._required:
-            validation_error = "required value was not provided for '{}'".format(self.name)
+            validation_error = f"required value was not provided for '{self.name}'"
         elif value is not UNSPECIFIED and self._valid_type is not None and not isinstance(value, self._valid_type):
-            validation_error = "value '{}' is not of the right type. Got '{}', expected '{}'".format(
-                self.name, type(value), self._valid_type
+            validation_error = (
+                f"value '{self.name}' is not of the right type. Got '{type(value)}', expected '{self._valid_type}'"
             )
 
         if not validation_error and self.validator is not None and value is not UNSPECIFIED:
@@ -258,7 +258,7 @@ class InputPort(Port):
             if not callable(default):
                 validation_error = self.validate(default)
                 if validation_error:
-                    raise ValueError('Invalid default value: {}'.format(validation_error.message))
+                    raise ValueError(f'Invalid default value: {validation_error.message}')
 
         self._default = default
 
@@ -284,7 +284,7 @@ class InputPort(Port):
         description = super().get_description()
 
         if self.has_default():
-            description['default'] = '{}'.format(self.default)
+            description['default'] = f'{self.default}'
 
         return description
 
@@ -438,7 +438,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         :raises: ValueError if port or namespace does not exist
         """
         if not isinstance(name, str):
-            raise ValueError('name has to be a string type, not {}'.format(type(name)))
+            raise ValueError(f'name has to be a string type, not {type(name)}')
 
         if not name:
             raise ValueError('name cannot be an empty string')
@@ -447,7 +447,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         port_name = namespace.pop(0)
 
         if port_name not in self:
-            raise ValueError("port '{}' does not exist in port namespace '{}'".format(port_name, self.name))
+            raise ValueError(f"port '{port_name}' does not exist in port namespace '{self.name}'")
 
         if namespace:
             portnamespace = cast(PortNamespace, self[port_name])
@@ -467,7 +467,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         :raises: ValueError if any sub namespace is occupied by a non-PortNamespace port
         """
         if not isinstance(name, str):
-            raise ValueError('name has to be a string type, not {}'.format(type(name)))
+            raise ValueError(f'name has to be a string type, not {type(name)}')
 
         if not name:
             raise ValueError('name cannot be an empty string')
@@ -476,7 +476,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         port_name = namespace.pop(0)
 
         if port_name in self and not isinstance(self[port_name], PortNamespace):
-            raise ValueError("the name '{}' in '{}' already contains a Port".format(port_name, self.name))
+            raise ValueError(f"the name '{port_name}' in '{self.name}' already contains a Port")
 
         # If this is True, the (sub) port namespace does not yet exist, so we create it
         if port_name not in self:
@@ -538,9 +538,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
         if namespace_options:
             raise ValueError(
-                'the namespace_options {}, is not a supported PortNamespace property'.format(
-                    ', '.join(list(namespace_options.keys()))
-                )
+                f'the namespace_options {list(namespace_options.keys())}, is not a supported PortNamespace property'
             )
 
         absorbed_ports = []
@@ -622,7 +620,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
             port_values = {}
 
         if not isinstance(port_values, collections.abc.Mapping):
-            message = 'specified value is of type {} which is not sub class of `Mapping`'.format(type(port_values))
+            message = f'specified value is of type {type(port_values)} which is not sub class of `Mapping`'
             return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
 
         # Turn the port values into a normal dictionary and create a shallow copy. The `validate_ports` method to which
@@ -657,7 +655,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
                 message = self.validator(port_values_clone, self)  # pylint: disable=not-callable
             if message is not None:
                 assert isinstance(message, str), \
-                    "Validator returned something other than None or str: '{}'".format(type(message))
+                    f"Validator returned something other than None or str: '{type(message)}'"
                 return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
 
         return None
@@ -735,14 +733,14 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         breadcrumbs = (*breadcrumbs, self.name)
 
         if port_values and not self.dynamic:
-            msg = 'Unexpected ports {}, for a non dynamic namespace'.format(port_values)
+            msg = f'Unexpected ports {port_values}, for a non dynamic namespace'
             return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs))
 
         if self.valid_type is not None:
             valid_type = self.valid_type
             for port_name, port_value in port_values.items():
                 if not isinstance(port_value, valid_type):
-                    msg = 'Invalid type {} for dynamic port value: expected {}'.format(type(port_value), valid_type)
+                    msg = f'Invalid type {type(port_value)} for dynamic port value: expected {valid_type}'
                     return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs + (port_name,)))
         return None
 
@@ -770,7 +768,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
         stripped = []
 
-        prefix = '{}{}'.format(namespace, separator)
+        prefix = f'{namespace}{separator}'
 
         for rule in rules:
             if rule.startswith(prefix):

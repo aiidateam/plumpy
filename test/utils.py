@@ -3,13 +3,13 @@
 import asyncio
 import collections
 from collections.abc import Mapping
-import shortuuid
 import unittest
 
 import kiwipy.rmq
+import shortuuid
 
 import plumpy
-from plumpy import processes, process_states, persistence, utils
+from plumpy import persistence, process_states, processes, utils
 
 Snapshot = collections.namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -114,7 +114,7 @@ class EventsTesterMixin:
 
     @classmethod
     def called(cls, event):
-        assert event in cls.EVENTS, "Unknown event '{}'".format(event)
+        assert event in cls.EVENTS, f"Unknown event '{event}'"
         cls.called_events.append(event)
 
     def __init__(self, *args, **kwargs):
@@ -359,10 +359,10 @@ def compare_dictionaries(bundle1, bundle2, dict1, dict2, exclude=None):
 
     for key in keys:
         if key not in dict1:
-            raise ValueError("Key '{}' in dict 1 but not 2".format(key))
+            raise ValueError(f"Key '{key}' in dict 1 but not 2")
 
         if key not in dict2:
-            raise ValueError("Key '{}' in dict 2 but not 1".format(key))
+            raise ValueError(f"Key '{key}' in dict 2 but not 1")
 
         v1 = dict1[key]
         v2 = dict2[key]
@@ -378,7 +378,7 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
             compare_value(bundle1, bundle2, vv1, vv2, exclude)
     else:
         if v1 != v2:
-            raise ValueError('Dict values mismatch for :\n{} != {}'.format(v1, v2))
+            raise ValueError(f'Dict values mismatch for :\n{v1} != {v2}')
 
 
 class TestPersister(persistence.Persister):

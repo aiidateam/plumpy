@@ -7,9 +7,10 @@ import logging
 import os
 import sys
 from types import TracebackType
-from typing import Any, Callable, cast, Dict, Hashable, Iterable, List, Optional, Sequence, Set, Type, Union
+from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Sequence, Set, Type, Union, cast
 
 from plumpy.futures import Future
+
 from .utils import call_with_super_check, super_check
 
 __all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed']
@@ -62,7 +63,7 @@ class TransitionFailed(Exception):
         super().__init__(self._format_msg())
 
     def _format_msg(self) -> str:
-        msg = ['{} -> {}'.format(self.initial_state, self.final_state)]
+        msg = [f'{self.initial_state} -> {self.final_state}']
         if self.traceback_str is not None:
             msg.append(self.traceback_str)
         return '\n'.join(msg)
@@ -92,7 +93,7 @@ def event(
             initial = self._state
 
             if from_states != '*' and not any(isinstance(self._state, state) for state in from_states):  # type: ignore
-                raise EventError(evt_label, 'Event {} invalid in state {}'.format(evt_label, initial.LABEL))
+                raise EventError(evt_label, f'Event {evt_label} invalid in state {initial.LABEL}')
 
             result = wrapped(self, *a, **kw)
             if not (result is False or isinstance(result, Future)):
@@ -102,7 +103,7 @@ def event(
 
                     raise EventError(
                         evt_label, 'Event produced invalid state transition from '
-                        '{} to {}'.format(initial.LABEL, self._state.LABEL)
+                        f'{initial.LABEL} to {self._state.LABEL}'
                     )
 
             return result
@@ -154,7 +155,7 @@ class State:
     def exit(self) -> None:
         """ Exiting the state """
         if self.is_terminal():
-            raise InvalidStateError('Cannot exit a terminal state {}'.format(self.LABEL))
+            raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
 
     def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'State':
         return self.state_machine.create_state(state_label, *args, **kwargs)
@@ -244,7 +245,7 @@ class StateMachine(metaclass=StateMachineMeta):
         for state_cls in cls.STATES:  # pylint: disable=not-an-iterable
             assert issubclass(state_cls, State)
             label = state_cls.LABEL
-            assert label not in cls._STATES_MAP, "Duplicate label '{}'".format(label)  # pylint: disable=unsupported-membership-test
+            assert label not in cls._STATES_MAP, f"Duplicate label '{label}'"  # pylint: disable=unsupported-membership-test
             cls._STATES_MAP[label] = state_cls  # pylint: disable=unsupported-assignment-operation
 
         # should class initialise sealed = False?
@@ -264,7 +265,7 @@ class StateMachine(metaclass=StateMachineMeta):
         """Called after entering initial state in `__call__` method of `StateMachineMeta`"""
 
     def __str__(self) -> str:
-        return '<{}> ({})'.format(self.__class__.__name__, self.state)
+        return f'<{self.__class__.__name__}> ({self.state})'
 
     def create_initial_state(self) -> State:
         return self.get_state_class(self.initial_state_label())(self)
@@ -292,7 +293,7 @@ class StateMachine(metaclass=StateMachineMeta):
         try:
             self._event_callbacks[hook].remove(callback)
         except (KeyError, ValueError):
-            raise ValueError("Callback not set for hook '{}'".format(hook))
+            raise ValueError(f"Callback not set for hook '{hook}'")
 
     def _fire_state_event(self, hook: Hashable, state: Optional[State]) -> None:
         for callback in self._event_callbacks.get(hook, []):
@@ -360,7 +361,7 @@ class StateMachine(metaclass=StateMachineMeta):
         try:
             return self.get_states_map()[state_label](self, *args, **kwargs)  # pylint: disable=unsubscriptable-object
         except KeyError:
-            raise ValueError('{} is not a valid state'.format(state_label))
+            raise ValueError(f'{state_label} is not a valid state')
 
     def _exit_current_state(self, next_state: State) -> None:
         """ Exit the given state """
@@ -369,11 +370,11 @@ class StateMachine(metaclass=StateMachineMeta):
         # in which case check the new state is the initial state
         if self._state is None:
             if next_state.label != self.initial_state_label():
-                raise RuntimeError("Cannot enter state '{}' as the initial state".format(next_state))
+                raise RuntimeError(f"Cannot enter state '{next_state}' as the initial state")
             return  # Nothing to exit
 
         if next_state.LABEL not in self._state.ALLOWED:
-            raise RuntimeError('Cannot transition from {} to {}'.format(self._state.LABEL, next_state.label))
+            raise RuntimeError(f'Cannot transition from {self._state.LABEL} to {next_state.label}')
         self._fire_state_event(StateEventHook.EXITING_STATE, next_state)
         self._state.do_exit()
 
@@ -401,4 +402,4 @@ class StateMachine(metaclass=StateMachineMeta):
         try:
             return self.get_states_map()[cast(Hashable, state)]  # pylint: disable=unsubscriptable-object
         except KeyError:
-            raise ValueError('{} is not a valid state'.format(state))
+            raise ValueError(f'{state} is not a valid state')

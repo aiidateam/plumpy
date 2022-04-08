@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
+from test.utils import NewLoopProcess
 import unittest
 
 from plumpy.ports import PortNamespace
-from plumpy.processes import Process
 from plumpy.process_spec import ProcessSpec
-from test.utils import NewLoopProcess
+from plumpy.processes import Process
 
 
 class TestExposeProcess(unittest.TestCase):

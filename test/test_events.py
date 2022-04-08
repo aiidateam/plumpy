@@ -5,7 +5,7 @@ import pathlib
 
 import pytest
 
-from plumpy import set_event_loop_policy, reset_event_loop_policy, PlumpyEventLoopPolicy, set_event_loop, new_event_loop
+from plumpy import PlumpyEventLoopPolicy, new_event_loop, reset_event_loop_policy, set_event_loop, set_event_loop_policy
 
 
 def test_set_event_loop_policy():
