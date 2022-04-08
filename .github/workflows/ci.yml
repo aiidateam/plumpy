@@ -7,19 +7,25 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v2
-            - name: Set up Python 3.8
-              uses: actions/setup-python@v2
-              with:
-                  python-version: 3.8
-            - uses: pre-commit/action@v2.0.0
+        -   uses: actions/checkout@v2
+
+        -   name: Set up Python 3.8
+            uses: actions/setup-python@v2
+            with:
+                python-version: 3.8
+
+        -   name: Install Python dependencies
+            run: pip install -e .[pre-commit]
+
+        -   name: Run pre-commit
+            run: pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
 
     tests:
         runs-on: ubuntu-latest
 
         strategy:
             matrix:
-                python-version: [3.7, 3.8, 3.9]
+                python-version: ['3.7', '3.8', '3.9']
 
         services:
             rabbitmq:
@@ -28,25 +34,25 @@ jobs:
                     - 5672:5672
 
         steps:
-            - uses: actions/checkout@v2
+        -   uses: actions/checkout@v2
 
-            - name: Set up Python ${{ matrix.python-version }}
-              uses: actions/setup-python@v2
-              with:
-                  python-version: ${{ matrix.python-version }}
+        -   name: Set up Python ${{ matrix.python-version }}
+            uses: actions/setup-python@v2
+            with:
+                python-version: ${{ matrix.python-version }}
 
-            - name: Install python dependencies
-              run: pip install -e .[tests]
+        -   name: Install python dependencies
+            run: pip install -e .[tests]
 
-            - name: Run pytest
-              run: pytest -sv --cov=plumpy test
+        -   name: Run pytest
+            run: pytest -sv --cov=plumpy test
 
-            - name: Create xml coverage
-              run: coverage xml
+        -   name: Create xml coverage
+            run: coverage xml
 
-            - name: Upload coverage to Codecov
-              if: github.repository == 'aiidateam/plumpy'
-              uses: codecov/codecov-action@v1
-              with:
-                  file: ./coverage.xml
-                  name: plumpy
+        -   name: Upload coverage to Codecov
+            if: github.repository == 'aiidateam/plumpy'
+            uses: codecov/codecov-action@v1
+            with:
+                file: ./coverage.xml
+                name: plumpy
