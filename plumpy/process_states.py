@@ -4,7 +4,7 @@ from enum import Enum
 import sys
 import traceback
 from types import TracebackType
-from typing import Any, Callable, cast, Optional, Tuple, Type, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Type, Union, cast
 
 import yaml
 from yaml.loader import Loader
@@ -16,14 +16,11 @@ try:
 except ImportError:
     _HAS_TBLIB = False
 
-from . import futures
+from . import exceptions, futures, persistence, utils
 from .base import state_machine
-from . import persistence
-from .persistence import auto_persist
 from .lang import NULL
-from . import utils
+from .persistence import auto_persist
 from .utils import SAVED_STATE_TYPE
-from . import exceptions
 
 __all__ = [
     'ProcessState',
@@ -286,7 +283,7 @@ class Waiting(State):
     def __str__(self) -> str:
         state_info = super().__str__()
         if self.msg is not None:
-            state_info += ' ({})'.format(self.msg)
+            state_info += f' ({self.msg})'
         return state_info
 
     def __init__(
@@ -361,10 +358,8 @@ class Excepted(State):
         self.traceback = trace_back
 
     def __str__(self) -> str:
-        return '{} ({})'.format(
-            super().__str__(),
-            traceback.format_exception_only(type(self.exception) if self.exception else None, self.exception)[0]
-        )
+        exception = traceback.format_exception_only(type(self.exception) if self.exception else None, self.exception)[0]
+        return super().__str__() + f'({exception})'
 
     def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
         super().save_instance_state(out_state, save_context)

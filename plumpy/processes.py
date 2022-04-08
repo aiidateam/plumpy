@@ -12,7 +12,19 @@ import sys
 import time
 from types import TracebackType
 from typing import (
-    Any, Awaitable, Callable, cast, Dict, Generator, Hashable, List, Optional, Sequence, Tuple, Type, Union
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Generator,
+    Hashable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+    cast,
 )
 import uuid
 import warnings
@@ -23,23 +35,16 @@ except ModuleNotFoundError:
     from contextvars import ContextVar
 
 from aio_pika.exceptions import ConnectionClosed
-import yaml
 import kiwipy
+import yaml
 
+from . import events, exceptions, futures, persistence, ports, process_comms, process_states, utils
+from .base import state_machine
+from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
+from .base.utils import call_with_super_check, super_check
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
-from .utils import protected, PID_TYPE, SAVED_STATE_TYPE
-from . import exceptions
-from . import futures
-from .base import state_machine
-from .base.utils import super_check, call_with_super_check
-from .base.state_machine import event, StateEntryFailed, StateMachine, TransitionFailed
-from . import events
-from . import persistence
-from . import ports
-from . import process_comms
-from . import process_states
-from . import utils
+from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
 
 # pylint: disable=too-many-lines
 
@@ -180,10 +185,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 cls._spec: ProcessSpec = cls._spec_class()  # type: ignore
                 cls.__called: bool = False  # type: ignore
                 cls.define(cls._spec)  # type: ignore
-                assert cls.__called, \
-                    'Process.define() was not called by {}\n' \
-                    'Hint: Did you forget to call the superclass method in your define? ' \
-                    'Try: super().define(spec)'.format(cls)
+                assert cls.__called, (
+                    f'Process.define() was not called by {cls}\nHint: Did you forget to call the superclass method in '
+                    'your define? Try: super().define(spec)'
+                )
                 return cls._spec  # type: ignore
             except Exception:
                 del cls._spec  # type: ignore
@@ -530,9 +535,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         try:
             yield None
         finally:
-            assert Process.current() is self, \
-                'Somehow, the process at the top of the stack is not me, ' \
-                'but another process! ({} != {})'.format(self, Process.current())
+            assert Process.current() is self, (
+                'Somehow, the process at the top of the stack is not me, but another process! '
+                f'({self} != {Process.current()})'
+            )
             stack_copy = PROCESS_STACK.get().copy()
             stack_copy.pop()
             PROCESS_STACK.set(stack_copy)
@@ -694,7 +700,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if self._communicator and isinstance(self.state, enum.Enum):
             from_label = cast(enum.Enum, from_state.LABEL).value if from_state is not None else None
-            subject = 'state_changed.{}.{}'.format(from_label, self.state.value)
+            subject = f'state_changed.{from_label}.{self.state.value}'
             self.logger.info('Process<%s>: Broadcasting state change: %s', self.pid, subject)
             try:
                 self._communicator.broadcast_send(body=None, sender=self.pid, subject=subject)
@@ -1042,7 +1048,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             return futures.CancellableAction(do_kill, cookie=exception)
 
-        raise ValueError("Got unknown interruption type '{}'".format(type(exception)))
+        raise ValueError(f"Got unknown interruption type '{type(exception)}'")
 
     def _set_interrupt_action(self, new_action: Optional[futures.CancellableAction]) -> None:
         """
@@ -1270,9 +1276,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             validation_error = port.validate_dynamic_ports({port_name: value})
 
         if validation_error:
-            msg = "Error validating output '{}' for port '{}': {}".format(
-                value, validation_error.port, validation_error.message
-            )
+            msg = f"Error validating output '{value}' for port '{validation_error.port}': {validation_error.message}"
             raise ValueError(msg)
 
         output_namespace = self._outputs

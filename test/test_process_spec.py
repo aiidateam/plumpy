@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from plumpy.ports import PortNamespace, InputPort
 from plumpy import ProcessSpec
+from plumpy.ports import InputPort, PortNamespace
+
 from .utils import TestCase
 
 

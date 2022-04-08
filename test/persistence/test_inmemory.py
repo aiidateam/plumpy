@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-import unittest
-import plumpy
 import asyncio
-
 from test.utils import ProcessWithCheckpoint
+import unittest
+
+import plumpy
 
 
 class TestInMemoryPersister(unittest.TestCase):

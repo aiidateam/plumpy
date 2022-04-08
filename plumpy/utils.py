@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 from collections import deque
 from collections.abc import Mapping
 import functools
@@ -6,13 +7,11 @@ import importlib
 import inspect
 import logging
 import types
-from typing import Any, Callable, Hashable, Iterator, List, MutableMapping, Optional, Tuple, Type, TYPE_CHECKING
 from typing import Set  # pylint: disable=unused-import
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterator, List, MutableMapping, Optional, Tuple, Type
 
-import asyncio
-
-from .settings import check_protected, check_override
 from . import lang
+from .settings import check_override, check_protected
 
 if TYPE_CHECKING:
     from .processes import ProcessListener  # pylint: disable=cyclic-import
@@ -127,7 +126,7 @@ class AttributesFrozendict(Frozendict):
         try:
             return self[attr]
         except KeyError:
-            errmsg = "'{}' object has no attribute '{}'".format(self.__class__.__name__, attr)
+            errmsg = f"'{self.__class__.__name__}' object has no attribute '{attr}'"
             raise AttributeError(errmsg)
 
     def __dir__(self) -> List[str]:
@@ -156,7 +155,7 @@ class AttributesDict(types.SimpleNamespace):
         try:
             return getattr(self, item)
         except AttributeError:
-            raise KeyError("No key '{}'".format(item))
+            raise KeyError(f"No key '{item}'")
 
     def __delitem__(self, item: str) -> None:
         return delattr(self, item)
@@ -179,7 +178,7 @@ def load_function(name: str, instance: Optional[Any] = None) -> Callable[..., An
     if inspect.isfunction(obj):
         return obj
 
-    raise ValueError("Invalid function name '{}'".format(name))
+    raise ValueError(f"Invalid function name '{name}'")
 
 
 def load_object(fullname: str) -> Any:
@@ -193,7 +192,7 @@ def load_object(fullname: str) -> Any:
         try:
             obj = getattr(obj, name)
         except AttributeError:
-            raise ValueError("Could not load object corresponding to '{}'".format(fullname))
+            raise ValueError(f"Could not load object corresponding to '{fullname}'")
 
     return obj
 
@@ -212,14 +211,14 @@ def load_module(fullname: str) -> Tuple[types.ModuleType, deque]:
             remainder.appendleft(parts.pop())
 
     if mod is None:
-        raise ValueError("Could not load a module corresponding to '{}'".format(fullname))
+        raise ValueError(f"Could not load a module corresponding to '{fullname}'")
 
     return mod, remainder
 
 
 def type_check(obj: Any, expected_type: Type) -> None:
     if not isinstance(obj, expected_type):
-        raise TypeError("Got object of type '{}' when expecting '{}'".format(type(obj), expected_type))
+        raise TypeError(f"Got object of type '{type(obj)}' when expecting '{expected_type}'")
 
 
 def ensure_coroutine(coro_or_fn: Any) -> Callable[..., Any]:

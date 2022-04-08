@@ -2,9 +2,9 @@
 import collections
 import json
 import logging
-from typing import Any, cast, Dict, Optional, Sequence, Type, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Type, Union, cast
 
-from .ports import Port, PortNamespace, InputPort, OutputPort
+from .ports import InputPort, OutputPort, Port, PortNamespace
 
 if TYPE_CHECKING:
     from .processes import Process  # pylint: disable=cyclic-import

@@ -2,7 +2,7 @@
 """Event and loop related classes and functions"""
 import asyncio
 import sys
-from typing import Any, Callable, Dict, Optional, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence
 
 __all__ = [
     'new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete', 'set_event_loop_policy',
