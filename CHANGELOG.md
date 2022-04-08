@@ -1,5 +1,26 @@
 # Changelog
 
+
+## v0.21.0 - 2022-04-08
+
+### Bug fixes
+- Fix UnboundLocalError in DefaultObjectLoader.load_object. [[#225]](https://github.com/aiidateam/plumpy/pull/225)
+
+### Dependencies
+- Drop support for Python 3.6. [[#228]](https://github.com/aiidateam/plumpy/pull/228)
+- Pin Jinja2 and Markupsafe packages for docs builds. [[#228]](https://github.com/aiidateam/plumpy/pull/228)
+- Update requirement `nest-asyncio~=1.5` [[#229]](https://github.com/aiidateam/plumpy/pull/229)
+- Pin tests requirements to functional versions. [[#228]](https://github.com/aiidateam/plumpy/pull/228)
+
+### Devops
+- Adopt PEP 621 and move build spec to `pyproject.toml` [[#230]](https://github.com/aiidateam/plumpy/pull/230)
+- Move package into the `src/` subdirectory [[#234]](https://github.com/aiidateam/plumpy/pull/234)
+- Merge separate license files into one [[#232]](https://github.com/aiidateam/plumpy/pull/232)
+- Add the `flynt` and `isort` pre-commit hooks [[#233]](https://github.com/aiidateam/plumpy/pull/233)
+- Remove obsolete `release.sh` [[#231]](https://github.com/aiidateam/plumpy/pull/231)
+- Update the continuous deployment workflow [[#235]](https://github.com/aiidateam/plumpy/pull/235)
+
+
 ## v0.20.0 - 2021-08-10
 
 - 🔧 MAINTAIN: update requirement to `pyyaml~=5.4` (#221)
