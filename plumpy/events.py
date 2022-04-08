@@ -53,16 +53,10 @@ def reset_event_loop_policy() -> None:
 
     # pylint: disable=protected-access
     cls = loop.__class__
-    cls._run_once = cls._run_once_orig  # type: ignore
-    cls.run_forever = cls._run_forever_orig  # type: ignore
-    cls.run_until_complete = cls._run_until_complete_orig  # type: ignore
 
     del cls._check_running  # type: ignore
     # typo in Python 3.7 source
     del cls._check_runnung  # type: ignore
-    del cls._run_once_orig  # type: ignore
-    del cls._run_forever_orig  # type: ignore
-    del cls._run_until_complete_orig  # type: ignore
     del cls._nest_patched  # type: ignore
     # pylint: enable=protected-access
 
