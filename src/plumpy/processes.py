@@ -487,6 +487,14 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         return None
 
+    @property
+    def is_excepted(self) -> bool:
+        """Return whether the process excepted.
+
+        :return: boolean, True if the process is in ``EXCEPTED`` state.
+        """
+        return self.state == process_states.ProcessState.EXCEPTED
+
     def done(self) -> bool:
         """Return True if the call was successfully killed or finished running.
 

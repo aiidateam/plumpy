@@ -499,6 +499,8 @@ class TestProcess(unittest.TestCase):
         with self.assertRaises(ValueError):
             proc.execute()
 
+        assert proc.is_excepted
+
     def test_missing_output(self):
         proc = utils.MissingOutputProcess()
 
@@ -507,7 +509,7 @@ class TestProcess(unittest.TestCase):
 
         proc.execute()
 
-        self.assertFalse(proc.successful())
+        self.assertFalse(proc.is_successful)
 
     def test_unsuccessful_result(self):
         ERROR_CODE = 256
