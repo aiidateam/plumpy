@@ -338,16 +338,14 @@ class StateMachine(metaclass=StateMachineMeta):
             self._transition_failing = False
             self._transitioning = False
 
-    @staticmethod
-    def transition_failed(
-        initial_state: Hashable, final_state: Hashable, exception: Exception, trace: TracebackType
+    def transition_failed(  # pylint: disable=no-self-use
+        self, initial_state: Hashable, final_state: Hashable, exception: Exception, trace: TracebackType
     ) -> None:
-        """
-        Called when a state transitions fails.  This method can be overwritten
-        to change the default behaviour which is to raise the exception.
+        """Called when a state transitions fails.
 
-        :param exception: The transition failed exception
+        This method can be overwritten to change the default behaviour which is to raise the exception.
 
+        :param exception: The transition failed exception.
         """
         raise exception.with_traceback(trace)
 
