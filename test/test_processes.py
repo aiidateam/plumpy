@@ -242,10 +242,9 @@ class TestProcess(unittest.TestCase):
                 proc.execute()
 
     def test_forget_to_call_parent_kill(self):
-        with self.assertRaises(AssertionError):
-            proc = ForgetToCallParent('kill')
-            proc.kill()
-            proc.execute()
+        proc = ForgetToCallParent('kill')
+        proc.kill()
+        assert proc.is_excepted
 
     def test_pid(self):
         # Test auto generation of pid
