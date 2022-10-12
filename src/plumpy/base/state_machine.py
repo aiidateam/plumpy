@@ -315,7 +315,10 @@ class StateMachine(metaclass=StateMachineMeta):
             # Make sure we have a state instance
             new_state = self._create_state_instance(new_state, *args, **kwargs)
             label = new_state.LABEL
-            self._exit_current_state(new_state)
+
+            # If the previous transition failed, do not try to exit it but go straight to next state
+            if not self._transition_failing:
+                self._exit_current_state(new_state)
 
             try:
                 self._enter_next_state(new_state)

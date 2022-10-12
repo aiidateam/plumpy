@@ -654,6 +654,40 @@ class TestProcess(unittest.TestCase):
         with self.assertRaises(plumpy.ClosedError):
             proc.execute()
 
+    def test_exception_during_on_entered(self):
+        """Test that an exception raised during ``on_entered`` will cause the process to be excepted."""
+
+        class RaisingProcess(Process):
+
+            def on_entered(self, from_state):
+                if from_state is not None and from_state.label == ProcessState.RUNNING:
+                    raise RuntimeError('exception during on_entered')
+                super().on_entered(from_state)
+
+        process = RaisingProcess()
+
+        with self.assertRaises(RuntimeError):
+            process.execute()
+
+        assert not process.is_successful
+        assert process.is_excepted
+        assert str(process.exception()) == 'exception during on_entered'
+
+    def test_exception_during_run(self):
+
+        class RaisingProcess(Process):
+
+            def run(self):
+                raise RuntimeError('exception during run')
+
+        process = RaisingProcess()
+
+        with self.assertRaises(RuntimeError):
+            process.execute()
+
+        assert process.is_excepted
+        assert str(process.exception()) == 'exception during run'
+
 
 @plumpy.auto_persist('steps_ran')
 class SavePauseProc(plumpy.Process):

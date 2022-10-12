@@ -828,6 +828,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """Entering the EXCEPTED state."""
         exception = exc_info[1]
         exception.__traceback__ = exc_info[2]
+
+        # It is possible that we already got into a finished state and the future result was set, in which case, we
+        # should reset it before setting the exception or else ``asyncio`` will raise an exception.
+        future = self.future()
+
+        if future.done():
+            self._future = persistence.SavableFuture(loop=self._loop)
         self.future().set_exception(exception)
 
     @super_check
