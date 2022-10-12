@@ -978,8 +978,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region State related methods
 
-    def transition_excepted(
-        self, _initial_state: Any, final_state: process_states.ProcessState, exception: Exception, trace: TracebackType
+    def transition_failed(
+        self, initial_state: Hashable, final_state: Hashable, exception: Exception, trace: TracebackType
     ) -> None:
         # If we are creating, then reraise instead of failing.
         if final_state == process_states.ProcessState.CREATED:
