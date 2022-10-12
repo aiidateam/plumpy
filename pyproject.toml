@@ -48,7 +48,7 @@ docs = [
     'sphinx-book-theme~=0.0.39',
 ]
 pre-commit = [
-    'mypy==0.790',
+    'mypy==0.982',
     'pre-commit~=2.2',
     'pylint==2.12.2',
 ]
