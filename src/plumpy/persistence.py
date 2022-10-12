@@ -9,7 +9,7 @@ import inspect
 import os
 import pickle
 from types import MethodType
-from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterable, List, Optional, Set, Type, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterable, List, Optional, Set, TypeVar, Union
 
 import yaml
 
@@ -340,9 +340,12 @@ class InMemoryPersister(Persister):
             del self._checkpoints[pid]
 
 
-def auto_persist(*members: str) -> Callable[[Type['Savable']], Type['Savable']]:
+SavableClsType = TypeVar('SavableClsType', bound='Type[Savable]')
 
-    def wrapped(savable: Type['Savable']) -> Type['Savable']:
+
+def auto_persist(*members: str) -> Callable[[SavableClsType], SavableClsType]:
+
+    def wrapped(savable: SavableClsType) -> SavableClsType:
         # pylint: disable=protected-access
         if savable._auto_persist is None:
             savable._auto_persist = set()
