@@ -28,8 +28,7 @@ classifiers = [
 keywords = ['workflow', 'multithreaded', 'rabbitmq']
 requires-python = '>=3.7'
 dependencies = [
-    'aio-pika~=6.6',
-    'kiwipy[rmq]~=0.7.4',
+    'kiwipy[rmq]~=0.8.2',
     'nest_asyncio~=1.5,>=1.5.1',
     'pyyaml~=5.4',
 ]
@@ -43,6 +42,7 @@ Documentation = 'https://plumpy.readthedocs.io'
 docs = [
     'ipython~=7.0',
     'jinja2==2.11.3',
+    'kiwipy[docs]~=0.8.2',
     'markupsafe==2.0.1',
     'myst-nb~=0.11.0',
     'sphinx~=3.2.0',
