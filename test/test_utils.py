@@ -2,30 +2,32 @@
 import asyncio
 import functools
 import inspect
-import unittest
+import warnings
+
+import pytest
 
 from plumpy.utils import AttributesFrozendict, ensure_coroutine, load_function
 
 
-class TestAttributesFrozendict(unittest.TestCase):
+class TestAttributesFrozendict:
 
     def test_getitem(self):
         d = AttributesFrozendict({'a': 5})
-        self.assertEqual(d['a'], 5)
+        assert d['a'] == 5
 
-        with self.assertRaises(KeyError):
+        with pytest.raises(KeyError):
             d['b']
 
     def test_getattr(self):
         d = AttributesFrozendict({'a': 5})
-        self.assertEqual(d.a, 5)
+        assert d.a == 5
 
-        with self.assertRaises(AttributeError):
+        with pytest.raises(AttributeError):
             d.b
 
     def test_setitem(self):
         d = AttributesFrozendict()
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             d['a'] = 5
 
 
@@ -37,7 +39,7 @@ async def async_fct():
     pass
 
 
-class TestEnsureCoroutine(unittest.TestCase):
+class TestEnsureCoroutine:
 
     def test_sync_func(self):
         coro = ensure_coroutine(fct)
@@ -48,8 +50,6 @@ class TestEnsureCoroutine(unittest.TestCase):
         assert coro is async_fct
 
     def test_callable_class(self):
-        """
-        """
 
         class AsyncDummy:
 
@@ -60,8 +60,6 @@ class TestEnsureCoroutine(unittest.TestCase):
         assert coro is AsyncDummy
 
     def test_callable_object(self):
-        """
-        """
 
         class AsyncDummy:
 
@@ -76,7 +74,11 @@ class TestEnsureCoroutine(unittest.TestCase):
         fct_wrap = functools.partial(fct)
         coro = ensure_coroutine(fct_wrap)
         assert coro is not fct_wrap
-        assert asyncio.iscoroutine(coro())
+        # The following will emit a RuntimeWarning ``coroutine 'ensure_coroutine.<locals>.wrap' was never awaited``
+        # since were not actually ever awaiting ``core`` but that is not the point of the test.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            assert asyncio.iscoroutine(coro())
 
 
 def test_load_function():

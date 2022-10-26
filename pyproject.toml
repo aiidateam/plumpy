@@ -108,9 +108,7 @@ minversion = '6.0'
 testpaths = [
     'test',
 ]
-filterwarnings = [
-    'ignore::DeprecationWarning:frozendict:',
-]
+filterwarnings = []
 
 [tool.yapf]
 align_closing_bracket_with_visual_indent = true
