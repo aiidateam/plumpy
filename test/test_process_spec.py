@@ -77,7 +77,7 @@ class TestProcessSpec(TestCase):
         """Test the port validator with default."""
 
         def dict_validator(dictionary, port):
-            if 'key' not in dictionary or dictionary['key'] is not 'value':
+            if 'key' not in dictionary or dictionary['key'] != 'value':
                 return 'Invalid dictionary'
 
         self.spec.input('dict', default={'key': 'value'}, validator=dict_validator)
