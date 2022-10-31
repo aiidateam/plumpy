@@ -171,7 +171,7 @@ def load_function(name: str, instance: Optional[Any] = None) -> Callable[..., An
     obj = load_object(name)
     if inspect.ismethod(obj):
         if instance is not None:
-            return obj.__get__(instance, instance.__class__)
+            return obj.__get__(instance, instance.__class__)  # type: ignore[attr-defined]
 
         return obj
 

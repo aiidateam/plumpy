@@ -72,7 +72,10 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
 
 
 # Make ProcessStateMachineMeta instances (classes) YAML - able
-yaml.representer.Representer.add_representer(ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
+yaml.representer.Representer.add_representer(
+    ProcessStateMachineMeta,
+    yaml.representer.Representer.represent_name  # type: ignore[arg-type]
+)
 
 
 def ensure_not_closed(func: Callable[..., Any]) -> Callable[..., Any]:
