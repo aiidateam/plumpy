@@ -53,6 +53,7 @@ pre-commit = [
     'mypy==0.982',
     'pre-commit~=2.2',
     'pylint==2.12.2',
+    'types-pyyaml'
 ]
 tests = [
     'ipykernel==6.12.1',
@@ -82,6 +83,28 @@ force_sort_within_sections = true
 include_trailing_comma = true
 line_length = 120
 multi_line_output = 3
+
+[tool.mypy]
+show_error_codes = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = 'test.*'
+check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    'aio_pika.*',
+    'aiocontextvars.*',
+    'kiwipy.*',
+    'nest_asyncio.*',
+    'tblib.*',
+]
+ignore_missing_imports = true
 
 [tool.pylint.format]
 max-line-length = 120
@@ -118,3 +141,43 @@ column_limit = 120
 dedent_closing_brackets = true
 indent_dictionary_value = false
 split_arguments_when_comma_terminated = true
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = py37
+
+[testenv]
+usedevelop = true
+
+[testenv:py{37,38,39,310}]
+description = Run the unit tests
+extras =
+    tests
+commands = pytest {posargs}
+
+[testenv:py{37,38,39,310}-pre-commit]
+description = Run the style checks and formatting
+extras =
+    pre-commit
+    tests
+commands = pre-commit run {posargs}
+
+[testenv:docs-{update,clean}]
+description = Build the documentation
+extras = docs
+whitelist_externals = rm
+commands =
+    clean: rm -rf docs/_build
+    sphinx-build -nW --keep-going -b {posargs:html} docs/source/ docs/_build/{posargs:html}
+
+[testenv:docs-live]
+description = Build the documentation and launch browser (with live updates)
+extras = docs
+deps = sphinx-autobuild
+commands =
+    sphinx-autobuild \
+        --re-ignore _build/.* \
+        --port 0 --open-browser \
+        -n -b {posargs:html} docs/source/ docs/_build/{posargs:html}
+"""

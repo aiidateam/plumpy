@@ -76,12 +76,12 @@ def event(
     """A decorator to check for correct transitions, raising ``EventError`` on invalid transitions."""
     if from_states != '*':
         if inspect.isclass(from_states):
-            from_states = (from_states,)  # type: ignore
+            from_states = (from_states,)
         if not all(issubclass(state, State) for state in from_states):  # type: ignore
             raise TypeError(f'from_states: {from_states}')
     if to_states != '*':
         if inspect.isclass(to_states):
-            to_states = (to_states,)  # type: ignore
+            to_states = (to_states,)
         if not all(issubclass(state, State) for state in to_states):  # type: ignore
             raise TypeError(f'to_states: {to_states}')
 
@@ -111,7 +111,7 @@ def event(
         return transition
 
     if inspect.isfunction(from_states):
-        return wrapper(from_states)  # type: ignore
+        return wrapper(from_states)
 
     return wrapper
 
@@ -397,8 +397,8 @@ class StateMachine(metaclass=StateMachineMeta):
         return state_cls(self, *args, **kwargs)
 
     def _ensure_state_class(self, state: Union[Hashable, Type[State]]) -> Type[State]:
-        if inspect.isclass(state) and issubclass(state, State):  # type: ignore
-            return cast(Type[State], state)
+        if inspect.isclass(state) and issubclass(state, State):
+            return state
 
         try:
             return self.get_states_map()[cast(Hashable, state)]  # pylint: disable=unsubscriptable-object

@@ -15,7 +15,7 @@ class ContextMixin(persistence.Savable):
     CONTEXT: str = '_context'
 
     def __init__(self, *args: Any, **kwargs: Any):
-        super().__init__(*args, **kwargs)  # type: ignore
+        super().__init__(*args, **kwargs)
         self._context: Optional[AttributesDict] = AttributesDict()
 
     @property
