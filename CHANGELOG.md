@@ -1,10 +1,29 @@
 # Changelog
 
+## v0.22.0 - 2022-10-31
+
+### Features
+- `Process`: Add the `is_excepted` property [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+
+### Bug fixes
+- `StateMachine`: transition directly to excepted if transition failed [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+- `Process`: Fix incorrect overriding of `transition_failed` [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+
+### Dependencies
+- Add support for Python 3.10 [[#242]](https://github.com/aiidateam/plumpy/pull/242)
+- Update requirement `kiwipy~=0.8.2` [[#243]](https://github.com/aiidateam/plumpy/pull/243)
+- Add lower limit for patch version of `nest-asyncio` [[#241]](https://github.com/aiidateam/plumpy/pull/241)
+
+### Devops
+- Fix `auto_persist` decorator typing [[#239]](https://github.com/aiidateam/plumpy/pull/239)
+- Fix remaining warnings in unit tests [[#244]](https://github.com/aiidateam/plumpy/pull/244)
+- Update the `mypy` pre-commit dependency [[#246]](https://github.com/aiidateam/plumpy/pull/246)
+
 
 ## v0.21.0 - 2022-04-08
 
 ### Bug fixes
-- Fix UnboundLocalError in DefaultObjectLoader.load_object. [[#225]](https://github.com/aiidateam/plumpy/pull/225)
+- Fix `UnboundLocalError` in `DefaultObjectLoader.load_object`. [[#225]](https://github.com/aiidateam/plumpy/pull/225)
 
 ### Dependencies
 - Drop support for Python 3.6. [[#228]](https://github.com/aiidateam/plumpy/pull/228)
