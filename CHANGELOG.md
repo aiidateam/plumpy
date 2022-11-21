@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.21.1 - 2022-11-21
+
+This is a backport of changes introduced in `v0.22.0`.
+
+### Features
+- `Process`: Add the `is_excepted` property [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+
+### Bug fixes
+- `StateMachine`: transition directly to excepted if transition failed [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+- `Process`: Fix incorrect overriding of `transition_failed` [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+
 
 ## v0.21.0 - 2022-04-08
 
