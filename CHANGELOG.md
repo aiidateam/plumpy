@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.22.1 - 2022-11-21
+
+### Dependencies
+- Add support for Python 3.11 [[#249]](https://github.com/aiidateam/plumpy/pull/249)
+- Update requirement `pyyaml~=6.0` [[#248]](https://github.com/aiidateam/plumpy/pull/248)
+
+
 ## v0.22.0 - 2022-10-31
 
 ### Features
