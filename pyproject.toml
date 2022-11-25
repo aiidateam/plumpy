@@ -44,7 +44,7 @@ docs = [
     'jinja2==2.11.3',
     'markupsafe==2.0.1',
     'myst-nb~=0.17.0',
-    'sphinx~=3.2.0',
+    'sphinx~=5.0',
     'sphinx-book-theme~=0.0.39',
 ]
 pre-commit = [

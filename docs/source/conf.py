@@ -87,6 +87,10 @@ html_theme_options = {
     'extra_navbar': ''
 }
 
+suppress_warnings = [
+    'ref.python',  # https://github.com/sphinx-doc/sphinx/issues/4961
+]
+
 # API Documentation
 
 
