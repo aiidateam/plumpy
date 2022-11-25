@@ -55,9 +55,9 @@ myst_substitutions = {
     'rabbitmq': '[RabbitMQ](https://www.rabbitmq.com/)',
     'kiwipy': '[kiwipy](https://kiwipy.readthedocs.io)'
 }
-jupyter_execute_notebooks = 'cache'
-execution_show_tb = 'READTHEDOCS' in os.environ
-execution_timeout = 60
+nb_execution_mode = 'cache'
+nb_execution_show_tb = 'READTHEDOCS' in os.environ
+nb_execution_timeout = 60
 
 # Warnings to ignore when using the -n (nitpicky) option
 # We should ignore any python built-in exception, for instance
