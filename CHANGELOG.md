@@ -27,6 +27,31 @@
 - Update the `mypy` pre-commit dependency [[#246]](https://github.com/aiidateam/plumpy/pull/246)
 
 
+## v0.21.2 - 2022-11-29
+
+### Bug fixes
+`Process`: Ensure that the raw inputs are not mutated [[#251]](https://github.com/aiidateam/plumpy/pull/251)
+
+### Dependencies
+- Add support for Python 3.10 and 3.11 [[#254]](https://github.com/aiidateam/plumpy/pull/254)
+- Update requirement `pytest-notebook>=0.8.1` [[#254]](https://github.com/aiidateam/plumpy/pull/254)
+- Update requirement `pyyaml~=6.0` [[#254]](https://github.com/aiidateam/plumpy/pull/254)
+- Update requirement `kiwipy[rmq]~=0.7.7` [[#254]](https://github.com/aiidateam/plumpy/pull/254)
+- Update the `myst-nb` and `sphinx` requirements [[#253]](https://github.com/aiidateam/plumpy/pull/253)
+
+
+## v0.21.1 - 2022-11-21
+
+This is a backport of changes introduced in `v0.22.0`.
+
+### Features
+- `Process`: Add the `is_excepted` property [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+
+### Bug fixes
+- `StateMachine`: transition directly to excepted if transition failed [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+- `Process`: Fix incorrect overriding of `transition_failed` [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+
+
 ## v0.21.0 - 2022-04-08
 
 ### Bug fixes
