@@ -115,6 +115,28 @@ class TestProcess(unittest.TestCase):
         with self.assertRaises(AttributeError):
             p.raw_inputs.b
 
+    def test_raw_inputs(self):
+        """Test that the ``raw_inputs`` are not mutated by the ``Process`` constructor.
+
+        Regression test for https://github.com/aiidateam/plumpy/issues/250
+        """
+
+        class Proc(Process):
+
+            @classmethod
+            def define(cls, spec):
+                super().define(spec)
+                spec.input('a')
+                spec.input('nested.a')
+                spec.input('nested.b', default='default-value')
+
+        inputs = {'a': 5, 'nested': {'a': 'value'}}
+        process = Proc(inputs)
+
+        # Compare against a clone of the original inputs dictionary as the original is modified. It should not contain
+        # the default value of the ``nested.b`` port.
+        self.assertDictEqual(dict(process.raw_inputs), {'a': 5, 'nested': {'a': 'value'}})
+
     def test_inputs_default(self):
 
         class Proc(utils.DummyProcess):
