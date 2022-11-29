@@ -53,11 +53,12 @@ pre-commit = [
     'pylint==2.12.2',
 ]
 tests = [
+    'importlib-resources~=5.2',
     'ipykernel==6.12.1',
     'pytest==6.2.5',
     'pytest-asyncio==0.16.0',
     'pytest-cov==3.0.0',
-    'pytest-notebook==0.7.0',
+    'pytest-notebook>=0.8.1',
     'shortuuid==1.0.8',
 ]
 
