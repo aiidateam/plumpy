@@ -32,7 +32,7 @@ dependencies = [
     'aio-pika~=6.6',
     'kiwipy[rmq]~=0.7.4',
     'nest_asyncio~=1.5',
-    'pyyaml~=5.4',
+    'pyyaml~=6.0',
 ]
 
 [project.urls]
