@@ -734,8 +734,18 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """Entering the CREATED state."""
         self._creation_time = time.time()
 
-        # This will parse the inputs with respect to the input portnamespace of the spec and validate them
-        raw_inputs = dict(self._raw_inputs) if self._raw_inputs else {}
+        def recursively_copy_dictionaries(value: Any) -> Any:
+            """Recursively copy the mapping but only create copies of the dictionaries not the values."""
+            if isinstance(value, dict):
+                return {key: recursively_copy_dictionaries(subvalue) for key, subvalue in value.items()}
+            return value
+
+        # This will parse the inputs with respect to the input portnamespace of the spec and validate them. The
+        # ``pre_process`` method of the inputs port namespace modifies its argument in place, and since the
+        # ``_raw_inputs`` should not be modified, we pass a clone of it. Note that we only need a clone of the nested
+        # dictionaries, so we don't use ``copy.deepcopy`` (which might seem like the obvious choice) as that will also
+        # create a clone of the values, which we don't want.
+        raw_inputs = recursively_copy_dictionaries(dict(self._raw_inputs)) if self._raw_inputs else {}
         self._parsed_inputs = self.spec().inputs.pre_process(raw_inputs)
         result = self.spec().inputs.validate(self._parsed_inputs)
 
