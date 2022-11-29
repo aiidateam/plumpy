@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.21.2 - 2022-11-29
+
+### Bug fixes
+`Process`: Ensure that the raw inputs are not mutated [[#251]](https://github.com/aiidateam/plumpy/pull/251)
+
+### Dependencies
+- Add support for Python 3.10 and 3.11 [[#254]](https://github.com/aiidateam/plumpy/pull/254)
+- Update requirement `pytest-notebook>=0.8.1` [[#254]](https://github.com/aiidateam/plumpy/pull/254)
+- Update requirement `pyyaml~=6.0` [[#254]](https://github.com/aiidateam/plumpy/pull/254)
+- Update requirement `kiwipy[rmq]~=0.7.7` [[#254]](https://github.com/aiidateam/plumpy/pull/254)
+- Update the `myst-nb` and `sphinx` requirements [[#253]](https://github.com/aiidateam/plumpy/pull/253)
+
+
 ## v0.21.1 - 2022-11-21
 
 This is a backport of changes introduced in `v0.22.0`.
