@@ -14,7 +14,7 @@ from . import lang
 from .settings import check_override, check_protected
 
 if TYPE_CHECKING:
-    from .processes import ProcessListener  # pylint: disable=cyclic-import
+    from .process_listener import ProcessListener  # pylint: disable=cyclic-import
 
 __all__ = ['AttributesDict']
 
@@ -171,7 +171,7 @@ def load_function(name: str, instance: Optional[Any] = None) -> Callable[..., An
     obj = load_object(name)
     if inspect.ismethod(obj):
         if instance is not None:
-            return obj.__get__(instance, instance.__class__)  # type: ignore[attr-defined]
+            return obj.__get__(instance, instance.__class__)  # type: ignore[attr-defined]  # pylint: disable=unnecessary-dunder-call
 
         return obj
 

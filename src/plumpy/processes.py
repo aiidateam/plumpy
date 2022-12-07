@@ -660,7 +660,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         the specific state condition.
 
         """
-        assert (listener != self), 'Cannot listen to yourself!'
+        assert (listener != self), 'Cannot listen to yourself!'  # type: ignore
         self.__event_helper.add_listener(listener)
 
     def remove_process_listener(self, listener: ProcessListener) -> None:
@@ -1324,7 +1324,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param inputs: A mapping of the inputs as passed to the process
         :return: The encoded inputs
         """
-        # pylint: disable=no-self-use
         return copy.deepcopy(inputs)
 
     @protected
@@ -1337,7 +1336,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param encoded:
         :return: The decoded input args
         """
-        # pylint: disable=no-self-use
         return copy.deepcopy(encoded)
 
     def get_status_info(self, out_status_info: dict) -> None:

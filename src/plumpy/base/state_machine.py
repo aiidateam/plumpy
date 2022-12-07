@@ -341,7 +341,7 @@ class StateMachine(metaclass=StateMachineMeta):
             self._transition_failing = False
             self._transitioning = False
 
-    def transition_failed(  # pylint: disable=no-self-use
+    def transition_failed(
         self, initial_state: Hashable, final_state: Hashable, exception: Exception, trace: TracebackType
     ) -> None:
         """Called when a state transitions fails.

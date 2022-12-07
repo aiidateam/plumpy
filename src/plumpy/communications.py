@@ -119,7 +119,7 @@ def wrap_communicator(
     return LoopCommunicator(communicator, loop)
 
 
-class LoopCommunicator(kiwipy.Communicator):
+class LoopCommunicator(kiwipy.Communicator):  # type: ignore
     """Wrapper around a `kiwipy.Communicator` that schedules any subscriber messages on a given event loop."""
 
     def __init__(self, communicator: kiwipy.Communicator, loop: Optional[asyncio.AbstractEventLoop] = None):
