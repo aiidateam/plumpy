@@ -51,9 +51,9 @@ docs = [
     'importlib-metadata~=4.12.0',
 ]
 pre-commit = [
-    'mypy==0.982',
+    'mypy==0.991',
     'pre-commit~=2.2',
-    'pylint==2.12.2',
+    'pylint==2.15.8',
     'types-pyyaml'
 ]
 tests = [
@@ -88,11 +88,10 @@ multi_line_output = 3
 
 [tool.mypy]
 show_error_codes = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-warn_unused_ignores = true
-warn_redundant_casts = true
+strict = true
+# reduce stricness, eventually these should be removed
+disallow_any_generics = false
+warn_return_any = false
 
 [[tool.mypy.overrides]]
 module = 'test.*'
@@ -113,7 +112,6 @@ max-line-length = 120
 
 [tool.pylint.messages_control]
 disable = [
-    'bad-continuation',
     'duplicate-code',
     'global-statement',
     'import-outside-toplevel',

@@ -602,7 +602,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
     def validate(  # pylint: disable=arguments-differ
         self,
-        port_values: Mapping[str, Any] = None,
+        port_values: Optional[Mapping[str, Any]] = None,
         breadcrumbs: Sequence[str] = ()
     ) -> Optional[PortValidationError]:
         """

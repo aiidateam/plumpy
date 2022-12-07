@@ -340,7 +340,7 @@ class InMemoryPersister(Persister):
             del self._checkpoints[pid]
 
 
-SavableClsType = TypeVar('SavableClsType', bound='Type[Savable]')  # type: ignore[name-defined]
+SavableClsType = TypeVar('SavableClsType', bound='Type[Savable]')  # type: ignore[name-defined]  # pylint: disable=invalid-name
 
 
 def auto_persist(*members: str) -> Callable[[SavableClsType], SavableClsType]:
