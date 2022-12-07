@@ -27,6 +27,12 @@
 - Update the `mypy` pre-commit dependency [[#246]](https://github.com/aiidateam/plumpy/pull/246)
 
 
+## v0.21.3 - 2022-12-07
+
+### Bug fixes
+- `PortNamespace`: Fix bug in valid type checking of dynamic namespaces [[#255]](https://github.com/aiidateam/plumpy/pull/255)
+
+
 ## v0.21.2 - 2022-11-29
 
 ### Bug fixes
