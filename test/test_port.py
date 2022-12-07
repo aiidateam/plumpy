@@ -249,9 +249,14 @@ class TestPortNamespace(TestCase):
         self.assertIsNone(self.port_namespace.valid_type)
 
     def test_port_namespace_validate(self):
-        """Check that validating of sub namespaces works correctly"""
+        """Check that validating of sub namespaces works correctly.
+
+        By setting a valid type on a port namespace, it automatically becomes dynamic. Port namespaces that are dynamic
+        should accept arbitrarily nested input and should validate, as long as all leaf values satisfy the `valid_type`.
+        """
         port_namespace_sub = self.port_namespace.create_port_namespace('sub.space')
         port_namespace_sub.valid_type = int
+        assert port_namespace_sub.dynamic
 
         # Check that passing a non mapping type raises
         validation_error = self.port_namespace.validate(5)
@@ -261,7 +266,12 @@ class TestPortNamespace(TestCase):
         validation_error = self.port_namespace.validate({'sub': {'space': {'output': 5}}})
         self.assertIsNone(validation_error)
 
-        # Invalid input
+        # Valid input: `sub.space` is dynamic, so should allow arbitrarily nested namespaces as long as the leaf values
+        # match the valid type, which is `int` in this example.
+        validation_error = self.port_namespace.validate({'sub': {'space': {'output': {'invalid': 5}}}})
+        self.assertIsNone(validation_error)
+
+        # Invalid input - the value in ``space`` is not ``int`` but a ``str``
         validation_error = self.port_namespace.validate({'sub': {'space': {'output': '5'}}})
         self.assertIsNotNone(validation_error)
 
