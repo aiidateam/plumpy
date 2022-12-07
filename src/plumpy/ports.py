@@ -730,18 +730,22 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         :return: if invalid returns a string with the reason for the validation failure, otherwise None
         :rtype: typing.Optional[str]
         """
-        breadcrumbs = (*breadcrumbs, self.name)
-
         if port_values and not self.dynamic:
             msg = f'Unexpected ports {port_values}, for a non dynamic namespace'
+            return PortValidationError(msg, breadcrumbs_to_port((*breadcrumbs, self.name)))
+
+        if self.valid_type is None:
+            return None
+
+        if isinstance(port_values, dict):
+            for key, value in port_values.items():
+                result = self.validate_dynamic_ports(value, (*breadcrumbs, self.name, key))
+                if result is not None:
+                    return result
+        elif not isinstance(port_values, self.valid_type):
+            msg = f'Invalid type {type(port_values)} for dynamic port value: expected {self.valid_type}'
             return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs))
 
-        if self.valid_type is not None:
-            valid_type = self.valid_type
-            for port_name, port_value in port_values.items():
-                if not isinstance(port_value, valid_type):
-                    msg = f'Invalid type {type(port_value)} for dynamic port value: expected {valid_type}'
-                    return PortValidationError(msg, breadcrumbs_to_port(breadcrumbs + (port_name,)))
         return None
 
     @staticmethod
