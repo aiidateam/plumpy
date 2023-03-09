@@ -27,6 +27,15 @@
 - Update the `mypy` pre-commit dependency [[#246]](https://github.com/aiidateam/plumpy/pull/246)
 
 
+## v0.21.4 - 2023-03-09
+
+### Bug fixes
+- Workchains: Raise if `if_/while_` predicate does not return boolean [[#259]](https://github.com/aiidateam/plumpy/pull/259)
+
+### Dependencies
+- Dependencies: Update pre-commit requirement `isort==5.12.0` [[#260]](https://github.com/aiidateam/plumpy/pull/260)
+
+
 ## v0.21.3 - 2022-12-07
 
 ### Bug fixes
