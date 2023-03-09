@@ -388,7 +388,12 @@ class _Conditional:
         return self._predicate
 
     def is_true(self, workflow: 'WorkChain') -> bool:
-        return self._predicate(workflow)
+        result = self._predicate(workflow)
+
+        if not isinstance(result, bool):
+            raise TypeError(f'The conditional predicate `{self._predicate.__name__}` did not return a boolean')
+
+        return result
 
     def __call__(self, *instructions: Union[_Instruction, WC_COMMAND_TYPE]) -> _Instruction:
         assert self._body is None, 'Instructions have already been set'
