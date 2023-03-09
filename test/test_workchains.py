@@ -618,3 +618,14 @@ class TestImmutableInputWorkchain(unittest.TestCase):
 
         workchain = Wf(inputs=dict(subspace={'one': 1, 'two': 2}))
         workchain.execute()
+
+
+@pytest.mark.parametrize('construct', (if_, while_))
+def test_conditional_return_type(construct):
+    """Test that a conditional passed to the ``if_`` and ``while_`` functions that does not return a ``bool`` raises."""
+
+    def invalid_conditional(self):
+        return 'true'
+
+    with pytest.raises(TypeError, match='The conditional predicate `invalid_conditional` did not return a boolean'):
+        construct(invalid_conditional)[0].is_true(None)
