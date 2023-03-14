@@ -390,6 +390,15 @@ class _Conditional:
     def is_true(self, workflow: 'WorkChain') -> bool:
         result = self._predicate(workflow)
 
+        if result is None:
+            import warnings
+            warnings.warn(
+                f'The conditional predicate `{self._predicate.__name__}` returned `None` but it should return a bool. '
+                'The behavior is deprecated and will soon start raising an exception, please return ``False`` instead.',
+                UserWarning
+            )
+            return False
+
         if not isinstance(result, bool):
             raise TypeError(f'The conditional predicate `{self._predicate.__name__}` did not return a boolean')
 
