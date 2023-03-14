@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=undefined-variable
 # type: ignore[name-defined]
-__version__ = '0.21.4'
+__version__ = '0.21.5'
 
 import logging
 
