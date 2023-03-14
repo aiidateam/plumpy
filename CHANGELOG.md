@@ -27,6 +27,12 @@
 - Update the `mypy` pre-commit dependency [[#246]](https://github.com/aiidateam/plumpy/pull/246)
 
 
+## v0.21.5 - 2023-03-14
+
+### Bug fixes
+- Workchains: Accept but deprecate conditional predicates returning `None` [[#261]](https://github.com/aiidateam/plumpy/pull/261)
+
+
 ## v0.21.4 - 2023-03-09
 
 ### Bug fixes
