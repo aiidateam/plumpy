@@ -446,8 +446,19 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         namespace = name.split(self.NAMESPACE_SEPARATOR)
         port_name = namespace.pop(0)
 
-        if port_name not in self:
+        if port_name not in self and not self.dynamic:
             raise ValueError(f"port '{port_name}' does not exist in port namespace '{self.name}'")
+
+        if port_name not in self and self.dynamic:
+            self[port_name] = self.__class__(
+                name=port_name,
+                required=self.required,
+                validator=self.validator,
+                valid_type=self.valid_type,
+                default=self.default,
+                dynamic=self.dynamic,
+                populate_defaults=self.populate_defaults
+            )
 
         if namespace:
             portnamespace = cast(PortNamespace, self[port_name])
