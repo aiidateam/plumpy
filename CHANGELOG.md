@@ -1,7 +1,15 @@
 # Changelog
 
+## v0.21.6 - 2023-04-03
+
+### Bug fixes
+- `PortNamespace`: Make `dynamic` apply recursively [[#263]](https://github.com/aiidateam/plumpy/pull/263)
+- Workchains: Turn exception into warning for incorrect return type in conditional predicates: any type that implements `__bool__` will be accepted [[#265]](https://github.com/aiidateam/plumpy/pull/265)
+
+
 ## v0.21.5 - 2023-03-14
 
+### Bug fixes
 - Workchains: Accept but deprecate conditional predicates returning `None` [[#261]](https://github.com/aiidateam/plumpy/pull/261)
 
 
