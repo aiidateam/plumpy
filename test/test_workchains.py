@@ -621,20 +621,29 @@ class TestImmutableInputWorkchain(unittest.TestCase):
 
 
 @pytest.mark.parametrize('construct', (if_, while_))
-def test_conditional_return_type(construct, caplog):
-    """Test that a conditional passed to the ``if_`` and ``while_`` functions that does not return a ``bool`` raises.
+def test_conditional_return_type(construct, recwarn):
+    """Test that a conditional passed to the ``if_`` and ``while_`` functions warns for incorrect type."""
 
-    For now ``None`` is still accepted and is interpreted as ``False`` but it emits a deprecation warning.
-    """
+    class BoolLike:
+        """Instances that implement ``__bool__`` are valid return types for conditional predicate."""
+
+        def __bool__(self):
+            return True
+
+    def valid_conditional(self):
+        return BoolLike()
+
+    construct(valid_conditional)[0].is_true(None)
+    assert len(recwarn) == 0
+
+    def conditional_returning_none(self):
+        return None
+
+    construct(conditional_returning_none)[0].is_true(None)
+    assert len(recwarn) == 0
 
     def invalid_conditional(self):
         return 'true'
 
-    with pytest.raises(TypeError, match='The conditional predicate `invalid_conditional` did not return a boolean'):
-        construct(invalid_conditional)[0].is_true(None)
-
-    def deprecated_conditional(self):
-        return None
-
     with pytest.warns(UserWarning):
-        construct(deprecated_conditional)[0].is_true(None)
+        construct(invalid_conditional)[0].is_true(None)
