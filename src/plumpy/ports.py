@@ -428,12 +428,14 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
         return description
 
-    def get_port(self, name: str) -> Union[Port, 'PortNamespace']:
+    def get_port(self, name: str, create_dynamically: bool = False) -> Union[Port, 'PortNamespace']:
         """
         Retrieve a (namespaced) port from this PortNamespace. If any of the sub namespaces of the terminal
         port itself cannot be found, a ValueError will be raised
 
-        :param name: name (potentially namespaced) of the port to retrieve
+        :param name: name (potentially namespaced) of the port to retrieve.
+        :param create_dynamically: If set to ``True``, dynamically create the requested port if it doesn't exist and the
+            namespace is dynamic, instead of raising a ``ValueError``.
         :returns: Port
         :raises: ValueError if port or namespace does not exist
         """
@@ -446,10 +448,10 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         namespace = name.split(self.NAMESPACE_SEPARATOR)
         port_name = namespace.pop(0)
 
-        if port_name not in self and not self.dynamic:
-            raise ValueError(f"port '{port_name}' does not exist in port namespace '{self.name}'")
+        if port_name not in self:
+            if not self.dynamic or not create_dynamically:
+                raise ValueError(f"port '{port_name}' does not exist in port namespace '{self.name}'")
 
-        if port_name not in self and self.dynamic:
             self[port_name] = self.__class__(
                 name=port_name,
                 required=self.required,
@@ -462,7 +464,9 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
         if namespace:
             portnamespace = cast(PortNamespace, self[port_name])
-            return portnamespace.get_port(self.NAMESPACE_SEPARATOR.join(namespace))
+            return portnamespace.get_port(
+                self.NAMESPACE_SEPARATOR.join(namespace), create_dynamically=create_dynamically
+            )
 
         return self[port_name]
 
