@@ -961,7 +961,8 @@ class TestProcessNamespace(unittest.TestCase):
 
     def test_namespaced_process_outputs(self):
         """Test the output namespacing and validation."""
-        namespace = 'integer.namespace'
+        namespace = 'integer'
+        namespace_nested = f'{namespace}.nested'
 
         class OutputMode(enum.Enum):
 
@@ -983,14 +984,14 @@ class TestProcessNamespace(unittest.TestCase):
                 if self.inputs.output_mode == OutputMode.NONE:
                     pass
                 elif self.inputs.output_mode == OutputMode.DYNAMIC_PORT_NAMESPACE:
-                    self.out(namespace + '.one', 1)
-                    self.out(namespace + '.two', 2)
+                    self.out(namespace_nested + '.one', 1)
+                    self.out(namespace_nested + '.two', 2)
                 elif self.inputs.output_mode == OutputMode.SINGLE_REQUIRED_PORT:
                     self.out('required_bool', False)
                 elif self.inputs.output_mode == OutputMode.BOTH_SINGLE_AND_NAMESPACE:
                     self.out('required_bool', False)
-                    self.out(namespace + '.one', 1)
-                    self.out(namespace + '.two', 2)
+                    self.out(namespace_nested + '.one', 1)
+                    self.out(namespace_nested + '.two', 2)
 
         # Run the process in default mode which should not add any outputs and therefore fail
         process = DummyDynamicProcess()
@@ -1006,8 +1007,8 @@ class TestProcessNamespace(unittest.TestCase):
 
         self.assertEqual(process.state, ProcessState.FINISHED)
         self.assertFalse(process.is_successful)
-        self.assertEqual(process.outputs['integer']['namespace']['one'], 1)
-        self.assertEqual(process.outputs['integer']['namespace']['two'], 2)
+        self.assertEqual(process.outputs[namespace]['nested']['one'], 1)
+        self.assertEqual(process.outputs[namespace]['nested']['two'], 2)
 
         # Attaching only the single required top-level port should be fine
         process = DummyDynamicProcess(inputs={'output_mode': OutputMode.SINGLE_REQUIRED_PORT})
@@ -1025,8 +1026,8 @@ class TestProcessNamespace(unittest.TestCase):
         self.assertEqual(process.state, ProcessState.FINISHED)
         self.assertTrue(process.is_successful)
         self.assertEqual(process.outputs['required_bool'], False)
-        self.assertEqual(process.outputs['integer']['namespace']['one'], 1)
-        self.assertEqual(process.outputs['integer']['namespace']['two'], 2)
+        self.assertEqual(process.outputs[namespace]['nested']['one'], 1)
+        self.assertEqual(process.outputs[namespace]['nested']['two'], 2)
 
 
 class TestProcessEvents(unittest.TestCase):
