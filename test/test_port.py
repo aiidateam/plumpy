@@ -209,21 +209,21 @@ class TestPortNamespace(TestCase):
         self.assertEqual(port, self.port)
 
     def test_port_namespace_get_port_dynamic(self):
-        """Test that ``get_port`` does not raise if a port does not exist as long as the namespace is dynamic.
+        """Test ``get_port`` with the ``create_dynamically=True`` keyword.
 
         In this case, the method should create the subnamespace on-the-fly with the same stats as the host namespace.
         """
         port_namespace = PortNamespace(self.BASE_PORT_NAMESPACE_NAME, dynamic=True)
 
         name = 'undefined'
-        sub_namespace = port_namespace.get_port(name)
+        sub_namespace = port_namespace.get_port(name, create_dynamically=True)
 
         assert isinstance(sub_namespace, PortNamespace)
         assert sub_namespace.dynamic
         assert sub_namespace.name == name
 
         name = 'nested.undefined'
-        sub_namespace = port_namespace.get_port(name)
+        sub_namespace = port_namespace.get_port(name, create_dynamically=True)
 
         assert isinstance(sub_namespace, PortNamespace)
         assert sub_namespace.dynamic
