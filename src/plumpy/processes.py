@@ -1285,7 +1285,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if namespace:
             port_namespace = cast(
                 ports.PortNamespace,
-                self.spec().outputs.get_port(namespace_separator.join(namespace))
+                self.spec().outputs.get_port(namespace_separator.join(namespace), create_dynamically=True)
             )
         else:
             port_namespace = self.spec().outputs
