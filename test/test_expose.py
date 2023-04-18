@@ -491,3 +491,42 @@ class TestExposeProcess(unittest.TestCase):
         self.check_ports(ExposeProcess, 'base', ['namespace'])
         self.check_ports(ExposeProcess, 'base.namespace', ['sub_one'])
         self.check_namespace_properties(BaseNamespaceProcess, 'namespace', ExposeProcess, 'base.namespace')
+
+    def test_expose_exclude_port_with_validator(self):
+        """Test that validators of excluded ports are not called, even if the parent namespace is dynamic.
+
+        This is a regression test for https://github.com/aiidateam/plumpy/issues/267. Changes to the method
+        ``PortNamespace.get_port`` would recursively create and return non-existing ports as long as the parent
+        namespace is dynamic. This would result in a problem with the validationn of namespaces that contained exposed
+        namespaces with validators that are dependent on excluded ports. Even though the port was excluded, the changes
+        in ``get_port`` would now recreate the port on the fly when the validation attempted to retrieve it, thereby
+        undoing the exclusion of the port when exposed.
+        """
+
+        class BaseProcess(NewLoopProcess):
+
+            @classmethod
+            def define(cls, spec):
+                super().define(spec)
+                spec.input('a', required=False)
+                spec.inputs.dynamic = True
+                spec.inputs.validator = cls.validator
+
+            @classmethod
+            def validator(cls, value, ctx):
+                try:
+                    ctx.get_port('a')
+                except ValueError:
+                    return None
+
+                if not isinstance(value['a'], str):
+                    return f'value for input `a` should be a str, but got: {type(value["a"])}'
+
+        class ExposeProcess(NewLoopProcess):
+
+            @classmethod
+            def define(cls, spec):
+                super().define(spec)
+                spec.expose_inputs(BaseProcess, namespace='base', exclude=('a',))
+
+        assert ExposeProcess.spec().inputs.validate({}) is None
