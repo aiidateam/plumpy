@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.21.7 - 2023-04-20
+
+### Bug fixes
+- `PortNamespace.get_port`: Only create if `create_dynamically` is `True` [[#268]](https://github.com/aiidateam/plumpy/pull/268)
+
+
 ## v0.21.6 - 2023-04-03
 
 ### Bug fixes
