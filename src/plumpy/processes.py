@@ -72,7 +72,10 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
 
 
 # Make ProcessStateMachineMeta instances (classes) YAML - able
-yaml.representer.Representer.add_representer(ProcessStateMachineMeta, yaml.representer.Representer.represent_name)
+yaml.representer.Representer.add_representer(
+    ProcessStateMachineMeta,
+    yaml.representer.Representer.represent_name  # type: ignore[arg-type]
+)
 
 
 def ensure_not_closed(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -731,7 +734,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """Entering the CREATED state."""
         self._creation_time = time.time()
 
-        def recursively_copy_dictionaries(value):
+        def recursively_copy_dictionaries(value: Any) -> Any:
             """Recursively copy the mapping but only create copies of the dictionaries not the values."""
             if isinstance(value, dict):
                 return {key: recursively_copy_dictionaries(subvalue) for key, subvalue in value.items()}

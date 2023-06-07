@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=undefined-variable
-# type: ignore[name-defined]
+# mypy: disable-error-code="name-defined"
 __version__ = '0.21.7'
 
 import logging
@@ -33,7 +33,7 @@ __all__ = (
 # for more details
 class NullHandler(logging.Handler):
 
-    def emit(self, record):
+    def emit(self, record):  # type: ignore[no-untyped-def]
         pass
 
 

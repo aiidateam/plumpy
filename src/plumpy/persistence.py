@@ -73,7 +73,7 @@ def _bundle_constructor(loader: yaml.Loader, data: Any) -> Generator[Bundle, Non
 
 
 yaml.add_representer(Bundle, _bundle_representer)
-yaml.add_constructor(_BUNDLE_TAG, _bundle_constructor)
+yaml.add_constructor(_BUNDLE_TAG, _bundle_constructor)  # type: ignore[arg-type]
 
 
 class Persister(metaclass=abc.ABCMeta):
@@ -647,5 +647,5 @@ class SavableFuture(futures.Future, Savable):
         super().load_instance_state(saved_state, load_context)
         if self._callbacks:
             # typing says asyncio.Future._callbacks needs to be called, but in the python 3.7 code it is a simple list
-            for callback in self._callbacks:  # type: ignore
-                self.remove_done_callback(callback)
+            for callback in self._callbacks:
+                self.remove_done_callback(callback)  # type: ignore[arg-type]
