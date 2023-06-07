@@ -27,6 +27,12 @@
 - Update the `mypy` pre-commit dependency [[#246]](https://github.com/aiidateam/plumpy/pull/246)
 
 
+## v0.21.8 - 2023-06-07
+
+### Devops
+- Dependencies: Update requirement `mypy==1.3.0` [[#270]](https://github.com/aiidateam/plumpy/pull/270)
+
+
 ## v0.21.7 - 2023-04-20
 
 ### Bug fixes
