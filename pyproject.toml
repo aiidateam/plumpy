@@ -51,7 +51,7 @@ docs = [
     'importlib-metadata~=4.12.0',
 ]
 pre-commit = [
-    'mypy==0.991',
+    'mypy==1.3.0',
     'pre-commit~=2.2',
     'pylint==2.15.8',
     'types-pyyaml'
@@ -91,6 +91,11 @@ show_error_codes = true
 strict = true
 # reduce stricness, eventually these should be removed
 disallow_any_generics = false
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
 warn_return_any = false
 
 [[tool.mypy.overrides]]
@@ -101,6 +106,7 @@ check_untyped_defs = false
 module = [
     'aio_pika.*',
     'aiocontextvars.*',
+    'frozendict.*',
     'kiwipy.*',
     'nest_asyncio.*',
     'tblib.*',
