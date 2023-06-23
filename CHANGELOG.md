@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.22.2 - 2023-06-23
+
+This release applies the fixes that were released on the support branch of `v0.21.x`.
+
+### Bug fixes
+- Workchains: Accept but deprecate conditional predicates returning `None` [[#261]](https://github.com/aiidateam/plumpy/pull/261)
+- `PortNamespace`: Fix bug in valid type checking of dynamic namespaces [[#255]](https://github.com/aiidateam/plumpy/pull/255)
+- `PortNamespace`: Make `dynamic` apply recursively [[#263]](https://github.com/aiidateam/plumpy/pull/263)
+- `PortNamespace.get_port`: Only create if `create_dynamically` is `True` [[#268]](https://github.com/aiidateam/plumpy/pull/268)
+
+
 ## v0.22.1 - 2022-11-21
 
 ### Dependencies
