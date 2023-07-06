@@ -12,7 +12,7 @@ from plumpy import communications, process_comms
 
 class Process(plumpy.Process):
 
-    def run(self):
+    async def run(self):
         pass
 
 

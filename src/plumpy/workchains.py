@@ -156,7 +156,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
                 awaitable = awaitable.future()
             self._awaitables[awaitable] = key
 
-    def run(self) -> Any:
+    async def run(self) -> Any:
         return self._do_step()
 
     def _do_step(self) -> Any:

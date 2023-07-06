@@ -327,7 +327,7 @@ class TestProcess(unittest.TestCase):
 
         class LoggerTester(Process):
 
-            def run(self, **kwargs):
+            async def run(self, **kwargs):
                 self.logger.info('Test')
 
         # TODO: Test giving a custom logger to see if it gets used
@@ -442,7 +442,7 @@ class TestProcess(unittest.TestCase):
         class KillProcess(Process):
             after_kill = False
 
-            def run(self, **kwargs):
+            async def run(self, **kwargs):
                 self.kill('killed')
                 # The following line should be executed because kill will not
                 # interrupt execution of a method call in the RUNNING state
@@ -459,7 +459,7 @@ class TestProcess(unittest.TestCase):
 
         class PauseProcess(Process):
 
-            def run(self, **kwargs):
+            async def run(self, **kwargs):
                 self.pause()
                 self.kill()
 
@@ -513,7 +513,7 @@ class TestProcess(unittest.TestCase):
 
         class InvalidOutput(plumpy.Process):
 
-            def run(self):
+            async def run(self):
                 self.out('invalid', 5)
 
         proc = InvalidOutput()
@@ -541,7 +541,7 @@ class TestProcess(unittest.TestCase):
             def define(cls, spec):
                 super().define(spec)
 
-            def run(self):
+            async def run(self):
                 return plumpy.UnsuccessfulResult(ERROR_CODE)
 
         proc = Proc()
@@ -555,7 +555,7 @@ class TestProcess(unittest.TestCase):
 
         class TestPausePlay(plumpy.Process):
 
-            def run(self):
+            async def run(self):
                 fut = self.pause()
                 test_case.assertIsInstance(fut, plumpy.Future)
 
@@ -580,7 +580,7 @@ class TestProcess(unittest.TestCase):
 
         class TestPausePlay(plumpy.Process):
 
-            def run(self):
+            async def run(self):
                 fut = self.pause()
                 test_case.assertIsInstance(fut, plumpy.Future)
                 result = self.play()
@@ -597,7 +597,7 @@ class TestProcess(unittest.TestCase):
 
         class StackTest(plumpy.Process):
 
-            def run(self):
+            async def run(self):
                 test_case.assertIs(self, Process.current())
 
         proc = StackTest()
@@ -614,7 +614,7 @@ class TestProcess(unittest.TestCase):
 
         class StackTest(plumpy.Process):
 
-            def run(self):
+            async def run(self):
                 # TODO: unexpected behaviour here
                 # if assert error happend here not raise
                 # it will be handled by try except clause in process
@@ -624,7 +624,7 @@ class TestProcess(unittest.TestCase):
 
         class ParentProcess(plumpy.Process):
 
-            def run(self):
+            async def run(self):
                 expect_true.append(self == Process.current())
                 StackTest().execute()
 
@@ -647,12 +647,12 @@ class TestProcess(unittest.TestCase):
 
         class StackTest(plumpy.Process):
 
-            def run(self):
+            async def run(self):
                 pass
 
         class ParentProcess(plumpy.Process):
 
-            def run(self):
+            async def run(self):
                 StackTest().execute()
 
         ParentProcess().execute()
@@ -661,7 +661,7 @@ class TestProcess(unittest.TestCase):
 
         class CallSoon(plumpy.Process):
 
-            def run(self):
+            async def run(self):
                 self.call_soon(self.do_except)
 
             def do_except(self):
@@ -699,7 +699,7 @@ class TestProcess(unittest.TestCase):
 
         class RaisingProcess(Process):
 
-            def run(self):
+            async def run(self):
                 raise RuntimeError('exception during run')
 
         process = RaisingProcess()
@@ -719,7 +719,7 @@ class SavePauseProc(plumpy.Process):
         super().init()
         self.steps_ran = []
 
-    def run(self):
+    async def run(self):
         self.pause()
         self.steps_ran.append(self.run.__name__)
         return plumpy.Continue(self.step2)
@@ -811,6 +811,7 @@ class TestProcessSaving(unittest.TestCase):
             saver = utils.ProcessSaver(proc)
             saver.capture()
             self.assertEqual(proc.state, ProcessState.FINISHED)
+            print(proc)
             self.assertTrue(utils.check_process_against_snapshots(loop, proc_class, saver.snapshots))
 
     def test_restart(self):
@@ -980,7 +981,7 @@ class TestProcessNamespace(unittest.TestCase):
                 spec.output('required_bool', valid_type=bool)
                 spec.output_namespace(namespace, valid_type=int, dynamic=True)
 
-            def run(self):
+            async def run(self):
                 if self.inputs.output_mode == OutputMode.NONE:
                     pass
                 elif self.inputs.output_mode == OutputMode.DYNAMIC_PORT_NAMESPACE:
