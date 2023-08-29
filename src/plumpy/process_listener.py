@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import abc
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+from . import persistence
+from .utils import SAVED_STATE_TYPE, protected
 
 __all__ = ['ProcessListener']
 
@@ -8,7 +11,26 @@ if TYPE_CHECKING:
     from .processes import Process  # pylint: disable=cyclic-import
 
 
-class ProcessListener(metaclass=abc.ABCMeta):
+@persistence.auto_persist('_params')
+class ProcessListener(persistence.Savable, metaclass=abc.ABCMeta):
+
+    # region Persistence methods
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._params: Dict[str, Any] = {}
+
+    def init(self, **kwargs: Any) -> None:
+        self._params = kwargs
+
+    @protected
+    def load_instance_state(
+        self, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext]
+    ) -> None:
+        super().load_instance_state(saved_state, load_context)
+        self.init(**saved_state['_params'])
+
+    # endregion
 
     def on_process_created(self, process: 'Process') -> None:
         """
