@@ -16,6 +16,8 @@ def super_check(wrapped: Callable[..., Any]) -> Callable[..., Any]:
         wrapped(self, *args, **kwargs)
         self._called -= 1
 
+    #the following is to show the correct name later in the call_with_super_check error message
+    wrapper.__name__ = wrapped.__name__
     return wrapper
 
 
