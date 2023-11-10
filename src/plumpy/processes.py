@@ -42,6 +42,7 @@ from . import events, exceptions, futures, persistence, ports, process_comms, pr
 from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
+from .event_helper import EventHelper
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
@@ -91,7 +92,9 @@ def ensure_not_closed(func: Callable[..., Any]) -> Callable[..., Any]:
     return func_wrapper
 
 
-@persistence.auto_persist('_pid', '_creation_time', '_future', '_paused', '_status', '_pre_paused_status')
+@persistence.auto_persist(
+    '_pid', '_creation_time', '_future', '_paused', '_status', '_pre_paused_status', '_event_helper'
+)
 class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMeta):
     """
     The Process class is the base for any unit of work in plumpy.
@@ -289,7 +292,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         # Runtime variables
         self._future = persistence.SavableFuture(loop=self._loop)
-        self.__event_helper = utils.EventHelper(ProcessListener)
+        self._event_helper = EventHelper(ProcessListener)
         self._logger = logger
         self._communicator = communicator
 
@@ -612,7 +615,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         # Runtime variables, set initial states
         self._future = persistence.SavableFuture()
-        self.__event_helper = utils.EventHelper(ProcessListener)
+        self._event_helper = EventHelper(ProcessListener)
         self._logger = None
         self._communicator = None
 
@@ -661,11 +664,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         """
         assert (listener != self), 'Cannot listen to yourself!'  # type: ignore
-        self.__event_helper.add_listener(listener)
+        self._event_helper.add_listener(listener)
 
     def remove_process_listener(self, listener: ProcessListener) -> None:
         """Remove a process listener from the process."""
-        self.__event_helper.remove_listener(listener)
+        self._event_helper.remove_listener(listener)
 
     @protected
     def set_logger(self, logger: logging.Logger) -> None:
@@ -778,7 +781,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """Output is about to be emitted."""
 
     def on_output_emitted(self, output_port: str, value: Any, dynamic: bool) -> None:
-        self.__event_helper.fire_event(ProcessListener.on_output_emitted, self, output_port, value, dynamic)
+        self._event_helper.fire_event(ProcessListener.on_output_emitted, self, output_port, value, dynamic)
 
     @super_check
     def on_wait(self, awaitables: Sequence[Awaitable]) -> None:
@@ -891,7 +894,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._closed = True
 
     def _fire_event(self, evt: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-        self.__event_helper.fire_event(evt, self, *args, **kwargs)
+        self._event_helper.fire_event(evt, self, *args, **kwargs)
 
     # endregion
 

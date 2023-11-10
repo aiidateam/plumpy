@@ -283,6 +283,46 @@ class TestWorkchain(unittest.TestCase):
             if step not in ['isA', 's2', 'isB', 's3']:
                 self.assertTrue(finished, f'Step {step} was not called by workflow')
 
+    def test_listener_persistence(self):
+        persister = plumpy.InMemoryPersister()
+        process_finished_count = 0
+
+        class TestListener(plumpy.ProcessListener):
+
+            def on_process_finished(self, process, output):
+                nonlocal process_finished_count
+                process_finished_count += 1
+
+        class SimpleWorkChain(plumpy.WorkChain):
+
+            @classmethod
+            def define(cls, spec):
+                super().define(spec)
+                spec.outline(
+                    cls.step1,
+                    cls.step2,
+                )
+
+            def step1(self):
+                persister.save_checkpoint(self, 'step1')
+
+            def step2(self):
+                persister.save_checkpoint(self, 'step2')
+
+        # add SimpleWorkChain and TestListener to this module global namespace, so they can be reloaded from checkpoint
+        globals()['SimpleWorkChain'] = SimpleWorkChain
+        globals()['TestListener'] = TestListener
+
+        workchain = SimpleWorkChain()
+        workchain.add_process_listener(TestListener())
+        output = workchain.execute()
+
+        self.assertEqual(process_finished_count, 1)
+
+        workchain_checkpoint = persister.load_checkpoint(workchain.pid, 'step1').unbundle()
+        workchain_checkpoint.execute()
+        self.assertEqual(process_finished_count, 2)
+
     def test_return_in_outline(self):
 
         class WcWithReturn(WorkChain):
