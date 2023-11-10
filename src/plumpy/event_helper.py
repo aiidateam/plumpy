@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Set, Type
+from typing import TYPE_CHECKING, Any, Callable
 
 from . import persistence
 

@@ -304,11 +304,9 @@ class TestWorkchain(unittest.TestCase):
                 )
 
             def step1(self):
-                print('step1')
                 persister.save_checkpoint(self, 'step1')
 
             def step2(self):
-                print('step2')
                 persister.save_checkpoint(self, 'step2')
 
         # add SimpleWorkChain and TestListener to this module global namespace, so they can be reloaded from checkpoint
@@ -321,7 +319,6 @@ class TestWorkchain(unittest.TestCase):
 
         self.assertEqual(process_finished_count, 1)
 
-        print('reload persister checkpoint:')
         workchain_checkpoint = persister.load_checkpoint(workchain.pid, 'step1').unbundle()
         workchain_checkpoint.execute()
         self.assertEqual(process_finished_count, 2)
