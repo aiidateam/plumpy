@@ -6,6 +6,7 @@ from . import persistence
 
 if TYPE_CHECKING:
     from typing import Set, Type
+
     from .process_listener import ProcessListener  # pylint: disable=cyclic-import
 
 _LOGGER = logging.getLogger(__name__)
