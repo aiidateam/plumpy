@@ -800,7 +800,8 @@ class TestProcessSaving(unittest.TestCase):
             # Check that it is a copy
             self.assertIsNot(outputs, bundle.get(BundleKeys.OUTPUTS, {}))
             # Check the contents are the same
-            self.assertDictEqual(outputs, bundle.get(BundleKeys.OUTPUTS, {}))
+            # Remove the ``ProcessSaver`` instance that is only used for testing
+            utils.compare_dictionaries(None, None, outputs, bundle.get(BundleKeys.OUTPUTS, {}), exclude={'_listeners'})
 
         self.assertIsNot(proc.outputs, saver.snapshots[-1].get(BundleKeys.OUTPUTS, {}))
 
@@ -875,7 +876,7 @@ class TestProcessSaving(unittest.TestCase):
         bundle2 = plumpy.Bundle(proc2)
 
         self.assertEqual(proc1.pid, proc2.pid)
-        self.assertDictEqual(bundle1, bundle2)
+        utils.compare_dictionaries(None, None, bundle1, bundle2, exclude={'_listeners'})
 
 
 class TestProcessNamespace(unittest.TestCase):
