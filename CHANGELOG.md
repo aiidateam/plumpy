@@ -38,6 +38,18 @@ This release applies the fixes that were released on the support branch of `v0.2
 - Update the `mypy` pre-commit dependency [[#246]](https://github.com/aiidateam/plumpy/pull/246)
 
 
+## v0.21.9 - 2023-11-10
+
+### Features
+- Make `ProcessListener` instances persistable [[98a375f]](https://github.com/aiidateam/plumpy/commit/98a375f07db0cacaacdc1545d4d12f25dd00bf1d)
+
+### Fixes
+- Catch `ChannelInvalidStateError` in process state change [[db2af9a]](https://github.com/aiidateam/plumpy/commit/db2af9acf7c139798a21e574d6308ae21b3b7513)
+
+### Devops
+- Update ReadTheDocs configuration file [[31f85c7]](https://github.com/aiidateam/plumpy/commit/31f85c71730b488aafd680f240485a51884722b7)
+
+
 ## v0.21.8 - 2023-06-07
 
 ### Devops
