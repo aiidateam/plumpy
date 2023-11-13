@@ -38,6 +38,13 @@ This release applies the fixes that were released on the support branch of `v0.2
 - Update the `mypy` pre-commit dependency [[#246]](https://github.com/aiidateam/plumpy/pull/246)
 
 
+## v0.21.10 - 2023-11-13
+
+### Dependencies
+
+- Dependencies: Add support for Python 3.12 [[2af3907]](https://github.com/aiidateam/plumpy/commit/2af390738df3f151c8225c01e265527b65d7a005)
+
+
 ## v0.21.9 - 2023-11-10
 
 ### Features
