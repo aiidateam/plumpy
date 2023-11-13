@@ -25,6 +25,7 @@ classifiers = [
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
     'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
 ]
 keywords = ['workflow', 'multithreaded', 'rabbitmq']
 requires-python = '>=3.7'
@@ -61,7 +62,7 @@ tests = [
     'pytest==6.2.5',
     'pytest-asyncio==0.16.0',
     'pytest-cov==3.0.0',
-    'pytest-notebook==0.8.1',
+    'pytest-notebook>=0.8.0',
     'shortuuid==1.0.8',
     'importlib-resources~=5.2',
 ]
