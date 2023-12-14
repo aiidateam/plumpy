@@ -308,6 +308,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             try:
                 identifier = self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
                 self.add_cleanup(functools.partial(self._communicator.remove_rpc_subscriber, identifier))
+            except (ConnectionClosed, ChannelInvalidStateError):
+                self.logger.warning('Process<%s>: no connection available to register as an RPC subscriber.', self.pid)
             except kiwipy.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as an RPC subscriber', self.pid)
 
@@ -316,6 +318,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 subscriber = kiwipy.BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
                 identifier = self._communicator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
                 self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
+            except (ConnectionClosed, ChannelInvalidStateError):
+                self.logger.warning(
+                    'Process<%s>: no connection available to register as a broadcast subscriber.', self.pid
+                )
             except kiwipy.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
 
@@ -886,6 +892,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             for cleanup in self._cleanups or []:
                 try:
                     cleanup()
+                except (ConnectionClosed, ChannelInvalidStateError):
+                    self.logger.warning('Process<%s>: No connection when calling cleanup method %s.', self.pid, cleanup)
                 except Exception:  # pylint: disable=broad-except
                     self.logger.exception('Process<%s>: Exception calling cleanup method %s', self.pid, cleanup)
             self._cleanups = None
