@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import asyncio
 from enum import Enum
 import sys
 import traceback
@@ -230,11 +229,6 @@ class Running(State):
                     self._running = False
             except Interruption:
                 # Let this bubble up to the caller
-                raise
-            except asyncio.CancelledError:  # pylint: disable=try-except-raise
-                # note this re-raise is only required in python<=3.7,
-                # for python>=3.8 asyncio.CancelledError does not inherit from Exception,
-                # so will not be caught below
                 raise
             except Exception:  # pylint: disable=broad-except
                 excepted = self.create_state(ProcessState.EXCEPTED, *sys.exc_info()[1:])

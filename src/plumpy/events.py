@@ -55,8 +55,6 @@ def reset_event_loop_policy() -> None:
     cls = loop.__class__
 
     del cls._check_running  # type: ignore
-    # typo in Python 3.7 source
-    del cls._check_runnung  # type: ignore
     del cls._nest_patched  # type: ignore
     # pylint: enable=protected-access
 
