@@ -6,7 +6,7 @@ import plumpy
 
 class WaitForResumeProc(plumpy.Process):
 
-    def run(self):
+    async def run(self):
         print(f'Now I am running: {self.state}')
         return plumpy.Wait(self.after_resume_and_exec)
 
