@@ -330,6 +330,10 @@ class Waiting(State):
 
     def resume(self, value: Any = NULL) -> None:
         assert self._waiting_future is not None, 'Not yet waiting'
+        
+        if self._waiting_future.done():
+            return
+        
         self._waiting_future.set_result(value)
 
 
