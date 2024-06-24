@@ -836,6 +836,31 @@ class TestProcessSaving(unittest.TestCase):
         loop.create_task(proc.step_until_terminated())
         loop.run_until_complete(async_test())
 
+    def test_double_restart(self):
+        """Test that consecutive restarts do not cause any issues, this is tested for concurrency reasons."""
+        loop = asyncio.get_event_loop()
+        proc = _RestartProcess()
+
+        async def async_test():
+            await utils.run_until_waiting(proc)
+
+            # Save the state of the process
+            saved_state = plumpy.Bundle(proc)
+
+            # Load a process from the saved state
+            loaded_proc = saved_state.unbundle()
+            self.assertEqual(loaded_proc.state, ProcessState.WAITING)
+
+            # Now resume it twice in succession
+            loaded_proc.resume()
+            loaded_proc.resume()
+
+            await loaded_proc.step_until_terminated()
+            self.assertEqual(loaded_proc.outputs, {'finished': True})
+
+        loop.create_task(proc.step_until_terminated())
+        loop.run_until_complete(async_test())
+
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
         loop = asyncio.get_event_loop()
