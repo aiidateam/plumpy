@@ -851,9 +851,8 @@ class TestProcessSaving(unittest.TestCase):
             loaded_proc = saved_state.unbundle()
             self.assertEqual(loaded_proc.state, ProcessState.WAITING)
 
-            # Now resume it
+            # Now resume it twice in succession
             loaded_proc.resume()
-
             loaded_proc.resume()
 
             await loaded_proc.step_until_terminated()
