@@ -853,15 +853,15 @@ class TestProcessSaving(unittest.TestCase):
 
             # Now resume it
             loaded_proc.resume()
-            
+
             loaded_proc.resume()
-            
+
             await loaded_proc.step_until_terminated()
             self.assertEqual(loaded_proc.outputs, {'finished': True})
 
         loop.create_task(proc.step_until_terminated())
         loop.run_until_complete(async_test())
-        
+
     def test_wait_save_continue(self):
         """ Test that process saved while in WAITING state restarts correctly when loaded """
         loop = asyncio.get_event_loop()
