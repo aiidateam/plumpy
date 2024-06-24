@@ -835,7 +835,7 @@ class TestProcessSaving(unittest.TestCase):
 
         loop.create_task(proc.step_until_terminated())
         loop.run_until_complete(async_test())
-    
+
     def test_double_restart(self):
         """Test that consecutive restarts do not cause any issues, this is tested for concurrency reasons."""
         loop = asyncio.get_event_loop()
