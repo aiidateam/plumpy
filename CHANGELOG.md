@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.21.11 - 2024-07-01
+
+### Fixes
+- Make `Waiting.resume()` idempotent [[a79497b]](https://github.com/aiidateam/plumpy/commit/a79497ba37cef7bc609cee90535ad86708fc48f9)
+
+### Dependencies
+- Add requirement `nbdime<4` [[94df0df]](https://github.com/aiidateam/plumpy/commit/94df0dfd0a3ea93174aa4de83ac5e06246350c27)
+
+
 ## v0.21.10 - 2023-11-13
 
 ### Dependencies
