@@ -63,6 +63,7 @@ tests = [
     'pytest-asyncio==0.16.0',
     'pytest-cov==3.0.0',
     'pytest-notebook>=0.8.1',
+    'nbdime<4',
     'shortuuid==1.0.8',
 ]
 
