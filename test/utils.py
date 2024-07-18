@@ -40,7 +40,7 @@ class DummyProcessWithOutput(processes.Process):
         spec.outputs.dynamic = True
         spec.output('default', valid_type=int)
 
-    def run(self, **kwargs):
+    async def run(self, **kwargs):
         self.out('default', 5)
 
 
@@ -53,21 +53,21 @@ class DummyProcessWithDynamicOutput(processes.Process):
         spec.inputs.dynamic = True
         spec.outputs.dynamic = True
 
-    def run(self, **kwargs):
+    async def run(self, **kwargs):
         self.out('default', 5)
 
 
 class KeyboardInterruptProc(processes.Process):
 
     @utils.override
-    def run(self):
+    async def run(self):
         raise KeyboardInterrupt()
 
 
 class ProcessWithCheckpoint(processes.Process):
 
     @utils.override
-    def run(self):
+    async def run(self):
         return process_states.Continue(self.last_step)
 
     def last_step(self):
@@ -77,7 +77,7 @@ class ProcessWithCheckpoint(processes.Process):
 class WaitForSignalProcess(processes.Process):
 
     @utils.override
-    def run(self):
+    async def run(self):
         return process_states.Wait(self.last_step)
 
     def last_step(self):
@@ -87,7 +87,7 @@ class WaitForSignalProcess(processes.Process):
 class KillProcess(processes.Process):
 
     @utils.override
-    def run(self):
+    async def run(self):
         return process_states.Kill('killed')
 
 
@@ -171,7 +171,7 @@ class ProcessEventsTester(EventsTesterMixin, processes.Process):
         super().define(spec)
         spec.outputs.dynamic = True
 
-    def run(self):
+    async def run(self):
         self.out('test', 5)
 
 
@@ -181,7 +181,7 @@ class ThreeSteps(ProcessEventsTester):
     _last_checkpoint = None
 
     @utils.override
-    def run(self):
+    async def run(self):
         self.out('test', 5)
         return process_states.Continue(self.middle_step)
 
@@ -194,7 +194,7 @@ class ThreeSteps(ProcessEventsTester):
 
 class TwoCheckpointNoFinish(ProcessEventsTester):
 
-    def run(self):
+    async def run(self):
         self.out('test', 5)
         return process_states.Continue(self.middle_step)
 
@@ -204,7 +204,7 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
 
 class ExceptionProcess(ProcessEventsTester):
 
-    def run(self):
+    async def run(self):
         self.out('test', 5)
         raise RuntimeError('Great scott!')
 

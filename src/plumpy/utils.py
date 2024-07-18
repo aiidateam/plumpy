@@ -7,8 +7,20 @@ import importlib
 import inspect
 import logging
 import types
-from typing import Set  # pylint: disable=unused-import
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterator, List, MutableMapping, Optional, Tuple, Type
+from typing import (  # pylint: disable=unused-import
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Hashable,
+    Iterator,
+    List,
+    MutableMapping,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+)
 
 from . import lang
 from .settings import check_override, check_protected
@@ -180,7 +192,7 @@ def type_check(obj: Any, expected_type: Type) -> None:
         raise TypeError(f"Got object of type '{type(obj)}' when expecting '{expected_type}'")
 
 
-def ensure_coroutine(coro_or_fn: Any) -> Callable[..., Any]:
+def ensure_coroutine(coro_or_fn: Any) -> Callable[..., Awaitable[Any]]:
     """
     Ensure that the given function ``fct`` is a coroutine
 
