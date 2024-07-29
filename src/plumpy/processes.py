@@ -34,7 +34,6 @@ try:
 except ModuleNotFoundError:
     from contextvars import ContextVar
 
-from aio_pika.exceptions import ChannelInvalidStateError, ConnectionClosed
 import kiwipy
 import yaml
 
@@ -699,6 +698,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             call_with_super_check(self.on_except, state.get_exc_info())  # type: ignore
 
     def on_entered(self, from_state: Optional[process_states.State]) -> None:
+        from aio_pika.exceptions import ChannelInvalidStateError, ConnectionClosed
+
         # Map these onto direct functions that the subclass can implement
         state_label = self._state.LABEL
         if state_label == process_states.ProcessState.RUNNING:
