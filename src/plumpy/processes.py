@@ -51,29 +51,7 @@ from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
 
 __all__ = ['Process', 'ProcessSpec', 'BundleKeys', 'TransitionFailed']
 
-
-#file_handler = logging.FileHandler(filename='tmp.log')
-#stdout_handler = logging.StreamHandler(stream=sys.stdout)
-#handlers = [file_handler, stdout_handler]
-#
-#logging.basicConfig(
-#    level=logging.DEBUG, 
-#    format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
-#    handlers=handlers
-#)
-
-#file_handler = logging.FileHandler(filename="/Users/alexgo/code/aiida-core/plumpy2.log")
-#stdout_handler = logging.StreamHandler(stream=sys.stdout)
-#handlers = [file_handler, stdout_handler]
-#
-#logging.basicConfig(
-#    level=logging.DEBUG, 
-#    format='[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
-#    handlers=handlers
-#)
 _LOGGER = logging.getLogger(__name__)
-
-
 PROCESS_STACK = ContextVar('process stack', default=[])
 
 
@@ -411,8 +389,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: The logger.
 
         """
-        #if self._logger is not None:
-        #    return self._logger
+        if self._logger is not None:
+            return self._logger
 
         return _LOGGER
 
@@ -930,7 +908,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param msg: the message
         :return: the outcome of processing the message, the return value will be sent back as a response to the sender
         """
-        breakpoint()
         self.logger.debug("Process<%s>: received RPC message with communicator '%s': %r", self.pid, _comm, msg)
 
         intent = msg[process_comms.INTENT_KEY]
@@ -940,11 +917,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == process_comms.Intent.PAUSE:
             return self._schedule_rpc(self.pause, msg=msg.get(process_comms.MESSAGE_KEY, None))
         if intent == process_comms.Intent.KILL:
-            breakpoint()
-            # have problems to pass new argument get
-            # Error: failed to kill Process<699>: Process.kill() got an unexpected keyword argument 'force_kill'
-            #return self._schedule_rpc(self.kill, msg=msg.get(process_comms.MESSAGE_KEY, None), force_kill=msg.get(process_comms.FORCE_KILL_KEY, False))
-            return self._schedule_rpc(self.kill, msg=msg)
+            return self._schedule_rpc(self.kill, msg=msg.get(process_comms.MESSAGE_KEY, None))
         if intent == process_comms.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
@@ -961,7 +934,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param _comm: the communicator that sent the message
         :param msg: the message
         """
-        breakpoint()
         # pylint: disable=unused-argument
         self.logger.debug(
             "Process<%s>: received broadcast message '%s' with communicator '%s': %r", self.pid, subject, _comm, body
@@ -973,7 +945,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if subject == process_comms.Intent.PAUSE:
             return self._schedule_rpc(self.pause, msg=body)
         if subject == process_comms.Intent.KILL:
-            # TODO deal with this
             return self._schedule_rpc(self.kill, msg=body)
         return None
 
@@ -1096,7 +1067,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             do_pause = functools.partial(self._do_pause, str(exception))
             return futures.CancellableAction(do_pause, cookie=exception)
 
-        if isinstance(exception, process_states.KillInterruption):
+        if isinstance(exception, (process_states.KillInterruption, process_states.ForceKillInterruption)):
 
             def do_kill(_next_state: process_states.State) -> Any:
                 try:
@@ -1155,20 +1126,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace_back)
 
-    def kill(self, msg: Union[dict, None] = None, force_kill: bool = False) -> Union[bool, asyncio.Future]:
+    def kill(self, msg: Union[str, None] = None) -> Union[bool, asyncio.Future]:
         """
         Kill the process
-
-        # PR_COMMENT have not figured out how to integrate force_kill as argument
-        #            so I just pass the dict
-
         :param msg: An optional kill message
         """
-        breakpoint()
-        if msg is None:
-            force_kill = False 
-        else:
-            force_kill = msg.get(process_comms.FORCE_KILL_KEY, False)
+        force_kill = isinstance(msg, str) and '-F' in msg
 
         if self.state == process_states.ProcessState.KILLED:
             # Already killed
@@ -1178,20 +1141,25 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             # Can't kill
             return False
 
-        if self._killing:
+        if self._killing and not force_kill:
             # Already killing
             return self._killing
 
-        if self._stepping and not force_kill:
+        if force_kill:
+            # Skip interrupting the state and go straight to killed
+            interrupt_exception = process_states.ForceKillInterruption(msg)
+            self._killing = self._interrupt_action
+            self._state.interrupt(interrupt_exception)
+
+        elif self._stepping:
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
-            interrupt_exception = process_states.KillInterruption(msg.get(process_comms.MESSAGE_KEY, None))
+            interrupt_exception = process_states.KillInterruption(msg)  # type: ignore
             self._set_interrupt_action_from_exception(interrupt_exception)
             self._killing = self._interrupt_action
             self._state.interrupt(interrupt_exception)
             return cast(futures.CancellableAction, self._interrupt_action)
 
-        breakpoint()
         self.transition_to(process_states.ProcessState.KILLED, msg)
         return True
 

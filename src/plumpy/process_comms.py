@@ -30,7 +30,6 @@ ProcessStatus = Any
 
 INTENT_KEY = 'intent'
 MESSAGE_KEY = 'message'
-FORCE_KILL_KEY = 'force_kill'
 
 
 class Intent:
@@ -197,7 +196,7 @@ class RemoteProcessController:
         result = await asyncio.wrap_future(future)
         return result
 
-    async def kill_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None, force_kill: bool = False) -> 'ProcessResult':
+    async def kill_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> 'ProcessResult':
         """
         Kill the process
 
@@ -205,11 +204,9 @@ class RemoteProcessController:
         :param msg: optional kill message
         :return: True if killed, False otherwise
         """
-        breakpoint()
         message = copy.copy(KILL_MSG)
         if msg is not None:
             message[MESSAGE_KEY] = msg
-        message[FORCE_KILL_KEY] = force_kill
 
         # Wait for the communication to go through
         kill_future = self._communicator.rpc_send(pid, message)
@@ -378,7 +375,7 @@ class RemoteProcessThreadController:
         """
         self._communicator.broadcast_send(None, subject=Intent.PLAY)
 
-    def kill_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None, force_kill: bool = False) -> kiwipy.Future:
+    def kill_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> kiwipy.Future:
         """
         Kill the process
 
@@ -387,11 +384,9 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be killed
 
         """
-        breakpoint()
         message = copy.copy(KILL_MSG)
         if msg is not None:
             message[MESSAGE_KEY] = msg
-        message[FORCE_KILL_KEY] = force_kill
 
         return self._communicator.rpc_send(pid, message)
 
@@ -410,7 +405,6 @@ class RemoteProcessThreadController:
         nowait: bool = False,
         no_reply: bool = False
     ) -> Union[None, PID_TYPE, ProcessResult]:
-        breakpoint()
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         return self.task_send(message, no_reply=no_reply)
 
@@ -485,7 +479,6 @@ class RemoteProcessThreadController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the response from the remote side (if no_reply=False)
         """
-        breakpoint()
         return self._communicator.task_send(message, no_reply=no_reply)
 
 
