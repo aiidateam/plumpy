@@ -36,6 +36,7 @@ __all__ = [
     'Continue',
     'Interruption',
     'KillInterruption',
+    'ForceKillInterruption',
     'PauseInterruption',
 ]
 
@@ -48,6 +49,10 @@ class Interruption(Exception):
 
 
 class KillInterruption(Interruption):
+    pass
+
+
+class ForceKillInterruption(Interruption):
     pass
 
 
