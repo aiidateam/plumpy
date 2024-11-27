@@ -31,7 +31,7 @@ def protected(check: bool = False) -> Callable[[Callable[..., Any]], Callable[..
 
                 return func(self, *args, **kwargs)
         else:
-            wrapped_fn = func
+            wrapped_fn = func  # type: ignore[assignment]
 
         return wrapped_fn
 
@@ -60,7 +60,7 @@ def override(check: bool = False) -> Callable[[Callable[..., Any]], Callable[...
 
                 return func(self, *args, **kwargs)
         else:
-            wrapped_fn = func
+            wrapped_fn = func  # type: ignore[assignment]
 
         return wrapped_fn
 

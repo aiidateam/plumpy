@@ -81,7 +81,7 @@ def convert_to_comm(
         def _passthrough(*args: Any, **kwargs: Any) -> bool:
             sender = kwargs.get('sender', args[1])
             subject = kwargs.get('subject', args[2])
-            return callback.is_filtered(sender, subject)  # type: ignore[attr-defined]
+            return callback.is_filtered(sender, subject)
     else:
 
         def _passthrough(*args: Any, **kwargs: Any) -> bool:  # pylint: disable=unused-argument
