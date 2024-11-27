@@ -487,7 +487,7 @@ class TestExposeProcess(unittest.TestCase):
                     return None
 
                 if not isinstance(value['a'], str):
-                    return f'value for input `a` should be a str, but got: {type(value['a'])}'
+                    return f'value for input `a` should be a str, but got: {type(value["a"])}'
 
         class ExposeProcess(NewLoopProcess):
             @classmethod
