@@ -4,7 +4,6 @@ import unittest
 from plumpy.ports import PortNamespace
 from plumpy.process_spec import ProcessSpec
 from plumpy.processes import Process
-
 from test.utils import NewLoopProcess
 
 

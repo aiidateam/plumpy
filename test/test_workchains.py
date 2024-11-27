@@ -3,8 +3,9 @@ import asyncio
 import inspect
 import unittest
 
-import plumpy
 import pytest
+
+import plumpy
 from plumpy.process_listener import ProcessListener
 from plumpy.workchains import *
 

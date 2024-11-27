@@ -28,7 +28,7 @@ import kiwipy
 from . import lang, mixins, persistence, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
 
-__all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
+__all__ = ['ToContext', 'WorkChain', 'WorkChainSpec', 'if_', 'return_', 'while_']
 
 ToContext = dict
 

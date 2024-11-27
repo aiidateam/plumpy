@@ -5,6 +5,7 @@ import asyncio
 import pathlib
 
 import pytest
+
 from plumpy import PlumpyEventLoopPolicy, new_event_loop, reset_event_loop_policy, set_event_loop, set_event_loop_policy
 
 

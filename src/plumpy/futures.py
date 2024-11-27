@@ -8,7 +8,7 @@ from typing import Any, Callable, Coroutine, Optional
 
 import kiwipy
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError', 'create_task']
+__all__ = ['CancelledError', 'Future', 'chain', 'copy_future', 'create_task', 'gather']
 
 CancelledError = kiwipy.CancelledError
 

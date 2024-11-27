@@ -12,8 +12,8 @@ from .utils import ensure_coroutine
 
 __all__ = [
     'Communicator',
-    'RemoteException',
     'DeliveryFailed',
+    'RemoteException',
     'TaskRejected',
     'plum_to_kiwi_future',
     'wrap_communicator',

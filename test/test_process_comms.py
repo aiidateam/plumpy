@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-import plumpy
 import pytest
-from plumpy import process_comms
 
+import plumpy
+from plumpy import process_comms
 from test import utils
 
 

@@ -2,7 +2,6 @@
 import unittest
 
 import plumpy
-
 from test.utils import ProcessWithCheckpoint
 
 

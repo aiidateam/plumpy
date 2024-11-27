@@ -6,11 +6,11 @@ import enum
 import unittest
 
 import kiwipy
-import plumpy
 import pytest
+
+import plumpy
 from plumpy import BundleKeys, Process, ProcessState
 from plumpy.utils import AttributesFrozendict
-
 from test import utils
 
 

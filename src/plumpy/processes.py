@@ -48,7 +48,7 @@ from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
 
-__all__ = ['Process', 'ProcessSpec', 'BundleKeys', 'TransitionFailed']
+__all__ = ['BundleKeys', 'Process', 'ProcessSpec', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
 PROCESS_STACK = ContextVar('process stack', default=[])

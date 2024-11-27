@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Optional
 
-__all__ = ['KilledError', 'UnsuccessfulResult', 'InvalidStateError', 'PersistenceError', 'ClosedError']
+__all__ = ['ClosedError', 'InvalidStateError', 'KilledError', 'PersistenceError', 'UnsuccessfulResult']
 
 
 class KilledError(Exception):

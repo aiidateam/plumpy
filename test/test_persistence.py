@@ -2,8 +2,9 @@
 import asyncio
 import unittest
 
-import plumpy
 import yaml
+
+import plumpy
 
 from . import utils
 

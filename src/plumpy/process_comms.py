@@ -12,15 +12,15 @@ from . import communications, futures, loaders, persistence
 from .utils import PID_TYPE
 
 __all__ = [
+    'KILL_MSG',
     'PAUSE_MSG',
     'PLAY_MSG',
-    'KILL_MSG',
     'STATUS_MSG',
     'ProcessLauncher',
+    'RemoteProcessController',
+    'RemoteProcessThreadController',
     'create_continue_body',
     'create_launch_body',
-    'RemoteProcessThreadController',
-    'RemoteProcessController',
 ]
 
 if TYPE_CHECKING:
