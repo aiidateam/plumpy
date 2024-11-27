@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Type, Union, ca
 from .ports import InputPort, OutputPort, Port, PortNamespace
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
-EXPOSED_TYPE = Dict[Optional[str], Dict[Type['Process'], Sequence[str]]]  # pylint: disable=invalid-name
+EXPOSED_TYPE = Dict[Optional[str], Dict[Type['Process'], Sequence[str]]]
 
 
 class ProcessSpec:
@@ -251,7 +251,7 @@ class ProcessSpec:
         exclude: Optional[Sequence[str]],
         include: Optional[Sequence[str]],
         namespace_options: Optional[dict] = None,
-    ) -> None:  # pylint: disable=too-many-arguments
+    ) -> None:
         """
         Expose ports from a source PortNamespace of the ProcessSpec of a Process class into the destination
         PortNamespace of this ProcessSpec. If the namespace is specified, the ports will be exposed in that sub

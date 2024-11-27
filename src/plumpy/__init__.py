@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 # mypy: disable-error-code=name-defined
-# pylint: disable=undefined-variable
 __version__ = '0.22.3'
 
 import logging

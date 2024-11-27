@@ -18,8 +18,8 @@ __all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
 
-LABEL_TYPE = Union[None, enum.Enum, str]  # pylint: disable=invalid-name
-EVENT_CALLBACK_TYPE = Callable[['StateMachine', Hashable, Optional['State']], None]  # pylint: disable=invalid-name
+LABEL_TYPE = Union[None, enum.Enum, str]
+EVENT_CALLBACK_TYPE = Callable[['StateMachine', Hashable, Optional['State']], None]
 
 
 class StateMachineError(Exception):
@@ -31,7 +31,7 @@ class StateEntryFailed(Exception):  # noqa: N818
     Failed to enter a state, can provide the next state to go to via this exception
     """
 
-    def __init__(self, state: Hashable = None, *args: Any, **kwargs: Any) -> None:  # pylint: disable=keyword-arg-before-vararg
+    def __init__(self, state: Hashable = None, *args: Any, **kwargs: Any) -> None:
         super().__init__('failed to enter state')
         self.state = state
         self.args = args
@@ -123,7 +123,7 @@ class State:
     def is_terminal(cls) -> bool:
         return not cls.ALLOWED
 
-    def __init__(self, state_machine: 'StateMachine', *args: Any, **kwargs: Any):  # pylint: disable=unused-argument
+    def __init__(self, state_machine: 'StateMachine', *args: Any, **kwargs: Any):
         """
         :param state_machine: The process this state belongs to
         """
@@ -217,13 +217,13 @@ class StateMachine(metaclass=StateMachineMeta):
     def initial_state_label(cls) -> LABEL_TYPE:
         cls.__ensure_built()
         assert cls.STATES is not None
-        return cls.STATES[0].LABEL  # pylint: disable=unsubscriptable-object
+        return cls.STATES[0].LABEL
 
     @classmethod
     def get_state_class(cls, label: LABEL_TYPE) -> Type[State]:
         cls.__ensure_built()
         assert cls._STATES_MAP is not None
-        return cls._STATES_MAP[label]  # pylint: disable=unsubscriptable-object
+        return cls._STATES_MAP[label]
 
     @classmethod
     def __ensure_built(cls) -> None:
@@ -235,15 +235,15 @@ class StateMachine(metaclass=StateMachineMeta):
             pass
 
         cls.STATES = cls.get_states()
-        assert isinstance(cls.STATES, Iterable)  # pylint: disable=isinstance-second-argument-not-valid-type
+        assert isinstance(cls.STATES, Iterable)
 
         # Build the states map
         cls._STATES_MAP = {}
-        for state_cls in cls.STATES:  # pylint: disable=not-an-iterable
+        for state_cls in cls.STATES:
             assert issubclass(state_cls, State)
             label = state_cls.LABEL
-            assert label not in cls._STATES_MAP, f"Duplicate label '{label}'"  # pylint: disable=unsupported-membership-test
-            cls._STATES_MAP[label] = state_cls  # pylint: disable=unsupported-assignment-operation
+            assert label not in cls._STATES_MAP, f"Duplicate label '{label}'"
+            cls._STATES_MAP[label] = state_cls
 
         # should class initialise sealed = False?
         cls.sealed = True  # type: ignore
@@ -327,7 +327,7 @@ class StateMachine(metaclass=StateMachineMeta):
 
             if self._state is not None and self._state.is_terminal():
                 call_with_super_check(self.on_terminated)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self._transitioning = False
             if self._transition_failing:
                 raise
@@ -356,7 +356,7 @@ class StateMachine(metaclass=StateMachineMeta):
 
     def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> State:
         try:
-            return self.get_states_map()[state_label](self, *args, **kwargs)  # pylint: disable=unsubscriptable-object
+            return self.get_states_map()[state_label](self, *args, **kwargs)
         except KeyError:
             raise ValueError(f'{state_label} is not a valid state')
 
@@ -397,6 +397,6 @@ class StateMachine(metaclass=StateMachineMeta):
             return state
 
         try:
-            return self.get_states_map()[cast(Hashable, state)]  # pylint: disable=unsubscriptable-object
+            return self.get_states_map()[cast(Hashable, state)]
         except KeyError:
             raise ValueError(f'{state} is not a valid state')

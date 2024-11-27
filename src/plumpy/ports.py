@@ -20,7 +20,7 @@ VALIDATOR_SIGNATURE_DEPRECATION_WARNING = """the validator `{}` has a signature 
     This has been deprecated and the new signature is `validator(value, port)` where the `port` argument will be the
     port instance to which the validator has been assigned."""
 
-VALIDATOR_TYPE = Callable[[Any, 'Port'], Optional[str]]  # pylint: disable=invalid-name
+VALIDATOR_TYPE = Callable[[Any, 'Port'], Optional[str]]
 
 
 class PortValidationError(Exception):
@@ -67,7 +67,7 @@ class Port:
         self,
         name: str,
         valid_type: Optional[Type[Any]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        help: Optional[str] = None,
         required: bool = True,
         validator: Optional[VALIDATOR_TYPE] = None,
     ) -> None:
@@ -135,7 +135,7 @@ class Port:
         return self._help
 
     @help.setter
-    def help(self, help: Optional[str]) -> None:  # pylint: disable=redefined-builtin
+    def help(self, help: Optional[str]) -> None:
         """Set the help string for this port
 
         :param help: the help string
@@ -199,9 +199,9 @@ class Port:
             spec = inspect.getfullargspec(self.validator)
             if len(spec[0]) == 1:
                 warnings.warn(VALIDATOR_SIGNATURE_DEPRECATION_WARNING.format(self.validator.__name__))
-                result = self.validator(value)  # type: ignore # pylint: disable=not-callable
+                result = self.validator(value)  # type: ignore
             else:
-                result = self.validator(value, self)  # pylint: disable=not-callable
+                result = self.validator(value, self)
             if result is not None:
                 assert isinstance(result, str), 'Validator returned non string type'
                 validation_error = result
@@ -234,11 +234,11 @@ class InputPort(Port):
         self,
         name: str,
         valid_type: Optional[Type[Any]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        help: Optional[str] = None,
         default: Any = UNSPECIFIED,
         required: bool = True,
         validator: Optional[VALIDATOR_TYPE] = None,
-    ) -> None:  # pylint: disable=too-many-arguments
+    ) -> None:
         super().__init__(
             name,
             valid_type=valid_type,
@@ -304,14 +304,14 @@ class PortNamespace(collections.abc.MutableMapping, Port):
     def __init__(
         self,
         name: str = '',  # Note this was set to None, but that would fail if you tried to compute breadcrumbs
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        help: Optional[str] = None,
         required: bool = True,
         validator: Optional[VALIDATOR_TYPE] = None,
         valid_type: Optional[Type[Any]] = None,
         default: Any = UNSPECIFIED,
         dynamic: bool = False,
         populate_defaults: bool = True,
-    ) -> None:  # pylint: disable=too-many-arguments
+    ) -> None:
         """Construct a port namespace.
 
         :param name: the name of the namespace
@@ -396,7 +396,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         if valid_type is not None:
             self.dynamic = True
 
-        super(PortNamespace, self.__class__).valid_type.fset(self, valid_type)  # type: ignore # pylint: disable=no-member
+        super(PortNamespace, self.__class__).valid_type.fset(self, valid_type)  # type: ignore
 
     @property
     def populate_defaults(self) -> bool:
@@ -530,7 +530,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         :param namespace_options: a dictionary with mutable PortNamespace property values to override
         :return: list of the names of the ports that were absorbed
         """
-        # pylint: disable=too-many-branches
+
         if not isinstance(port_namespace, PortNamespace):
             raise ValueError('port_namespace has to be an instance of PortNamespace')
 
@@ -577,7 +577,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
                 # absorb call that will properly consider the include and exclude rules
                 self[port_name] = copy.copy(port)
                 portnamespace = cast(PortNamespace, self[port_name])
-                portnamespace._ports = {}  # pylint: disable=protected-access
+                portnamespace._ports = {}
                 portnamespace.absorb(port, sub_exclude, sub_include)
             else:
                 # If include rules are specified but the port name does not appear, simply skip it
@@ -612,7 +612,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
         return result
 
-    def validate(  # pylint: disable=arguments-differ
+    def validate(
         self, port_values: Optional[Mapping[str, Any]] = None, breadcrumbs: Sequence[str] = ()
     ) -> Optional[PortValidationError]:
         """
@@ -622,7 +622,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         :param breadcrumbs: a tuple of the path to having reached this point in validation
         :return: None or tuple containing 0: error string 1: tuple of breadcrumb strings to where the validation failed
         """
-        # pylint: disable=arguments-renamed
+
         breadcrumbs_local = (*breadcrumbs, self.name)
         message: Optional[str]
 
@@ -660,9 +660,9 @@ class PortNamespace(collections.abc.MutableMapping, Port):
             spec = inspect.getfullargspec(self.validator)
             if len(spec[0]) == 1:
                 warnings.warn(VALIDATOR_SIGNATURE_DEPRECATION_WARNING.format(self.validator.__name__))
-                message = self.validator(port_values_clone)  # type: ignore # pylint: disable=not-callable
+                message = self.validator(port_values_clone)  # type: ignore
             else:
-                message = self.validator(port_values_clone, self)  # pylint: disable=not-callable
+                message = self.validator(port_values_clone, self)
             if message is not None:
                 assert isinstance(
                     message, str

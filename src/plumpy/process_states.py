@@ -40,7 +40,7 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
 
 class Interruption(Exception):  # noqa: N818
@@ -146,7 +146,7 @@ class State(state_machine.State, persistence.Savable):
         super().load_instance_state(saved_state, load_context)
         self.state_machine = load_context.process
 
-    def interrupt(self, reason: Any) -> None:  # pylint: disable=unused-argument
+    def interrupt(self, reason: Any) -> None:
         pass
 
 
@@ -218,7 +218,7 @@ class Running(State):
     def interrupt(self, reason: Any) -> None:
         pass
 
-    async def execute(self) -> State:  # type: ignore # pylint: disable=invalid-overridden-method
+    async def execute(self) -> State:  # type: ignore
         if self._command is not None:
             command = self._command
         else:
@@ -231,7 +231,7 @@ class Running(State):
             except Interruption:
                 # Let this bubble up to the caller
                 raise
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 excepted = self.create_state(ProcessState.EXCEPTED, *sys.exc_info()[1:])
                 return cast(State, excepted)
             else:
@@ -316,7 +316,7 @@ class Waiting(State):
         # This will cause the future in execute() to raise the exception
         self._waiting_future.set_exception(reason)
 
-    async def execute(self) -> State:  # type: ignore # pylint: disable=invalid-overridden-method
+    async def execute(self) -> State:  # type: ignore
         try:
             result = await self._waiting_future
         except Interruption:

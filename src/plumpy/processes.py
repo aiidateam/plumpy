@@ -48,8 +48,6 @@ from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
 
-# pylint: disable=too-many-lines
-
 __all__ = ['Process', 'ProcessSpec', 'BundleKeys', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
@@ -64,7 +62,6 @@ class BundleKeys:
 
     """
 
-    # pylint: disable=too-few-public-methods
     INPUTS_RAW = 'INPUTS_RAW'
     INPUTS_PARSED = 'INPUTS_PARSED'
     OUTPUTS = 'OUTPUTS'
@@ -86,7 +83,6 @@ def ensure_not_closed(func: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(func)
     def func_wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
-        # pylint: disable=protected-access
         if self._closed:
             raise exceptions.ClosedError('Process is closed')
         return func(self, *args, **kwargs)
@@ -134,8 +130,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     always called immediately after that state is entered but before being
     executed.
     """
-
-    # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
     # Static class stuff ######################
     _spec_class = ProcessSpec
@@ -511,7 +505,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         .. deprecated:: 0.18.6
             Use the `has_terminated` method instead
         """
-        warnings.warn('method is deprecated, use `has_terminated` instead', DeprecationWarning)  # pylint: disable=no-member
+        warnings.warn('method is deprecated, use `has_terminated` instead', DeprecationWarning)
         return self._state.is_terminal()
 
     # endregion
@@ -890,7 +884,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             for cleanup in self._cleanups or []:
                 try:
                     cleanup()
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     self.logger.exception('Process<%s>: Exception calling cleanup method %s', self.pid, cleanup)
             self._cleanups = None
         finally:
@@ -939,7 +933,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param _comm: the communicator that sent the message
         :param msg: the message
         """
-        # pylint: disable=unused-argument
+
         self.logger.debug(
             "Process<%s>: received broadcast message '%s' with communicator '%s': %r", self.pid, subject, _comm, body
         )
@@ -1238,9 +1232,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 else:
                     self._set_interrupt_action_from_exception(exception)
 
-            except KeyboardInterrupt:  # pylint: disable=try-except-raise
+            except KeyboardInterrupt:
                 raise
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 # Overwrite the next state to go to excepted directly
                 next_state = self.create_state(process_states.ProcessState.EXCEPTED, *sys.exc_info()[1:])
                 self._set_interrupt_action(None)

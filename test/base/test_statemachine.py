@@ -40,7 +40,7 @@ class Playing(state_machine.State):
         super().exit()
         self._update_time()
 
-    def play(self, track=None):  # pylint: disable=no-self-use, unused-argument
+    def play(self, track=None):
         return False
 
     def _update_time(self):

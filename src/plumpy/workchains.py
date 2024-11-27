@@ -32,9 +32,9 @@ __all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec'
 
 ToContext = dict
 
-PREDICATE_TYPE = Callable[['WorkChain'], bool]  # pylint: disable=invalid-name
-WC_COMMAND_TYPE = Callable[['WorkChain'], Any]  # pylint: disable=invalid-name
-EXIT_CODE_TYPE = int  # pylint: disable=invalid-name
+PREDICATE_TYPE = Callable[['WorkChain'], bool]
+WC_COMMAND_TYPE = Callable[['WorkChain'], Any]
+EXIT_CODE_TYPE = int
 
 
 class WorkChainSpec(processes.ProcessSpec):
@@ -99,7 +99,7 @@ class Waiting(process_states.Waiting):
         key = self._awaiting.pop(awaitable)
         try:
             self.process.ctx[key] = awaitable.result()  # type: ignore
-        except Exception as exception:  # pylint: disable=broad-except
+        except Exception as exception:
             self._waiting_future.set_exception(exception)
         else:
             if not self._awaiting:
@@ -610,7 +610,7 @@ class _ReturnStepper(Stepper):
         Raise a _PropagateReturn exception where the value is the exit code set
         in the _Return instruction upon instantiation
         """
-        raise _PropagateReturn(self._return_instruction._exit_code)  # pylint: disable=protected-access
+        raise _PropagateReturn(self._return_instruction._exit_code)
 
 
 class _Return(_Instruction):
@@ -677,7 +677,7 @@ def while_(condition: PREDICATE_TYPE) -> _While:
     return _While(condition)
 
 
-return_ = _Return()  # pylint: disable=invalid-name
+return_ = _Return()
 """
 A global singleton that contains a Return instruction that allows to exit
 out of the workchain outline directly with None as exit code
