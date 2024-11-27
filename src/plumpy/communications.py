@@ -26,7 +26,7 @@ Communicator = kiwipy.Communicator
 
 if TYPE_CHECKING:
     # identifiers for subscribers
-    ID_TYPE = Hashable  # pylint: disable=invalid-name
+    ID_TYPE = Hashable
     Subscriber = Callable[..., Any]
     # RPC subscriber params: communicator, msg
     RpcSubscriber = Callable[[kiwipy.Communicator, Any], Any]
@@ -84,7 +84,7 @@ def convert_to_comm(
             return callback.is_filtered(sender, subject)
     else:
 
-        def _passthrough(*args: Any, **kwargs: Any) -> bool:  # pylint: disable=unused-argument
+        def _passthrough(*args: Any, **kwargs: Any) -> bool:
             return False
 
     coro = ensure_coroutine(callback)

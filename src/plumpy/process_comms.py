@@ -24,7 +24,7 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
 ProcessResult = Any
 ProcessStatus = Any
@@ -36,7 +36,6 @@ MESSAGE_KEY = 'message'
 class Intent:
     """Intent constants for a process message"""
 
-    # pylint: disable=too-few-public-methods
     PLAY: str = 'play'
     PAUSE: str = 'pause'
     KILL: str = 'kill'
@@ -261,7 +260,7 @@ class RemoteProcessController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the result of launching the process
         """
-        # pylint: disable=too-many-arguments
+
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
         launch_future = self._communicator.task_send(message, no_reply=no_reply)
         future = await asyncio.wrap_future(launch_future)
@@ -294,7 +293,7 @@ class RemoteProcessController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the result of executing the process
         """
-        # pylint: disable=too-many-arguments
+
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         create_future = self._communicator.task_send(message)
@@ -412,7 +411,6 @@ class RemoteProcessThreadController:
         nowait: bool = False,
         no_reply: bool = False,
     ) -> Union[None, PID_TYPE, ProcessResult]:
-        # pylint: disable=too-many-arguments
         """
         Launch the process
 
@@ -450,7 +448,7 @@ class RemoteProcessThreadController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the result of executing the process
         """
-        # pylint: disable=too-many-arguments
+
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         execute_future = kiwipy.Future()

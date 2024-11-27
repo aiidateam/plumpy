@@ -17,11 +17,11 @@ class InvalidStateError(Exception):
     """Exception for when a future or action is in an invalid state"""
 
 
-copy_future = kiwipy.copy_future  # pylint: disable=invalid-name
-chain = kiwipy.chain  # pylint: disable=invalid-name
-gather = asyncio.gather  # pylint: disable=invalid-name
+copy_future = kiwipy.copy_future
+chain = kiwipy.chain
+gather = asyncio.gather
 
-Future = asyncio.Future  # pylint: disable=invalid-name
+Future = asyncio.Future
 
 
 class CancellableAction(Future):

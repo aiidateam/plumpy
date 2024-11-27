@@ -8,7 +8,7 @@ from .utils import SAVED_STATE_TYPE, protected
 __all__ = ['ProcessListener']
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
 
 @persistence.auto_persist('_params')

@@ -32,7 +32,7 @@ __all__ = [
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
 
 class Bundle(dict):
@@ -350,7 +350,6 @@ SavableClsType = TypeVar('SavableClsType', bound='type[Savable]')
 
 def auto_persist(*members: str) -> Callable[[SavableClsType], SavableClsType]:
     def wrapped(savable: SavableClsType) -> SavableClsType:
-        # pylint: disable=protected-access
         if savable._auto_persist is None:
             savable._auto_persist = set()
         else:
@@ -488,7 +487,7 @@ class Savable:
             self.load_members(self._auto_persist, saved_state, load_context)
 
     @super_check
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: Optional[LoadSaveContext]) -> None:  # pylint: disable=unused-argument
+    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: Optional[LoadSaveContext]) -> None:
         self._ensure_persist_configured()
         if self._auto_persist is not None:
             self.save_members(self._auto_persist, out_state)
@@ -627,10 +626,10 @@ class SavableFuture(futures.Future, Savable):
 
         state = saved_state['_state']
 
-        if state == asyncio.futures._PENDING:  # type: ignore # pylint: disable=protected-access
+        if state == asyncio.futures._PENDING:  # type: ignore
             obj = cls(loop=loop)
 
-        if state == asyncio.futures._FINISHED:  # type: ignore # pylint: disable=protected-access
+        if state == asyncio.futures._FINISHED:  # type: ignore
             obj = cls(loop=loop)
             result = saved_state['_result']
 
@@ -640,14 +639,13 @@ class SavableFuture(futures.Future, Savable):
             except KeyError:
                 obj.set_result(result)
 
-        if state == asyncio.futures._CANCELLED:  # type: ignore # pylint: disable=protected-access
+        if state == asyncio.futures._CANCELLED:  # type: ignore
             obj = cls(loop=loop)
             obj.cancel()
 
         return obj
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext) -> None:
-        # pylint: disable=attribute-defined-outside-init
         super().load_instance_state(saved_state, load_context)
         if self._callbacks:
             # typing says asyncio.Future._callbacks needs to be called, but in the python 3.7 code it is a simple list
