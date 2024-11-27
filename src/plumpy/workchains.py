@@ -66,9 +66,8 @@ class Waiting(process_states.Waiting):
         super().__init__(process, done_callback, msg, awaiting)
         self._awaiting: Dict[asyncio.Future, str] = {}
         for awaitable, key in (awaiting or {}).items():
-            if isinstance(awaitable, processes.Process):
-                awaitable = awaitable.future()
-            self._awaiting[awaitable] = key
+            resolved_awaitable = awaitable.future() if isinstance(awaitable, processes.Process) else awaitable
+            self._awaiting[resolved_awaitable] = key
 
     def enter(self) -> None:
         super().enter()
@@ -152,9 +151,9 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         to the corresponding key in the context of the workchain
         """
         for key, awaitable in kwargs.items():
-            if isinstance(awaitable, processes.Process):
-                awaitable = awaitable.future()
-            self._awaitables[awaitable] = key
+            resolved_awaitable = awaitable.future() if isinstance(awaitable, processes.Process) else awaitable
+
+            self._awaitables[resolved_awaitable] = key
 
     def run(self) -> Any:
         return self._do_step()
@@ -332,9 +331,10 @@ class _Block(_Instruction, collections.abc.Sequence):
         for instruction in instructions:
             if not isinstance(instruction, _Instruction):
                 # Assume it's a function call
-                instruction = _FunctionCall(instruction)
+                comms.append(_FunctionCall(instruction))
+            else:
+                comms.append(instruction)
 
-            comms.append(instruction)
         self._instruction: List[Union[_Instruction, _FunctionCall]] = comms
 
     def __getitem__(self, index: int) -> Union[_Instruction, _FunctionCall]:  # type: ignore
