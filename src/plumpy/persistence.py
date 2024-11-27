@@ -19,14 +19,14 @@ from .utils import PID_TYPE, SAVED_STATE_TYPE
 
 __all__ = [
     'Bundle',
-    'Persister',
-    'PicklePersister',
-    'auto_persist',
-    'Savable',
-    'SavableFuture',
+    'InMemoryPersister',
     'LoadSaveContext',
     'PersistedCheckpoint',
-    'InMemoryPersister',
+    'Persister',
+    'PicklePersister',
+    'Savable',
+    'SavableFuture',
+    'auto_persist',
 ]
 
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])

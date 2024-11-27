@@ -3,6 +3,7 @@
 
 import pytest
 from kiwipy import CommunicatorHelper
+
 from plumpy.communications import LoopCommunicator
 
 

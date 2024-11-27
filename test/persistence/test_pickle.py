@@ -6,7 +6,6 @@ if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
 
 import plumpy
-
 from test.utils import ProcessWithCheckpoint
 
 

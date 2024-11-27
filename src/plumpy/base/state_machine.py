@@ -14,7 +14,7 @@ from plumpy.futures import Future
 
 from .utils import call_with_super_check, super_check
 
-__all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed']
+__all__ = ['StateMachine', 'StateMachineMeta', 'TransitionFailed', 'event']
 
 _LOGGER = logging.getLogger(__name__)
 

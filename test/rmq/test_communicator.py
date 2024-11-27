@@ -7,11 +7,12 @@ import shutil
 import tempfile
 import uuid
 
-import plumpy
 import pytest
 import shortuuid
 import yaml
 from kiwipy import BroadcastFilter, rmq
+
+import plumpy
 from plumpy import communications, process_comms
 
 from .. import utils

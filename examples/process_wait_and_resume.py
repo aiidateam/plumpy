@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-import plumpy
 from kiwipy import rmq
+
+import plumpy
 
 
 class WaitForResumeProc(plumpy.Process):

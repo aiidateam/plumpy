@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Tests for the :mod:`plumpy.loaders` module."""
 
-import plumpy
 import pytest
+
+import plumpy
 
 
 class DummyClass:

@@ -22,21 +22,21 @@ from .persistence import auto_persist
 from .utils import SAVED_STATE_TYPE
 
 __all__ = [
-    'ProcessState',
+    'Continue',
     'Created',
-    'Running',
-    'Waiting',
-    'Finished',
     'Excepted',
-    'Killed',
+    'Finished',
+    'Interruption',
     # Commands
     'Kill',
+    'KillInterruption',
+    'Killed',
+    'PauseInterruption',
+    'ProcessState',
+    'Running',
     'Stop',
     'Wait',
-    'Continue',
-    'Interruption',
-    'KillInterruption',
-    'PauseInterruption',
+    'Waiting',
 ]
 
 if TYPE_CHECKING:

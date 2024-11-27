@@ -5,6 +5,7 @@ import inspect
 import warnings
 
 import pytest
+
 from plumpy.utils import AttributesFrozendict, ensure_coroutine, load_function
 
 
