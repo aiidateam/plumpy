@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from .processes import Process  # pylint: disable=cyclic-import
 
 
-class Interruption(Exception):
+class Interruption(Exception):  # noqa: N818
     pass
 
 

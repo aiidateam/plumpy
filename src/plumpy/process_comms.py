@@ -567,7 +567,8 @@ class ProcessLauncher:
             self._persister.save_checkpoint(proc)
 
         if nowait:
-            asyncio.ensure_future(proc.step_until_terminated())
+            # XXX: can return a reference and gracefully use task to cancel itself when the upper call stack fails
+            asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
             return proc.pid
 
         await proc.step_until_terminated()
@@ -594,7 +595,8 @@ class ProcessLauncher:
         proc = cast('Process', saved_state.unbundle(self._load_context))
 
         if nowait:
-            asyncio.ensure_future(proc.step_until_terminated())
+            # XXX: can return a reference and gracefully use task to cancel itself when the upper call stack fails
+            asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
             return proc.pid
 
         await proc.step_until_terminated()
