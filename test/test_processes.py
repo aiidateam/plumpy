@@ -380,7 +380,7 @@ class TestProcess(unittest.TestCase):
             self.assertTrue(proc.has_terminated())
             self.assertEqual(proc.state, ProcessState.FINISHED)
 
-        loop.create_task(proc.step_until_terminated())
+        loop.create_task(proc.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 
     def test_pause_play_status_messaging(self):
@@ -390,8 +390,8 @@ class TestProcess(unittest.TestCase):
         Any process can have its status set to a given message. When pausing, a pause message can be set for the
         status, which should store the current status, which should be restored, once the process is played again.
         """
-        PLAY_STATUS = 'process was played by Hans Klok'
-        PAUSE_STATUS = 'process was paused by Evel Knievel'
+        PLAY_STATUS = 'process was played by Hans Klok'  # noqa: N806
+        PAUSE_STATUS = 'process was paused by Evel Knievel'  # noqa: N806
 
         loop = asyncio.get_event_loop()
         proc = utils.WaitForSignalProcess()
@@ -415,7 +415,7 @@ class TestProcess(unittest.TestCase):
             await proc.future()
 
         # Check it's done
-        loop.create_task(proc.step_until_terminated())
+        loop.create_task(proc.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 
         self.assertTrue(proc.has_terminated())
@@ -457,8 +457,6 @@ class TestProcess(unittest.TestCase):
         async def async_test():
             await utils.run_until_waiting(proc)
 
-            saved_state = plumpy.Bundle(proc)
-
             result = await proc.pause()
             self.assertTrue(result)
             self.assertTrue(proc.paused)
@@ -469,7 +467,7 @@ class TestProcess(unittest.TestCase):
             with self.assertRaises(plumpy.KilledError):
                 result = await proc.future()
 
-        loop.create_task(proc.step_until_terminated())
+        loop.create_task(proc.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 
         self.assertEqual(proc.state, ProcessState.KILLED)
@@ -481,7 +479,7 @@ class TestProcess(unittest.TestCase):
         procs = []
         for proc_class in utils.TEST_PROCESSES:
             proc = proc_class()
-            loop.create_task(proc.step_until_terminated())
+            loop.create_task(proc.step_until_terminated())  # noqa: RUF006
             procs.append(proc)
 
         tasks = asyncio.gather(*[p.future() for p in procs])
@@ -512,7 +510,7 @@ class TestProcess(unittest.TestCase):
         self.assertFalse(proc.is_successful)
 
     def test_unsuccessful_result(self):
-        ERROR_CODE = 256
+        error_code = 256
 
         class Proc(Process):
             @classmethod
@@ -520,12 +518,12 @@ class TestProcess(unittest.TestCase):
                 super().define(spec)
 
             def run(self):
-                return plumpy.UnsuccessfulResult(ERROR_CODE)
+                return plumpy.UnsuccessfulResult(error_code)
 
         proc = Proc()
         proc.execute()
 
-        self.assertEqual(proc.result(), ERROR_CODE)
+        self.assertEqual(proc.result(), error_code)
 
     def test_pause_in_process(self):
         """Test that we can pause and cancel that by playing within the process"""
@@ -544,7 +542,7 @@ class TestProcess(unittest.TestCase):
         proc = TestPausePlay()
         proc.add_process_listener(listener)
 
-        loop.create_task(proc.step_until_terminated())
+        loop.create_task(proc.step_until_terminated())  # noqa: RUF006
         loop.run_forever()
 
         self.assertTrue(proc.paused)
@@ -722,7 +720,7 @@ class TestProcessSaving(unittest.TestCase):
             await proc_unbundled.step_until_terminated()
             self.assertEqual([SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
 
-        loop.create_task(nsync_comeback.step_until_terminated())
+        loop.create_task(nsync_comeback.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 
     def test_save_future(self):
@@ -745,7 +743,7 @@ class TestProcessSaving(unittest.TestCase):
 
             self.assertListEqual([SavePauseProc.run.__name__, SavePauseProc.step2.__name__], proc_unbundled.steps_ran)
 
-        loop.create_task(proc_unbundled.step_until_terminated())
+        loop.create_task(proc_unbundled.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 
     def test_created_bundle(self):
@@ -799,7 +797,7 @@ class TestProcessSaving(unittest.TestCase):
             await loaded_proc.step_until_terminated()
             self.assertEqual(loaded_proc.outputs, {'finished': True})
 
-        loop.create_task(proc.step_until_terminated())
+        loop.create_task(proc.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 
     def test_double_restart(self):
@@ -824,7 +822,7 @@ class TestProcessSaving(unittest.TestCase):
             await loaded_proc.step_until_terminated()
             self.assertEqual(loaded_proc.outputs, {'finished': True})
 
-        loop.create_task(proc.step_until_terminated())
+        loop.create_task(proc.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 
     def test_wait_save_continue(self):
@@ -844,14 +842,14 @@ class TestProcessSaving(unittest.TestCase):
             # Load from saved state and run again
             loader = plumpy.get_object_loader()
             proc2 = saved_state.unbundle(plumpy.LoadSaveContext(loader))
-            asyncio.ensure_future(proc2.step_until_terminated())
+            asyncio.ensure_future(proc2.step_until_terminated())  # noqa: RUF006
             proc2.resume()
             result2 = await proc2.future()
 
             # Check results match
             self.assertEqual(result1, result2)
 
-        loop.create_task(proc.step_until_terminated())
+        loop.create_task(proc.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 
     def test_killed(self):
@@ -936,7 +934,7 @@ class TestProcessNamespace(unittest.TestCase):
 
         original_inputs = [1, 2, 3, 4]
 
-        inputs = {'name': {'space': {str(l): l for l in original_inputs}}}
+        inputs = {'name': {'space': {str(l): l for l in original_inputs}}}  # noqa: E741
         proc = DummyDynamicProcess(inputs=inputs)
 
         for label, value in proc.inputs['name']['space'].items():
