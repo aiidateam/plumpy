@@ -25,7 +25,7 @@ class Playing(state_machine.State):
         super().__init__(player)
         self.track = track
         self._last_time = None
-        self._played = 0.0
+        self._played = 0.
 
     def __str__(self):
         if self.in_state:
@@ -40,7 +40,7 @@ class Playing(state_machine.State):
         super().exit()
         self._update_time()
 
-    def play(self, track=None):
+    def play(self, track=None):  # pylint: disable=no-self-use, unused-argument
         return False
 
     def _update_time(self):
@@ -55,7 +55,8 @@ class Paused(state_machine.State):
     TRANSITIONS = {STOP: STOPPED}
 
     def __init__(self, player, playing_state):
-        assert isinstance(playing_state, Playing), 'Must provide the playing state to pause'
+        assert isinstance(playing_state, Playing), \
+            'Must provide the playing state to pause'
         super().__init__(player)
         self.playing_state = playing_state
 
@@ -64,7 +65,7 @@ class Paused(state_machine.State):
 
     def play(self, track=None):
         if track is not None:
-            self.state_machine.transition_to(Playing, track)
+            self.state_machine.transition_to(Playing, track=track)
         else:
             self.state_machine.transition_to(self.playing_state)
 
@@ -80,7 +81,7 @@ class Stopped(state_machine.State):
         return '[]'
 
     def play(self, track):
-        self.state_machine.transition_to(Playing, track)
+        self.state_machine.transition_to(Playing, track=track)
 
 
 class CdPlayer(state_machine.StateMachine):
@@ -107,7 +108,7 @@ class CdPlayer(state_machine.StateMachine):
 
     @state_machine.event(from_states=Playing, to_states=Paused)
     def pause(self):
-        self.transition_to(Paused, self._state)
+        self.transition_to(Paused, playing_state=self._state)
         return True
 
     @state_machine.event(from_states=(Playing, Paused), to_states=Stopped)
@@ -116,13 +117,14 @@ class CdPlayer(state_machine.StateMachine):
 
 
 class TestStateMachine(unittest.TestCase):
+
     def test_basic(self):
         cd_player = CdPlayer()
         self.assertEqual(cd_player.state, STOPPED)
 
         cd_player.play('Eminem - The Real Slim Shady')
         self.assertEqual(cd_player.state, PLAYING)
-        time.sleep(1.0)
+        time.sleep(1.)
 
         cd_player.pause()
         self.assertEqual(cd_player.state, PAUSED)

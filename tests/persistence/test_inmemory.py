@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import unittest
 
+from ..utils import ProcessWithCheckpoint
+
 import plumpy
-from test.utils import ProcessWithCheckpoint
 
 
 class TestInMemoryPersister(unittest.TestCase):

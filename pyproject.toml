@@ -72,7 +72,7 @@ name = 'plumpy'
 exclude = [
     'docs/',
     'examples/',
-    'test/',
+    'tests/',
 ]
 
 [tool.flynt]

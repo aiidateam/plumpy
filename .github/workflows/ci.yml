@@ -45,7 +45,7 @@ jobs:
             run: pip install .[tests]
 
         -   name: Run pytest
-            run: pytest -s --cov=plumpy test
+            run: pytest -s --cov=plumpy tests/
 
         -   name: Create xml coverage
             run: coverage xml
