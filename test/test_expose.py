@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-from test.utils import NewLoopProcess
 import unittest
 
 from plumpy.ports import PortNamespace
 from plumpy.process_spec import ProcessSpec
 from plumpy.processes import Process
 
+from test.utils import NewLoopProcess
+
 
 class TestExposeProcess(unittest.TestCase):
-
     def setUp(self):
         super().setUp()
 
@@ -16,7 +16,6 @@ class TestExposeProcess(unittest.TestCase):
             pass
 
         class BaseNamespaceProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -27,7 +26,6 @@ class TestExposeProcess(unittest.TestCase):
                 spec.inputs['namespace'].validator = validator_function
 
         class BaseProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -37,7 +35,6 @@ class TestExposeProcess(unittest.TestCase):
                 spec.inputs.valid_type = str
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -78,14 +75,12 @@ class TestExposeProcess(unittest.TestCase):
         """Test that exposing a dynamic namespace remains dynamic."""
 
         class Lower(Process):
-
             @classmethod
             def define(cls, spec):
                 super(Lower, cls).define(spec)
                 spec.input_namespace('foo', dynamic=True)
 
         class Upper(Process):
-
             @classmethod
             def define(cls, spec):
                 super(Upper, cls).define(spec)
@@ -150,7 +145,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseProcess = self.BaseProcess
 
         class ExcludeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -168,7 +162,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseProcess = self.BaseProcess
 
         class ExcludeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -186,7 +179,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseProcess = self.BaseProcess
 
         class ExcludeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -228,7 +220,7 @@ class TestExposeProcess(unittest.TestCase):
             namespace=None,
             exclude=(),
             include=None,
-            namespace_options={}
+            namespace_options={},
         )
 
         # Verify that all the ports are there
@@ -283,7 +275,7 @@ class TestExposeProcess(unittest.TestCase):
                 'dynamic': False,
                 'default': None,
                 'help': None,
-            }
+            },
         )
 
         # Verify that all the ports are there
@@ -330,7 +322,7 @@ class TestExposeProcess(unittest.TestCase):
             namespace='namespace',
             exclude=(),
             include=None,
-            namespace_options={}
+            namespace_options={},
         )
 
         # Verify that all the ports are there
@@ -365,7 +357,7 @@ class TestExposeProcess(unittest.TestCase):
                 include=None,
                 namespace_options={
                     'non_existent': None,
-                }
+                },
             )
 
     def test_expose_nested_include_top_level(self):
@@ -373,7 +365,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -387,7 +378,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -403,7 +393,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -419,7 +408,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -435,7 +423,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -451,7 +438,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -465,7 +451,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -481,7 +466,6 @@ class TestExposeProcess(unittest.TestCase):
         BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -504,7 +488,6 @@ class TestExposeProcess(unittest.TestCase):
         """
 
         class BaseProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -520,10 +503,9 @@ class TestExposeProcess(unittest.TestCase):
                     return None
 
                 if not isinstance(value['a'], str):
-                    return f'value for input `a` should be a str, but got: {type(value["a"])}'
+                    return f'value for input `a` should be a str, but got: {type(value['a'])}'
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)

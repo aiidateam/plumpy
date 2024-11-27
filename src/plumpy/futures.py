@@ -2,6 +2,7 @@
 """
 Module containing future related methods and classes
 """
+
 import asyncio
 from typing import Any, Callable, Coroutine, Optional
 
@@ -35,7 +36,7 @@ class CancellableAction(Future):
 
     @property
     def cookie(self) -> Any:
-        """ A cookie that can be used to correlate the actions with something """
+        """A cookie that can be used to correlate the actions with something"""
         return self._cookie
 
     def run(self, *args: Any, **kwargs: Any) -> None:

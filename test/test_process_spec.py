@@ -10,7 +10,6 @@ class StrSubtype(str):
 
 
 class TestProcessSpec(TestCase):
-
     def setUp(self):
         self.spec = ProcessSpec()
 

@@ -7,7 +7,6 @@ from .utils import TestCase
 
 
 class TestPort(TestCase):
-
     def test_required(self):
         spec = Port('required_value', required=True)
 
@@ -21,7 +20,6 @@ class TestPort(TestCase):
         self.assertIsNotNone(spec.validate('a'))
 
     def test_validator(self):
-
         def validate(value, port):
             assert isinstance(port, Port)
             if not isinstance(value, int):
@@ -45,7 +43,6 @@ class TestPort(TestCase):
 
 
 class TestInputPort(TestCase):
-
     def test_default(self):
         """Test the default value property for the InputPort."""
         port = InputPort('test', default=5)
@@ -86,7 +83,6 @@ class TestInputPort(TestCase):
 
 
 class TestOutputPort(TestCase):
-
     def test_default(self):
         """
         Test the default value property for the InputPort
@@ -108,7 +104,6 @@ class TestOutputPort(TestCase):
 
 
 class TestPortNamespace(TestCase):
-
     BASE_PORT_NAME = 'port'
     BASE_PORT_NAMESPACE_NAME = 'port'
 
@@ -299,7 +294,7 @@ class TestPortNamespace(TestCase):
         # Check the breadcrumbs are correct
         self.assertEqual(
             validation_error.port,
-            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output'))
+            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output')),
         )
 
     def test_port_namespace_required(self):

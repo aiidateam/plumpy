@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import asyncio
-from test.utils import ProcessWithCheckpoint
 import unittest
 
 import plumpy
 
+from test.utils import ProcessWithCheckpoint
+
 
 class TestInMemoryPersister(unittest.TestCase):
-
     def test_save_load_roundtrip(self):
         """
         Test the plumpy.PicklePersister by taking a dummpy process, saving a checkpoint
@@ -24,8 +24,7 @@ class TestInMemoryPersister(unittest.TestCase):
         recreated = bundle.unbundle(load_context)
 
     def test_get_checkpoints_without_tags(self):
-        """
-        """
+        """ """
         process_a = ProcessWithCheckpoint()
         process_b = ProcessWithCheckpoint()
 
@@ -43,8 +42,7 @@ class TestInMemoryPersister(unittest.TestCase):
         self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
     def test_get_checkpoints_with_tags(self):
-        """
-        """
+        """ """
         process_a = ProcessWithCheckpoint()
         process_b = ProcessWithCheckpoint()
         tag_a = 'tag_a'
@@ -64,8 +62,7 @@ class TestInMemoryPersister(unittest.TestCase):
         self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
     def test_get_process_checkpoints(self):
-        """
-        """
+        """ """
         process_a = ProcessWithCheckpoint()
         process_b = ProcessWithCheckpoint()
 
@@ -87,8 +84,7 @@ class TestInMemoryPersister(unittest.TestCase):
         self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
     def test_delete_process_checkpoints(self):
-        """
-        """
+        """ """
         process_a = ProcessWithCheckpoint()
         process_b = ProcessWithCheckpoint()
 
@@ -116,8 +112,7 @@ class TestInMemoryPersister(unittest.TestCase):
         self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
 
     def test_delete_checkpoint(self):
-        """
-        """
+        """ """
         process_a = ProcessWithCheckpoint()
         process_b = ProcessWithCheckpoint()
 

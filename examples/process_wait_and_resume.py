@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
-from kiwipy import rmq
-
 import plumpy
+from kiwipy import rmq
 
 
 class WaitForResumeProc(plumpy.Process):
-
     def run(self):
         print(f'Now I am running: {self.state}')
         return plumpy.Wait(self.after_resume_and_exec)
@@ -15,12 +13,10 @@ class WaitForResumeProc(plumpy.Process):
 
 
 kwargs = {
-    'connection_params': {
-        'url': 'amqp://guest:guest@127.0.0.1:5672/'
-    },
+    'connection_params': {'url': 'amqp://guest:guest@127.0.0.1:5672/'},
     'message_exchange': 'WaitForResume.uuid-0',
     'task_exchange': 'WaitForResume.uuid-0',
-    'task_queue': 'WaitForResume.uuid-0'
+    'task_queue': 'WaitForResume.uuid-0',
 }
 
 if __name__ == '__main__':

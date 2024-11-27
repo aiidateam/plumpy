@@ -2,13 +2,12 @@
 import asyncio
 
 import kiwipy
-from kiwipy import rmq
+import plumpy
+import plumpy.communications
 import pytest
 import shortuuid
-
-import plumpy
+from kiwipy import rmq
 from plumpy import process_comms
-import plumpy.communications
 
 from .. import utils
 
@@ -43,7 +42,6 @@ def sync_controller(thread_communicator: rmq.RmqThreadCommunicator):
 
 
 class TestRemoteProcessController:
-
     @pytest.mark.asyncio
     async def test_pause(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
@@ -122,7 +120,6 @@ class TestRemoteProcessController:
 
 
 class TestRemoteProcessThreadController:
-
     @pytest.mark.asyncio
     async def test_pause(self, thread_communicator, sync_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)

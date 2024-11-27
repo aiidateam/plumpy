@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 """Event and loop related classes and functions"""
+
 import asyncio
 import sys
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence
 
 __all__ = [
-    'new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete', 'set_event_loop_policy',
-    'reset_event_loop_policy', 'PlumpyEventLoopPolicy'
+    'new_event_loop',
+    'set_event_loop',
+    'get_event_loop',
+    'run_until_complete',
+    'set_event_loop_policy',
+    'reset_event_loop_policy',
+    'PlumpyEventLoopPolicy',
 ]
 
 if TYPE_CHECKING:

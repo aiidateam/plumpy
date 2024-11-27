@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from enum import Enum
 import sys
 import traceback
+from enum import Enum
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Type, Union, cast
 
@@ -64,7 +64,6 @@ class Command(persistence.Savable):
 
 @auto_persist('msg')
 class Kill(Command):
-
     def __init__(self, msg: Optional[Any] = None):
         super().__init__()
         self.msg = msg
@@ -76,7 +75,6 @@ class Pause(Command):
 
 @auto_persist('msg', 'data')
 class Wait(Command):
-
     def __init__(
         self, continue_fn: Optional[Callable[..., Any]] = None, msg: Optional[Any] = None, data: Optional[Any] = None
     ):
@@ -88,7 +86,6 @@ class Wait(Command):
 
 @auto_persist('result')
 class Stop(Command):
-
     def __init__(self, result: Any, successful: bool) -> None:
         super().__init__()
         self.result = result
@@ -127,6 +124,7 @@ class ProcessState(Enum):
     """
     The possible states that a :class:`~plumpy.processes.Process` can be in.
     """
+
     CREATED: str = 'created'
     RUNNING: str = 'running'
     WAITING: str = 'waiting'
@@ -137,7 +135,6 @@ class ProcessState(Enum):
 
 @auto_persist('in_state')
 class State(state_machine.State, persistence.Savable):
-
     @property
     def process(self) -> state_machine.StateMachine:
         """
@@ -183,7 +180,11 @@ class Created(State):
 class Running(State):
     LABEL = ProcessState.RUNNING
     ALLOWED = {
-        ProcessState.RUNNING, ProcessState.WAITING, ProcessState.FINISHED, ProcessState.KILLED, ProcessState.EXCEPTED
+        ProcessState.RUNNING,
+        ProcessState.WAITING,
+        ProcessState.FINISHED,
+        ProcessState.KILLED,
+        ProcessState.EXCEPTED,
     }
 
     RUN_FN = 'run_fn'  # The key used to store the function to run
@@ -267,7 +268,11 @@ class Running(State):
 class Waiting(State):
     LABEL = ProcessState.WAITING
     ALLOWED = {
-        ProcessState.RUNNING, ProcessState.WAITING, ProcessState.KILLED, ProcessState.EXCEPTED, ProcessState.FINISHED
+        ProcessState.RUNNING,
+        ProcessState.WAITING,
+        ProcessState.KILLED,
+        ProcessState.EXCEPTED,
+        ProcessState.FINISHED,
     }
 
     DONE_CALLBACK = 'DONE_CALLBACK'
@@ -285,7 +290,7 @@ class Waiting(State):
         process: 'Process',
         done_callback: Optional[Callable[..., Any]],
         msg: Optional[str] = None,
-        data: Optional[Any] = None
+        data: Optional[Any] = None,
     ) -> None:
         super().__init__(process)
         self.done_callback = done_callback
@@ -370,9 +375,7 @@ class Excepted(State):
         self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=Loader)
         if _HAS_TBLIB:
             try:
-                self.traceback = \
-                    tblib.Traceback.from_string(saved_state[self.TRACEBACK],
-                                                strict=False)
+                self.traceback = tblib.Traceback.from_string(saved_state[self.TRACEBACK], strict=False)
             except KeyError:
                 self.traceback = None
         else:
