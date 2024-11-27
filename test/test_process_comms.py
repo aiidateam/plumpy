@@ -35,7 +35,6 @@ async def test_continue():
     pid = process.pid
     persister.save_checkpoint(process)
     del process
-    process = None
 
     result = await launcher._continue(None, **plumpy.create_continue_body(pid)[process_comms.TASK_ARGS])
     assert result == utils.DummyProcess.EXPECTED_OUTPUTS

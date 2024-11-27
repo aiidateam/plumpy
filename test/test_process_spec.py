@@ -17,7 +17,6 @@ class TestProcessSpec(TestCase):
         """
         Get the root, inputs and outputs port namespaces of the ProcessSpec
         """
-        ports = self.spec.ports
         input_ports = self.spec.inputs
         output_ports = self.spec.outputs
 
