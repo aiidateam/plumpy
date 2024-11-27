@@ -67,7 +67,7 @@ def override(check: bool = False) -> Callable[[Callable[..., Any]], Callable[...
     return wrap
 
 
-class __NULL:  # pylint: disable=invalid-name
+class __NULL:  # noqa: N801
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, self.__class__)
 

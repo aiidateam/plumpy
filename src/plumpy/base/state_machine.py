@@ -26,7 +26,7 @@ class StateMachineError(Exception):
     """Base class for state machine errors"""
 
 
-class StateEntryFailed(Exception):
+class StateEntryFailed(Exception):  # noqa: N818
     """
     Failed to enter a state, can provide the next state to go to via this exception
     """
@@ -48,7 +48,7 @@ class EventError(StateMachineError):
         self.event = evt
 
 
-class TransitionFailed(Exception):
+class TransitionFailed(Exception):  # noqa: N818
     """A state transition failed"""
 
     def __init__(

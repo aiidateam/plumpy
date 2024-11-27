@@ -80,7 +80,7 @@ class TestInputPort(TestCase):
         port = InputPort('test', valid_type=(types.FunctionType, int), default=lambda: 5)
 
         def some_lambda():
-            "string"
+            return 'string'
 
         self.assertIsNone(port.validate(some_lambda))
 
