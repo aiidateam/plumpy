@@ -267,23 +267,23 @@ class ProcessSaver(plumpy.ProcessListener):
     """
 
     def __del__(self):
-        global _ProcessSaver_Saver
-        global _ProcessSaverProcReferences
+        global _ProcessSaver_Saver  # noqa: PLW0602
+        global _ProcessSaverProcReferences  # noqa: PLW0602
         if _ProcessSaverProcReferences is not None and id(self) in _ProcessSaverProcReferences:
             del _ProcessSaverProcReferences[id(self)]
         if _ProcessSaver_Saver is not None and id(self) in _ProcessSaver_Saver:
             del _ProcessSaver_Saver[id(self)]
 
     def get_process(self):
-        global _ProcessSaverProcReferences
+        global _ProcessSaverProcReferences  # noqa: PLW0602
         return _ProcessSaverProcReferences[id(self)]
 
     def _save(self, p):
-        global _ProcessSaver_Saver
+        global _ProcessSaver_Saver  # noqa: PLW0602
         _ProcessSaver_Saver[id(self)]._save(p)
 
     def set_process(self, process):
-        global _ProcessSaverProcReferences
+        global _ProcessSaverProcReferences  # noqa: PLW0602
         _ProcessSaverProcReferences[id(self)] = process
 
     def __init__(self, proc):
@@ -292,7 +292,7 @@ class ProcessSaver(plumpy.ProcessListener):
         self.init_not_persistent(proc)
 
     def init_not_persistent(self, proc):
-        global _ProcessSaver_Saver
+        global _ProcessSaver_Saver  # noqa: PLW0602
         _ProcessSaver_Saver[id(self)] = Saver()
         self.set_process(proc)
 
@@ -306,12 +306,12 @@ class ProcessSaver(plumpy.ProcessListener):
 
     @property
     def snapshots(self):
-        global _ProcessSaver_Saver
+        global _ProcessSaver_Saver  # noqa: PLW0602
         return _ProcessSaver_Saver[id(self)].snapshots
 
     @property
     def outputs(self):
-        global _ProcessSaver_Saver
+        global _ProcessSaver_Saver  # noqa: PLW0602
         return _ProcessSaver_Saver[id(self)].outputs
 
     @utils.override
@@ -375,7 +375,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     for i, bundle in zip(list(range(0, len(snapshots))), snapshots):
         loaded = bundle.unbundle(plumpy.LoadSaveContext(loop=loop))
         # the process listeners are persisted
-        saver = list(loaded._event_helper._listeners)[0]
+        saver = next(iter(loaded._event_helper._listeners))
         assert isinstance(saver, ProcessSaver)
         # the process reference inside this particular implementation of process listener
         # cannot be persisted because of a circular reference. So we load it there
