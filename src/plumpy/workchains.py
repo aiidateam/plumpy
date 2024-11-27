@@ -1,11 +1,27 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import abc
 import asyncio
 import collections
 import inspect
 import logging
 import re
-from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Type, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    List,
+    Mapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 import kiwipy
 
@@ -327,7 +343,7 @@ class _Block(_Instruction, collections.abc.Sequence):
 
     def __init__(self, instructions: Sequence[Union[_Instruction, WC_COMMAND_TYPE]]) -> None:
         # Build up the list of commands
-        comms = []
+        comms: MutableSequence[_Instruction | _FunctionCall] = []
         for instruction in instructions:
             if not isinstance(instruction, _Instruction):
                 # Assume it's a function call
@@ -335,7 +351,7 @@ class _Block(_Instruction, collections.abc.Sequence):
             else:
                 comms.append(instruction)
 
-        self._instruction: List[Union[_Instruction, _FunctionCall]] = comms
+        self._instruction: MutableSequence[_Instruction | _FunctionCall] = comms
 
     def __getitem__(self, index: int) -> Union[_Instruction, _FunctionCall]:  # type: ignore
         return self._instruction[index]
