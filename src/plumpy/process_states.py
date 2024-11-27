@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 import sys
 import traceback
 from enum import Enum
@@ -18,7 +19,7 @@ except ImportError:
 from . import exceptions, futures, persistence, utils
 from .base import state_machine
 from .lang import NULL
-from .persistence import auto_persist
+from .persistence import Savable, auto_persist
 from .utils import SAVED_STATE_TYPE
 
 __all__ = [
@@ -264,8 +265,8 @@ class Running(State):
         return cast(State, state)  # casting from base.State to process.State
 
 
-@auto_persist('msg', 'data')
-class Waiting(State):
+class Waiting(state_machine.State, persistence.Savable):
+# class Waiting(state_machine.State):
     LABEL = ProcessState.WAITING
     ALLOWED = {
         ProcessState.RUNNING,
@@ -278,6 +279,7 @@ class Waiting(State):
     DONE_CALLBACK = 'DONE_CALLBACK'
 
     _interruption = None
+    _auto_persist = {'msg', 'data', 'in_state'}
 
     def __str__(self) -> str:
         state_info = super().__str__()
@@ -288,15 +290,23 @@ class Waiting(State):
     def __init__(
         self,
         process: 'Process',
-        done_callback: Optional[Callable[..., Any]],
-        msg: Optional[str] = None,
-        data: Optional[Any] = None,
+        done_callback: Callable[..., Any] | None,
+        msg: str | None = None,
+        data: Any | None = None,
+        saver: Savable | None = None,
     ) -> None:
         super().__init__(process)
         self.done_callback = done_callback
         self.msg = msg
         self.data = data
         self._waiting_future: futures.Future = futures.Future()
+
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self.state_machine
 
     def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
         super().save_instance_state(out_state, save_context)
@@ -305,6 +315,8 @@ class Waiting(State):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
+
+        self.state_machine = load_context.process
         callback_name = saved_state.get(self.DONE_CALLBACK, None)
         if callback_name is not None:
             self.done_callback = getattr(self.process, callback_name)

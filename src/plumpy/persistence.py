@@ -430,7 +430,44 @@ class Savable:
     CLASS_NAME: str = 'class_name'
 
     _auto_persist: Optional[Set[str]] = None
-    _persist_configured = False
+
+    @classmethod
+    def auto_persist(cls, *members: str) -> None:
+        if cls._auto_persist is None:
+            cls._auto_persist = set()
+        cls._auto_persist.update(members)
+
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = _ensure_object_loader(load_context, saved_state)
+        obj = cls.__new__(cls)
+        call_with_super_check(obj.load_instance_state, saved_state, load_context)
+        return obj
+
+    @super_check
+    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext]) -> None:
+        if self._auto_persist is None:
+            return None
+
+        for member in self._auto_persist:
+            value = saved_state[member]
+
+            typ = Savable._get_meta_type(saved_state, member)
+            if typ == META__TYPE__METHOD:
+                value = getattr(self, value)
+            elif typ == META__TYPE__SAVABLE:
+                value = Savable.load(value, load_context)
+
+            setattr(self, member, value)
 
     @staticmethod
     def load(saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
@@ -454,45 +491,27 @@ class Savable:
         else:
             return load_cls.recreate_from(saved_state, load_context)
 
-    @classmethod
-    def auto_persist(cls, *members: str) -> None:
-        if cls._auto_persist is None:
-            cls._auto_persist = set()
-        cls._auto_persist.update(members)
-
-    @classmethod
-    def persist(cls) -> None:
-        pass
-
-    @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
-        """
-        Recreate a :class:`Savable` from a saved state using an optional load context.
-
-        :param saved_state: The saved state
-        :param load_context: An optional load context
-
-        :return: The recreated instance
-
-        """
-        load_context = _ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        call_with_super_check(obj.load_instance_state, saved_state, load_context)
-        return obj
-
-    @super_check
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext]) -> None:
-        self._ensure_persist_configured()
-        if self._auto_persist is not None:
-            self.load_members(self._auto_persist, saved_state, load_context)
-
     @super_check
     def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: Optional[LoadSaveContext]) -> None:
-        self._ensure_persist_configured()
-        if self._auto_persist is not None:
-            self.save_members(self._auto_persist, out_state)
+        if self._auto_persist is None:
+            return None
+
+        for member in self._auto_persist:
+            value = getattr(self, member)
+            if inspect.ismethod(value):
+                if value.__self__ is not self:
+                    raise TypeError('Cannot persist methods of other classes')
+                Savable._set_meta_type(out_state, member, META__TYPE__METHOD)
+                value = value.__name__
+            elif isinstance(value, Savable):
+                Savable._set_meta_type(out_state, member, META__TYPE__SAVABLE)
+                value = value.save(save_context)
+            else:
+                value = copy.deepcopy(value)
+            out_state[member] = value
 
     def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        """Recursively call ``save`` on the members."""
         out_state: SAVED_STATE_TYPE = {}
 
         if save_context is None:
@@ -512,32 +531,6 @@ class Savable:
         Savable._set_class_name(out_state, loader.identify_object(self.__class__))
         call_with_super_check(self.save_instance_state, out_state, save_context)
         return out_state
-
-    def save_members(self, members: Iterable[str], out_state: SAVED_STATE_TYPE) -> None:
-        for member in members:
-            value = getattr(self, member)
-            if inspect.ismethod(value):
-                if value.__self__ is not self:
-                    raise TypeError('Cannot persist methods of other classes')
-                Savable._set_meta_type(out_state, member, META__TYPE__METHOD)
-                value = value.__name__
-            elif isinstance(value, Savable):
-                Savable._set_meta_type(out_state, member, META__TYPE__SAVABLE)
-                value = value.save()
-            else:
-                value = copy.deepcopy(value)
-            out_state[member] = value
-
-    def load_members(
-        self, members: Iterable[str], saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None
-    ) -> None:
-        for member in members:
-            setattr(self, member, self._get_value(saved_state, member, load_context))
-
-    def _ensure_persist_configured(self) -> None:
-        if not self._persist_configured:
-            self.persist()
-            self._persist_configured = True
 
     # region Metadata getter/setters
 
@@ -576,21 +569,6 @@ class Savable:
             return saved_state[META][META__TYPES][name]
         except KeyError:
             pass
-
-    # endregion
-
-    def _get_value(
-        self, saved_state: SAVED_STATE_TYPE, name: str, load_context: Optional[LoadSaveContext]
-    ) -> Union[MethodType, 'Savable']:
-        value = saved_state[name]
-
-        typ = Savable._get_meta_type(saved_state, name)
-        if typ == META__TYPE__METHOD:
-            value = getattr(self, value)
-        elif typ == META__TYPE__SAVABLE:
-            value = Savable.load(value, load_context)
-
-        return value
 
 
 @auto_persist('_state', '_result')
