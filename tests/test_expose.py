@@ -44,6 +44,42 @@ class ExposeProcess(NewLoopProcess):
         spec.inputs.valid_type = int
 
 
+def validator_function(input, port):
+    pass
+
+
+class BaseNamespaceProcess(NewLoopProcess):
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.input('top')
+        spec.input('namespace.sub_one')
+        spec.input('namespace.sub_two')
+        spec.inputs['namespace'].valid_type = (int, float)
+        spec.inputs['namespace'].validator = validator_function
+
+
+class BaseProcess(NewLoopProcess):
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.input('a', valid_type=str, default='a')
+        spec.input('b', valid_type=str, default='b')
+        spec.inputs.dynamic = True
+        spec.inputs.valid_type = str
+
+
+class ExposeProcess(NewLoopProcess):
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.expose_inputs(BaseProcess, namespace='base.name.space')
+        spec.input('c', valid_type=int, default=1)
+        spec.input('d', valid_type=int, default=2)
+        spec.inputs.dynamic = True
+        spec.inputs.valid_type = int
+
+
 class TestExposeProcess(unittest.TestCase):
     def check_ports(self, process, namespace, expected_port_names):
         """Check the port namespace of a given process inputs spec for existence of set of expected port names."""

@@ -11,6 +11,9 @@ import pytest
 from tests import utils
 
 import plumpy
+import pytest
+
+import plumpy
 from plumpy import BundleKeys, Process, ProcessState
 from plumpy.process_comms import KILL_MSG, MESSAGE_KEY
 from plumpy.utils import AttributesFrozendict
