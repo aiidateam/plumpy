@@ -311,6 +311,8 @@ class TestWorkchain(unittest.TestCase):
         workchain = SimpleWorkChain()
         workchain.add_process_listener(TestListener())
 
+        workchain.execute()
+
         self.assertEqual(process_finished_count, 1)
 
         workchain_checkpoint = persister.load_checkpoint(workchain.pid, 'step1').unbundle()
