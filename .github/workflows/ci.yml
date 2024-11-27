@@ -1,4 +1,4 @@
-name: continuous-integration
+name: ci
 
 on: [push, pull_request]
 
@@ -9,10 +9,10 @@ jobs:
         steps:
         -   uses: actions/checkout@v2
 
-        -   name: Set up Python 3.8
+        -   name: Set up Python 3.12
             uses: actions/setup-python@v2
             with:
-                python-version: '3.8'
+                python-version: '3.12'
 
         -   name: Install Python dependencies
             run: pip install -e .[pre-commit]
@@ -42,10 +42,10 @@ jobs:
                 python-version: ${{ matrix.python-version }}
 
         -   name: Install python dependencies
-            run: pip install -e .[tests]
+            run: pip install .[tests]
 
         -   name: Run pytest
-            run: pytest -sv --cov=plumpy test
+            run: pytest -s --cov=plumpy test
 
         -   name: Create xml coverage
             run: coverage xml
