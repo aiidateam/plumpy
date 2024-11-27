@@ -21,19 +21,19 @@ class A:
     def protected_fn_nocheck(self):
         return self._a
 
-    def testA(self):
+    def testA(self):  # noqa: N802
         self.protected_fn()
         self.protected_property
 
 
 class B(A):
-    def testB(self):
+    def testB(self):  # noqa: N802
         self.protected_fn()
         self.protected_property
 
 
 class C(B):
-    def testC(self):
+    def testC(self):  # noqa: N802
         self.protected_fn()
         self.protected_property
 

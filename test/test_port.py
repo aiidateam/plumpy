@@ -78,7 +78,10 @@ class TestInputPort(TestCase):
 
         # Testing that passing an actual lambda as a value is alos possible
         port = InputPort('test', valid_type=(types.FunctionType, int), default=lambda: 5)
-        some_lambda = lambda: 'string'
+
+        def some_lambda():
+            "string"
+
         self.assertIsNone(port.validate(some_lambda))
 
 
@@ -366,7 +369,9 @@ class TestPortNamespace(TestCase):
         self.assertIsNone(port_namespace.validate(inputs))
 
         # When passing a lambda directly as the value, it should NOT be evaluated during pre_processing
-        some_lambda = lambda: 5
+        def some_lambda():
+            return 5
+
         inputs = port_namespace.pre_process({'lambda_default': some_lambda})
         self.assertEqual(inputs['lambda_default'], some_lambda)
         self.assertIsNone(port_namespace.validate(inputs))
