@@ -61,7 +61,7 @@ class TestLoopCommunicator:
 
     @pytest.mark.asyncio
     async def test_broadcast(self, loop_communicator):
-        BROADCAST = {'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420}
+        BROADCAST = {'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420}  # noqa: N806
         broadcast_future = plumpy.Future()
 
         loop = asyncio.get_event_loop()
@@ -83,8 +83,6 @@ class TestLoopCommunicator:
     async def test_broadcast_filter(self, loop_communicator):
         broadcast_future = plumpy.Future()
 
-        loop = asyncio.get_event_loop()
-
         def ignore_broadcast(_comm, body, sender, subject, correlation_id):
             broadcast_future.set_exception(AssertionError('broadcast received'))
 
@@ -102,7 +100,7 @@ class TestLoopCommunicator:
 
     @pytest.mark.asyncio
     async def test_rpc(self, loop_communicator):
-        MSG = 'rpc this'
+        MSG = 'rpc this'  # noqa: N806
         rpc_future = plumpy.Future()
 
         loop = asyncio.get_event_loop()
@@ -119,7 +117,7 @@ class TestLoopCommunicator:
 
     @pytest.mark.asyncio
     async def test_task(self, loop_communicator):
-        TASK = 'task this'
+        TASK = 'task this'  # noqa: N806
         task_future = plumpy.Future()
 
         loop = asyncio.get_event_loop()
