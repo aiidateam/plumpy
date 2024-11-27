@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 """Tests for the :mod:`plumpy.rmq.communicator` module."""
+
 import asyncio
 import functools
 import shutil
 import tempfile
 import uuid
 
-from kiwipy import BroadcastFilter, rmq
+import plumpy
 import pytest
 import shortuuid
 import yaml
-
-import plumpy
+from kiwipy import BroadcastFilter, rmq
 from plumpy import communications, process_comms
 
 from .. import utils
@@ -38,7 +38,7 @@ def loop_communicator():
         message_exchange=message_exchange,
         task_exchange=task_exchange,
         task_queue=task_queue,
-        decoder=functools.partial(yaml.load, Loader=yaml.Loader)
+        decoder=functools.partial(yaml.load, Loader=yaml.Loader),
     )
 
     loop = asyncio.get_event_loop()
@@ -61,7 +61,7 @@ class TestLoopCommunicator:
 
     @pytest.mark.asyncio
     async def test_broadcast(self, loop_communicator):
-        BROADCAST = {'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420}
+        BROADCAST = {'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420}  # noqa: N806
         broadcast_future = plumpy.Future()
 
         loop = asyncio.get_event_loop()
@@ -69,12 +69,9 @@ class TestLoopCommunicator:
         def get_broadcast(_comm, body, sender, subject, correlation_id):
             assert loop is asyncio.get_event_loop()
 
-            broadcast_future.set_result({
-                'body': body,
-                'sender': sender,
-                'subject': subject,
-                'correlation_id': correlation_id
-            })
+            broadcast_future.set_result(
+                {'body': body, 'sender': sender, 'subject': subject, 'correlation_id': correlation_id}
+            )
 
         loop_communicator.add_broadcast_subscriber(get_broadcast)
         loop_communicator.broadcast_send(**BROADCAST)
@@ -84,10 +81,7 @@ class TestLoopCommunicator:
 
     @pytest.mark.asyncio
     async def test_broadcast_filter(self, loop_communicator):
-
         broadcast_future = plumpy.Future()
-
-        loop = asyncio.get_event_loop()
 
         def ignore_broadcast(_comm, body, sender, subject, correlation_id):
             broadcast_future.set_exception(AssertionError('broadcast received'))
@@ -98,12 +92,7 @@ class TestLoopCommunicator:
         loop_communicator.add_broadcast_subscriber(BroadcastFilter(ignore_broadcast, subject='other'))
         loop_communicator.add_broadcast_subscriber(get_broadcast)
         loop_communicator.broadcast_send(
-            **{
-                'body': 'present',
-                'sender': 'Martin',
-                'subject': 'sup',
-                'correlation_id': 420
-            }
+            **{'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420}
         )
 
         result = await broadcast_future
@@ -111,7 +100,7 @@ class TestLoopCommunicator:
 
     @pytest.mark.asyncio
     async def test_rpc(self, loop_communicator):
-        MSG = 'rpc this'
+        MSG = 'rpc this'  # noqa: N806
         rpc_future = plumpy.Future()
 
         loop = asyncio.get_event_loop()
@@ -128,7 +117,7 @@ class TestLoopCommunicator:
 
     @pytest.mark.asyncio
     async def test_task(self, loop_communicator):
-        TASK = 'task this'
+        TASK = 'task this'  # noqa: N806
         task_future = plumpy.Future()
 
         loop = asyncio.get_event_loop()
@@ -145,7 +134,6 @@ class TestLoopCommunicator:
 
 
 class TestTaskActions:
-
     @pytest.mark.asyncio
     async def test_launch(self, loop_communicator, async_controller, persister):
         # Let the process run to the end
@@ -157,7 +145,7 @@ class TestTaskActions:
 
     @pytest.mark.asyncio
     async def test_launch_nowait(self, loop_communicator, async_controller, persister):
-        """ Testing launching but don't wait, just get the pid """
+        """Testing launching but don't wait, just get the pid"""
         loop = asyncio.get_event_loop()
         loop_communicator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
         pid = await async_controller.launch_process(utils.DummyProcess, nowait=True)
@@ -165,7 +153,7 @@ class TestTaskActions:
 
     @pytest.mark.asyncio
     async def test_execute_action(self, loop_communicator, async_controller, persister):
-        """ Test the process execute action """
+        """Test the process execute action"""
         loop = asyncio.get_event_loop()
         loop_communicator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
         result = await async_controller.execute_process(utils.DummyProcessWithOutput)
@@ -173,7 +161,7 @@ class TestTaskActions:
 
     @pytest.mark.asyncio
     async def test_execute_action_nowait(self, loop_communicator, async_controller, persister):
-        """ Test the process execute action """
+        """Test the process execute action"""
         loop = asyncio.get_event_loop()
         loop_communicator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
         pid = await async_controller.execute_process(utils.DummyProcessWithOutput, nowait=True)
@@ -197,7 +185,7 @@ class TestTaskActions:
 
     @pytest.mark.asyncio
     async def test_continue(self, loop_communicator, async_controller, persister):
-        """ Test continuing a saved process """
+        """Test continuing a saved process"""
         loop = asyncio.get_event_loop()
         loop_communicator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
         process = utils.DummyProcessWithOutput()

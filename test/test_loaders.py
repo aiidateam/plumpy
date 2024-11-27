@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """Tests for the :mod:`plumpy.loaders` module."""
-import pytest
 
 import plumpy
+import pytest
 
 
 class DummyClass:
     """Dummy class for testing."""
+
     pass
 
 
@@ -38,11 +39,12 @@ def test_default_object_roundtrip():
 
 
 @pytest.mark.parametrize(
-    'identifier, match', (
+    'identifier, match',
+    (
         ('plumpy.non_existing_module.SomeClass', r'identifier `.*` has an invalid format.'),
         ('plumpy.non_existing_module:SomeClass', r'module `.*` from identifier `.*` could not be loaded.'),
         ('plumpy.loaders:NonExistingClass', r'object `.*` form identifier `.*` could not be loaded.'),
-    )
+    ),
 )
 def test_default_object_loader_load_object_except(identifier, match):
     """Test the :meth:`plumpy.DefaultObjectLoader.load_object` when it is expected to raise."""

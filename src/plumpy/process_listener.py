@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 @persistence.auto_persist('_params')
 class ProcessListener(persistence.Savable, metaclass=abc.ABCMeta):
-
     # region Persistence methods
 
     def __init__(self) -> None:

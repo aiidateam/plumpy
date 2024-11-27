@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """Module for process ports"""
+
 import collections
 import copy
 import inspect
 import json
 import logging
-from typing import Any, Callable, Dict, Iterator, List, Mapping, MutableMapping, Optional, Sequence, Type, Union, cast
 import warnings
+from typing import Any, Callable, Dict, Iterator, List, Mapping, MutableMapping, Optional, Sequence, Type, Union, cast
 
 from plumpy.utils import AttributesFrozendict, is_mutable_property, type_check
 
@@ -68,7 +69,7 @@ class Port:
         valid_type: Optional[Type[Any]] = None,
         help: Optional[str] = None,  # pylint: disable=redefined-builtin
         required: bool = True,
-        validator: Optional[VALIDATOR_TYPE] = None
+        validator: Optional[VALIDATOR_TYPE] = None,
     ) -> None:
         self._name = name
         self._valid_type = valid_type
@@ -236,14 +237,14 @@ class InputPort(Port):
         help: Optional[str] = None,  # pylint: disable=redefined-builtin
         default: Any = UNSPECIFIED,
         required: bool = True,
-        validator: Optional[VALIDATOR_TYPE] = None
+        validator: Optional[VALIDATOR_TYPE] = None,
     ) -> None:  # pylint: disable=too-many-arguments
         super().__init__(
             name,
             valid_type=valid_type,
             help=help,
             required=InputPort.required_override(required, default),
-            validator=validator
+            validator=validator,
         )
 
         if required is not InputPort.required_override(required, default):
@@ -252,7 +253,6 @@ class InputPort(Port):
             )
 
         if default is not UNSPECIFIED:
-
             # Only validate the default value if it is not a callable. If it is a callable its return value will always
             # be validated when the port is validated upon process construction, if the default is was actually used.
             if not callable(default):
@@ -310,7 +310,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         valid_type: Optional[Type[Any]] = None,
         default: Any = UNSPECIFIED,
         dynamic: bool = False,
-        populate_defaults: bool = True
+        populate_defaults: bool = True,
     ) -> None:  # pylint: disable=too-many-arguments
         """Construct a port namespace.
 
@@ -459,7 +459,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
                 valid_type=self.valid_type,
                 default=self.default,
                 dynamic=self.dynamic,
-                populate_defaults=self.populate_defaults
+                populate_defaults=self.populate_defaults,
             )
 
         if namespace:
@@ -495,7 +495,6 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
         # If this is True, the (sub) port namespace does not yet exist, so we create it
         if port_name not in self:
-
             # If there still is a `namespace`, we create a sub namespace, *without* the constructor arguments
             if namespace:
                 self[port_name] = self.__class__(port_name)
@@ -515,7 +514,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         port_namespace: 'PortNamespace',
         exclude: Optional[Sequence[str]] = None,
         include: Optional[Sequence[str]] = None,
-        namespace_options: Optional[Dict[str, Any]] = None
+        namespace_options: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         """Absorb another PortNamespace instance into oneself, including all its mutable properties and ports.
 
@@ -559,14 +558,12 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         absorbed_ports = []
 
         for port_name, port in port_namespace.items():
-
             # If the current port name occurs in the exclude list, simply skip it entirely, there is no need to consider
             # any of the nested ports it might have, even if it is a port namespace
             if exclude and port_name in exclude:
                 continue
 
             if isinstance(port, PortNamespace):
-
                 # If the name does not appear at the start of any of the include rules we continue:
                 if include and not any(rule.startswith(port_name) for rule in include):
                     continue
@@ -616,9 +613,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         return result
 
     def validate(  # pylint: disable=arguments-differ
-        self,
-        port_values: Optional[Mapping[str, Any]] = None,
-        breadcrumbs: Sequence[str] = ()
+        self, port_values: Optional[Mapping[str, Any]] = None, breadcrumbs: Sequence[str] = ()
     ) -> Optional[PortValidationError]:
         """
         Validate the namespace port itself and subsequently all the port_values it contains
@@ -669,8 +664,9 @@ class PortNamespace(collections.abc.MutableMapping, Port):
             else:
                 message = self.validator(port_values_clone, self)  # pylint: disable=not-callable
             if message is not None:
-                assert isinstance(message, str), \
-                    f"Validator returned something other than None or str: '{type(message)}'"
+                assert isinstance(
+                    message, str
+                ), f"Validator returned something other than None or str: '{type(message)}'"
                 return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
 
         return None
@@ -682,14 +678,12 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         :return: an AttributesFrozenDict with pre-processed port value mapping, complemented with port default values
         """
         for name, port in self.items():
-
             # If the port was not specified in the inputs values and the port is a namespace with the property
             # `populate_defaults=False`, we skip the pre-processing and do not populate defaults.
             if name not in port_values and isinstance(port, PortNamespace) and not port.populate_defaults:
                 continue
 
             if name not in port_values:
-
                 if port.has_default():
                     default = port.default
                     if callable(default):
@@ -712,8 +706,9 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
         return AttributesFrozendict(port_values)
 
-    def validate_ports(self, port_values: MutableMapping[str, Any],
-                       breadcrumbs: Sequence[str]) -> Optional[PortValidationError]:
+    def validate_ports(
+        self, port_values: MutableMapping[str, Any], breadcrumbs: Sequence[str]
+    ) -> Optional[PortValidationError]:
         """
         Validate port values with respect to the explicitly defined ports of the port namespace.
         Ports values that are matched to an actual Port will be popped from the dictionary
@@ -791,7 +786,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
         for rule in rules:
             if rule.startswith(prefix):
-                stripped.append(rule[len(prefix):])
+                stripped.append(rule[len(prefix) :])
 
         return stripped
 

@@ -1,56 +1,50 @@
 # -*- coding: utf-8 -*-
-from test.utils import NewLoopProcess
 import unittest
 
 from plumpy.ports import PortNamespace
 from plumpy.process_spec import ProcessSpec
 from plumpy.processes import Process
 
+from test.utils import NewLoopProcess
+
+
+def validator_function(input, port):
+    pass
+
+
+class BaseNamespaceProcess(NewLoopProcess):
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.input('top')
+        spec.input('namespace.sub_one')
+        spec.input('namespace.sub_two')
+        spec.inputs['namespace'].valid_type = (int, float)
+        spec.inputs['namespace'].validator = validator_function
+
+
+class BaseProcess(NewLoopProcess):
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.input('a', valid_type=str, default='a')
+        spec.input('b', valid_type=str, default='b')
+        spec.inputs.dynamic = True
+        spec.inputs.valid_type = str
+
+
+class ExposeProcess(NewLoopProcess):
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        spec.expose_inputs(BaseProcess, namespace='base.name.space')
+        spec.input('c', valid_type=int, default=1)
+        spec.input('d', valid_type=int, default=2)
+        spec.inputs.dynamic = True
+        spec.inputs.valid_type = int
+
 
 class TestExposeProcess(unittest.TestCase):
-
-    def setUp(self):
-        super().setUp()
-
-        def validator_function(input, port):
-            pass
-
-        class BaseNamespaceProcess(NewLoopProcess):
-
-            @classmethod
-            def define(cls, spec):
-                super().define(spec)
-                spec.input('top')
-                spec.input('namespace.sub_one')
-                spec.input('namespace.sub_two')
-                spec.inputs['namespace'].valid_type = (int, float)
-                spec.inputs['namespace'].validator = validator_function
-
-        class BaseProcess(NewLoopProcess):
-
-            @classmethod
-            def define(cls, spec):
-                super().define(spec)
-                spec.input('a', valid_type=str, default='a')
-                spec.input('b', valid_type=str, default='b')
-                spec.inputs.dynamic = True
-                spec.inputs.valid_type = str
-
-        class ExposeProcess(NewLoopProcess):
-
-            @classmethod
-            def define(cls, spec):
-                super().define(spec)
-                spec.expose_inputs(BaseProcess, namespace='base.name.space')
-                spec.input('c', valid_type=int, default=1)
-                spec.input('d', valid_type=int, default=2)
-                spec.inputs.dynamic = True
-                spec.inputs.valid_type = int
-
-        self.BaseNamespaceProcess = BaseNamespaceProcess
-        self.BaseProcess = BaseProcess
-        self.ExposeProcess = ExposeProcess
-
     def check_ports(self, process, namespace, expected_port_names):
         """Check the port namespace of a given process inputs spec for existence of set of expected port names."""
         port_namespace = process.spec().inputs
@@ -68,24 +62,21 @@ class TestExposeProcess(unittest.TestCase):
         port_namespace_left = process_left.spec().inputs.get_port(namespace_left)
         port_namespace_right = process_right.spec().inputs.get_port(namespace_right)
 
-        # Pop the ports in stored in the `_ports` attribute
-        port_namespace_left.__dict__.pop('_ports', None)
-        port_namespace_right.__dict__.pop('_ports', None)
+        left_dict = {k: v for k, v in port_namespace_left.__dict__.items() if k != '_ports'}
+        right_dict = {k: v for k, v in port_namespace_right.__dict__.items() if k != '_ports'}
 
-        self.assertEqual(port_namespace_left.__dict__, port_namespace_right.__dict__)
+        self.assertEqual(left_dict, right_dict)
 
     def test_expose_dynamic(self):
         """Test that exposing a dynamic namespace remains dynamic."""
 
         class Lower(Process):
-
             @classmethod
             def define(cls, spec):
                 super(Lower, cls).define(spec)
                 spec.input_namespace('foo', dynamic=True)
 
         class Upper(Process):
-
             @classmethod
             def define(cls, spec):
                 super(Upper, cls).define(spec)
@@ -96,7 +87,7 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_nested_namespace(self):
         """Test that expose_inputs can create nested namespaces while maintaining own ports."""
-        inputs = self.ExposeProcess.spec().inputs
+        inputs = ExposeProcess.spec().inputs
 
         # Verify that the nested namespaces are present
         self.assertTrue('base' in inputs)
@@ -116,7 +107,7 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_ports(self):
         """Test that the exposed ports are present and properly deepcopied."""
-        exposed_inputs = self.ExposeProcess.spec().inputs.get_port('base.name.space')
+        exposed_inputs = ExposeProcess.spec().inputs.get_port('base.name.space')
 
         self.assertEqual(len(exposed_inputs), 2)
         self.assertTrue('a' in exposed_inputs)
@@ -125,32 +116,30 @@ class TestExposeProcess(unittest.TestCase):
         self.assertEqual(exposed_inputs['b'].default, 'b')
 
         # Change the default of base process port and verify they don't change the exposed port
-        self.BaseProcess.spec().inputs['a'].default = 'c'
-        self.assertEqual(self.BaseProcess.spec().inputs['a'].default, 'c')
+        BaseProcess.spec().inputs['a'].default = 'c'
+        self.assertEqual(BaseProcess.spec().inputs['a'].default, 'c')
         self.assertEqual(exposed_inputs['a'].default, 'a')
 
     def test_expose_attributes(self):
         """Test that the attributes of the exposed PortNamespace are maintained and properly deepcopied."""
-        inputs = self.ExposeProcess.spec().inputs
-        exposed_inputs = self.ExposeProcess.spec().inputs.get_port('base.name.space')
+        inputs = ExposeProcess.spec().inputs
+        exposed_inputs = ExposeProcess.spec().inputs.get_port('base.name.space')
 
-        self.assertEqual(str, self.BaseProcess.spec().inputs.valid_type)
+        self.assertEqual(str, BaseProcess.spec().inputs.valid_type)
         self.assertEqual(str, exposed_inputs.valid_type)
         self.assertEqual(int, inputs.valid_type)
 
         # Now change the valid type of the BaseProcess inputs and verify it does not affect ExposeProcess
-        self.BaseProcess.spec().inputs.valid_type = float
+        BaseProcess.spec().inputs.valid_type = float
 
-        self.assertEqual(self.BaseProcess.spec().inputs.valid_type, float)
+        self.assertEqual(BaseProcess.spec().inputs.valid_type, float)
         self.assertEqual(exposed_inputs.valid_type, str)
         self.assertEqual(inputs.valid_type, int)
 
     def test_expose_exclude(self):
         """Test that the exclude argument of exposed_inputs works correctly and excludes ports from being absorbed."""
-        BaseProcess = self.BaseProcess
 
         class ExcludeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -165,10 +154,8 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_include(self):
         """Test that the include argument of exposed_inputs works correctly and includes only specified ports."""
-        BaseProcess = self.BaseProcess
 
         class ExcludeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -183,10 +170,8 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_exclude_include_mutually_exclusive(self):
         """Test that passing both exclude and include raises."""
-        BaseProcess = self.BaseProcess
 
         class ExcludeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -208,7 +193,7 @@ class TestExposeProcess(unittest.TestCase):
 
         # Define child process with all mutable properties of the inputs PortNamespace to a non-default value
         # This way we can check if the defaults of the ParentProcessSpec will be properly overridden
-        ChildProcessSpec = ProcessSpec()
+        ChildProcessSpec = ProcessSpec()  # noqa: N806
         ChildProcessSpec.input('a', valid_type=int)
         ChildProcessSpec.input('b', valid_type=str)
         ChildProcessSpec.inputs.validator = validator_function
@@ -218,7 +203,7 @@ class TestExposeProcess(unittest.TestCase):
         ChildProcessSpec.inputs.default = True
         ChildProcessSpec.inputs.help = 'testing'
 
-        ParentProcessSpec = ProcessSpec()
+        ParentProcessSpec = ProcessSpec()  # noqa: N806
         ParentProcessSpec.input('c', valid_type=float)
         ParentProcessSpec._expose_ports(
             process_class=None,
@@ -228,7 +213,7 @@ class TestExposeProcess(unittest.TestCase):
             namespace=None,
             exclude=(),
             include=None,
-            namespace_options={}
+            namespace_options={},
         )
 
         # Verify that all the ports are there
@@ -256,7 +241,7 @@ class TestExposeProcess(unittest.TestCase):
 
         # Define child process with all mutable properties of the inputs PortNamespace to a non-default value
         # This way we can check if the defaults of the ParentProcessSpec will be properly overridden
-        ChildProcessSpec = ProcessSpec()
+        ChildProcessSpec = ProcessSpec()  # noqa: N806
         ChildProcessSpec.input('a', valid_type=int)
         ChildProcessSpec.input('b', valid_type=str)
         ChildProcessSpec.inputs.validator = validator_function
@@ -266,7 +251,7 @@ class TestExposeProcess(unittest.TestCase):
         ChildProcessSpec.inputs.default = True
         ChildProcessSpec.inputs.help = 'testing'
 
-        ParentProcessSpec = ProcessSpec()
+        ParentProcessSpec = ProcessSpec()  # noqa: N806
         ParentProcessSpec.input('c', valid_type=float)
         ParentProcessSpec._expose_ports(
             process_class=None,
@@ -283,7 +268,7 @@ class TestExposeProcess(unittest.TestCase):
                 'dynamic': False,
                 'default': None,
                 'help': None,
-            }
+            },
         )
 
         # Verify that all the ports are there
@@ -310,7 +295,7 @@ class TestExposeProcess(unittest.TestCase):
 
         # Define child process with all mutable properties of the inputs PortNamespace to a non-default value
         # This way we can check if the defaults of the ParentProcessSpec will be properly overridden
-        ChildProcessSpec = ProcessSpec()
+        ChildProcessSpec = ProcessSpec()  # noqa: N806
         ChildProcessSpec.input('a', valid_type=int)
         ChildProcessSpec.input('b', valid_type=str)
         ChildProcessSpec.inputs.validator = validator_function
@@ -320,7 +305,7 @@ class TestExposeProcess(unittest.TestCase):
         ChildProcessSpec.inputs.default = True
         ChildProcessSpec.inputs.help = 'testing'
 
-        ParentProcessSpec = ProcessSpec()
+        ParentProcessSpec = ProcessSpec()  # noqa: N806
         ParentProcessSpec.input('c', valid_type=float)
         ParentProcessSpec._expose_ports(
             process_class=None,
@@ -330,7 +315,7 @@ class TestExposeProcess(unittest.TestCase):
             namespace='namespace',
             exclude=(),
             include=None,
-            namespace_options={}
+            namespace_options={},
         )
 
         # Verify that all the ports are there
@@ -351,8 +336,8 @@ class TestExposeProcess(unittest.TestCase):
         Verify that passing non-supported PortNamespace mutable properties in namespace_options
         will raise a ValueError
         """
-        ChildProcessSpec = ProcessSpec()
-        ParentProcessSpec = ProcessSpec()
+        ChildProcessSpec = ProcessSpec()  # noqa: N806
+        ParentProcessSpec = ProcessSpec()  # noqa: N806
 
         with self.assertRaises(ValueError):
             ParentProcessSpec._expose_ports(
@@ -365,15 +350,13 @@ class TestExposeProcess(unittest.TestCase):
                 include=None,
                 namespace_options={
                     'non_existent': None,
-                }
+                },
             )
 
     def test_expose_nested_include_top_level(self):
         """Test the include rules can be nested and are properly unwrapped."""
-        BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -384,10 +367,8 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_nested_include_namespace(self):
         """Test the include rules can be nested and are properly unwrapped."""
-        BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -400,10 +381,8 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_nested_include_namespace_sub(self):
         """Test the include rules can be nested and are properly unwrapped."""
-        BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -416,10 +395,8 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_nested_include_combination(self):
         """Test the include rules can be nested and are properly unwrapped."""
-        BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -432,10 +409,8 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_nested_exclude_top_level(self):
         """Test the exclude rules can be nested and are properly unwrapped."""
-        BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -448,10 +423,8 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_nested_exclude_namespace(self):
         """Test the exclude rules can be nested and are properly unwrapped."""
-        BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -462,10 +435,8 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_nested_exclude_namespace_sub(self):
         """Test the exclude rules can be nested and are properly unwrapped."""
-        BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -478,10 +449,8 @@ class TestExposeProcess(unittest.TestCase):
 
     def test_expose_nested_exclude_combination(self):
         """Test the exclude rules can be nested and are properly unwrapped."""
-        BaseNamespaceProcess = self.BaseNamespaceProcess
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -504,7 +473,6 @@ class TestExposeProcess(unittest.TestCase):
         """
 
         class BaseProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -520,10 +488,9 @@ class TestExposeProcess(unittest.TestCase):
                     return None
 
                 if not isinstance(value['a'], str):
-                    return f'value for input `a` should be a str, but got: {type(value["a"])}'
+                    return f'value for input `a` should be a str, but got: {type(value['a'])}'
 
         class ExposeProcess(NewLoopProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)

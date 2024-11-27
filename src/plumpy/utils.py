@@ -1,20 +1,30 @@
 # -*- coding: utf-8 -*-
 import asyncio
-from collections import deque
-from collections.abc import Mapping
 import functools
 import importlib
 import inspect
 import logging
 import types
-from typing import Set  # pylint: disable=unused-import
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterator, List, MutableMapping, Optional, Tuple, Type
+from collections import deque
+from collections.abc import Mapping
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Hashable,
+    Iterator,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+)
 
 from . import lang
 from .settings import check_override, check_protected
 
 if TYPE_CHECKING:
-    from .process_listener import ProcessListener  # pylint: disable=cyclic-import
+    pass  # pylint: disable=cyclic-import
 
 __all__ = ['AttributesDict']
 
@@ -67,7 +77,6 @@ class Frozendict(Mapping):
 
 
 class AttributesFrozendict(Frozendict):
-
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._initialised: bool = True

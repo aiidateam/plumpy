@@ -22,6 +22,7 @@ class ProcessSpec:
 
     Every Process class has one of these.
     """
+
     NAME_INPUTS_PORT_NAMESPACE: str = 'inputs'
     NAME_OUTPUTS_PORT_NAMESPACE: str = 'outputs'
     PORT_NAMESPACE_TYPE = PortNamespace
@@ -184,7 +185,7 @@ class ProcessSpec:
         namespace: Optional[str] = None,
         exclude: Optional[Sequence[str]] = None,
         include: Optional[Sequence[str]] = None,
-        namespace_options: Optional[dict] = None
+        namespace_options: Optional[dict] = None,
     ) -> None:
         """
         This method allows one to automatically add the inputs from another Process to this ProcessSpec.
@@ -215,7 +216,7 @@ class ProcessSpec:
         namespace: Optional[str] = None,
         exclude: Optional[Sequence[str]] = None,
         include: Optional[Sequence[str]] = None,
-        namespace_options: Optional[dict] = None
+        namespace_options: Optional[dict] = None,
     ) -> None:
         """
         This method allows one to automatically add the ouputs from another Process to this ProcessSpec.
@@ -249,7 +250,7 @@ class ProcessSpec:
         namespace: Optional[str],
         exclude: Optional[Sequence[str]],
         include: Optional[Sequence[str]],
-        namespace_options: Optional[dict] = None
+        namespace_options: Optional[dict] = None,
     ) -> None:  # pylint: disable=too-many-arguments
         """
         Expose ports from a source PortNamespace of the ProcessSpec of a Process class into the destination

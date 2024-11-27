@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Module for general kiwipy communication methods"""
+
 import asyncio
 import functools
 from typing import TYPE_CHECKING, Any, Callable, Hashable, Optional
@@ -10,7 +11,12 @@ from . import futures
 from .utils import ensure_coroutine
 
 __all__ = [
-    'Communicator', 'RemoteException', 'DeliveryFailed', 'TaskRejected', 'plum_to_kiwi_future', 'wrap_communicator'
+    'Communicator',
+    'RemoteException',
+    'DeliveryFailed',
+    'TaskRejected',
+    'plum_to_kiwi_future',
+    'wrap_communicator',
 ]
 
 RemoteException = kiwipy.RemoteException
@@ -55,8 +61,9 @@ def plum_to_kiwi_future(plum_future: futures.Future) -> kiwipy.Future:
     return kiwi_future
 
 
-def convert_to_comm(callback: 'Subscriber',
-                    loop: Optional[asyncio.AbstractEventLoop] = None) -> Callable[..., kiwipy.Future]:
+def convert_to_comm(
+    callback: 'Subscriber', loop: Optional[asyncio.AbstractEventLoop] = None
+) -> Callable[..., kiwipy.Future]:
     """
     Take a callback function and converted it to one that will schedule a callback
     on the given even loop and return a kiwi future representing the future outcome
@@ -67,7 +74,6 @@ def convert_to_comm(callback: 'Subscriber',
     :return: a new callback function that returns a future
     """
     if isinstance(callback, kiwipy.BroadcastFilter):
-
         # if the broadcast is filtered for this callback,
         # we don't want to go through the (costly) process
         # of setting up async tasks and callbacks
@@ -84,7 +90,6 @@ def convert_to_comm(callback: 'Subscriber',
     coro = ensure_coroutine(callback)
 
     def converted(communicator: kiwipy.Communicator, *args: Any, **kwargs: Any) -> kiwipy.Future:
-
         if _passthrough(*args, **kwargs):
             kiwi_future = kiwipy.Future()
             kiwi_future.set_result(None)
@@ -170,7 +175,7 @@ class LoopCommunicator(kiwipy.Communicator):  # type: ignore
         body: Optional[Any],
         sender: Optional[str] = None,
         subject: Optional[str] = None,
-        correlation_id: Optional['ID_TYPE'] = None
+        correlation_id: Optional['ID_TYPE'] = None,
     ) -> futures.Future:
         return self._communicator.broadcast_send(body, sender, subject, correlation_id)
 

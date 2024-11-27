@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """The state machine for processes"""
+
 import enum
 import functools
 import inspect
@@ -25,7 +26,7 @@ class StateMachineError(Exception):
     """Base class for state machine errors"""
 
 
-class StateEntryFailed(Exception):
+class StateEntryFailed(Exception):  # noqa: N818
     """
     Failed to enter a state, can provide the next state to go to via this exception
     """
@@ -42,20 +43,16 @@ class InvalidStateError(Exception):
 
 
 class EventError(StateMachineError):
-
     def __init__(self, evt: str, msg: str):
         super().__init__(msg)
         self.event = evt
 
 
-class TransitionFailed(Exception):
+class TransitionFailed(Exception):  # noqa: N818
     """A state transition failed"""
 
     def __init__(
-        self,
-        initial_state: 'State',
-        final_state: Optional['State'] = None,
-        traceback_str: Optional[str] = None
+        self, initial_state: 'State', final_state: Optional['State'] = None, traceback_str: Optional[str] = None
     ) -> None:
         self.initial_state = initial_state
         self.final_state = final_state
@@ -71,7 +68,7 @@ class TransitionFailed(Exception):
 
 def event(
     from_states: Union[str, Type['State'], Iterable[Type['State']]] = '*',
-    to_states: Union[str, Type['State'], Iterable[Type['State']]] = '*'
+    to_states: Union[str, Type['State'], Iterable[Type['State']]] = '*',
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """A decorator to check for correct transitions, raising ``EventError`` on invalid transitions."""
     if from_states != '*':
@@ -102,8 +99,8 @@ def event(
                         raise EventError(evt_label, 'Machine did not transition')
 
                     raise EventError(
-                        evt_label, 'Event produced invalid state transition from '
-                        f'{initial.LABEL} to {self._state.LABEL}'
+                        evt_label,
+                        'Event produced invalid state transition from ' f'{initial.LABEL} to {self._state.LABEL}',
                     )
 
             return result
@@ -138,12 +135,12 @@ class State:
 
     @property
     def label(self) -> LABEL_TYPE:
-        """ Convenience property to get the state label """
+        """Convenience property to get the state label"""
         return self.LABEL
 
     @super_check
     def enter(self) -> None:
-        """ Entering the state """
+        """Entering the state"""
 
     def execute(self) -> Optional['State']:
         """
@@ -153,7 +150,7 @@ class State:
 
     @super_check
     def exit(self) -> None:
-        """ Exiting the state """
+        """Exiting the state"""
         if self.is_terminal():
             raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
 
@@ -175,13 +172,13 @@ class StateEventHook(enum.Enum):
     procedure.  The callback will be passed a state instance whose meaning will differ depending
     on the hook as commented below.
     """
+
     ENTERING_STATE: int = 0  # State passed will be the state that is being entered
     ENTERED_STATE: int = 1  # State passed will be the last state that we entered from
     EXITING_STATE: int = 2  # State passed will be the next state that will be entered (or None for terminal)
 
 
 class StateMachineMeta(type):
-
     def __call__(cls, *args: Any, **kwargs: Any) -> 'StateMachine':
         """
         Create the state machine and enter the initial state.
@@ -301,11 +298,10 @@ class StateMachine(metaclass=StateMachineMeta):
 
     @super_check
     def on_terminated(self) -> None:
-        """ Called when a terminal state is entered """
+        """Called when a terminal state is entered"""
 
     def transition_to(self, new_state: Union[Hashable, State, Type[State]], *args: Any, **kwargs: Any) -> None:
-        assert not self._transitioning, \
-            'Cannot call transition_to when already transitioning state'
+        assert not self._transitioning, 'Cannot call transition_to when already transitioning state'
 
         initial_state_label = self._state.LABEL if self._state is not None else None
         label = None
@@ -365,7 +361,7 @@ class StateMachine(metaclass=StateMachineMeta):
             raise ValueError(f'{state_label} is not a valid state')
 
     def _exit_current_state(self, next_state: State) -> None:
-        """ Exit the given state """
+        """Exit the given state"""
 
         # If we're just being constructed we may not have a state yet to exit,
         # in which case check the new state is the initial state
