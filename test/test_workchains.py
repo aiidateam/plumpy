@@ -66,15 +66,15 @@ class Wf(WorkChain):
         self.ctx.counter = self.ctx.counter + 1
         self._set_finished(inspect.stack()[0][3])
 
-    def isA(self):
+    def isA(self):  # noqa: N802
         self._set_finished(inspect.stack()[0][3])
         return self.inputs.value == 'A'
 
-    def isB(self):
+    def isB(self):  # noqa: N802
         self._set_finished(inspect.stack()[0][3])
         return self.inputs.value == 'B'
 
-    def ltN(self):
+    def ltN(self):  # noqa: N802
         keep_looping = self.ctx.counter < self.inputs.n
         if not keep_looping:
             self._set_finished(inspect.stack()[0][3])
@@ -140,9 +140,9 @@ class TestWorkchain(unittest.TestCase):
     maxDiff = None
 
     def test_run(self):
-        A = 'A'
-        B = 'B'
-        C = 'C'
+        A = 'A'  # noqa: N806
+        B = 'B'  # noqa: N806
+        C = 'C'  # noqa: N806
         three = 3
 
         # Try the if(..) part
@@ -195,8 +195,8 @@ class TestWorkchain(unittest.TestCase):
         Wf(inputs=dict(a=x, b=x)).execute()
 
     def test_context(self):
-        A = 'a'
-        B = 'b'
+        A = 'a'  # noqa: N806
+        B = 'b'  # noqa: N806
 
         class ReturnA(plumpy.Process):
             @classmethod
@@ -254,9 +254,9 @@ class TestWorkchain(unittest.TestCase):
             spec.outline(lambda x, y: 5)
 
     def test_checkpointing(self):
-        A = 'A'
-        B = 'B'
-        C = 'C'
+        A = 'A'  # noqa: N806
+        B = 'B'  # noqa: N806
+        C = 'C'  # noqa: N806
         three = 3
 
         # Try the if(..) part
@@ -310,7 +310,6 @@ class TestWorkchain(unittest.TestCase):
 
         workchain = SimpleWorkChain()
         workchain.add_process_listener(TestListener())
-        output = workchain.execute()
 
         self.assertEqual(process_finished_count, 1)
 
@@ -435,7 +434,7 @@ class TestWorkchain(unittest.TestCase):
             self.assertTrue(workchain.ctx.s2)
 
         loop = asyncio.get_event_loop()
-        loop.create_task(workchain.step_until_terminated())
+        loop.create_task(workchain.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 
     def test_to_context(self):
