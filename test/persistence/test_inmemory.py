@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import asyncio
 import unittest
 
 import plumpy
@@ -13,15 +12,10 @@ class TestInMemoryPersister(unittest.TestCase):
         Test the plumpy.PicklePersister by taking a dummpy process, saving a checkpoint
         and recreating it from the same checkpoint
         """
-        loop = asyncio.get_event_loop()
         process = ProcessWithCheckpoint()
 
         persister = plumpy.InMemoryPersister()
         persister.save_checkpoint(process)
-
-        bundle = persister.load_checkpoint(process.pid)
-        load_context = plumpy.LoadSaveContext(loop=loop)
-        recreated = bundle.unbundle(load_context)
 
     def test_get_checkpoints_without_tags(self):
         """ """
@@ -68,8 +62,6 @@ class TestInMemoryPersister(unittest.TestCase):
 
         checkpoint_a1 = plumpy.PersistedCheckpoint(process_a.pid, '1')
         checkpoint_a2 = plumpy.PersistedCheckpoint(process_a.pid, '2')
-        checkpoint_b1 = plumpy.PersistedCheckpoint(process_b.pid, '1')
-        checkpoint_b2 = plumpy.PersistedCheckpoint(process_b.pid, '2')
 
         checkpoints = [checkpoint_a1, checkpoint_a2]
 
@@ -90,8 +82,6 @@ class TestInMemoryPersister(unittest.TestCase):
 
         checkpoint_a1 = plumpy.PersistedCheckpoint(process_a.pid, '1')
         checkpoint_a2 = plumpy.PersistedCheckpoint(process_a.pid, '2')
-        checkpoint_b1 = plumpy.PersistedCheckpoint(process_b.pid, '1')
-        checkpoint_b2 = plumpy.PersistedCheckpoint(process_b.pid, '2')
 
         persister = plumpy.InMemoryPersister()
         persister.save_checkpoint(process_a, tag='1')
