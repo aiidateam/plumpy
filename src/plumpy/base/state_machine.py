@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 from types import TracebackType
-from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Sequence, Set, Type, Union, cast
+from typing import Any, Callable, ClassVar, Dict, Hashable, Iterable, List, Optional, Protocol, Sequence, Set, Type, Union, cast, runtime_checkable
 
 from plumpy.futures import Future
 
@@ -163,6 +163,27 @@ class State:
     def do_exit(self) -> None:
         call_with_super_check(self.exit)
         self.in_state = False
+
+
+@runtime_checkable
+class StateP(Protocol):
+    LABEL: ClassVar[str]
+
+    # FIXME: fix the LABEL_TYPE
+    ALLOWED: ClassVar[set[LABEL_TYPE]]
+
+    def do_enter(self) -> None:
+        ...
+
+    def do_exit(self) -> None:
+        ...
+
+    def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'State':
+        ...
+
+    @classmethod
+    def is_terminal(cls) -> bool:
+        ...
 
 
 class StateEventHook(enum.Enum):

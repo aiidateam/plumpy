@@ -267,7 +267,6 @@ class Running(State):
         return cast(State, state)  # casting from base.State to process.State
 
 
-# class Waiting(state_machine.State):
 class Waiting(state_machine.State, persistence.Savable):
     """The basic waiting state."""
 
@@ -292,6 +291,7 @@ class Waiting(state_machine.State, persistence.Savable):
             state_info += f' ({self.msg})'
         return state_info
 
+    # FIXME: fully get rid of state_machine.State as parent class (as a protocol with contract)
     def __init__(
         self,
         process: 'Process',
@@ -314,6 +314,7 @@ class Waiting(state_machine.State, persistence.Savable):
         """
         return self._process
 
+    # FIXME: this is shared by all states
     def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'state_machine.State':
         return self._process.create_state(state_label, *args, **kwargs)
 
@@ -424,14 +425,50 @@ class Excepted(State):
         return type(self.exception) if self.exception else None, self.exception, self.traceback
 
 
-@auto_persist('result', 'successful')
-class Finished(State):
+class Finished(state_machine.State, persistence.Savable):
     LABEL = ProcessState.FINISHED
+    is_terminal_state = True
+
+    _auto_persist = {'result', 'successful'}
 
     def __init__(self, process: 'Process', result: Any, successful: bool) -> None:
-        super().__init__(process)
+        self._process = process
+        self.in_state: bool = False
         self.result = result
         self.successful = successful
+
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self._process
+
+    # FIXME: this is shared by all states
+    def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'state_machine.State':
+        return self._process.create_state(state_label, *args, **kwargs)
+
+    # FIXME: this is shared
+    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
+        super().save_instance_state(out_state, save_context)
+
+    # FIXME: this is shared
+    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
+        super().load_instance_state(saved_state, load_context)
+
+    def do_enter(self) -> None:
+        self.in_state = True
+
+    def do_exit(self) -> None:
+        if self.is_terminal():
+            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+
+        self.in_state = False
+
+    @classmethod
+    def is_terminal(cls) -> bool:
+        # deprecated using class attribute `is_terminal_state` directly.
+        return cls.is_terminal_state
 
 
 @auto_persist('msg')
