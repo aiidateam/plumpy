@@ -450,10 +450,9 @@ class Savable:
         """
         load_context = _ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
-        call_with_super_check(obj.load_instance_state, saved_state, load_context)
+        obj.load_instance_state(saved_state, load_context)
         return obj
 
-    @super_check
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext]) -> None:
         if self._auto_persist is None:
             return None
@@ -491,7 +490,6 @@ class Savable:
         else:
             return load_cls.recreate_from(saved_state, load_context)
 
-    @super_check
     def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: Optional[LoadSaveContext]) -> None:
         if self._auto_persist is None:
             return None
@@ -529,7 +527,7 @@ class Savable:
             loader = default_loader
 
         Savable._set_class_name(out_state, loader.identify_object(self.__class__))
-        call_with_super_check(self.save_instance_state, out_state, save_context)
+        self.save_instance_state(out_state, save_context)
         return out_state
 
     # region Metadata getter/setters
