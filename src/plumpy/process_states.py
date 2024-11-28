@@ -4,10 +4,12 @@ import sys
 import traceback
 from enum import Enum
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Optional, Tuple, Type, Union, cast
 
 import yaml
 from yaml.loader import Loader
+
+from plumpy.base.utils import call_with_super_check
 
 try:
     import tblib
@@ -265,8 +267,10 @@ class Running(State):
         return cast(State, state)  # casting from base.State to process.State
 
 
-class Waiting(state_machine.State, persistence.Savable):
 # class Waiting(state_machine.State):
+class Waiting(state_machine.State, persistence.Savable):
+    """The basic waiting state."""
+
     LABEL = ProcessState.WAITING
     ALLOWED = {
         ProcessState.RUNNING,
@@ -280,6 +284,7 @@ class Waiting(state_machine.State, persistence.Savable):
 
     _interruption = None
     _auto_persist = {'msg', 'data', 'in_state'}
+    is_terminal_state = False
 
     def __str__(self) -> str:
         state_info = super().__str__()
@@ -295,7 +300,8 @@ class Waiting(state_machine.State, persistence.Savable):
         data: Any | None = None,
         saver: Savable | None = None,
     ) -> None:
-        super().__init__(process)
+        self._process = process
+        self.in_state: bool = False
         self.done_callback = done_callback
         self.msg = msg
         self.data = data
@@ -306,7 +312,10 @@ class Waiting(state_machine.State, persistence.Savable):
         """
         :return: The process
         """
-        return self.state_machine
+        return self._process
+
+    def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'state_machine.State':
+        return self._process.create_state(state_label, *args, **kwargs)
 
     def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
         super().save_instance_state(out_state, save_context)
@@ -316,7 +325,8 @@ class Waiting(state_machine.State, persistence.Savable):
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
 
-        self.state_machine = load_context.process
+        # FIXME: the save/load instance state methods should be generic from Saver
+        self._process = load_context.process
         callback_name = saved_state.get(self.DONE_CALLBACK, None)
         if callback_name is not None:
             self.done_callback = getattr(self.process, callback_name)
@@ -352,6 +362,20 @@ class Waiting(state_machine.State, persistence.Savable):
             return
 
         self._waiting_future.set_result(value)
+
+    def do_enter(self) -> None:
+        self.in_state = True
+
+    def do_exit(self) -> None:
+        if self.is_terminal():
+            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+
+        self.in_state = False
+
+    @classmethod
+    def is_terminal(cls) -> bool:
+        # deprecated using class attribute `is_terminal_state` directly.
+        return cls.is_terminal_state
 
 
 class Excepted(State):

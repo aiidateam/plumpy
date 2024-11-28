@@ -74,8 +74,8 @@ def event(
     if from_states != '*':
         if inspect.isclass(from_states):
             from_states = (from_states,)
-        if not all(issubclass(state, State) for state in from_states):  # type: ignore
-            raise TypeError(f'from_states: {from_states}')
+        # if not all(issubclass(state, State) for state in from_states):  # type: ignore
+        #     raise TypeError(f'from_states: {from_states}')
     if to_states != '*':
         if inspect.isclass(to_states):
             to_states = (to_states,)
@@ -138,7 +138,6 @@ class State:
         """Convenience property to get the state label"""
         return self.LABEL
 
-    @super_check
     def enter(self) -> None:
         """Entering the state"""
 
@@ -158,7 +157,7 @@ class State:
         return self.state_machine.create_state(state_label, *args, **kwargs)
 
     def do_enter(self) -> None:
-        call_with_super_check(self.enter)
+        self.enter()
         self.in_state = True
 
     def do_exit(self) -> None:
@@ -240,7 +239,7 @@ class StateMachine(metaclass=StateMachineMeta):
         # Build the states map
         cls._STATES_MAP = {}
         for state_cls in cls.STATES:
-            assert issubclass(state_cls, State)
+            # assert issubclass(state_cls, State)
             label = state_cls.LABEL
             assert label not in cls._STATES_MAP, f"Duplicate label '{label}'"
             cls._STATES_MAP[label] = state_cls

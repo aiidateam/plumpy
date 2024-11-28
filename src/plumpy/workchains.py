@@ -70,7 +70,7 @@ class WorkChainSpec(processes.ProcessSpec):
 
 @persistence.auto_persist('_awaiting')
 class Waiting(process_states.Waiting):
-    """Overwrite the waiting state"""
+    """WorkChain waiting state that can wait on its awaiting list."""
 
     def __init__(
         self,
@@ -90,6 +90,13 @@ class Waiting(process_states.Waiting):
         for awaitable in self._awaiting:
             awaitable.add_done_callback(self._awaitable_done)
 
+    def do_enter(self) -> None:
+        for awaitable in self._awaiting:
+            awaitable.add_done_callback(self._awaitable_done)
+
+        # FIXME:
+        self.in_state = True
+
     def exit(self) -> None:
         super().exit()
         for awaitable in self._awaiting:
@@ -104,6 +111,13 @@ class Waiting(process_states.Waiting):
         else:
             if not self._awaiting:
                 self._waiting_future.set_result(lang.NULL)
+
+    def do_exit(self) -> None:
+        if self.is_terminal():
+            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+
+        # FIXME:
+        self.in_state = False
 
 
 class WorkChain(mixins.ContextMixin, processes.Process):
