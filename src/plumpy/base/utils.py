@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Any, Callable
 
-__all__ = ['super_check', 'call_with_super_check']
+__all__ = ['call_with_super_check', 'super_check']
 
 
 def super_check(wrapped: Callable[..., Any]) -> Callable[..., Any]:

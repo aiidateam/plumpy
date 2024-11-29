@@ -8,11 +8,9 @@
 
 import filecmp
 import os
-from pathlib import Path
 import shutil
-import subprocess
-import sys
 import tempfile
+from pathlib import Path
 
 import plumpy
 
@@ -32,8 +30,12 @@ release = plumpy.__version__
 master_doc = 'index'
 language = None
 extensions = [
-    'myst_nb', 'sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.viewcode', 'sphinx.ext.intersphinx',
-    'IPython.sphinxext.ipython_console_highlighting'
+    'myst_nb',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.doctest',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.intersphinx',
+    'IPython.sphinxext.ipython_console_highlighting',
 ]
 
 # List of patterns, relative to source directory, that match files and
@@ -46,14 +48,14 @@ pygments_style = None
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3.8', None),
-    'kiwipy': ('https://kiwipy.readthedocs.io/en/latest/', None)
+    'kiwipy': ('https://kiwipy.readthedocs.io/en/latest/', None),
 }
 
 myst_enable_extensions = ['colon_fence', 'deflist', 'html_image', 'smartquotes', 'substitution']
 myst_url_schemes = ('http', 'https', 'mailto')
 myst_substitutions = {
     'rabbitmq': '[RabbitMQ](https://www.rabbitmq.com/)',
-    'kiwipy': '[kiwipy](https://kiwipy.readthedocs.io)'
+    'kiwipy': '[kiwipy](https://kiwipy.readthedocs.io)',
 }
 jupyter_execute_notebooks = 'cache'
 execution_show_tb = 'READTHEDOCS' in os.environ
@@ -84,7 +86,7 @@ html_theme_options = {
     'use_issues_button': True,
     'path_to_docs': 'docs',
     'use_edit_page_button': True,
-    'extra_navbar': ''
+    'extra_navbar': '',
 }
 
 # API Documentation
@@ -112,9 +114,17 @@ def run_apidoc(app):
     # this ensures that document rebuilds are not triggered every time (due to change in file mtime)
     with tempfile.TemporaryDirectory() as tmpdirname:
         options = [
-            '-o', tmpdirname,
-            str(package_dir), '--private', '--force', '--module-first', '--separate', '--no-toc', '--maxdepth', '4',
-            '-q'
+            '-o',
+            tmpdirname,
+            str(package_dir),
+            '--private',
+            '--force',
+            '--module-first',
+            '--separate',
+            '--no-toc',
+            '--maxdepth',
+            '4',
+            '-q',
         ]
 
         os.environ['SPHINX_APIDOC_OPTIONS'] = 'members,special-members,private-members,undoc-members,show-inheritance'

@@ -1,18 +1,24 @@
 # -*- coding: utf-8 -*-
 """Event and loop related classes and functions"""
+
 import asyncio
 import sys
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence
 
 __all__ = [
-    'new_event_loop', 'set_event_loop', 'get_event_loop', 'run_until_complete', 'set_event_loop_policy',
-    'reset_event_loop_policy', 'PlumpyEventLoopPolicy'
+    'PlumpyEventLoopPolicy',
+    'get_event_loop',
+    'new_event_loop',
+    'reset_event_loop_policy',
+    'run_until_complete',
+    'set_event_loop',
+    'set_event_loop_policy',
 ]
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
-get_event_loop = asyncio.get_event_loop  # pylint: disable=invalid-name
+get_event_loop = asyncio.get_event_loop
 
 
 def set_event_loop(*args: Any, **kwargs: Any) -> None:
@@ -51,12 +57,10 @@ def reset_event_loop_policy() -> None:
     """Reset the event loop policy to the default."""
     loop = get_event_loop()
 
-    # pylint: disable=protected-access
     cls = loop.__class__
 
     del cls._check_running  # type: ignore
     del cls._nest_patched  # type: ignore
-    # pylint: enable=protected-access
 
     asyncio.set_event_loop_policy(None)
 
@@ -69,7 +73,7 @@ def run_until_complete(future: asyncio.Future, loop: Optional[asyncio.AbstractEv
 class ProcessCallback:
     """Object returned by callback registration methods."""
 
-    __slots__ = ('_callback', '_args', '_kwargs', '_process', '_cancelled', '__weakref__')
+    __slots__ = ('__weakref__', '_args', '_callback', '_cancelled', '_kwargs', '_process')
 
     def __init__(
         self, process: 'Process', callback: Callable[..., Any], args: Sequence[Any], kwargs: Dict[str, Any]
@@ -93,7 +97,7 @@ class ProcessCallback:
         if not self._cancelled:
             try:
                 await self._callback(*self._args, **self._kwargs)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 exc_info = sys.exc_info()
                 self._process.callback_excepted(self._callback, exc_info[1], exc_info[2])
             finally:

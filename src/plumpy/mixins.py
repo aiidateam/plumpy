@@ -12,6 +12,7 @@ class ContextMixin(persistence.Savable):
     Add a context to a Process.  The contents of the context will be saved
     in the instance state unlike standard instance variables.
     """
+
     CONTEXT: str = '_context'
 
     def __init__(self, *args: Any, **kwargs: Any):

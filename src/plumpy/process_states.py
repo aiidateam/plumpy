@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
-from enum import Enum
+from __future__ import annotations
 import sys
 import traceback
+from enum import Enum
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Optional, Tuple, Type, Union, cast
 
 import yaml
 from yaml.loader import Loader
+
+from plumpy.base.utils import call_with_super_check
 
 try:
     import tblib
@@ -18,32 +21,32 @@ except ImportError:
 from . import exceptions, futures, persistence, utils
 from .base import state_machine
 from .lang import NULL
-from .persistence import auto_persist
+from .persistence import Savable, auto_persist
 from .utils import SAVED_STATE_TYPE
 
 __all__ = [
-    'ProcessState',
+    'Continue',
     'Created',
-    'Running',
-    'Waiting',
-    'Finished',
     'Excepted',
-    'Killed',
+    'Finished',
+    'Interruption',
     # Commands
     'Kill',
+    'KillInterruption',
+    'Killed',
+    'PauseInterruption',
+    'ProcessState',
+    'Running',
     'Stop',
     'Wait',
-    'Continue',
-    'Interruption',
-    'KillInterruption',
-    'PauseInterruption',
+    'Waiting',
 ]
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
 
-class Interruption(Exception):
+class Interruption(Exception):  # noqa: N818
     pass
 
 
@@ -64,7 +67,6 @@ class Command(persistence.Savable):
 
 @auto_persist('msg')
 class Kill(Command):
-
     def __init__(self, msg: Optional[Any] = None):
         super().__init__()
         self.msg = msg
@@ -76,7 +78,6 @@ class Pause(Command):
 
 @auto_persist('msg', 'data')
 class Wait(Command):
-
     def __init__(
         self, continue_fn: Optional[Callable[..., Any]] = None, msg: Optional[Any] = None, data: Optional[Any] = None
     ):
@@ -88,7 +89,6 @@ class Wait(Command):
 
 @auto_persist('result')
 class Stop(Command):
-
     def __init__(self, result: Any, successful: bool) -> None:
         super().__init__()
         self.result = result
@@ -127,6 +127,7 @@ class ProcessState(Enum):
     """
     The possible states that a :class:`~plumpy.processes.Process` can be in.
     """
+
     CREATED: str = 'created'
     RUNNING: str = 'running'
     WAITING: str = 'waiting'
@@ -137,7 +138,6 @@ class ProcessState(Enum):
 
 @auto_persist('in_state')
 class State(state_machine.State, persistence.Savable):
-
     @property
     def process(self) -> state_machine.StateMachine:
         """
@@ -149,7 +149,7 @@ class State(state_machine.State, persistence.Savable):
         super().load_instance_state(saved_state, load_context)
         self.state_machine = load_context.process
 
-    def interrupt(self, reason: Any) -> None:  # pylint: disable=unused-argument
+    def interrupt(self, reason: Any) -> None:
         pass
 
 
@@ -183,7 +183,11 @@ class Created(State):
 class Running(State):
     LABEL = ProcessState.RUNNING
     ALLOWED = {
-        ProcessState.RUNNING, ProcessState.WAITING, ProcessState.FINISHED, ProcessState.KILLED, ProcessState.EXCEPTED
+        ProcessState.RUNNING,
+        ProcessState.WAITING,
+        ProcessState.FINISHED,
+        ProcessState.KILLED,
+        ProcessState.EXCEPTED,
     }
 
     RUN_FN = 'run_fn'  # The key used to store the function to run
@@ -217,7 +221,7 @@ class Running(State):
     def interrupt(self, reason: Any) -> None:
         pass
 
-    async def execute(self) -> State:  # type: ignore # pylint: disable=invalid-overridden-method
+    async def execute(self) -> State:  # type: ignore
         if self._command is not None:
             command = self._command
         else:
@@ -230,7 +234,7 @@ class Running(State):
             except Interruption:
                 # Let this bubble up to the caller
                 raise
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 excepted = self.create_state(ProcessState.EXCEPTED, *sys.exc_info()[1:])
                 return cast(State, excepted)
             else:
@@ -263,16 +267,23 @@ class Running(State):
         return cast(State, state)  # casting from base.State to process.State
 
 
-@auto_persist('msg', 'data')
-class Waiting(State):
+class Waiting(state_machine.State, persistence.Savable):
+    """The basic waiting state."""
+
     LABEL = ProcessState.WAITING
     ALLOWED = {
-        ProcessState.RUNNING, ProcessState.WAITING, ProcessState.KILLED, ProcessState.EXCEPTED, ProcessState.FINISHED
+        ProcessState.RUNNING,
+        ProcessState.WAITING,
+        ProcessState.KILLED,
+        ProcessState.EXCEPTED,
+        ProcessState.FINISHED,
     }
 
     DONE_CALLBACK = 'DONE_CALLBACK'
 
     _interruption = None
+    _auto_persist = {'msg', 'data', 'in_state'}
+    is_terminal_state = False
 
     def __str__(self) -> str:
         state_info = super().__str__()
@@ -280,18 +291,32 @@ class Waiting(State):
             state_info += f' ({self.msg})'
         return state_info
 
+    # FIXME: fully get rid of state_machine.State as parent class (as a protocol with contract)
     def __init__(
         self,
         process: 'Process',
-        done_callback: Optional[Callable[..., Any]],
-        msg: Optional[str] = None,
-        data: Optional[Any] = None
+        done_callback: Callable[..., Any] | None,
+        msg: str | None = None,
+        data: Any | None = None,
+        saver: Savable | None = None,
     ) -> None:
-        super().__init__(process)
+        self._process = process
+        self.in_state: bool = False
         self.done_callback = done_callback
         self.msg = msg
         self.data = data
         self._waiting_future: futures.Future = futures.Future()
+
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self._process
+
+    # FIXME: this is shared by all states
+    def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'state_machine.State':
+        return self._process.create_state(state_label, *args, **kwargs)
 
     def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
         super().save_instance_state(out_state, save_context)
@@ -300,6 +325,9 @@ class Waiting(State):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
+
+        # FIXME: the save/load instance state methods should be generic from Saver
+        self._process = load_context.process
         callback_name = saved_state.get(self.DONE_CALLBACK, None)
         if callback_name is not None:
             self.done_callback = getattr(self.process, callback_name)
@@ -311,7 +339,7 @@ class Waiting(State):
         # This will cause the future in execute() to raise the exception
         self._waiting_future.set_exception(reason)
 
-    async def execute(self) -> State:  # type: ignore # pylint: disable=invalid-overridden-method
+    async def execute(self) -> State:  # type: ignore
         try:
             result = await self._waiting_future
         except Interruption:
@@ -335,6 +363,20 @@ class Waiting(State):
             return
 
         self._waiting_future.set_result(value)
+
+    def do_enter(self) -> None:
+        self.in_state = True
+
+    def do_exit(self) -> None:
+        if self.is_terminal():
+            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+
+        self.in_state = False
+
+    @classmethod
+    def is_terminal(cls) -> bool:
+        # deprecated using class attribute `is_terminal_state` directly.
+        return cls.is_terminal_state
 
 
 class Excepted(State):
@@ -370,9 +412,7 @@ class Excepted(State):
         self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=Loader)
         if _HAS_TBLIB:
             try:
-                self.traceback = \
-                    tblib.Traceback.from_string(saved_state[self.TRACEBACK],
-                                                strict=False)
+                self.traceback = tblib.Traceback.from_string(saved_state[self.TRACEBACK], strict=False)
             except KeyError:
                 self.traceback = None
         else:
@@ -385,14 +425,50 @@ class Excepted(State):
         return type(self.exception) if self.exception else None, self.exception, self.traceback
 
 
-@auto_persist('result', 'successful')
-class Finished(State):
+class Finished(state_machine.State, persistence.Savable):
     LABEL = ProcessState.FINISHED
+    is_terminal_state = True
+
+    _auto_persist = {'result', 'successful'}
 
     def __init__(self, process: 'Process', result: Any, successful: bool) -> None:
-        super().__init__(process)
+        self._process = process
+        self.in_state: bool = False
         self.result = result
         self.successful = successful
+
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self._process
+
+    # FIXME: this is shared by all states
+    def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'state_machine.State':
+        return self._process.create_state(state_label, *args, **kwargs)
+
+    # FIXME: this is shared
+    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
+        super().save_instance_state(out_state, save_context)
+
+    # FIXME: this is shared
+    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
+        super().load_instance_state(saved_state, load_context)
+
+    def do_enter(self) -> None:
+        self.in_state = True
+
+    def do_exit(self) -> None:
+        if self.is_terminal():
+            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+
+        self.in_state = False
+
+    @classmethod
+    def is_terminal(cls) -> bool:
+        # deprecated using class attribute `is_terminal_state` directly.
+        return cls.is_terminal_state
 
 
 @auto_persist('msg')

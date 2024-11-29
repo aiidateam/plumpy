@@ -7,7 +7,6 @@ from .utils import TestCase
 
 
 class TestPort(TestCase):
-
     def test_required(self):
         spec = Port('required_value', required=True)
 
@@ -21,7 +20,6 @@ class TestPort(TestCase):
         self.assertIsNotNone(spec.validate('a'))
 
     def test_validator(self):
-
         def validate(value, port):
             assert isinstance(port, Port)
             if not isinstance(value, int):
@@ -45,7 +43,6 @@ class TestPort(TestCase):
 
 
 class TestInputPort(TestCase):
-
     def test_default(self):
         """Test the default value property for the InputPort."""
         port = InputPort('test', default=5)
@@ -81,12 +78,14 @@ class TestInputPort(TestCase):
 
         # Testing that passing an actual lambda as a value is alos possible
         port = InputPort('test', valid_type=(types.FunctionType, int), default=lambda: 5)
-        some_lambda = lambda: 'string'
+
+        def some_lambda():
+            return 'string'
+
         self.assertIsNone(port.validate(some_lambda))
 
 
 class TestOutputPort(TestCase):
-
     def test_default(self):
         """
         Test the default value property for the InputPort
@@ -108,7 +107,6 @@ class TestOutputPort(TestCase):
 
 
 class TestPortNamespace(TestCase):
-
     BASE_PORT_NAME = 'port'
     BASE_PORT_NAMESPACE_NAME = 'port'
 
@@ -299,7 +297,7 @@ class TestPortNamespace(TestCase):
         # Check the breadcrumbs are correct
         self.assertEqual(
             validation_error.port,
-            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output'))
+            self.port_namespace.NAMESPACE_SEPARATOR.join((self.BASE_PORT_NAMESPACE_NAME, 'sub', 'space', 'output')),
         )
 
     def test_port_namespace_required(self):
@@ -371,7 +369,9 @@ class TestPortNamespace(TestCase):
         self.assertIsNone(port_namespace.validate(inputs))
 
         # When passing a lambda directly as the value, it should NOT be evaluated during pre_processing
-        some_lambda = lambda: 5
+        def some_lambda():
+            return 5
+
         inputs = port_namespace.pre_process({'lambda_default': some_lambda})
         self.assertEqual(inputs['lambda_default'], some_lambda)
         self.assertIsNone(port_namespace.validate(inputs))

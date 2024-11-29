@@ -2,13 +2,13 @@
 import asyncio
 
 import kiwipy
-from kiwipy import rmq
 import pytest
 import shortuuid
+from kiwipy import rmq
 
 import plumpy
-from plumpy import process_comms
 import plumpy.communications
+from plumpy import process_comms
 
 from .. import utils
 
@@ -43,12 +43,11 @@ def sync_controller(thread_communicator: rmq.RmqThreadCommunicator):
 
 
 class TestRemoteProcessController:
-
     @pytest.mark.asyncio
     async def test_pause(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
-        asyncio.ensure_future(proc.step_until_terminated())
+        asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
         # Send a pause message
         result = await async_controller.pause_process(proc.pid)
 
@@ -60,7 +59,7 @@ class TestRemoteProcessController:
     async def test_play(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
-        asyncio.ensure_future(proc.step_until_terminated())
+        asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
         assert proc.pause()
 
         # Send a play message
@@ -78,7 +77,7 @@ class TestRemoteProcessController:
     async def test_kill(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the event loop
-        asyncio.ensure_future(proc.step_until_terminated())
+        asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
 
         # Send a kill message and wait for it to be done
         result = await async_controller.kill_process(proc.pid)
@@ -91,7 +90,7 @@ class TestRemoteProcessController:
     async def test_status(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
-        asyncio.ensure_future(proc.step_until_terminated())
+        asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
 
         # Send a status message
         status = await async_controller.get_status(proc.pid)
@@ -122,7 +121,6 @@ class TestRemoteProcessController:
 
 
 class TestRemoteProcessThreadController:
-
     @pytest.mark.asyncio
     async def test_pause(self, thread_communicator, sync_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
@@ -205,7 +203,7 @@ class TestRemoteProcessThreadController:
     async def test_status(self, thread_communicator, sync_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
-        asyncio.ensure_future(proc.step_until_terminated())
+        asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
 
         # Send a status message
         status_future = sync_controller.get_status(proc.pid)
