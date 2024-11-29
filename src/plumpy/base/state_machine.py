@@ -166,11 +166,7 @@ class State:
 
 
 @runtime_checkable
-class StateP(Protocol):
-    LABEL: ClassVar[str]
-
-    # FIXME: fix the LABEL_TYPE
-    ALLOWED: ClassVar[set[LABEL_TYPE]]
+class StateProtocol(Protocol):
 
     def do_enter(self) -> None:
         ...
@@ -183,6 +179,7 @@ class StateP(Protocol):
 
     @classmethod
     def is_terminal(cls) -> bool:
+        # FIXME: not necessary only for fit with legacy state
         ...
 
 
