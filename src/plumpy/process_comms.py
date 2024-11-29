@@ -31,7 +31,7 @@ ProcessStatus = Any
 
 INTENT_KEY = 'intent'
 MESSAGE_KEY = 'message'
-
+FORCE_KILL_KEY = 'force_kill'
 
 class Intent:
     """Intent constants for a process message"""
@@ -42,10 +42,10 @@ class Intent:
     STATUS: str = 'status'
 
 
-PAUSE_MSG = {INTENT_KEY: Intent.PAUSE}
-PLAY_MSG = {INTENT_KEY: Intent.PLAY}
-KILL_MSG = {INTENT_KEY: Intent.KILL}
-STATUS_MSG = {INTENT_KEY: Intent.STATUS}
+PAUSE_MSG = {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
+PLAY_MSG = {INTENT_KEY: Intent.PLAY, MESSAGE_KEY: None}
+KILL_MSG = {INTENT_KEY: Intent.KILL, MESSAGE_KEY: None, FORCE_KILL_KEY: False}
+STATUS_MSG = {INTENT_KEY: Intent.STATUS, MESSAGE_KEY: None}
 
 TASK_KEY = 'task'
 TASK_ARGS = 'args'
