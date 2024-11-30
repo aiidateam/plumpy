@@ -831,7 +831,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if successful:
             validation_error = self.spec().outputs.validate(self.outputs)
             if validation_error:
-                raise StateEntryFailed(process_states.ProcessState.FINISHED, result, False)
+                raise StateEntryFailed(process_states.Finished, result, False)
 
         self.future().set_result(self.outputs)
 
@@ -1016,7 +1016,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if final_state == process_states.ProcessState.CREATED:
             raise exception.with_traceback(trace)
 
-        self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
+        self.transition_to(process_states.Excepted, exception, trace)
 
     def pause(self, msg: Union[str, None] = None) -> Union[bool, futures.CancellableAction]:
         """Pause the process.
@@ -1081,7 +1081,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 try:
                     # Ignore the next state
                     # __import__('ipdb').set_trace()
-                    self.transition_to(process_states.ProcessState.KILLED, exception)
+                    self.transition_to(process_states.Killed, exception)
                     return True
                 finally:
                     self._killing = None
@@ -1133,7 +1133,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param exception: The exception that caused the failure
         :param trace_back: Optional exception traceback
         """
-        self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace_back)
+        self.transition_to(process_states.Excepted, exception, trace_back)
 
     def kill(self, msg: Optional[MessageType] = None) -> Union[bool, asyncio.Future]:
         """
@@ -1161,7 +1161,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._state.interrupt(interrupt_exception)
             return cast(futures.CancellableAction, self._interrupt_action)
 
-        self.transition_to(process_states.ProcessState.KILLED, msg)
+        self.transition_to(process_states.Killed, msg)
         return True
 
     @property

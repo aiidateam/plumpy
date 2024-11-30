@@ -20,7 +20,6 @@ from typing import (
     Set,
     Type,
     Union,
-    cast,
 )
 
 from plumpy.futures import Future
@@ -325,8 +324,18 @@ class StateMachine(metaclass=StateMachineMeta):
     def on_terminated(self) -> None:
         """Called when a terminal state is entered"""
 
-    def transition_to(self, new_state: Union[Hashable, State, Type[State]], *args: Any, **kwargs: Any) -> None:
-        assert not self._transitioning, 'Cannot call transition_to when already transitioning state'
+    def transition_to(
+        self, new_state: Union[State, Type[State]], *args: Any, **kwargs: Any
+    ) -> None:
+        """Transite to the new state.
+
+        The new target state will be create lazily when the state
+        is not yet instantiated, which will happened for states not in the expect path such as
+        pause and kill.
+        """
+        assert (
+            not self._transitioning
+        ), "Cannot call transition_to when already transitioning state"
 
         initial_state_label = self._state.LABEL if self._state is not None else None
         label = None
@@ -389,6 +398,10 @@ class StateMachine(metaclass=StateMachineMeta):
         self._debug: bool = enabled
 
     def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> State:
+        # XXX: this method create state from label, which is duplicate as _create_state_instance and less generic
+        # because the label is defined after the state and required to be know before calling this function.
+        # This method should be replaced by `_create_state_instance`.
+        # aiida-core using this method for its Waiting state override.
         try:
             return self.get_states_map()[state_label](self, *args, **kwargs)
         except KeyError:
@@ -422,15 +435,9 @@ class StateMachine(metaclass=StateMachineMeta):
         self._fire_state_event(StateEventHook.ENTERED_STATE, last_state)
 
     def _create_state_instance(
-        self, state: Union[Hashable, Type[State]], *args: Any, **kwargs: Any
+        self, state_cls: type[State], *args: Any, **kwargs: Any
     ) -> State:
-        # build from state class
-        if inspect.isclass(state) and issubclass(state, State):
-            state_cls = state
-        else:
-            try:
-                state_cls = self.get_states_map()[cast(Hashable, state)]  # pylint: disable=unsubscriptable-object
-            except KeyError:
-                raise ValueError(f"{state} is not a valid state")
+        if state_cls.LABEL not in self.get_states_map():
+            raise ValueError(f"{state_cls.LABEL} is not a valid state")
 
         return state_cls(self, *args, **kwargs)
