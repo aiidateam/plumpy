@@ -865,7 +865,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if msg is None:
             msg_txt = ''
         else:
-            msg_txt = msg[MESSAGE_KEY] or ''
+            # msg_txt = msg[MESSAGE_KEY] or ''
+            msg_txt = msg
 
         self.set_status(msg_txt)
         self.future().set_exception(exceptions.KilledError(msg_txt))
@@ -1079,7 +1080,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             def do_kill(_next_state: process_states.State) -> Any:
                 try:
                     # Ignore the next state
-                    __import__('ipdb').set_trace()
+                    # __import__('ipdb').set_trace()
                     self.transition_to(process_states.ProcessState.KILLED, exception)
                     return True
                 finally:
