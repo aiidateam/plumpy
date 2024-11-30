@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Type, Union, c
 import yaml
 from yaml.loader import Loader
 
+from plumpy.process_comms import MessageType
+
 try:
     import tblib
 
@@ -402,7 +404,7 @@ class Finished(State):
 class Killed(State):
     LABEL = ProcessState.KILLED
 
-    def __init__(self, process: 'Process', msg: Optional[str]):
+    def __init__(self, process: 'Process', msg: Optional[MessageType]):
         """
         :param process: The associated process
         :param msg: Optional kill message

@@ -41,11 +41,12 @@ class Intent:
     KILL: str = 'kill'
     STATUS: str = 'status'
 
+MessageType = dict[str, Any]
 
-PAUSE_MSG = {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
-PLAY_MSG = {INTENT_KEY: Intent.PLAY, MESSAGE_KEY: None}
-KILL_MSG = {INTENT_KEY: Intent.KILL, MESSAGE_KEY: None, FORCE_KILL_KEY: False}
-STATUS_MSG = {INTENT_KEY: Intent.STATUS, MESSAGE_KEY: None}
+PAUSE_MSG: MessageType= {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
+PLAY_MSG: MessageType = {INTENT_KEY: Intent.PLAY, MESSAGE_KEY: None}
+KILL_MSG: MessageType = {INTENT_KEY: Intent.KILL, MESSAGE_KEY: None, FORCE_KILL_KEY: False}
+STATUS_MSG: MessageType = {INTENT_KEY: Intent.STATUS, MESSAGE_KEY: None}
 
 TASK_KEY = 'task'
 TASK_ARGS = 'args'
@@ -197,7 +198,7 @@ class RemoteProcessController:
         result = await asyncio.wrap_future(future)
         return result
 
-    async def kill_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> 'ProcessResult':
+    async def kill_process(self, pid: 'PID_TYPE', msg: Optional[MessageType] = None) -> 'ProcessResult':
         """
         Kill the process
 
@@ -205,12 +206,11 @@ class RemoteProcessController:
         :param msg: optional kill message
         :return: True if killed, False otherwise
         """
-        message = copy.copy(KILL_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
+        if msg is None:
+            msg = copy.copy(KILL_MSG)
 
         # Wait for the communication to go through
-        kill_future = self._communicator.rpc_send(pid, message)
+        kill_future = self._communicator.rpc_send(pid, msg)
         future = await asyncio.wrap_future(kill_future)
         # Now wait for the kill to be enacted
         result = await asyncio.wrap_future(future)
@@ -372,7 +372,7 @@ class RemoteProcessThreadController:
         """
         self._communicator.broadcast_send(None, subject=Intent.PLAY)
 
-    def kill_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> kiwipy.Future:
+    def kill_process(self, pid: 'PID_TYPE', msg: Optional[MessageType] = None) -> kiwipy.Future:
         """
         Kill the process
 
@@ -381,11 +381,10 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be killed
 
         """
-        message = copy.copy(KILL_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
+        if msg is None:
+            msg = copy.copy(KILL_MSG)
 
-        return self._communicator.rpc_send(pid, message)
+        return self._communicator.rpc_send(pid, msg)
 
     def kill_all(self, msg: Optional[Any]) -> None:
         """

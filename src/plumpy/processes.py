@@ -47,6 +47,7 @@ from .event_helper import EventHelper
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
+from .process_comms import KILL_MSG, MESSAGE_KEY, MessageType
 
 __all__ = ['BundleKeys', 'Process', 'ProcessSpec', 'TransitionFailed']
 
@@ -320,7 +321,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             def try_killing(future: futures.Future) -> None:
                 if future.cancelled():
-                    if not self.kill('Killed by future being cancelled'):
+                    msg = copy.copy(KILL_MSG)
+                    msg[MESSAGE_KEY] = 'Killed by future being cancelled'
+                    if not self.kill(msg):
                         self.logger.warning('Process<%s>: Failed to kill process on future cancel', self.pid)
 
             self._future.add_done_callback(try_killing)
@@ -857,10 +860,15 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._fire_event(ProcessListener.on_process_excepted, str(self.future().exception()))
 
     @super_check
-    def on_kill(self, msg: Optional[str]) -> None:
+    def on_kill(self, msg: Optional[MessageType]) -> None:
         """Entering the KILLED state."""
-        self.set_status(msg)
-        self.future().set_exception(exceptions.KilledError(msg))
+        if msg is None:
+            msg_txt = ''
+        else:
+            msg_txt = msg[MESSAGE_KEY] or ''
+
+        self.set_status(msg_txt)
+        self.future().set_exception(exceptions.KilledError(msg_txt))
 
     @super_check
     def on_killed(self) -> None:
@@ -915,7 +923,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == process_comms.Intent.PAUSE:
             return self._schedule_rpc(self.pause, msg=msg.get(process_comms.MESSAGE_KEY, None))
         if intent == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg=msg.get(process_comms.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.kill, msg=msg)
         if intent == process_comms.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
@@ -1071,7 +1079,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             def do_kill(_next_state: process_states.State) -> Any:
                 try:
                     # Ignore the next state
-                    self.transition_to(process_states.ProcessState.KILLED, str(exception))
+                    __import__('ipdb').set_trace()
+                    self.transition_to(process_states.ProcessState.KILLED, exception)
                     return True
                 finally:
                     self._killing = None
@@ -1125,7 +1134,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace_back)
 
-    def kill(self, msg: Union[str, None] = None) -> Union[bool, asyncio.Future]:
+    def kill(self, msg: Optional[MessageType] = None) -> Union[bool, asyncio.Future]:
         """
         Kill the process
         :param msg: An optional kill message
