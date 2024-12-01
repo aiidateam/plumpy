@@ -3,17 +3,15 @@ import pytest
 from tests import utils
 
 import plumpy
-from plumpy import communications, process_comms
+from plumpy import process_comms
 
 
 class Process(plumpy.Process):
-
     def run(self):
         pass
 
 
 class CustomObjectLoader(plumpy.DefaultObjectLoader):
-
     def load_object(self, identifier):
         if identifier == 'jimmy':
             return Process
@@ -45,7 +43,7 @@ async def test_continue():
 
 @pytest.mark.asyncio
 async def test_loader_is_used():
-    """ Make sure that the provided class loader is used by the process launcher """
+    """Make sure that the provided class loader is used by the process launcher"""
     loader = CustomObjectLoader()
     proc = Process()
     persister = plumpy.InMemoryPersister(loader=loader)

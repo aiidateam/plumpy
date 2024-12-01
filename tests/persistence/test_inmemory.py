@@ -5,6 +5,8 @@ from ..utils import ProcessWithCheckpoint
 
 import plumpy
 
+import plumpy
+
 
 class TestInMemoryPersister(unittest.TestCase):
     def test_save_load_roundtrip(self):

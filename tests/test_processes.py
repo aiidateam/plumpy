@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """Process tests"""
+
 import asyncio
 import copy
 import enum
-from plumpy.process_comms import KILL_MSG, MESSAGE_KEY
-from test import utils
 import unittest
 
 import kiwipy
@@ -13,11 +12,11 @@ from tests import utils
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
+from plumpy.process_comms import KILL_MSG, MESSAGE_KEY
 from plumpy.utils import AttributesFrozendict
 
 
 class ForgetToCallParent(plumpy.Process):
-
     def __init__(self, forget_on):
         super().__init__()
         self.forget_on = forget_on
@@ -45,9 +44,7 @@ class ForgetToCallParent(plumpy.Process):
 
 @pytest.mark.asyncio
 async def test_process_scope():
-
     class ProcessTaskInterleave(plumpy.Process):
-
         async def task(self, steps: list):
             steps.append(f'[{self.pid}] started')
             assert plumpy.Process.current() is self
@@ -67,7 +64,6 @@ async def test_process_scope():
 
 
 class TestProcess(unittest.TestCase):
-
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
@@ -85,12 +81,10 @@ class TestProcess(unittest.TestCase):
         self.assertIs(p.spec(), Proc.spec())
 
     def test_dynamic_inputs(self):
-
         class NoDynamic(Process):
             pass
 
         class WithDynamic(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -103,9 +97,7 @@ class TestProcess(unittest.TestCase):
         proc.execute()
 
     def test_inputs(self):
-
         class Proc(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -125,7 +117,6 @@ class TestProcess(unittest.TestCase):
         """
 
         class Proc(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -141,9 +132,7 @@ class TestProcess(unittest.TestCase):
         self.assertDictEqual(dict(process.raw_inputs), {'a': 5, 'nested': {'a': 'value'}})
 
     def test_inputs_default(self):
-
         class Proc(utils.DummyProcess):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -202,7 +191,6 @@ class TestProcess(unittest.TestCase):
         for def_val in (True, False, 0, 1):
 
             class Proc(utils.DummyProcess):
-
                 @classmethod
                 def define(cls, spec):
                     super().define(spec)
@@ -217,7 +205,6 @@ class TestProcess(unittest.TestCase):
         """Process with a default in a nested namespace should be created, even if top level namespace not supplied."""
 
         class SomeProcess(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -232,7 +219,6 @@ class TestProcess(unittest.TestCase):
         """Process which raises in its 'define' method. Check that the spec is not set."""
 
         class BrokenProcess(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -296,12 +282,11 @@ class TestProcess(unittest.TestCase):
             proc.execute()
 
     def test_get_description(self):
-
         class ProcWithoutSpec(Process):
             pass
 
         class ProcWithSpec(Process):
-            """ Process with a spec and a docstring """
+            """Process with a spec and a docstring"""
 
             @classmethod
             def define(cls, spec):
@@ -327,9 +312,7 @@ class TestProcess(unittest.TestCase):
         self.assertIsInstance(desc_with_spec['description'], str)
 
     def test_logging(self):
-
         class LoggerTester(Process):
-
             def run(self, **kwargs):
                 self.logger.info('Test')
 
@@ -443,7 +426,6 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(proc.state, ProcessState.FINISHED)
 
     def test_kill_in_run(self):
-
         class KillProcess(Process):
             after_kill = False
 
@@ -463,9 +445,7 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_kill_when_paused_in_run(self):
-
         class PauseProcess(Process):
-
             def run(self, **kwargs):
                 self.pause()
                 self.kill()
@@ -517,9 +497,7 @@ class TestProcess(unittest.TestCase):
             self.assertDictEqual(proc_class.EXPECTED_OUTPUTS, result)
 
     def test_invalid_output(self):
-
         class InvalidOutput(plumpy.Process):
-
             def run(self):
                 self.out('invalid', 5)
 
@@ -543,7 +521,6 @@ class TestProcess(unittest.TestCase):
         ERROR_CODE = 256
 
         class Proc(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -557,11 +534,10 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(proc.result(), ERROR_CODE)
 
     def test_pause_in_process(self):
-        """ Test that we can pause and cancel that by playing within the process """
+        """Test that we can pause and cancel that by playing within the process"""
         test_case = self
 
         class TestPausePlay(plumpy.Process):
-
             def run(self):
                 fut = self.pause()
                 test_case.assertIsInstance(fut, plumpy.Future)
@@ -581,12 +557,11 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(plumpy.ProcessState.FINISHED, proc.state)
 
     def test_pause_play_in_process(self):
-        """ Test that we can pause and play that by playing within the process """
+        """Test that we can pause and play that by playing within the process"""
 
         test_case = self
 
         class TestPausePlay(plumpy.Process):
-
             def run(self):
                 fut = self.pause()
                 test_case.assertIsInstance(fut, plumpy.Future)
@@ -603,7 +578,6 @@ class TestProcess(unittest.TestCase):
         test_case = self
 
         class StackTest(plumpy.Process):
-
             def run(self):
                 test_case.assertIs(self, Process.current())
 
@@ -620,7 +594,6 @@ class TestProcess(unittest.TestCase):
             expect_true.append(process == Process.current())
 
         class StackTest(plumpy.Process):
-
             def run(self):
                 # TODO: unexpected behaviour here
                 # if assert error happend here not raise
@@ -630,7 +603,6 @@ class TestProcess(unittest.TestCase):
                 test_nested(self)
 
         class ParentProcess(plumpy.Process):
-
             def run(self):
                 expect_true.append(self == Process.current())
                 StackTest().execute()
@@ -653,21 +625,17 @@ class TestProcess(unittest.TestCase):
         """
 
         class StackTest(plumpy.Process):
-
             def run(self):
                 pass
 
         class ParentProcess(plumpy.Process):
-
             def run(self):
                 StackTest().execute()
 
         ParentProcess().execute()
 
     def test_call_soon(self):
-
         class CallSoon(plumpy.Process):
-
             def run(self):
                 self.call_soon(self.do_except)
 
@@ -687,7 +655,6 @@ class TestProcess(unittest.TestCase):
         """Test that an exception raised during ``on_entered`` will cause the process to be excepted."""
 
         class RaisingProcess(Process):
-
             def on_entered(self, from_state):
                 if from_state is not None and from_state.label == ProcessState.RUNNING:
                     raise RuntimeError('exception during on_entered')
@@ -703,9 +670,7 @@ class TestProcess(unittest.TestCase):
         assert str(process.exception()) == 'exception during on_entered'
 
     def test_exception_during_run(self):
-
         class RaisingProcess(Process):
-
             def run(self):
                 raise RuntimeError('exception during run')
 
@@ -869,7 +834,7 @@ class TestProcessSaving(unittest.TestCase):
         loop.run_until_complete(async_test())
 
     def test_wait_save_continue(self):
-        """ Test that process saved while in WAITING state restarts correctly when loaded """
+        """Test that process saved while in WAITING state restarts correctly when loaded"""
         loop = asyncio.get_event_loop()
         proc = utils.WaitForSignalProcess()
 
@@ -912,7 +877,6 @@ class TestProcessSaving(unittest.TestCase):
 
 
 class TestProcessNamespace(unittest.TestCase):
-
     def test_namespaced_process(self):
         """
         Test that inputs in nested namespaces are properly validated and the returned
@@ -920,7 +884,6 @@ class TestProcessNamespace(unittest.TestCase):
         """
 
         class NameSpacedProcess(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -945,7 +908,6 @@ class TestProcessNamespace(unittest.TestCase):
         """
 
         class NameSpacedProcess(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -971,7 +933,6 @@ class TestProcessNamespace(unittest.TestCase):
         namespace = 'name.space'
 
         class DummyDynamicProcess(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -998,14 +959,12 @@ class TestProcessNamespace(unittest.TestCase):
         namespace_nested = f'{namespace}.nested'
 
         class OutputMode(enum.Enum):
-
             NONE = 0
             DYNAMIC_PORT_NAMESPACE = 1
             SINGLE_REQUIRED_PORT = 2
             BOTH_SINGLE_AND_NAMESPACE = 3
 
         class DummyDynamicProcess(Process):
-
             @classmethod
             def define(cls, spec):
                 super().define(spec)
@@ -1064,7 +1023,6 @@ class TestProcessNamespace(unittest.TestCase):
 
 
 class TestProcessEvents(unittest.TestCase):
-
     def test_basic_events(self):
         proc = utils.DummyProcessWithOutput()
         events_tester = utils.ProcessListenerTester(
@@ -1084,11 +1042,14 @@ class TestProcessEvents(unittest.TestCase):
 
     def test_excepted(self):
         proc = utils.ExceptionProcess()
-        events_tester = utils.ProcessListenerTester(proc, (
-            'excepted',
-            'running',
-            'output_emitted',
-        ))
+        events_tester = utils.ProcessListenerTester(
+            proc,
+            (
+                'excepted',
+                'running',
+                'output_emitted',
+            ),
+        )
         with self.assertRaises(RuntimeError):
             proc.execute()
             proc.result()
@@ -1127,7 +1088,6 @@ class TestProcessEvents(unittest.TestCase):
 
 
 class _RestartProcess(utils.WaitForSignalProcess):
-
     @classmethod
     def define(cls, spec):
         super().define(spec)

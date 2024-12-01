@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 """Utilities for tests"""
+
 import asyncio
 import collections
-from collections.abc import Mapping
 import copy
 import unittest
-
-import kiwipy.rmq
-import shortuuid
+from collections.abc import Mapping
 
 import plumpy
 from plumpy import persistence, process_states, processes, utils
@@ -26,7 +24,9 @@ class DummyProcess(processes.Process):
     """
 
     EXPECTED_STATE_SEQUENCE = [
-        process_states.ProcessState.CREATED, process_states.ProcessState.RUNNING, process_states.ProcessState.FINISHED
+        process_states.ProcessState.CREATED,
+        process_states.ProcessState.RUNNING,
+        process_states.ProcessState.FINISHED,
     ]
 
     EXPECTED_OUTPUTS = {}
@@ -60,14 +60,12 @@ class DummyProcessWithDynamicOutput(processes.Process):
 
 
 class KeyboardInterruptProc(processes.Process):
-
     @utils.override
     def run(self):
         raise KeyboardInterrupt()
 
 
 class ProcessWithCheckpoint(processes.Process):
-
     @utils.override
     def run(self):
         return process_states.Continue(self.last_step)
@@ -77,7 +75,6 @@ class ProcessWithCheckpoint(processes.Process):
 
 
 class WaitForSignalProcess(processes.Process):
-
     @utils.override
     def run(self):
         return process_states.Wait(self.last_step)
@@ -87,7 +84,6 @@ class WaitForSignalProcess(processes.Process):
 
 
 class KillProcess(processes.Process):
-
     @utils.override
     def run(self):
         msg = copy.copy(KILL_MSG)
@@ -96,7 +92,7 @@ class KillProcess(processes.Process):
 
 
 class MissingOutputProcess(processes.Process):
-    """ A process that does not generate a required output """
+    """A process that does not generate a required output"""
 
     @classmethod
     def define(cls, spec):
@@ -105,7 +101,6 @@ class MissingOutputProcess(processes.Process):
 
 
 class NewLoopProcess(processes.Process):
-
     def __init__(self, *args, **kwargs):
         kwargs['loop'] = plumpy.new_event_loop()
         super().__init__(*args, **kwargs)
@@ -122,8 +117,7 @@ class EventsTesterMixin:
         cls.called_events.append(event)
 
     def __init__(self, *args, **kwargs):
-        assert isinstance(self, processes.Process), \
-            'Mixin has to be used with a type derived from a Process'
+        assert isinstance(self, processes.Process), 'Mixin has to be used with a type derived from a Process'
         super().__init__(*args, **kwargs)
         self.__class__.called_events = []
 
@@ -169,7 +163,6 @@ class EventsTesterMixin:
 
 
 class ProcessEventsTester(EventsTesterMixin, processes.Process):
-
     @classmethod
     def define(cls, spec):
         super().define(spec)
@@ -197,7 +190,6 @@ class ThreeSteps(ProcessEventsTester):
 
 
 class TwoCheckpointNoFinish(ProcessEventsTester):
-
     def run(self):
         self.out('test', 5)
         return process_states.Continue(self.middle_step)
@@ -207,21 +199,18 @@ class TwoCheckpointNoFinish(ProcessEventsTester):
 
 
 class ExceptionProcess(ProcessEventsTester):
-
     def run(self):
         self.out('test', 5)
         raise RuntimeError('Great scott!')
 
 
 class ThreeStepsThenException(ThreeSteps):
-
     @utils.override
     def last_step(self):
         raise RuntimeError('Great scott!')
 
 
 class ProcessListenerTester(plumpy.ProcessListener):
-
     def __init__(self, process, expected_events):
         process.add_process_listener(self)
         self.expected_events = set(expected_events)
@@ -253,7 +242,6 @@ class ProcessListenerTester(plumpy.ProcessListener):
 
 
 class Saver:
-
     def __init__(self):
         self.snapshots = []
         self.outputs = []
@@ -361,7 +349,11 @@ class ProcessSaver(plumpy.ProcessListener):
 TEST_PROCESSES = [DummyProcess, DummyProcessWithOutput, DummyProcessWithDynamicOutput, ThreeSteps]
 
 TEST_WAITING_PROCESSES = [
-    ProcessWithCheckpoint, TwoCheckpointNoFinish, ExceptionProcess, ProcessEventsTester, ThreeStepsThenException
+    ProcessWithCheckpoint,
+    TwoCheckpointNoFinish,
+    ExceptionProcess,
+    ProcessEventsTester,
+    ThreeStepsThenException,
 ]
 
 TEST_EXCEPTION_PROCESSES = [ExceptionProcess, ThreeStepsThenException, MissingOutputProcess]
@@ -406,7 +398,7 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
                 saver.snapshots[-j],
                 snapshots[-j],
                 saver.snapshots[-j],
-                exclude={'exception', '_listeners'}
+                exclude={'exception', '_listeners'},
             )
             j += 1
 
@@ -442,9 +434,8 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
         compare_value(bundle1, bundle2, list(v1), list(v2), exclude)
     elif isinstance(v1, set) and isinstance(v2, set):
         raise NotImplementedError('Comparison between sets not implemented')
-    else:
-        if v1 != v2:
-            raise ValueError(f'Dict values mismatch for :\n{v1} != {v2}')
+    elif v1 != v2:
+        raise ValueError(f'Dict values mismatch for :\n{v1} != {v2}')
 
 
 class TestPersister(persistence.Persister):
@@ -453,7 +444,7 @@ class TestPersister(persistence.Persister):
     """
 
     def save_checkpoint(self, process, tag=None):
-        """ Create the checkpoint bundle """
+        """Create the checkpoint bundle"""
         persistence.Bundle(process)
 
     def load_checkpoint(self, pid, tag=None):
@@ -473,7 +464,7 @@ class TestPersister(persistence.Persister):
 
 
 def run_until_waiting(proc):
-    """ Set up a future that will be resolved on entering the WAITING state """
+    """Set up a future that will be resolved on entering the WAITING state"""
     from plumpy import ProcessState
 
     listener = plumpy.ProcessListener()
@@ -494,7 +485,7 @@ def run_until_waiting(proc):
 
 
 def run_until_paused(proc):
-    """ Set up a future that will be resolved when the process is paused """
+    """Set up a future that will be resolved when the process is paused"""
 
     listener = plumpy.ProcessListener()
     paused = plumpy.Future()

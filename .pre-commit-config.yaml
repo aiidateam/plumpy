@@ -20,7 +20,7 @@ repos:
       - id: ruff-format
         exclude: &exclude_ruff >
           (?x)^(
-
+            tests/.*|
           )$
 
       - id: ruff

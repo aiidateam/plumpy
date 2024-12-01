@@ -25,7 +25,7 @@ class Playing(state_machine.State):
         super().__init__(player)
         self.track = track
         self._last_time = None
-        self._played = 0.
+        self._played = 0.0
 
     def __str__(self):
         if self.in_state:
@@ -55,8 +55,7 @@ class Paused(state_machine.State):
     TRANSITIONS = {STOP: STOPPED}
 
     def __init__(self, player, playing_state):
-        assert isinstance(playing_state, Playing), \
-            'Must provide the playing state to pause'
+        assert isinstance(playing_state, Playing), 'Must provide the playing state to pause'
         super().__init__(player)
         self.playing_state = playing_state
 
@@ -117,14 +116,13 @@ class CdPlayer(state_machine.StateMachine):
 
 
 class TestStateMachine(unittest.TestCase):
-
     def test_basic(self):
         cd_player = CdPlayer()
         self.assertEqual(cd_player.state, STOPPED)
 
         cd_player.play('Eminem - The Real Slim Shady')
         self.assertEqual(cd_player.state, PLAYING)
-        time.sleep(1.)
+        time.sleep(1.0)
 
         cd_player.pause()
         self.assertEqual(cd_player.state, PAUSED)
