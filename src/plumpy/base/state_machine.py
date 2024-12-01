@@ -205,7 +205,7 @@ class StateMachineMeta(type):
         :param kwargs: Any keyword arguments to be passed to the constructor
         :return: An instance of the state machine
         """
-        inst = super().__call__(*args, **kwargs)
+        inst: StateMachine = super().__call__(*args, **kwargs)
         inst.transition_to(inst.create_initial_state())
         call_with_super_check(inst.init)
         return inst
@@ -325,13 +325,14 @@ class StateMachine(metaclass=StateMachineMeta):
         """Called when a terminal state is entered"""
 
     def transition_to(
-        self, new_state: Union[State, Type[State]], *args: Any, **kwargs: Any
+        self, new_state: Union[State, Type[State]], **kwargs: Any
     ) -> None:
         """Transite to the new state.
 
-        The new target state will be create lazily when the state
-        is not yet instantiated, which will happened for states not in the expect path such as
-        pause and kill.
+        The new target state will be create lazily when the state is not yet instantiated, 
+        which will happened for states not in the expect path such as pause and kill.
+        The arguments are passed to the state class to create state instance.
+        (process arg does not need to pass since it will always call with 'self' as process)
         """
         assert (
             not self._transitioning
@@ -344,7 +345,7 @@ class StateMachine(metaclass=StateMachineMeta):
 
             if not isinstance(new_state, State):
                 # Make sure we have a state instance
-                new_state = self._create_state_instance(new_state, *args, **kwargs)
+                new_state = self._create_state_instance(new_state, **kwargs)
 
             label = new_state.LABEL
 
@@ -358,7 +359,7 @@ class StateMachine(metaclass=StateMachineMeta):
                 # Make sure we have a state instance
                 if not isinstance(exception.state, State):
                     new_state = self._create_state_instance(
-                        exception.state, *exception.args, **exception.kwargs
+                        exception.state, **exception.kwargs
                     )
                 label = new_state.LABEL
                 self._exit_current_state(new_state)
@@ -435,9 +436,9 @@ class StateMachine(metaclass=StateMachineMeta):
         self._fire_state_event(StateEventHook.ENTERED_STATE, last_state)
 
     def _create_state_instance(
-        self, state_cls: type[State], *args: Any, **kwargs: Any
+        self, state_cls: type[State], **kwargs: Any
     ) -> State:
         if state_cls.LABEL not in self.get_states_map():
             raise ValueError(f"{state_cls.LABEL} is not a valid state")
 
-        return state_cls(self, *args, **kwargs)
+        return state_cls(self, **kwargs)

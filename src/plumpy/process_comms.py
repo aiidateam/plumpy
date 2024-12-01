@@ -386,12 +386,15 @@ class RemoteProcessThreadController:
 
         return self._communicator.rpc_send(pid, msg)
 
-    def kill_all(self, msg: Optional[Any]) -> None:
+    def kill_all(self, msg: Optional[MessageType]) -> None:
         """
         Kill all processes that are subscribed to the same communicator
 
         :param msg: an optional pause message
         """
+        if msg is None:
+            msg = copy.copy(KILL_MSG)
+
         self._communicator.broadcast_send(msg, subject=Intent.KILL)
 
     def continue_process(
