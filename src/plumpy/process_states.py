@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import copy
 import sys
 import traceback
 from enum import Enum
@@ -9,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Type, Union, c
 import yaml
 from yaml.loader import Loader
 
-from plumpy.process_comms import KILL_MSG, MessageType
+from plumpy.process_comms import KillMessage, MessageType
 
 try:
     import tblib
@@ -54,7 +53,7 @@ class KillInterruption(Interruption):
     def __init__(self, msg: MessageType | None):
         super().__init__()
         if msg is None:
-            msg = copy.copy(KILL_MSG)
+            msg = KillMessage.build()
 
         self.msg: MessageType = msg
 

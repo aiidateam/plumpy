@@ -2,9 +2,8 @@
 """Process tests"""
 
 import asyncio
-import copy
 import enum
-from plumpy.process_comms import KILL_MSG, MESSAGE_KEY
+from plumpy.process_comms import KillMessage
 import unittest
 
 import kiwipy
@@ -16,7 +15,6 @@ import pytest
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
-from plumpy.process_comms import KILL_MSG, MESSAGE_KEY
 from plumpy.utils import AttributesFrozendict
 
 
@@ -327,8 +325,7 @@ class TestProcess(unittest.TestCase):
     def test_kill(self):
         proc: Process = utils.DummyProcess()
 
-        msg = copy.copy(KILL_MSG)
-        msg[MESSAGE_KEY] = 'Farewell!'
+        msg = KillMessage.build(message='Farewell!')
         proc.kill(msg)
         self.assertTrue(proc.killed())
         self.assertEqual(proc.killed_msg(), msg)
@@ -434,8 +431,7 @@ class TestProcess(unittest.TestCase):
             after_kill = False
 
             def run(self, **kwargs):
-                msg = copy.copy(KILL_MSG)
-                msg[MESSAGE_KEY] = 'killed'
+                msg = KillMessage.build(message='killed')
                 self.kill(msg)
                 # The following line should be executed because kill will not
                 # interrupt execution of a method call in the RUNNING state

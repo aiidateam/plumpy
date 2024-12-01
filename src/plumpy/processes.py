@@ -15,7 +15,6 @@ import uuid
 import warnings
 from types import TracebackType
 from typing import (
-    TYPE_CHECKING,
     Any,
     Awaitable,
     Callable,
@@ -27,6 +26,7 @@ from typing import (
     Sequence,
     Tuple,
     Type,
+    TypeVar,
     Union,
     cast,
 )
@@ -54,13 +54,12 @@ from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .process_comms import KILL_MSG, MESSAGE_KEY, MessageType
+from .process_comms import MESSAGE_KEY, KillMessage, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
 
-if TYPE_CHECKING:
-    from .process_states import State
+T = TypeVar('T')
 
 __all__ = ['BundleKeys', 'Process', 'ProcessSpec', 'TransitionFailed']
 
@@ -345,8 +344,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             def try_killing(future: futures.Future) -> None:
                 if future.cancelled():
-                    msg = copy.copy(KILL_MSG)
-                    msg[MESSAGE_KEY] = 'Killed by future being cancelled'
+                    msg = KillMessage.build(message='Killed by future being cancelled')
                     if not self.kill(msg):
                         self.logger.warning(
                             'Process<%s>: Failed to kill process on future cancel',
@@ -594,7 +592,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             stack_copy.pop()
             PROCESS_STACK.set(stack_copy)
 
-    async def _run_task(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    async def _run_task(self, callback: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """
         This method should be used to run all Process related functions and coroutines.
         If there is an exception the process will enter the EXCEPTED state.

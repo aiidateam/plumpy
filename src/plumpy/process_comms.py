@@ -12,10 +12,10 @@ from . import communications, futures, loaders, persistence
 from .utils import PID_TYPE
 
 __all__ = [
-    'KILL_MSG',
     'PAUSE_MSG',
     'PLAY_MSG',
     'STATUS_MSG',
+    'KillMessage',
     'ProcessLauncher',
     'RemoteProcessController',
     'RemoteProcessThreadController',
@@ -47,8 +47,19 @@ MessageType = dict[str, Any]
 
 PAUSE_MSG: MessageType = {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
 PLAY_MSG: MessageType = {INTENT_KEY: Intent.PLAY, MESSAGE_KEY: None}
-KILL_MSG: MessageType = {INTENT_KEY: Intent.KILL, MESSAGE_KEY: None, FORCE_KILL_KEY: False}
+# KILL_MSG: MessageType = {INTENT_KEY: Intent.KILL, MESSAGE_KEY: None, FORCE_KILL_KEY: False}
 STATUS_MSG: MessageType = {INTENT_KEY: Intent.STATUS, MESSAGE_KEY: None}
+
+
+class KillMessage:
+    @classmethod
+    def build(cls, message: str | None = None, force: bool = False) -> MessageType:
+        return {
+            INTENT_KEY: Intent.KILL,
+            MESSAGE_KEY: message,
+            FORCE_KILL_KEY: force,
+        }
+
 
 TASK_KEY = 'task'
 TASK_ARGS = 'args'
@@ -209,7 +220,7 @@ class RemoteProcessController:
         :return: True if killed, False otherwise
         """
         if msg is None:
-            msg = copy.copy(KILL_MSG)
+            msg = KillMessage.build()
 
         # Wait for the communication to go through
         kill_future = self._communicator.rpc_send(pid, msg)
@@ -384,7 +395,7 @@ class RemoteProcessThreadController:
 
         """
         if msg is None:
-            msg = copy.copy(KILL_MSG)
+            msg = KillMessage.build()
 
         return self._communicator.rpc_send(pid, msg)
 
@@ -395,7 +406,7 @@ class RemoteProcessThreadController:
         :param msg: an optional pause message
         """
         if msg is None:
-            msg = copy.copy(KILL_MSG)
+            msg = KillMessage.build()
 
         self._communicator.broadcast_send(msg, subject=Intent.KILL)
 
