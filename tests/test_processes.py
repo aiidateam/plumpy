@@ -5,7 +5,6 @@ import asyncio
 import copy
 import enum
 from plumpy.process_comms import KILL_MSG, MESSAGE_KEY
-from test import utils
 import unittest
 
 import kiwipy

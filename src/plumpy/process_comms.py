@@ -33,6 +33,7 @@ INTENT_KEY = 'intent'
 MESSAGE_KEY = 'message'
 FORCE_KILL_KEY = 'force_kill'
 
+
 class Intent:
     """Intent constants for a process message"""
 
@@ -41,9 +42,10 @@ class Intent:
     KILL: str = 'kill'
     STATUS: str = 'status'
 
+
 MessageType = dict[str, Any]
 
-PAUSE_MSG: MessageType= {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
+PAUSE_MSG: MessageType = {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
 PLAY_MSG: MessageType = {INTENT_KEY: Intent.PLAY, MESSAGE_KEY: None}
 KILL_MSG: MessageType = {INTENT_KEY: Intent.KILL, MESSAGE_KEY: None, FORCE_KILL_KEY: False}
 STATUS_MSG: MessageType = {INTENT_KEY: Intent.STATUS, MESSAGE_KEY: None}
