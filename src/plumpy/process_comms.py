@@ -2,7 +2,6 @@
 """Module for process level communication functions and classes"""
 
 import asyncio
-import copy
 import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
 
@@ -12,13 +11,13 @@ from . import communications, futures, loaders, persistence
 from .utils import PID_TYPE
 
 __all__ = [
-    'PAUSE_MSG',
-    'PLAY_MSG',
-    'STATUS_MSG',
     'KillMessage',
+    'PauseMessage',
+    'PlayMessage',
     'ProcessLauncher',
     'RemoteProcessController',
     'RemoteProcessThreadController',
+    'StatusMessage',
     'create_continue_body',
     'create_launch_body',
 ]
@@ -45,10 +44,27 @@ class Intent:
 
 MessageType = dict[str, Any]
 
-PAUSE_MSG: MessageType = {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
-PLAY_MSG: MessageType = {INTENT_KEY: Intent.PLAY, MESSAGE_KEY: None}
-# KILL_MSG: MessageType = {INTENT_KEY: Intent.KILL, MESSAGE_KEY: None, FORCE_KILL_KEY: False}
-STATUS_MSG: MessageType = {INTENT_KEY: Intent.STATUS, MESSAGE_KEY: None}
+# PAUSE_MSG: MessageType = {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
+# PLAY_MSG: MessageType = {INTENT_KEY: Intent.PLAY, MESSAGE_KEY: None}
+# STATUS_MSG: MessageType = {INTENT_KEY: Intent.STATUS, MESSAGE_KEY: None}
+
+
+class PlayMessage:
+    @classmethod
+    def build(cls, message: str | None = None) -> MessageType:
+        return {
+            INTENT_KEY: Intent.PLAY,
+            MESSAGE_KEY: message,
+        }
+
+
+class PauseMessage:
+    @classmethod
+    def build(cls, message: str | None = None) -> MessageType:
+        return {
+            INTENT_KEY: Intent.PAUSE,
+            MESSAGE_KEY: message,
+        }
 
 
 class KillMessage:
@@ -58,6 +74,15 @@ class KillMessage:
             INTENT_KEY: Intent.KILL,
             MESSAGE_KEY: message,
             FORCE_KILL_KEY: force,
+        }
+
+
+class StatusMessage:
+    @classmethod
+    def build(cls, message: str | None = None) -> MessageType:
+        return {
+            INTENT_KEY: Intent.STATUS,
+            MESSAGE_KEY: message,
         }
 
 
@@ -176,7 +201,7 @@ class RemoteProcessController:
         :param pid: the process id
         :return: the status response from the process
         """
-        future = self._communicator.rpc_send(pid, STATUS_MSG)
+        future = self._communicator.rpc_send(pid, StatusMessage.build())
         result = await asyncio.wrap_future(future)
         return result
 
@@ -188,11 +213,9 @@ class RemoteProcessController:
         :param msg: optional pause message
         :return: True if paused, False otherwise
         """
-        message = copy.copy(PAUSE_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
+        msg = PauseMessage.build(message=msg)
 
-        pause_future = self._communicator.rpc_send(pid, message)
+        pause_future = self._communicator.rpc_send(pid, msg)
         # rpc_send return a thread future from communicator
         future = await asyncio.wrap_future(pause_future)
         # future is just returned from rpc call which return a kiwipy future
@@ -206,7 +229,7 @@ class RemoteProcessController:
         :param pid: the pid of the process to play
         :return: True if played, False otherwise
         """
-        play_future = self._communicator.rpc_send(pid, PLAY_MSG)
+        play_future = self._communicator.rpc_send(pid, PlayMessage.build())
         future = await asyncio.wrap_future(play_future)
         result = await asyncio.wrap_future(future)
         return result
@@ -344,7 +367,7 @@ class RemoteProcessThreadController:
         :param pid: the process id
         :return: the status response from the process
         """
-        return self._communicator.rpc_send(pid, STATUS_MSG)
+        return self._communicator.rpc_send(pid, StatusMessage.build())
 
     def pause_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> kiwipy.Future:
         """
@@ -355,11 +378,9 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be paused
 
         """
-        message = copy.copy(PAUSE_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
+        msg = PauseMessage.build(message=msg)
 
-        return self._communicator.rpc_send(pid, message)
+        return self._communicator.rpc_send(pid, msg)
 
     def pause_all(self, msg: Any) -> None:
         """
@@ -377,7 +398,7 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be played
 
         """
-        return self._communicator.rpc_send(pid, PLAY_MSG)
+        return self._communicator.rpc_send(pid, PlayMessage.build())
 
     def play_all(self) -> None:
         """
