@@ -312,7 +312,7 @@ class StateMachine(metaclass=StateMachineMeta):
     def on_terminated(self) -> None:
         """Called when a terminal state is entered"""
 
-    def transition_to(self, new_state: Union[State, Type[State]], **kwargs: Any) -> None:
+    def transition_to(self, new_state: State | type[State] | None, **kwargs: Any) -> None:
         """Transite to the new state.
 
         The new target state will be create lazily when the state is not yet instantiated,
@@ -321,6 +321,9 @@ class StateMachine(metaclass=StateMachineMeta):
         (process arg does not need to pass since it will always call with 'self' as process)
         """
         assert not self._transitioning, 'Cannot call transition_to when already transitioning state'
+
+        if new_state is None:
+            return None
 
         initial_state_label = self._state.LABEL if self._state is not None else None
         label = None
