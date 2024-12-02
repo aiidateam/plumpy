@@ -18,7 +18,7 @@ py:class kiwipy.communications.Communicator
 
 # unavailable forward references
 py:class plumpy.process_states.Command
-py:class plumpy.process_states.State
+py:class plumpy.state_machine.State
 py:class plumpy.base.state_machine.State
 py:class State
 py:class Process

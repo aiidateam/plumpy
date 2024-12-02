@@ -105,6 +105,7 @@ class Continue(Command):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
+        self.state_machine = load_context.process
         try:
             self.continue_fn = utils.load_function(saved_state[self.CONTINUE_FN])
         except ValueError:
@@ -130,25 +131,8 @@ class ProcessState(Enum):
     KILLED: str = 'killed'
 
 
-@auto_persist('in_state')
-class State(state_machine.State, persistence.Savable):
-    @property
-    def process(self) -> state_machine.StateMachine:
-        """
-        :return: The process
-        """
-        return self.state_machine
-
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
-        super().load_instance_state(saved_state, load_context)
-        self.state_machine = load_context.process
-
-    def interrupt(self, reason: Any) -> None:
-        pass
-
-
-@auto_persist('args', 'kwargs')
-class Created(State):
+@auto_persist('args', 'kwargs', 'in_state')
+class Created(state_machine.State, persistence.Savable):
     LABEL = ProcessState.CREATED
     ALLOWED = {ProcessState.RUNNING, ProcessState.KILLED, ProcessState.EXCEPTED}
 
@@ -167,14 +151,23 @@ class Created(State):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
+        self.state_machine = load_context.process
+
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
 
     def execute(self) -> state_machine.State:
         return self.create_state(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
 
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self.state_machine
 
-@auto_persist('args', 'kwargs')
-class Running(State):
+
+@auto_persist('args', 'kwargs', 'in_state')
+class Running(state_machine.State, persistence.Savable):
     LABEL = ProcessState.RUNNING
     ALLOWED = {
         ProcessState.RUNNING,
@@ -214,6 +207,8 @@ class Running(State):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
+        self.state_machine = load_context.process
+
         self.run_fn = ensure_coroutine(getattr(self.process, saved_state[self.RUN_FN]))
         if self.COMMAND in saved_state:
             self._command = persistence.Savable.load(saved_state[self.COMMAND], load_context)  # type: ignore
@@ -221,7 +216,7 @@ class Running(State):
     def interrupt(self, reason: Any) -> None:
         pass
 
-    async def execute(self) -> State:  # type: ignore
+    async def execute(self) -> state_machine.State:  # type: ignore
         if self._command is not None:
             command = self._command
         else:
@@ -236,7 +231,7 @@ class Running(State):
                 raise
             except Exception:
                 excepted = self.create_state(ProcessState.EXCEPTED, *sys.exc_info()[1:])
-                return cast(State, excepted)
+                return cast(state_machine.State, excepted)
             else:
                 if not isinstance(result, Command):
                     if isinstance(result, exceptions.UnsuccessfulResult):
@@ -250,7 +245,7 @@ class Running(State):
         next_state = self._action_command(command)
         return next_state
 
-    def _action_command(self, command: Union[Kill, Stop, Wait, Continue]) -> State:
+    def _action_command(self, command: Union[Kill, Stop, Wait, Continue]) -> state_machine.State:
         if isinstance(command, Kill):
             state = self.create_state(ProcessState.KILLED, command.msg)
         # elif isinstance(command, Pause):
@@ -264,11 +259,18 @@ class Running(State):
         else:
             raise ValueError('Unrecognised command')
 
-        return cast(State, state)  # casting from base.State to process.State
+        return cast(state_machine.State, state)  # casting from base.State to process.State
+
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self.state_machine
 
 
-@auto_persist('msg', 'data')
-class Waiting(State):
+@auto_persist('msg', 'data', 'in_state')
+class Waiting(state_machine.State, persistence.Savable):
     LABEL = ProcessState.WAITING
     ALLOWED = {
         ProcessState.RUNNING,
@@ -308,6 +310,8 @@ class Waiting(State):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
+        self.state_machine = load_context.process
+
         callback_name = saved_state.get(self.DONE_CALLBACK, None)
         if callback_name is not None:
             self.done_callback = getattr(self.process, callback_name)
@@ -319,7 +323,7 @@ class Waiting(State):
         # This will cause the future in execute() to raise the exception
         self._waiting_future.set_exception(reason)
 
-    async def execute(self) -> State:  # type: ignore
+    async def execute(self) -> state_machine.State:  # type: ignore
         try:
             result = await self._waiting_future
         except Interruption:
@@ -334,7 +338,7 @@ class Waiting(State):
         else:
             next_state = self.create_state(ProcessState.RUNNING, self.done_callback, result)
 
-        return cast(State, next_state)  # casting from base.State to process.State
+        return cast(state_machine.State, next_state)  # casting from base.State to process.State
 
     def resume(self, value: Any = NULL) -> None:
         assert self._waiting_future is not None, 'Not yet waiting'
@@ -344,8 +348,16 @@ class Waiting(State):
 
         self._waiting_future.set_result(value)
 
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self.state_machine
 
-class Excepted(State):
+
+@auto_persist('in_state')
+class Excepted(state_machine.State, persistence.Savable):
     """
     Excepted state, can optionally provide exception and trace_back
 
@@ -385,6 +397,8 @@ class Excepted(State):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
+        self.state_machine = load_context.process
+
         self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=Loader)
         if _HAS_TBLIB:
             try:
@@ -406,9 +420,16 @@ class Excepted(State):
             self.traceback,
         )
 
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self.state_machine
 
-@auto_persist('result', 'successful')
-class Finished(State):
+
+@auto_persist('result', 'successful', 'in_state')
+class Finished(state_machine.State, persistence.Savable):
     """State for process is finished.
 
     :param result: The result of process
@@ -422,9 +443,20 @@ class Finished(State):
         self.result = result
         self.successful = successful
 
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self.state_machine
 
-@auto_persist('msg')
-class Killed(State):
+    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
+        super().load_instance_state(saved_state, load_context)
+        self.state_machine = load_context.process
+
+
+@auto_persist('msg', 'in_state')
+class Killed(state_machine.State, persistence.Savable):
     """
     Represents a state where a process has been killed.
 
@@ -443,6 +475,17 @@ class Killed(State):
         """
         super().__init__(process)
         self.msg = msg
+
+    @property
+    def process(self) -> state_machine.StateMachine:
+        """
+        :return: The process
+        """
+        return self.state_machine
+
+    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
+        super().load_instance_state(saved_state, load_context)
+        self.state_machine = load_context.process
 
 
 # endregion
