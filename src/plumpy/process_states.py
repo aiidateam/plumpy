@@ -5,7 +5,21 @@ import sys
 import traceback
 from enum import Enum
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Tuple, Type, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    ClassVar,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    Union,
+    cast,
+    final,
+    runtime_checkable,
+)
 
 import yaml
 from yaml.loader import Loader
@@ -20,9 +34,9 @@ except ImportError:
     _HAS_TBLIB = False
 
 from . import exceptions, futures, persistence, utils
-from .base import state_machine
+from .base import state_machine as st
 from .lang import NULL
-from .persistence import auto_persist
+from .persistence import LoadSaveContext, auto_persist
 from .utils import SAVED_STATE_TYPE, ensure_coroutine
 
 if TYPE_CHECKING:
@@ -123,22 +137,28 @@ class ProcessState(Enum):
     The possible states that a :class:`~plumpy.processes.Process` can be in.
     """
 
-    CREATED: str = 'created'
-    RUNNING: str = 'running'
-    WAITING: str = 'waiting'
-    FINISHED: str = 'finished'
-    EXCEPTED: str = 'excepted'
-    KILLED: str = 'killed'
+    # FIXME: see LSP error of return a exception, the type is Literal[str] which is invariant, tricky
+    CREATED = 'created'
+    RUNNING = 'running'
+    WAITING = 'waiting'
+    FINISHED = 'finished'
+    EXCEPTED = 'excepted'
+    KILLED = 'killed'
+
+
+@runtime_checkable
+class Savable(Protocol):
+    def save(self, save_context: LoadSaveContext | None = None) -> SAVED_STATE_TYPE: ...
 
 
 @final
-@auto_persist('args', 'kwargs', 'in_state')
-class Created(state_machine.State, persistence.Savable):
-    LABEL = ProcessState.CREATED
-    ALLOWED = {ProcessState.RUNNING, ProcessState.KILLED, ProcessState.EXCEPTED}
+@auto_persist('args', 'kwargs')
+class Created(persistence.Savable):
+    LABEL: ClassVar = ProcessState.CREATED
+    ALLOWED: ClassVar = {ProcessState.RUNNING, ProcessState.KILLED, ProcessState.EXCEPTED}
 
     RUN_FN = 'run_fn'
-    is_terminal = False
+    is_terminal: ClassVar[bool] = False
 
     def __init__(self, process: 'Process', run_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
         assert run_fn is not None
@@ -146,7 +166,6 @@ class Created(state_machine.State, persistence.Savable):
         self.run_fn = run_fn
         self.args = args
         self.kwargs = kwargs
-        self.in_state = True
 
     def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
         super().save_instance_state(out_state, save_context)
@@ -158,24 +177,21 @@ class Created(state_machine.State, persistence.Savable):
 
         self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
 
-    async def execute(self) -> state_machine.State:
-        return self.process.create_state(ProcessState.RUNNING, self.run_fn, *self.args, **self.kwargs)
+    def execute(self) -> st.State:
+        return st.create_state(
+            self.process, ProcessState.RUNNING, process=self.process, run_fn=self.run_fn, *self.args, **self.kwargs
+        )
 
-    def enter(self) -> None:
-        self.in_state = True
+    def enter(self) -> None: ...
 
-    def exit(self) -> None:
-        if self.is_terminal:
-            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
-
-        self.in_state = False
+    def exit(self) -> None: ...
 
 
 @final
-@auto_persist('args', 'kwargs', 'in_state')
-class Running(state_machine.State, persistence.Savable):
-    LABEL = ProcessState.RUNNING
-    ALLOWED = {
+@auto_persist('args', 'kwargs')
+class Running(persistence.Savable):
+    LABEL: ClassVar = ProcessState.RUNNING
+    ALLOWED: ClassVar = {
         ProcessState.RUNNING,
         ProcessState.WAITING,
         ProcessState.FINISHED,
@@ -191,18 +207,17 @@ class Running(state_machine.State, persistence.Savable):
     _running: bool = False
     _run_handle = None
 
-    is_terminal = False
+    is_terminal: ClassVar[bool] = False
 
     def __init__(
         self, process: 'Process', run_fn: Callable[..., Union[Awaitable[Any], Any]], *args: Any, **kwargs: Any
     ) -> None:
         assert run_fn is not None
         self.process = process
-        self.run_fn = run_fn
+        self.run_fn = ensure_coroutine(run_fn)
         self.args = args
         self.kwargs = kwargs
         self._run_handle = None
-        self.in_state = False
 
     def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
         super().save_instance_state(out_state, save_context)
@@ -221,7 +236,7 @@ class Running(state_machine.State, persistence.Savable):
     def interrupt(self, reason: Any) -> None:
         pass
 
-    async def execute(self) -> state_machine.State:
+    async def execute(self) -> st.State:
         if self._command is not None:
             command = self._command
         else:
@@ -235,8 +250,10 @@ class Running(state_machine.State, persistence.Savable):
                 # Let this bubble up to the caller
                 raise
             except Exception:
-                excepted = self.process.create_state(ProcessState.EXCEPTED, *sys.exc_info()[1:])
-                return cast(state_machine.State, excepted)
+                _, exception, traceback = sys.exc_info()
+                # excepted = state_cls(exception=exception, traceback=traceback)
+                excepted = Excepted(exception=exception, traceback=traceback)
+                return excepted
             else:
                 if not isinstance(result, Command):
                     if isinstance(result, exceptions.UnsuccessfulResult):
@@ -245,42 +262,52 @@ class Running(state_machine.State, persistence.Savable):
                         # Got passed a basic return type
                         result = Stop(result, True)
 
-                command = result
+                command = cast(Stop, result)
 
         next_state = self._action_command(command)
         return next_state
 
-    def _action_command(self, command: Union[Kill, Stop, Wait, Continue]) -> state_machine.State:
+    def _action_command(self, command: Union[Kill, Stop, Wait, Continue]) -> st.State:
         if isinstance(command, Kill):
-            state = self.process.create_state(ProcessState.KILLED, command.msg)
+            state = st.create_state(self.process, ProcessState.KILLED, msg=command.msg)
         # elif isinstance(command, Pause):
         #     self.pause()
         elif isinstance(command, Stop):
-            state = self.process.create_state(ProcessState.FINISHED, command.result, command.successful)
+            state = st.create_state(
+                self.process, ProcessState.FINISHED, result=command.result, successful=command.successful
+            )
         elif isinstance(command, Wait):
-            state = self.process.create_state(ProcessState.WAITING, command.continue_fn, command.msg, command.data)
+            state = st.create_state(
+                self.process,
+                ProcessState.WAITING,
+                process=self.process,
+                done_callback=command.continue_fn,
+                msg=command.msg,
+                data=command.data,
+            )
         elif isinstance(command, Continue):
-            state = self.process.create_state(ProcessState.RUNNING, command.continue_fn, *command.args)
+            state = st.create_state(
+                self.process,
+                ProcessState.RUNNING,
+                process=self.process,
+                run_fn=command.continue_fn,
+                *command.args,
+                **command.kwargs,
+            )
         else:
             raise ValueError('Unrecognised command')
 
-        return cast(state_machine.State, state)  # casting from base.State to process.State
+        return state
 
-    def enter(self) -> None:
-        self.in_state = True
+    def enter(self) -> None: ...
 
-    def exit(self) -> None:
-        if self.is_terminal:
-            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
-
-        self.in_state = False
+    def exit(self) -> None: ...
 
 
-@final
-@auto_persist('msg', 'data', 'in_state')
-class Waiting(state_machine.State, persistence.Savable):
-    LABEL = ProcessState.WAITING
-    ALLOWED = {
+@auto_persist('msg', 'data')
+class Waiting(persistence.Savable):
+    LABEL: ClassVar = ProcessState.WAITING
+    ALLOWED: ClassVar = {
         ProcessState.RUNNING,
         ProcessState.WAITING,
         ProcessState.KILLED,
@@ -292,7 +319,7 @@ class Waiting(state_machine.State, persistence.Savable):
 
     _interruption = None
 
-    is_terminal = False
+    is_terminal: ClassVar[bool] = False
 
     def __str__(self) -> str:
         state_info = super().__str__()
@@ -312,7 +339,6 @@ class Waiting(state_machine.State, persistence.Savable):
         self.msg = msg
         self.data = data
         self._waiting_future: futures.Future = futures.Future()
-        self.in_state = False
 
     def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
         super().save_instance_state(out_state, save_context)
@@ -334,7 +360,7 @@ class Waiting(state_machine.State, persistence.Savable):
         # This will cause the future in execute() to raise the exception
         self._waiting_future.set_exception(reason)
 
-    async def execute(self) -> state_machine.State:  # type: ignore
+    async def execute(self) -> st.State:
         try:
             result = await self._waiting_future
         except Interruption:
@@ -345,11 +371,15 @@ class Waiting(state_machine.State, persistence.Savable):
             raise
 
         if result == NULL:
-            next_state = self.process.create_state(ProcessState.RUNNING, self.done_callback)
+            next_state = st.create_state(
+                self.process, ProcessState.RUNNING, process=self.process, run_fn=self.done_callback
+            )
         else:
-            next_state = self.process.create_state(ProcessState.RUNNING, self.done_callback, result)
+            next_state = st.create_state(
+                self.process, ProcessState.RUNNING, process=self.process, done_callback=self.done_callback, *result
+            )
 
-        return cast(state_machine.State, next_state)  # casting from base.State to process.State
+        return next_state
 
     def resume(self, value: Any = NULL) -> None:
         assert self._waiting_future is not None, 'Not yet waiting'
@@ -359,47 +389,39 @@ class Waiting(state_machine.State, persistence.Savable):
 
         self._waiting_future.set_result(value)
 
-    def enter(self) -> None:
-        self.in_state = True
+    def enter(self) -> None: ...
 
-    def exit(self) -> None:
-        if self.is_terminal:
-            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
-
-        self.in_state = False
+    def exit(self) -> None: ...
 
 
-@auto_persist('in_state')
-class Excepted(state_machine.State, persistence.Savable):
+@final
+class Excepted(persistence.Savable):
     """
-    Excepted state, can optionally provide exception and trace_back
+    Excepted state, can optionally provide exception and traceback
 
     :param exception: The exception instance
-    :param trace_back: An optional exception traceback
+    :param traceback: An optional exception traceback
     """
 
-    LABEL = ProcessState.EXCEPTED
+    LABEL: ClassVar = ProcessState.EXCEPTED
+    ALLOWED: ClassVar[set[str]] = set()
 
     EXC_VALUE = 'ex_value'
     TRACEBACK = 'traceback'
 
-    is_terminal = True
+    is_terminal: ClassVar = True
 
     def __init__(
         self,
-        process: 'Process',
         exception: Optional[BaseException],
-        trace_back: Optional[TracebackType] = None,
+        traceback: Optional[TracebackType] = None,
     ):
         """
-        :param process: The associated process
         :param exception: The exception instance
-        :param trace_back: An optional exception traceback
+        :param traceback: An optional exception traceback
         """
-        self.process = process
         self.exception = exception
-        self.traceback = trace_back
-        self.in_state = False
+        self.traceback = traceback
 
     def __str__(self) -> str:
         exception = traceback.format_exception_only(type(self.exception) if self.exception else None, self.exception)[0]
@@ -413,7 +435,6 @@ class Excepted(state_machine.State, persistence.Savable):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
-        self.process = load_context.process
 
         self.exception = yaml.load(saved_state[self.EXC_VALUE], Loader=Loader)
         if _HAS_TBLIB:
@@ -436,50 +457,40 @@ class Excepted(state_machine.State, persistence.Savable):
             self.traceback,
         )
 
-    def enter(self) -> None:
-        self.in_state = True
+    def enter(self) -> None: ...
 
-    def exit(self) -> None:
-        if self.is_terminal:
-            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
-
-        self.in_state = False
+    def exit(self) -> None: ...
 
 
-@auto_persist('result', 'successful', 'in_state')
-class Finished(state_machine.State, persistence.Savable):
+@final
+@auto_persist('result', 'successful')
+class Finished(persistence.Savable):
     """State for process is finished.
 
     :param result: The result of process
     :param successful: Boolean for the exit code is ``0`` the process is successful.
     """
 
-    LABEL = ProcessState.FINISHED
+    LABEL: ClassVar = ProcessState.FINISHED
+    ALLOWED: ClassVar[set[str]] = set()
 
-    is_terminal = True
+    is_terminal: ClassVar[bool] = True
 
-    def __init__(self, process: 'Process', result: Any, successful: bool) -> None:
-        self.process = process
+    def __init__(self, result: Any, successful: bool) -> None:
         self.result = result
         self.successful = successful
-        self.in_state = False
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
-        self.process = load_context.process
 
-    def enter(self) -> None:
-        self.in_state = True
+    def enter(self) -> None: ...
 
-    def exit(self) -> None:
-        if self.is_terminal:
-            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
-
-        self.in_state = False
+    def exit(self) -> None: ...
 
 
-@auto_persist('msg', 'in_state')
-class Killed(state_machine.State, persistence.Savable):
+@final
+@auto_persist('msg')
+class Killed(persistence.Savable):
     """
     Represents a state where a process has been killed.
 
@@ -489,30 +500,23 @@ class Killed(state_machine.State, persistence.Savable):
     :param msg: An optional message explaining the reason for the process termination.
     """
 
-    LABEL = ProcessState.KILLED
+    LABEL: ClassVar = ProcessState.KILLED
+    ALLOWED: ClassVar[set[str]] = set()
 
-    is_terminal = True
+    is_terminal: ClassVar[bool] = True
 
-    def __init__(self, process: 'Process', msg: Optional[MessageType]):
+    def __init__(self, msg: Optional[MessageType]):
         """
-        :param process: The associated process
         :param msg: Optional kill message
         """
-        self.process = process
         self.msg = msg
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
-        self.process = load_context.process
 
-    def enter(self) -> None:
-        self.in_state = True
+    def enter(self) -> None: ...
 
-    def exit(self) -> None:
-        if self.is_terminal:
-            raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
-
-        self.in_state = False
+    def exit(self) -> None: ...
 
 
 # endregion
