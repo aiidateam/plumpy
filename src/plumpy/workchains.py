@@ -26,6 +26,7 @@ from typing import (
 from plumpy.coordinator import Coordinator
 
 from plumpy.base import state_machine
+from plumpy.exceptions import InvalidStateError
 
 from . import lang, mixins, persistence, process_spec, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
@@ -85,16 +86,6 @@ class Waiting(process_states.Waiting):
             resolved_awaitable = awaitable.future() if isinstance(awaitable, processes.Process) else awaitable
             self._awaiting[resolved_awaitable] = key
 
-    def enter(self) -> None:
-        super().enter()
-        for awaitable in self._awaiting:
-            awaitable.add_done_callback(self._awaitable_done)
-
-    def exit(self) -> None:
-        super().exit()
-        for awaitable in self._awaiting:
-            awaitable.remove_done_callback(self._awaitable_done)
-
     def _awaitable_done(self, awaitable: asyncio.Future) -> None:
         key = self._awaiting.pop(awaitable)
         try:
@@ -104,6 +95,20 @@ class Waiting(process_states.Waiting):
         else:
             if not self._awaiting:
                 self._waiting_future.set_result(lang.NULL)
+
+    def enter(self) -> None:
+        for awaitable in self._awaiting:
+            awaitable.add_done_callback(self._awaitable_done)
+
+        self.in_state = True
+
+    def exit(self) -> None:
+        if self.is_terminal:
+            raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+        self.in_state = False
+
+        for awaitable in self._awaiting:
+            awaitable.remove_done_callback(self._awaitable_done)
 
 
 class WorkChain(mixins.ContextMixin, processes.Process):
