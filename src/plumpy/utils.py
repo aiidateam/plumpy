@@ -1,30 +1,36 @@
 # -*- coding: utf-8 -*-
 import asyncio
-from collections import deque
-from collections.abc import Mapping
 import functools
 import importlib
 import inspect
 import logging
 import types
-from typing import Set  # pylint: disable=unused-import
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Iterator, List, MutableMapping, Optional, Tuple, Type
+from collections import deque
+from collections.abc import Mapping
+from typing import (
+    Any,
+    Callable,
+    Hashable,
+    Iterator,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+)
 
 from . import lang
 from .settings import check_override, check_protected
 
-if TYPE_CHECKING:
-    from .process_listener import ProcessListener  # pylint: disable=cyclic-import
-
 __all__ = ['AttributesDict']
 
-protected = lang.protected(check=check_protected)  # pylint: disable=invalid-name
-override = lang.override(check=check_override)  # pylint: disable=invalid-name
+protected = lang.protected(check=check_protected)
+override = lang.override(check=check_override)
 
 _LOGGER = logging.getLogger(__name__)
 
-SAVED_STATE_TYPE = MutableMapping[str, Any]  # pylint: disable=invalid-name
-PID_TYPE = Hashable  # pylint: disable=invalid-name
+SAVED_STATE_TYPE = MutableMapping[str, Any]
+PID_TYPE = Hashable
 
 
 class Frozendict(Mapping):
@@ -67,7 +73,6 @@ class Frozendict(Mapping):
 
 
 class AttributesFrozendict(Frozendict):
-
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._initialised: bool = True
@@ -130,7 +135,7 @@ def load_function(name: str, instance: Optional[Any] = None) -> Callable[..., An
     obj = load_object(name)
     if inspect.ismethod(obj):
         if instance is not None:
-            return obj.__get__(instance, instance.__class__)  # type: ignore[attr-defined]  # pylint: disable=unnecessary-dunder-call
+            return obj.__get__(instance, instance.__class__)  # type: ignore[attr-defined]
 
         return obj
 

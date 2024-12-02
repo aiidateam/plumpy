@@ -9,7 +9,6 @@ from . import utils
 
 
 class TestWaitingProcess(unittest.TestCase):
-
     def test_instance_state(self):
         proc = utils.ThreeSteps()
         wl = utils.ProcessSaver(proc)

@@ -3,7 +3,7 @@ import abc
 import importlib
 from typing import Any, Optional
 
-__all__ = ['ObjectLoader', 'DefaultObjectLoader', 'set_object_loader', 'get_object_loader']
+__all__ = ['DefaultObjectLoader', 'ObjectLoader', 'get_object_loader', 'set_object_loader']
 
 
 class ObjectLoader(metaclass=abc.ABCMeta):
@@ -74,7 +74,7 @@ def get_object_loader() -> ObjectLoader:
     :return: A class loader
     :rtype: :class:`ObjectLoader`
     """
-    global OBJECT_LOADER
+    global OBJECT_LOADER  # noqa: PLW0603
     if OBJECT_LOADER is None:
         OBJECT_LOADER = DefaultObjectLoader()
     return OBJECT_LOADER
@@ -88,5 +88,5 @@ def set_object_loader(loader: Optional[ObjectLoader]) -> None:
     :type loader: :class:`ObjectLoader`
     :return:
     """
-    global OBJECT_LOADER
+    global OBJECT_LOADER  # noqa: PLW0603
     OBJECT_LOADER = loader

@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import copy
 
 import kiwipy
-from kiwipy import rmq
 import pytest
 import shortuuid
+from kiwipy import rmq
 
 import plumpy
-from plumpy import process_comms
 import plumpy.communications
+from plumpy import process_comms
 
 from .. import utils
 
@@ -43,7 +44,6 @@ def sync_controller(thread_communicator: rmq.RmqThreadCommunicator):
 
 
 class TestRemoteProcessController:
-
     @pytest.mark.asyncio
     async def test_pause(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
@@ -122,7 +122,6 @@ class TestRemoteProcessController:
 
 
 class TestRemoteProcessThreadController:
-
     @pytest.mark.asyncio
     async def test_pause(self, thread_communicator, sync_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
@@ -197,7 +196,10 @@ class TestRemoteProcessThreadController:
         for _ in range(10):
             procs.append(utils.WaitForSignalProcess(communicator=thread_communicator))
 
-        sync_controller.kill_all('bang bang, I shot you down')
+        msg = copy.copy(process_comms.KILL_MSG)
+        msg[process_comms.MESSAGE_KEY] = 'bang bang, I shot you down'
+
+        sync_controller.kill_all(msg)
         await utils.wait_util(lambda: all([proc.killed() for proc in procs]))
         assert all([proc.state == plumpy.ProcessState.KILLED for proc in procs])
 

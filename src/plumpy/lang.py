@@ -2,13 +2,13 @@
 """
 Python language utilities and tools.
 """
+
 import functools
 import inspect
 from typing import Any, Callable
 
 
 def protected(check: bool = False) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-
     def wrap(func: Callable[..., Any]) -> Callable[..., Any]:
         if isinstance(func, property):
             raise RuntimeError('Protected must go after @property decorator')
@@ -31,7 +31,7 @@ def protected(check: bool = False) -> Callable[[Callable[..., Any]], Callable[..
 
                 return func(self, *args, **kwargs)
         else:
-            wrapped_fn = func
+            wrapped_fn = func  # type: ignore[assignment]
 
         return wrapped_fn
 
@@ -60,15 +60,14 @@ def override(check: bool = False) -> Callable[[Callable[..., Any]], Callable[...
 
                 return func(self, *args, **kwargs)
         else:
-            wrapped_fn = func
+            wrapped_fn = func  # type: ignore[assignment]
 
         return wrapped_fn
 
     return wrap
 
 
-class __NULL:  # pylint: disable=invalid-name
-
+class __NULL:  # noqa: N801
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, self.__class__)
 

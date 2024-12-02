@@ -1,46 +1,35 @@
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
-    -   id: double-quote-string-fixer
-    -   id: end-of-file-fixer
-    -   id: fix-encoding-pragma
-    -   id: mixed-line-ending
-    -   id: trailing-whitespace
+      - id: double-quote-string-fixer
+      - id: end-of-file-fixer
+      - id: fix-encoding-pragma
+      - id: mixed-line-ending
+      - id: trailing-whitespace
 
--   repo: https://github.com/ikamensh/flynt/
-    rev: '0.77'
+  - repo: https://github.com/ikamensh/flynt/
+    rev: 1.0.1
     hooks:
-    -   id: flynt
+      - id: flynt
+        args: [--line-length=120, --fail-on-change]
 
--   repo: https://github.com/pycqa/isort
-    rev: '5.12.0'
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
     hooks:
-    -   id: isort
+      - id: ruff-format
+        exclude: &exclude_ruff >
+          (?x)^(
+            tests/.*|
+          )$
 
--   repo: https://github.com/pre-commit/mirrors-yapf
-    rev: v0.32.0
-    hooks:
-    -   id: yapf
-        name: yapf
-        types: [python]
-        args: ['-i']
-        additional_dependencies: ['toml']
+      - id: ruff
+        exclude: *exclude_ruff
+        args: [--fix, --exit-non-zero-on-fix, --show-fixes]
 
--   repo: https://github.com/PyCQA/pylint
-    rev: v2.15.8
+  - repo: local
     hooks:
-    -   id: pylint
-        language: system
-        exclude: >
-            (?x)^(
-                docs/source/conf.py|
-                test/.*|
-            )$
-
--   repo: local
-    hooks:
-    -   id: mypy
+      - id: mypy
         name: mypy
         entry: mypy
         args: [--config-file=pyproject.toml]
@@ -49,6 +38,6 @@ repos:
         require_serial: true
         pass_filenames: true
         files: >-
-            (?x)^(
-                src/.*py|
-            )$
+          (?x)^(
+              src/.*py|
+          )$

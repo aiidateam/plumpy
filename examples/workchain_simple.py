@@ -3,7 +3,6 @@ import plumpy
 
 
 class AddAndMulWF(plumpy.WorkChain):
-
     @classmethod
     def define(cls, spec):
         super().define(spec)
