@@ -25,6 +25,8 @@ from typing import (
 
 import kiwipy
 
+from plumpy.base import state_machine
+
 from . import lang, mixins, persistence, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
 
@@ -117,7 +119,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     _CONTEXT = 'CONTEXT'
 
     @classmethod
-    def get_state_classes(cls) -> Dict[Hashable, Type[process_states.State]]:
+    def get_state_classes(cls) -> Dict[Hashable, Type[state_machine.State]]:
         states_map = super().get_state_classes()
         states_map[process_states.ProcessState.WAITING] = Waiting
         return states_map

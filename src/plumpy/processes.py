@@ -177,7 +177,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         return None
 
     @classmethod
-    def get_states(cls) -> Sequence[Type[process_states.State]]:
+    def get_states(cls) -> Sequence[Type[state_machine.State]]:
         """Return all allowed states of the process."""
         state_classes = cls.get_state_classes()
         return (
@@ -186,7 +186,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
 
     @classmethod
-    def get_state_classes(cls) -> Dict[Hashable, Type[process_states.State]]:
+    def get_state_classes(cls) -> Dict[Hashable, Type[state_machine.State]]:
         # A mapping of the State constants to the corresponding state class
         return {
             process_states.ProcessState.CREATED: process_states.Created,
@@ -357,10 +357,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """Set the event hooks to process, when it is created or loaded(recreated)."""
         event_hooks = {
             state_machine.StateEventHook.ENTERING_STATE: lambda _s, _h, state: self.on_entering(
-                cast(process_states.State, state)
+                cast(state_machine.State, state)
             ),
             state_machine.StateEventHook.ENTERED_STATE: lambda _s, _h, from_state: self.on_entered(
-                cast(Optional[process_states.State], from_state)
+                cast(Optional[state_machine.State], from_state)
             ),
             state_machine.StateEventHook.EXITING_STATE: lambda _s, _h, _state: self.on_exiting(),
         }
@@ -661,7 +661,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         else:
             self._loop = asyncio.get_event_loop()
 
-        self._state: process_states.State = self.recreate_state(saved_state['_state'])
+        self._state: state_machine.State = self.recreate_state(saved_state['_state'])
 
         if 'communicator' in load_context:
             self._communicator = load_context.communicator
@@ -719,7 +719,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region Events
 
-    def on_entering(self, state: process_states.State) -> None:
+    def on_entering(self, state: state_machine.State) -> None:
         # Map these onto direct functions that the subclass can implement
         state_label = state.LABEL
         if state_label == process_states.ProcessState.CREATED:
@@ -735,7 +735,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         elif state_label == process_states.ProcessState.EXCEPTED:
             call_with_super_check(self.on_except, state.get_exc_info())  # type: ignore
 
-    def on_entered(self, from_state: Optional[process_states.State]) -> None:
+    def on_entered(self, from_state: Optional[state_machine.State]) -> None:
         # Map these onto direct functions that the subclass can implement
         state_label = self._state.LABEL
         if state_label == process_states.ProcessState.RUNNING:
@@ -1103,7 +1103,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         return self._do_pause(msg)
 
-    def _do_pause(self, state_msg: Optional[str], next_state: Optional[process_states.State] = None) -> bool:
+    def _do_pause(self, state_msg: Optional[str], next_state: Optional[state_machine.State] = None) -> bool:
         """Carry out the pause procedure, optionally transitioning to the next state first"""
         try:
             if next_state is not None:
@@ -1129,7 +1129,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if isinstance(exception, process_states.KillInterruption):
 
-            def do_kill(_next_state: process_states.State) -> Any:
+            def do_kill(_next_state: state_machine.State) -> Any:
                 try:
                     state_class = self.get_states_map()[process_states.ProcessState.KILLED]
                     new_state = self._create_state_instance(state_class, msg=exception.msg)
@@ -1227,7 +1227,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # endregion
 
-    def create_initial_state(self) -> process_states.State:
+    def create_initial_state(self) -> state_machine.State:
         """This method is here to override its superclass.
 
         Automatically enter the CREATED state when the process is created.
@@ -1235,11 +1235,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: A Created state
         """
         return cast(
-            process_states.State,
+            state_machine.State,
             self.get_state_class(process_states.ProcessState.CREATED)(self, self.run),
         )
 
-    def recreate_state(self, saved_state: persistence.Bundle) -> process_states.State:
+    def recreate_state(self, saved_state: persistence.Bundle) -> state_machine.State:
         """
         Create a state object from a saved state
 
@@ -1247,7 +1247,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: An instance of the object with its state loaded from the save state.
         """
         load_context = persistence.LoadSaveContext(process=self)
-        return cast(process_states.State, persistence.Savable.load(saved_state, load_context))
+        return cast(state_machine.State, persistence.Savable.load(saved_state, load_context))
 
     # endregion
 
