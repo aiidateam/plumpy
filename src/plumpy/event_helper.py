@@ -7,14 +7,13 @@ from . import persistence
 if TYPE_CHECKING:
     from typing import Set, Type
 
-    from .process_listener import ProcessListener  # pylint: disable=cyclic-import
+    from .process_listener import ProcessListener
 
 _LOGGER = logging.getLogger(__name__)
 
 
 @persistence.auto_persist('_listeners', '_listener_type')
 class EventHelper(persistence.Savable):
-
     def __init__(self, listener_type: 'Type[ProcessListener]'):
         assert listener_type is not None, 'Must provide valid listener type'
 
@@ -50,5 +49,5 @@ class EventHelper(persistence.Savable):
         for listener in list(self.listeners):
             try:
                 getattr(listener, event_function.__name__)(*args, **kwargs)
-            except Exception as exception:  # pylint: disable=broad-except
+            except Exception as exception:
                 _LOGGER.error("Listener '%s' produced an exception:\n%s", listener, exception)

@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Type, Union, ca
 from .ports import InputPort, OutputPort, Port, PortNamespace
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
-EXPOSED_TYPE = Dict[Optional[str], Dict[Type['Process'], Sequence[str]]]  # pylint: disable=invalid-name
+EXPOSED_TYPE = Dict[Optional[str], Dict[Type['Process'], Sequence[str]]]
 
 
 class ProcessSpec:
@@ -22,6 +22,7 @@ class ProcessSpec:
 
     Every Process class has one of these.
     """
+
     NAME_INPUTS_PORT_NAMESPACE: str = 'inputs'
     NAME_OUTPUTS_PORT_NAMESPACE: str = 'outputs'
     PORT_NAMESPACE_TYPE = PortNamespace
@@ -184,7 +185,7 @@ class ProcessSpec:
         namespace: Optional[str] = None,
         exclude: Optional[Sequence[str]] = None,
         include: Optional[Sequence[str]] = None,
-        namespace_options: Optional[dict] = None
+        namespace_options: Optional[dict] = None,
     ) -> None:
         """
         This method allows one to automatically add the inputs from another Process to this ProcessSpec.
@@ -215,7 +216,7 @@ class ProcessSpec:
         namespace: Optional[str] = None,
         exclude: Optional[Sequence[str]] = None,
         include: Optional[Sequence[str]] = None,
-        namespace_options: Optional[dict] = None
+        namespace_options: Optional[dict] = None,
     ) -> None:
         """
         This method allows one to automatically add the ouputs from another Process to this ProcessSpec.
@@ -249,8 +250,8 @@ class ProcessSpec:
         namespace: Optional[str],
         exclude: Optional[Sequence[str]],
         include: Optional[Sequence[str]],
-        namespace_options: Optional[dict] = None
-    ) -> None:  # pylint: disable=too-many-arguments
+        namespace_options: Optional[dict] = None,
+    ) -> None:
         """
         Expose ports from a source PortNamespace of the ProcessSpec of a Process class into the destination
         PortNamespace of this ProcessSpec. If the namespace is specified, the ports will be exposed in that sub
