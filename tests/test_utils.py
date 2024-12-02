@@ -10,7 +10,6 @@ from plumpy.utils import AttributesFrozendict, ensure_coroutine, load_function
 
 
 class TestAttributesFrozendict:
-
     def test_getitem(self):
         d = AttributesFrozendict({'a': 5})
         assert d['a'] == 5
@@ -40,7 +39,6 @@ async def async_fct():
 
 
 class TestEnsureCoroutine:
-
     def test_sync_func(self):
         coro = ensure_coroutine(fct)
         assert inspect.iscoroutinefunction(coro)
@@ -50,9 +48,7 @@ class TestEnsureCoroutine:
         assert coro is async_fct
 
     def test_callable_class(self):
-
         class AsyncDummy:
-
             async def __call__(self):
                 pass
 
@@ -60,9 +56,7 @@ class TestEnsureCoroutine:
         assert coro is AsyncDummy
 
     def test_callable_object(self):
-
         class AsyncDummy:
-
             async def __call__(self):
                 pass
 

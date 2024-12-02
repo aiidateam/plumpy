@@ -2,12 +2,13 @@
 """
 Module containing future related methods and classes
 """
+
 import asyncio
 from typing import Any, Callable, Coroutine, Optional
 
 import kiwipy
 
-__all__ = ['Future', 'gather', 'chain', 'copy_future', 'CancelledError', 'create_task']
+__all__ = ['CancelledError', 'Future', 'chain', 'copy_future', 'create_task', 'gather']
 
 CancelledError = kiwipy.CancelledError
 
@@ -16,11 +17,11 @@ class InvalidStateError(Exception):
     """Exception for when a future or action is in an invalid state"""
 
 
-copy_future = kiwipy.copy_future  # pylint: disable=invalid-name
-chain = kiwipy.chain  # pylint: disable=invalid-name
-gather = asyncio.gather  # pylint: disable=invalid-name
+copy_future = kiwipy.copy_future
+chain = kiwipy.chain
+gather = asyncio.gather
 
-Future = asyncio.Future  # pylint: disable=invalid-name
+Future = asyncio.Future
 
 
 class CancellableAction(Future):
@@ -35,7 +36,7 @@ class CancellableAction(Future):
 
     @property
     def cookie(self) -> Any:
-        """ A cookie that can be used to correlate the actions with something """
+        """A cookie that can be used to correlate the actions with something"""
         return self._cookie
 
     def run(self, *args: Any, **kwargs: Any) -> None:

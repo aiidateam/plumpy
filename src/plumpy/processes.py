@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
+
 import abc
 import asyncio
 import contextlib
@@ -10,6 +11,8 @@ import logging
 import re
 import sys
 import time
+import uuid
+import warnings
 from types import TracebackType
 from typing import (
     Any,
@@ -26,17 +29,15 @@ from typing import (
     Union,
     cast,
 )
-import uuid
-import warnings
 
 try:
     from aiocontextvars import ContextVar
 except ModuleNotFoundError:
     from contextvars import ContextVar
 
-from aio_pika.exceptions import ChannelInvalidStateError, ConnectionClosed
 import kiwipy
 import yaml
+from aio_pika.exceptions import ChannelInvalidStateError, ConnectionClosed
 
 from . import events, exceptions, futures, persistence, ports, process_comms, process_states, utils
 from .base import state_machine
@@ -47,9 +48,7 @@ from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
 
-# pylint: disable=too-many-lines
-
-__all__ = ['Process', 'ProcessSpec', 'BundleKeys', 'TransitionFailed']
+__all__ = ['BundleKeys', 'Process', 'ProcessSpec', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
 PROCESS_STACK = ContextVar('process stack', default=[])
@@ -62,7 +61,7 @@ class BundleKeys:
     See :meth:`plumpy.processes.Process.save_instance_state` and :meth:`plumpy.processes.Process.load_instance_state`.
 
     """
-    # pylint: disable=too-few-public-methods
+
     INPUTS_RAW = 'INPUTS_RAW'
     INPUTS_PARSED = 'INPUTS_PARSED'
     OUTPUTS = 'OUTPUTS'
@@ -75,7 +74,7 @@ class ProcessStateMachineMeta(abc.ABCMeta, state_machine.StateMachineMeta):
 # Make ProcessStateMachineMeta instances (classes) YAML - able
 yaml.representer.Representer.add_representer(
     ProcessStateMachineMeta,
-    yaml.representer.Representer.represent_name  # type: ignore[arg-type]
+    yaml.representer.Representer.represent_name,  # type: ignore[arg-type]
 )
 
 
@@ -84,7 +83,6 @@ def ensure_not_closed(func: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(func)
     def func_wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
-        # pylint: disable=protected-access
         if self._closed:
             raise exceptions.ClosedError('Process is closed')
         return func(self, *args, **kwargs)
@@ -133,8 +131,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     executed.
     """
 
-    # pylint: disable=too-many-instance-attributes,too-many-public-methods
-
     # Static class stuff ######################
     _spec_class = ProcessSpec
     # Default placeholders, will be populated in init()
@@ -167,7 +163,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         state_classes = cls.get_state_classes()
         return (
             state_classes[process_states.ProcessState.CREATED],
-            *[state for state in state_classes.values() if state.LABEL != process_states.ProcessState.CREATED]
+            *[state for state in state_classes.values() if state.LABEL != process_states.ProcessState.CREATED],
         )
 
     @classmethod
@@ -179,7 +175,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             process_states.ProcessState.WAITING: process_states.Waiting,
             process_states.ProcessState.FINISHED: process_states.Finished,
             process_states.ProcessState.EXCEPTED: process_states.Excepted,
-            process_states.ProcessState.KILLED: process_states.Killed
+            process_states.ProcessState.KILLED: process_states.Killed,
         }
 
     @classmethod
@@ -256,7 +252,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         pid: Optional[PID_TYPE] = None,
         logger: Optional[logging.Logger] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
-        communicator: Optional[kiwipy.Communicator] = None
+        communicator: Optional[kiwipy.Communicator] = None,
     ) -> None:
         """
         The signature of the constructor should not be changed by subclassing processes.
@@ -278,8 +274,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._setup_event_hooks()
 
         self._status: Optional[str] = None  # May hold a current status message
-        self._pre_paused_status: Optional[
-            str] = None  # Save status when a pause message replaces it, such that it can be restored
+        self._pre_paused_status: Optional[str] = (
+            None  # Save status when a pause message replaces it, such that it can be restored
+        )
         self._paused = None
 
         # Input/output
@@ -331,12 +328,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     def _setup_event_hooks(self) -> None:
         """Set the event hooks to process, when it is created or loaded(recreated)."""
         event_hooks = {
-            state_machine.StateEventHook.ENTERING_STATE:
-            lambda _s, _h, state: self.on_entering(cast(process_states.State, state)),
-            state_machine.StateEventHook.ENTERED_STATE:
-            lambda _s, _h, from_state: self.on_entered(cast(Optional[process_states.State], from_state)),
-            state_machine.StateEventHook.EXITING_STATE:
-            lambda _s, _h, _state: self.on_exiting()
+            state_machine.StateEventHook.ENTERING_STATE: lambda _s, _h, state: self.on_entering(
+                cast(process_states.State, state)
+            ),
+            state_machine.StateEventHook.ENTERED_STATE: lambda _s, _h, from_state: self.on_entered(
+                cast(Optional[process_states.State], from_state)
+            ),
+            state_machine.StateEventHook.EXITING_STATE: lambda _s, _h, _state: self.on_exiting(),
         }
         for hook, callback in event_hooks.items():
             self.add_state_event_callback(hook, callback)
@@ -356,7 +354,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @property
     def uuid(self) -> Optional[uuid.UUID]:
-        """Return the UUID of the process """
+        """Return the UUID of the process"""
         return self._uuid
 
     @property
@@ -421,7 +419,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         process_class: Type['Process'],
         inputs: Optional[dict] = None,
         pid: Optional[PID_TYPE] = None,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ) -> 'Process':
         """Start running the nested process.
 
@@ -507,7 +505,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         .. deprecated:: 0.18.6
             Use the `has_terminated` method instead
         """
-        warnings.warn('method is deprecated, use `has_terminated` instead', DeprecationWarning)  # pylint: disable=no-member
+        warnings.warn('method is deprecated, use `has_terminated` instead', DeprecationWarning)
         return self._state.is_terminal()
 
     # endregion
@@ -663,7 +661,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         the specific state condition.
 
         """
-        assert (listener != self), 'Cannot listen to yourself!'  # type: ignore
+        assert listener != self, 'Cannot listen to yourself!'  # type: ignore
         self._event_helper.add_listener(listener)
 
     def remove_process_listener(self, listener: ProcessListener) -> None:
@@ -886,7 +884,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             for cleanup in self._cleanups or []:
                 try:
                     cleanup()
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     self.logger.exception('Process<%s>: Exception calling cleanup method %s', self.pid, cleanup)
             self._cleanups = None
         finally:
@@ -926,15 +924,16 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         # Didn't match any known intents
         raise RuntimeError('Unknown intent')
 
-    def broadcast_receive(self, _comm: kiwipy.Communicator, body: Any, sender: Any, subject: Any,
-                          correlation_id: Any) -> Optional[kiwipy.Future]:
+    def broadcast_receive(
+        self, _comm: kiwipy.Communicator, body: Any, sender: Any, subject: Any, correlation_id: Any
+    ) -> Optional[kiwipy.Future]:
         """
         Coroutine called when the process receives a message from the communicator
 
         :param _comm: the communicator that sent the message
         :param msg: the message
         """
-        # pylint: disable=unused-argument
+
         self.logger.debug(
             "Process<%s>: received broadcast message '%s' with communicator '%s': %r", self.pid, subject, _comm, body
         )
@@ -1044,7 +1043,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         return self._do_pause(msg)
 
     def _do_pause(self, state_msg: Optional[str], next_state: Optional[process_states.State] = None) -> bool:
-        """ Carry out the pause procedure, optionally transitioning to the next state first"""
+        """Carry out the pause procedure, optionally transitioning to the next state first"""
         try:
             if next_state is not None:
                 self.transition_to(next_state)
@@ -1091,7 +1090,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._interrupt_action = new_action
 
     def _set_interrupt_action_from_exception(self, interrupt_exception: process_states.Interruption) -> None:
-        """ Set an interrupt action from the corresponding interrupt exception """
+        """Set an interrupt action from the corresponding interrupt exception"""
         action = self._create_interrupt_action(interrupt_exception)
         self._set_interrupt_action(action)
 
@@ -1233,9 +1232,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 else:
                     self._set_interrupt_action_from_exception(exception)
 
-            except KeyboardInterrupt:  # pylint: disable=try-except-raise
+            except KeyboardInterrupt:
                 raise
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 # Overwrite the next state to go to excepted directly
                 next_state = self.create_state(process_states.ProcessState.EXCEPTED, *sys.exc_info()[1:])
                 self._set_interrupt_action(None)
@@ -1285,7 +1284,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if namespace:
             port_namespace = cast(
                 ports.PortNamespace,
-                self.spec().outputs.get_port(namespace_separator.join(namespace), create_dynamically=True)
+                self.spec().outputs.get_port(namespace_separator.join(namespace), create_dynamically=True),
             )
         else:
             port_namespace = self.spec().outputs
@@ -1341,9 +1340,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param out_status_info: the old status
 
         """
-        out_status_info.update({
-            'ctime': self.creation_time,
-            'paused': self.paused,
-            'process_string': str(self),
-            'state': str(self.state),
-        })
+        out_status_info.update(
+            {
+                'ctime': self.creation_time,
+                'paused': self.paused,
+                'process_string': str(self),
+                'state': str(self.state),
+            }
+        )

@@ -1,28 +1,43 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import abc
 import asyncio
 import collections
 import inspect
 import logging
 import re
-from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Type, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    List,
+    Mapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 import kiwipy
 
 from . import lang, mixins, persistence, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
 
-__all__ = ['WorkChain', 'if_', 'while_', 'return_', 'ToContext', 'WorkChainSpec']
+__all__ = ['ToContext', 'WorkChain', 'WorkChainSpec', 'if_', 'return_', 'while_']
 
 ToContext = dict
 
-PREDICATE_TYPE = Callable[['WorkChain'], bool]  # pylint: disable=invalid-name
-WC_COMMAND_TYPE = Callable[['WorkChain'], Any]  # pylint: disable=invalid-name
-EXIT_CODE_TYPE = int  # pylint: disable=invalid-name
+PREDICATE_TYPE = Callable[['WorkChain'], bool]
+WC_COMMAND_TYPE = Callable[['WorkChain'], Any]
+EXIT_CODE_TYPE = int
 
 
 class WorkChainSpec(processes.ProcessSpec):
-
     def __init__(self) -> None:
         super().__init__()
         self._outline: Optional[Union['_Instruction', '_FunctionCall']] = None
@@ -55,21 +70,20 @@ class WorkChainSpec(processes.ProcessSpec):
 
 @persistence.auto_persist('_awaiting')
 class Waiting(process_states.Waiting):
-    """ Overwrite the waiting state"""
+    """Overwrite the waiting state"""
 
     def __init__(
         self,
         process: 'WorkChain',
         done_callback: Optional[Callable[..., Any]],
         msg: Optional[str] = None,
-        awaiting: Optional[Dict[Union[asyncio.Future, processes.Process], str]] = None
+        awaiting: Optional[Dict[Union[asyncio.Future, processes.Process], str]] = None,
     ) -> None:
         super().__init__(process, done_callback, msg, awaiting)
         self._awaiting: Dict[asyncio.Future, str] = {}
         for awaitable, key in (awaiting or {}).items():
-            if isinstance(awaitable, processes.Process):
-                awaitable = awaitable.future()
-            self._awaiting[awaitable] = key
+            resolved_awaitable = awaitable.future() if isinstance(awaitable, processes.Process) else awaitable
+            self._awaiting[resolved_awaitable] = key
 
     def enter(self) -> None:
         super().enter()
@@ -85,7 +99,7 @@ class Waiting(process_states.Waiting):
         key = self._awaiting.pop(awaitable)
         try:
             self.process.ctx[key] = awaitable.result()  # type: ignore
-        except Exception as exception:  # pylint: disable=broad-except
+        except Exception as exception:
             self._waiting_future.set_exception(exception)
         else:
             if not self._awaiting:
@@ -97,6 +111,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     A WorkChain is a series of instructions carried out with the ability to save
     state in between.
     """
+
     _spec_class = WorkChainSpec
     _STEPPER_STATE = 'stepper_state'
     _CONTEXT = 'CONTEXT'
@@ -113,7 +128,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         pid: Optional[PID_TYPE] = None,
         logger: Optional[logging.Logger] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
-        communicator: Optional[kiwipy.Communicator] = None
+        communicator: Optional[kiwipy.Communicator] = None,
     ) -> None:
         super().__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
         self._stepper: Optional[Stepper] = None
@@ -152,9 +167,9 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         to the corresponding key in the context of the workchain
         """
         for key, awaitable in kwargs.items():
-            if isinstance(awaitable, processes.Process):
-                awaitable = awaitable.future()
-            self._awaitables[awaitable] = key
+            resolved_awaitable = awaitable.future() if isinstance(awaitable, processes.Process) else awaitable
+
+            self._awaitables[resolved_awaitable] = key
 
     def run(self) -> Any:
         return self._do_step()
@@ -169,7 +184,6 @@ class WorkChain(mixins.ContextMixin, processes.Process):
             finished, return_value = True, exception.exit_code
 
         if not finished and (return_value is None or isinstance(return_value, ToContext)):
-
             if isinstance(return_value, ToContext):
                 self.to_context(**return_value)
 
@@ -182,7 +196,6 @@ class WorkChain(mixins.ContextMixin, processes.Process):
 
 
 class Stepper(persistence.Savable, metaclass=abc.ABCMeta):
-
     def __init__(self, workchain: 'WorkChain') -> None:
         self._workchain = workchain
 
@@ -210,11 +223,11 @@ class _Instruction(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def create_stepper(self, workchain: 'WorkChain') -> Stepper:
-        """ Create a new stepper for this instruction """
+        """Create a new stepper for this instruction"""
 
     @abc.abstractmethod
     def recreate_stepper(self, saved_state: SAVED_STATE_TYPE, workchain: 'WorkChain') -> Stepper:
-        """ Recreate a stepper from a previously saved state """
+        """Recreate a stepper from a previously saved state"""
 
     def __str__(self) -> str:
         return str(self.get_description())
@@ -229,7 +242,6 @@ class _Instruction(metaclass=abc.ABCMeta):
 
 
 class _FunctionStepper(Stepper):
-
     def __init__(self, workchain: 'WorkChain', fn: WC_COMMAND_TYPE):
         super().__init__(workchain)
         self._fn = fn
@@ -250,7 +262,6 @@ class _FunctionStepper(Stepper):
 
 
 class _FunctionCall(_Instruction):
-
     def __init__(self, func: WC_COMMAND_TYPE) -> None:
         try:
             args = inspect.getfullargspec(func)[0]
@@ -282,7 +293,6 @@ STEPPER_STATE = 'stepper_state'
 
 @persistence.auto_persist('_pos')
 class _BlockStepper(Stepper):
-
     def __init__(self, block: Sequence[_Instruction], workchain: 'WorkChain') -> None:
         super().__init__(workchain)
         self._block = block
@@ -333,14 +343,15 @@ class _Block(_Instruction, collections.abc.Sequence):
 
     def __init__(self, instructions: Sequence[Union[_Instruction, WC_COMMAND_TYPE]]) -> None:
         # Build up the list of commands
-        comms = []
+        comms: MutableSequence[_Instruction | _FunctionCall] = []
         for instruction in instructions:
             if not isinstance(instruction, _Instruction):
                 # Assume it's a function call
-                instruction = _FunctionCall(instruction)
+                comms.append(_FunctionCall(instruction))
+            else:
+                comms.append(instruction)
 
-            comms.append(instruction)
-        self._instruction: List[Union[_Instruction, _FunctionCall]] = comms
+        self._instruction: MutableSequence[_Instruction | _FunctionCall] = comms
 
     def __getitem__(self, index: int) -> Union[_Instruction, _FunctionCall]:  # type: ignore
         return self._instruction[index]
@@ -392,10 +403,12 @@ class _Conditional:
 
         if not hasattr(result, '__bool__'):
             import warnings
+
             warnings.warn(
                 f'The conditional predicate `{self._predicate.__name__}` returned `{result}` which is not boolean-like.'
                 ' The return value should be `True` or `False` or implement the `__bool__` method. This behavior is '
-                'deprecated and will soon start raising an exception.', UserWarning
+                'deprecated and will soon start raising an exception.',
+                UserWarning,
             )
 
         return result
@@ -411,7 +424,6 @@ class _Conditional:
 
 @persistence.auto_persist('_pos')
 class _IfStepper(Stepper):
-
     def __init__(self, if_instruction: '_If', workchain: 'WorkChain') -> None:
         super().__init__(workchain)
         self._if_instruction = if_instruction
@@ -467,7 +479,6 @@ class _IfStepper(Stepper):
 
 
 class _If(_Instruction, collections.abc.Sequence):
-
     def __init__(self, condition: PREDICATE_TYPE) -> None:
         super().__init__()
         self._ifs: List[_Conditional] = [_Conditional(self, condition, label=if_.__name__)]
@@ -520,7 +531,6 @@ class _If(_Instruction, collections.abc.Sequence):
 
 
 class _WhileStepper(Stepper):
-
     def __init__(self, while_instruction: '_While', workchain: 'WorkChain') -> None:
         super().__init__(workchain)
         self._while_instruction = while_instruction
@@ -563,7 +573,6 @@ class _WhileStepper(Stepper):
 
 
 class _While(_Conditional, _Instruction, collections.abc.Sequence):
-
     def __init__(self, predicate: PREDICATE_TYPE) -> None:
         super().__init__(self, predicate, label=while_.__name__)
 
@@ -586,14 +595,12 @@ class _While(_Conditional, _Instruction, collections.abc.Sequence):
 
 
 class _PropagateReturn(BaseException):
-
     def __init__(self, exit_code: Optional[EXIT_CODE_TYPE]) -> None:
         super().__init__()
         self.exit_code = exit_code
 
 
 class _ReturnStepper(Stepper):
-
     def __init__(self, return_instruction: '_Return', workchain: 'WorkChain') -> None:
         super().__init__(workchain)
         self._return_instruction = return_instruction
@@ -603,7 +610,7 @@ class _ReturnStepper(Stepper):
         Raise a _PropagateReturn exception where the value is the exit code set
         in the _Return instruction upon instantiation
         """
-        raise _PropagateReturn(self._return_instruction._exit_code)  # pylint: disable=protected-access
+        raise _PropagateReturn(self._return_instruction._exit_code)
 
 
 class _Return(_Instruction):
@@ -670,7 +677,7 @@ def while_(condition: PREDICATE_TYPE) -> _While:
     return _While(condition)
 
 
-return_ = _Return()  # pylint: disable=invalid-name
+return_ = _Return()
 """
 A global singleton that contains a Return instruction that allows to exit
 out of the workchain outline directly with None as exit code
