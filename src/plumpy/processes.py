@@ -47,7 +47,15 @@ import yaml
 
 from . import events, exceptions, message, persistence, ports, process_states, utils
 from .base import state_machine
-from .base.state_machine import StateEntryFailed, StateMachine, event
+from .base.state_machine import (
+    Interruptable,
+    Proceedable,
+    StateEntryFailed,
+    StateMachine,
+    StateMachineError,
+    TransitionFailed,
+    event,
+)
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
 from .futures import CancellableAction, capture_exceptions
@@ -1127,6 +1135,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             return self._pausing
 
         if self._stepping:
+            if not isinstance(self._state, Interruptable):
+                raise exceptions.InvalidStateError(
+                    f'cannot interrupt {self._state.__class__}, method `interrupt` not implement'
+                )
+
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
             interrupt_exception = process_states.PauseInterruption(msg_text)
@@ -1138,6 +1151,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         msg = MessageBuilder.pause(msg_text)
         return self._do_pause(state_msg=msg)
+
+    @staticmethod
+    def _interrupt(state: Interruptable, reason: Exception) -> None:
+        state.interrupt(reason)
 
     def _do_pause(self, state_msg: Optional[MessageType], next_state: Optional[state_machine.State] = None) -> bool:
         """Carry out the pause procedure, optionally transitioning to the next state first"""
@@ -1326,6 +1343,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if self.paused and self._paused is not None:
             await self._paused
+
+        if not isinstance(self._state, Proceedable):
+            raise StateMachineError(f'cannot step from {self._state.__class__}, async method `execute` not implemented')
 
         try:
             self._stepping = True
