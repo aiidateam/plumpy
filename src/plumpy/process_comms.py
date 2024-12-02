@@ -46,10 +46,6 @@ class Intent:
 
 MessageType = Dict[str, Any]
 
-# PAUSE_MSG: MessageType = {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
-# PLAY_MSG: MessageType = {INTENT_KEY: Intent.PLAY, MESSAGE_KEY: None}
-# STATUS_MSG: MessageType = {INTENT_KEY: Intent.STATUS, MESSAGE_KEY: None}
-
 
 class PlayMessage:
     @classmethod
