@@ -5,9 +5,9 @@ import unittest
 if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
 
-from ..utils import ProcessWithCheckpoint
-
 import plumpy
+
+from ..utils import ProcessWithCheckpoint
 
 
 class TestPicklePersister(unittest.TestCase):

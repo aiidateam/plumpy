@@ -3,19 +3,16 @@
 
 import asyncio
 import enum
-from plumpy.process_comms import KillMessage
 import unittest
 
 import kiwipy
 import pytest
-from tests import utils
-
-import plumpy
-import pytest
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
+from plumpy.process_comms import KillMessage
 from plumpy.utils import AttributesFrozendict
+from tests import utils
 
 
 class ForgetToCallParent(plumpy.Process):
