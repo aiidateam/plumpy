@@ -137,6 +137,7 @@ class Created(state_machine.State, persistence.Savable):
     ALLOWED = {ProcessState.RUNNING, ProcessState.KILLED, ProcessState.EXCEPTED}
 
     RUN_FN = 'run_fn'
+    is_terminal = False
 
     def __init__(self, process: 'Process', run_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
         super().__init__(process)
@@ -185,6 +186,7 @@ class Running(state_machine.State, persistence.Savable):
     _running: bool = False
     _run_handle = None
 
+    is_terminal = False
     def __init__(
         self, process: 'Process', run_fn: Callable[..., Union[Awaitable[Any], Any]], *args: Any, **kwargs: Any
     ) -> None:
@@ -284,6 +286,8 @@ class Waiting(state_machine.State, persistence.Savable):
 
     _interruption = None
 
+    is_terminal = False
+
     def __str__(self) -> str:
         state_info = super().__str__()
         if self.msg is not None:
@@ -370,6 +374,8 @@ class Excepted(state_machine.State, persistence.Savable):
     EXC_VALUE = 'ex_value'
     TRACEBACK = 'traceback'
 
+    is_terminal = True
+
     def __init__(
         self,
         process: 'Process',
@@ -438,6 +444,8 @@ class Finished(state_machine.State, persistence.Savable):
 
     LABEL = ProcessState.FINISHED
 
+    is_terminal = True
+
     def __init__(self, process: 'Process', result: Any, successful: bool) -> None:
         super().__init__(process)
         self.result = result
@@ -467,6 +475,8 @@ class Killed(state_machine.State, persistence.Savable):
     """
 
     LABEL = ProcessState.KILLED
+
+    is_terminal = True
 
     def __init__(self, process: 'Process', msg: Optional[MessageType]):
         """

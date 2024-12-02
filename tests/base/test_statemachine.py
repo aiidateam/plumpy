@@ -20,6 +20,8 @@ class Playing(state_machine.State):
     ALLOWED = {PAUSED, STOPPED}
     TRANSITIONS = {STOP: STOPPED}
 
+    is_terminal = False
+
     def __init__(self, player, track):
         assert track is not None, 'Must provide a track name'
         super().__init__(player)
@@ -54,6 +56,8 @@ class Paused(state_machine.State):
     ALLOWED = {PLAYING, STOPPED}
     TRANSITIONS = {STOP: STOPPED}
 
+    is_terminal = False
+
     def __init__(self, player, playing_state):
         assert isinstance(playing_state, Playing), 'Must provide the playing state to pause'
         super().__init__(player)
@@ -76,6 +80,8 @@ class Stopped(state_machine.State):
         PLAYING,
     }
     TRANSITIONS = {PLAY: PLAYING}
+
+    is_terminal = False
 
     def __str__(self):
         return '[]'
