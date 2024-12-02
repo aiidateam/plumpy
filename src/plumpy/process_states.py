@@ -288,6 +288,7 @@ class Running(state_machine.State, persistence.Savable):
 
         self.in_state = False
 
+
 @final
 @auto_persist('msg', 'data', 'in_state')
 class Waiting(state_machine.State, persistence.Savable):
@@ -342,7 +343,7 @@ class Waiting(state_machine.State, persistence.Savable):
             self.done_callback = None
         self._waiting_future = futures.Future()
 
-    def interrupt(self, reason: Any) -> None:
+    def interrupt(self, reason: Exception) -> None:
         # This will cause the future in execute() to raise the exception
         self._waiting_future.set_exception(reason)
 
@@ -448,9 +449,6 @@ class Excepted(state_machine.State, persistence.Savable):
             self.traceback,
         )
 
-    async def execute(self) -> state_machine.State:  # type: ignore
-        ...
-
     def enter(self) -> None:
         self.in_state = True
 
@@ -486,9 +484,6 @@ class Finished(state_machine.State, persistence.Savable):
     def enter(self) -> None:
         self.in_state = True
 
-    async def execute(self) -> state_machine.State:  # type: ignore
-        ...
-
     def exit(self) -> None:
         if self.is_terminal:
             raise exceptions.InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
@@ -518,9 +513,6 @@ class Killed(state_machine.State, persistence.Savable):
         """
         self.process = process
         self.msg = msg
-
-    async def execute(self) -> state_machine.State:  # type: ignore
-        ...
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)

@@ -132,17 +132,27 @@ def event(
 @runtime_checkable
 class State(Protocol):
     LABEL: ClassVar[LABEL_TYPE]
+    is_terminal: ClassVar[bool]
 
-    async def execute(self) -> State | None:
+    def enter(self) -> None: ...
+
+    def exit(self) -> None: ...
+
+
+@runtime_checkable
+class Interruptable(Protocol):
+    def interrupt(self, reason: Exception) -> None: ...
+
+
+@runtime_checkable
+class Proceedable(Protocol):
+
+    def execute(self) -> State | None:
         """
         Execute the state, performing the actions that this state is responsible for.
         :returns: a state to transition to or None if finished.
         """
         ...
-
-    def enter(self) -> None: ...
-
-    def exit(self) -> None: ...
 
 
 class StateEventHook(enum.Enum):
