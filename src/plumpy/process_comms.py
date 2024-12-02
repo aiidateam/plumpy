@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Module for process level communication functions and classes"""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
@@ -42,7 +44,7 @@ class Intent:
     STATUS: str = 'status'
 
 
-MessageType = dict[str, Any]
+MessageType = Dict[str, Any]
 
 # PAUSE_MSG: MessageType = {INTENT_KEY: Intent.PAUSE, MESSAGE_KEY: None}
 # PLAY_MSG: MessageType = {INTENT_KEY: Intent.PLAY, MESSAGE_KEY: None}

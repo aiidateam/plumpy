@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """The state machine for processes"""
 
+from __future__ import annotations
+
 import enum
 import functools
 import inspect
