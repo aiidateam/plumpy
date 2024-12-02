@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import time
+from typing import final
 import unittest
 
 from plumpy.base import state_machine
+from plumpy.exceptions import InvalidStateError
 
 # Events
 PLAY = 'Play'
@@ -24,23 +26,15 @@ class Playing(state_machine.State):
 
     def __init__(self, player, track):
         assert track is not None, 'Must provide a track name'
-        super().__init__(player)
         self.track = track
         self._last_time = None
         self._played = 0.0
+        self.in_state = False
 
     def __str__(self):
         if self.in_state:
             self._update_time()
         return f'> {self.track} ({self._played}s)'
-
-    def enter(self):
-        super().enter()
-        self._last_time = time.time()
-
-    def exit(self):
-        super().exit()
-        self._update_time()
 
     def play(self, track=None):  # pylint: disable=no-self-use, unused-argument
         return False
@@ -49,6 +43,17 @@ class Playing(state_machine.State):
         current_time = time.time()
         self._played += current_time - self._last_time
         self._last_time = current_time
+
+    def enter(self) -> None:
+        self._last_time = time.time()
+        self.in_state = True
+
+    def exit(self) -> None:
+        if self.is_terminal:
+            raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+
+        self._update_time()
+        self.in_state = False
 
 
 class Paused(state_machine.State):
@@ -73,6 +78,15 @@ class Paused(state_machine.State):
         else:
             self.state_machine.transition_to(self.playing_state)
 
+    def enter(self) -> None:
+        self.in_state = True
+
+    def exit(self) -> None:
+        if self.is_terminal:
+            raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+
+        self.in_state = False
+
 
 class Stopped(state_machine.State):
     LABEL = STOPPED
@@ -83,11 +97,23 @@ class Stopped(state_machine.State):
 
     is_terminal = False
 
+    def __init__(self, player):
+        self.state_machine = player
+
     def __str__(self):
         return '[]'
 
     def play(self, track):
         self.state_machine.transition_to(Playing(self.state_machine, track=track))
+
+    def enter(self) -> None:
+        self.in_state = True
+
+    def exit(self) -> None:
+        if self.is_terminal:
+            raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+
+        self.in_state = False
 
 
 class CdPlayer(state_machine.StateMachine):

@@ -653,7 +653,7 @@ class TestProcess(unittest.TestCase):
 
         class RaisingProcess(Process):
             def on_entered(self, from_state):
-                if from_state is not None and from_state.label == ProcessState.RUNNING:
+                if from_state is not None and from_state.LABEL == ProcessState.RUNNING:
                     raise RuntimeError('exception during on_entered')
                 super().on_entered(from_state)
 
