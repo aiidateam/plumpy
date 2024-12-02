@@ -11,7 +11,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Hashable,
     List,
     Mapping,
     MutableSequence,
@@ -71,6 +70,7 @@ class WorkChainSpec(processes.ProcessSpec):
         return self._outline
 
 
+# FIXME:  better use composition here
 @persistence.auto_persist('_awaiting')
 class Waiting(process_states.Waiting):
     """Overwrite the waiting state"""
@@ -80,11 +80,11 @@ class Waiting(process_states.Waiting):
         process: 'WorkChain',
         done_callback: Optional[Callable[..., Any]],
         msg: Optional[str] = None,
-        awaiting: Optional[Dict[Union[asyncio.Future, processes.Process], str]] = None,
+        data: Optional[Dict[Union[asyncio.Future, processes.Process], str]] = None,
     ) -> None:
-        super().__init__(process, done_callback, msg, awaiting)
+        super().__init__(process, done_callback, msg, data)
         self._awaiting: Dict[asyncio.Future, str] = {}
-        for awaitable, key in (awaiting or {}).items():
+        for awaitable, key in (data or {}).items():
             resolved_awaitable = awaitable.future() if isinstance(awaitable, processes.Process) else awaitable
             self._awaiting[resolved_awaitable] = key
 
@@ -124,7 +124,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     _CONTEXT = 'CONTEXT'
 
     @classmethod
-    def get_state_classes(cls) -> Dict[Hashable, Type[state_machine.State]]:
+    def get_state_classes(cls) -> Dict[process_states.ProcessState, Type[state_machine.State]]:
         states_map = super().get_state_classes()
         states_map[process_states.ProcessState.WAITING] = Waiting
         return states_map

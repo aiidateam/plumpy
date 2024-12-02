@@ -17,7 +17,7 @@ PAUSED = 'Paused'
 STOPPED = 'Stopped'
 
 
-class Playing(state_machine.State):
+class Playing:
     LABEL = PLAYING
     ALLOWED = {PAUSED, STOPPED}
     TRANSITIONS = {STOP: STOPPED}
@@ -56,7 +56,7 @@ class Playing(state_machine.State):
         self.in_state = False
 
 
-class Paused(state_machine.State):
+class Paused:
     LABEL = PAUSED
     ALLOWED = {PLAYING, STOPPED}
     TRANSITIONS = {STOP: STOPPED}
@@ -65,7 +65,6 @@ class Paused(state_machine.State):
 
     def __init__(self, player, playing_state):
         assert isinstance(playing_state, Playing), 'Must provide the playing state to pause'
-        super().__init__(player)
         self._player = player
         self.playing_state = playing_state
 
@@ -74,9 +73,9 @@ class Paused(state_machine.State):
 
     def play(self, track=None):
         if track is not None:
-            self.state_machine.transition_to(Playing(player=self.state_machine, track=track))
+            self._player.transition_to(Playing(player=self.state_machine, track=track))
         else:
-            self.state_machine.transition_to(self.playing_state)
+            self._player.transition_to(self.playing_state)
 
     def enter(self) -> None:
         self.in_state = True
@@ -88,7 +87,7 @@ class Paused(state_machine.State):
         self.in_state = False
 
 
-class Stopped(state_machine.State):
+class Stopped:
     LABEL = STOPPED
     ALLOWED = {
         PLAYING,
@@ -98,13 +97,13 @@ class Stopped(state_machine.State):
     is_terminal = False
 
     def __init__(self, player):
-        self.state_machine = player
+        self._player = player
 
     def __str__(self):
         return '[]'
 
     def play(self, track):
-        self.state_machine.transition_to(Playing(self.state_machine, track=track))
+        self._player.transition_to(Playing(self._player, track=track))
 
     def enter(self) -> None:
         self.in_state = True
