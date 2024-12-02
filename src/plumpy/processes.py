@@ -467,7 +467,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def has_terminated(self) -> bool:
         """Return whether the process was terminated."""
-        return self._state.is_terminal()
+        return self._state.is_terminal
 
     def result(self) -> Any:
         """
@@ -540,7 +540,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             Use the `has_terminated` method instead
         """
         warnings.warn('method is deprecated, use `has_terminated` instead', DeprecationWarning)
-        return self._state.is_terminal()
+        return self._state.is_terminal
 
     # endregion
 

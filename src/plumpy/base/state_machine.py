@@ -133,10 +133,6 @@ class State:
     # from this one
     ALLOWED: Set[LABEL_TYPE] = set()
 
-    @classmethod
-    def is_terminal(cls) -> bool:
-        return not cls.ALLOWED
-
     def __init__(self, state_machine: 'StateMachine', *args: Any, **kwargs: Any):
         """
         :param state_machine: The process this state belongs to
@@ -165,7 +161,7 @@ class State:
     @super_check
     def exit(self) -> None:
         """Exiting the state"""
-        if self.is_terminal():
+        if self.is_terminal:
             raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
 
     def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> 'State':
@@ -345,7 +341,7 @@ class StateMachine(metaclass=StateMachineMeta):
                 self._exit_current_state(new_state)
                 self._enter_next_state(new_state)
 
-            if self._state is not None and self._state.is_terminal():
+            if self._state is not None and self._state.is_terminal:
                 call_with_super_check(self.on_terminated)
         except Exception:
             self._transitioning = False
