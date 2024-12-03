@@ -45,7 +45,7 @@ class StateEntryFailed(Exception):  # noqa: N818
     Failed to enter a state, can provide the next state to go to via this exception
     """
 
-    def __init__(self, state: type['State'], *args: Any, **kwargs: Any) -> None:
+    def __init__(self, state: State, *args: Any, **kwargs: Any) -> None:
         super().__init__('failed to enter state')
         self.state = state
         self.args = args
@@ -314,7 +314,7 @@ class StateMachine(metaclass=StateMachineMeta):
     def on_terminated(self) -> None:
         """Called when a terminal state is entered"""
 
-    def transition_to(self, new_state: State | type[State] | None, **kwargs: Any) -> None:
+    def transition_to(self, new_state: State | None, **kwargs: Any) -> None:
         """Transite to the new state.
 
         The new target state will be create lazily when the state is not yet instantiated,
@@ -331,11 +331,6 @@ class StateMachine(metaclass=StateMachineMeta):
         label = None
         try:
             self._transitioning = True
-
-            if not isinstance(new_state, State):
-                # Make sure we have a state instance
-                new_state = self._create_state_instance(new_state, **kwargs)
-
             label = new_state.LABEL
 
             # If the previous transition failed, do not try to exit it but go straight to next state
@@ -345,9 +340,7 @@ class StateMachine(metaclass=StateMachineMeta):
             try:
                 self._enter_next_state(new_state)
             except StateEntryFailed as exception:
-                # Make sure we have a state instance
-                if not isinstance(exception.state, State):
-                    new_state = self._create_state_instance(exception.state, **exception.kwargs)
+                new_state = exception.state
                 label = new_state.LABEL
                 self._exit_current_state(new_state)
                 self._enter_next_state(new_state)

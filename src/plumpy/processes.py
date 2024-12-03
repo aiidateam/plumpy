@@ -867,7 +867,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if successful:
             validation_error = self.spec().outputs.validate(self.outputs)
             if validation_error:
-                raise StateEntryFailed(process_states.Finished, result=result, successful=False)
+                state_cls = self.get_states_map()[process_states.ProcessState.FINISHED]
+                finished_state = state_cls(self, result=result, successful=False)
+                raise StateEntryFailed(finished_state)
 
         self.future().set_result(self.outputs)
 
@@ -1064,7 +1066,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if final_state == process_states.ProcessState.CREATED:
             raise exception.with_traceback(trace)
 
-        self.transition_to(process_states.Excepted, exception=exception, trace_back=trace)
+        state_class = self.get_states_map()[process_states.ProcessState.EXCEPTED]
+        new_state = self._create_state_instance(state_class, exception=exception, trace_back=trace)
+        self.transition_to(new_state)
 
     def pause(self, msg: Union[str, None] = None) -> Union[bool, futures.CancellableAction]:
         """Pause the process.
@@ -1127,7 +1131,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             def do_kill(_next_state: process_states.State) -> Any:
                 try:
-                    self.transition_to(process_states.Killed, msg=exception.msg)
+                    state_class = self.get_states_map()[process_states.ProcessState.KILLED]
+                    new_state = self._create_state_instance(state_class, msg=exception.msg)
+                    self.transition_to(new_state)
                     return True
                 finally:
                     self._killing = None
@@ -1179,7 +1185,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param exception: The exception that caused the failure
         :param trace_back: Optional exception traceback
         """
-        self.transition_to(process_states.Excepted, exception=exception, trace_back=trace_back)
+        state_class = self.get_states_map()[process_states.ProcessState.EXCEPTED]
+        new_state = self._create_state_instance(state_class, exception=exception, trace_back=trace_back)
+        self.transition_to(new_state)
 
     def kill(self, msg: Optional[MessageType] = None) -> Union[bool, asyncio.Future]:
         """
@@ -1207,7 +1215,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._state.interrupt(interrupt_exception)
             return cast(futures.CancellableAction, self._interrupt_action)
 
-        self.transition_to(process_states.Killed, msg=msg)
+        state_class = self.get_states_map()[process_states.ProcessState.KILLED]
+        new_state = self._create_state_instance(state_class, msg=msg)
+        self.transition_to(new_state)
         return True
 
     @property
