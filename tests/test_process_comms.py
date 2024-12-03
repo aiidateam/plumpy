@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import pytest
-from tests import utils
 
 import plumpy
 from plumpy import process_comms
+from tests import utils
 
 
 class Process(plumpy.Process):

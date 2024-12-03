@@ -3,13 +3,12 @@
 
 import asyncio
 import collections
-import copy
 import unittest
 from collections.abc import Mapping
 
 import plumpy
 from plumpy import persistence, process_states, processes, utils
-from plumpy.process_comms import KILL_MSG, MESSAGE_KEY
+from plumpy.process_comms import KillMessage
 
 Snapshot = collections.namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -86,8 +85,7 @@ class WaitForSignalProcess(processes.Process):
 class KillProcess(processes.Process):
     @utils.override
     def run(self):
-        msg = copy.copy(KILL_MSG)
-        msg[MESSAGE_KEY] = 'killed'
+        msg = KillMessage.build(message='killed')
         return process_states.Kill(msg=msg)
 
 
