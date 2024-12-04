@@ -137,7 +137,6 @@ class ProcessState(Enum):
     The possible states that a :class:`~plumpy.processes.Process` can be in.
     """
 
-    # FIXME: see LSP error of return a exception, the type is Literal[str] which is invariant, tricky
     CREATED = 'created'
     RUNNING = 'running'
     WAITING = 'waiting'
