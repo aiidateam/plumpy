@@ -1305,7 +1305,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: An instance of the object with its state loaded from the save state.
         """
         load_context = persistence.LoadSaveContext(process=self)
-        return cast(state_machine.State, persistence.Savable.load(saved_state, load_context))
+        return cast(state_machine.State, persistence.load(saved_state, load_context))
 
     # endregion
 
