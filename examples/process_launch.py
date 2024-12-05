@@ -18,7 +18,7 @@ class DummyProcessWithOutput(plumpy.Process):
         spec.outputs.dynamic = True
         spec.output('default', valid_type=int)
 
-    async def run(self):
+    def run(self):
         self.out('default', 5)
 
 

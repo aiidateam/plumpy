@@ -205,7 +205,7 @@ class TestWorkchain(unittest.TestCase):
                 super().define(spec)
                 spec.output('res')
 
-            async def run(self):
+            def run(self):
                 self.out('res', A)
 
         class ReturnB(plumpy.Process):
@@ -214,7 +214,7 @@ class TestWorkchain(unittest.TestCase):
                 super().define(spec)
                 spec.output('res')
 
-            async def run(self):
+            def run(self):
                 self.out('res', B)
 
         class Wf(WorkChain):
@@ -394,7 +394,7 @@ class TestWorkchain(unittest.TestCase):
                 spec.outline(cls.run, cls.check)
                 spec.outputs.dynamic = True
 
-            async def run(self):
+            def run(self):
                 return ToContext(subwc=self.launch(SubWorkChain))
 
             def check(self):
@@ -406,7 +406,7 @@ class TestWorkchain(unittest.TestCase):
                 super().define(spec)
                 spec.outline(cls.run)
 
-            async def run(self):
+            def run(self):
                 self.out('value', 5)
 
         workchain = MainWorkChain()
@@ -449,7 +449,7 @@ class TestWorkchain(unittest.TestCase):
                 super().define(spec)
                 spec.output('_return')
 
-            async def run(self):
+            def run(self):
                 self.out('_return', val)
 
         class Workchain(WorkChain):

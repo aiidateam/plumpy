@@ -9,7 +9,7 @@ class HelloWorld(plumpy.Process):
         spec.input('name', default='World', required=True)
         spec.output('greeting', valid_type=str)
 
-    async def run(self):
+    def run(self):
         self.out('greeting', f'Hello {self.inputs.name}!')
         return plumpy.Stop(None, True)
 
