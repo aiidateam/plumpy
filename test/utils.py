@@ -185,7 +185,7 @@ class ThreeSteps(ProcessEventsTester):
         self.out('test', 5)
         return process_states.Continue(self.middle_step)
 
-    def middle_step(self,):
+    def middle_step(self):
         return process_states.Continue(self.last_step)
 
     def last_step(self):
@@ -260,24 +260,71 @@ class Saver:
         self.outputs.append(p.outputs.copy())
 
 
-class ProcessSaver(plumpy.ProcessListener, Saver):
+_ProcessSaverProcReferences = {}
+_ProcessSaver_Saver = {}
+
+
+class ProcessSaver(plumpy.ProcessListener):
     """
-    Save the instance state of a process each time it is about to enter a new state
+    Save the instance state of a process each time it is about to enter a new state.
+    NB: this is not a general purpose saver, it is only intended to be used for testing
+    The listener instances inside a process are persisted, so if we store a process
+    reference in the ProcessSaver instance, we will have a circular reference that cannot be
+    persisted. So we store the Saver instance in a global dictionary with the key the id of the
+    ProcessSaver instance.
+    In the init_not_persistent method we initialize the instances that cannot be persisted,
+    like the saver instance. The __del__ method is used to clean up the global dictionaries
+    (note there is no guarantee that __del__ will be called)
+
     """
+
+    def __del__(self):
+        global _ProcessSaver_Saver
+        global _ProcessSaverProcReferences
+        if _ProcessSaverProcReferences is not None and id(self) in _ProcessSaverProcReferences:
+            del _ProcessSaverProcReferences[id(self)]
+        if _ProcessSaver_Saver is not None and id(self) in _ProcessSaver_Saver:
+            del _ProcessSaver_Saver[id(self)]
+
+    def get_process(self):
+        global _ProcessSaverProcReferences
+        return _ProcessSaverProcReferences[id(self)]
+
+    def _save(self, p):
+        global _ProcessSaver_Saver
+        _ProcessSaver_Saver[id(self)]._save(p)
+
+    def set_process(self, process):
+        global _ProcessSaverProcReferences
+        _ProcessSaverProcReferences[id(self)] = process
 
     def __init__(self, proc):
-        plumpy.ProcessListener.__init__(self)
-        Saver.__init__(self)
-        self.process = proc
+        super().__init__()
         proc.add_process_listener(self)
+        self.init_not_persistent(proc)
+
+    def init_not_persistent(self, proc):
+        global _ProcessSaver_Saver
+        _ProcessSaver_Saver[id(self)] = Saver()
+        self.set_process(proc)
 
     def capture(self):
-        self._save(self.process)
-        if not self.process.has_terminated():
+        self._save(self.get_process())
+        if not self.get_process().has_terminated():
             try:
-                self.process.execute()
+                self.get_process().execute()
             except Exception:
                 pass
+
+    @property
+    def snapshots(self):
+        global _ProcessSaver_Saver
+        return _ProcessSaver_Saver[id(self)].snapshots
+
+    @property
+    def outputs(self):
+        global _ProcessSaver_Saver
+        return _ProcessSaver_Saver[id(self)].outputs
 
     @utils.override
     def on_process_running(self, process):
@@ -335,7 +382,13 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
     """
     for i, bundle in zip(list(range(0, len(snapshots))), snapshots):
         loaded = bundle.unbundle(plumpy.LoadSaveContext(loop=loop))
-        saver = ProcessSaver(loaded)
+        # the process listeners are persisted
+        saver = list(loaded._event_helper._listeners)[0]
+        assert isinstance(saver, ProcessSaver)
+        # the process reference inside this particular implementation of process listener
+        # cannot be persisted because of a circular reference. So we load it there
+        # also the saver is not persisted for the same reason. We load it manually
+        saver.init_not_persistent(loaded)
         saver.capture()
 
         # Now check going backwards until running that the saved states match
@@ -345,7 +398,11 @@ def check_process_against_snapshots(loop, proc_class, snapshots):
                 break
 
             compare_dictionaries(
-                snapshots[-j], saver.snapshots[-j], snapshots[-j], saver.snapshots[-j], exclude={'exception'}
+                snapshots[-j],
+                saver.snapshots[-j],
+                snapshots[-j],
+                saver.snapshots[-j],
+                exclude={'exception', '_listeners'}
             )
             j += 1
 
@@ -376,6 +433,11 @@ def compare_value(bundle1, bundle2, v1, v2, exclude=None):
     elif isinstance(v1, list) and isinstance(v2, list):
         for vv1, vv2 in zip(v1, v2):
             compare_value(bundle1, bundle2, vv1, vv2, exclude)
+    elif isinstance(v1, set) and isinstance(v2, set) and len(v1) == len(v2) and len(v1) <= 1:
+        # TODO: implement sets with more than one element
+        compare_value(bundle1, bundle2, list(v1), list(v2), exclude)
+    elif isinstance(v1, set) and isinstance(v2, set):
+        raise NotImplementedError('Comparison between sets not implemented')
     else:
         if v1 != v2:
             raise ValueError(f'Dict values mismatch for :\n{v1} != {v2}')

@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.21.11 - 2024-07-01
+
+### Fixes
+- Make `Waiting.resume()` idempotent [[a79497b]](https://github.com/aiidateam/plumpy/commit/a79497ba37cef7bc609cee90535ad86708fc48f9)
+
+### Dependencies
+- Add requirement `nbdime<4` [[94df0df]](https://github.com/aiidateam/plumpy/commit/94df0dfd0a3ea93174aa4de83ac5e06246350c27)
+
+
+## v0.21.10 - 2023-11-13
+
+### Dependencies
+
+- Dependencies: Add support for Python 3.12 [[2af3907]](https://github.com/aiidateam/plumpy/commit/2af390738df3f151c8225c01e265527b65d7a005)
+
+
+## v0.21.9 - 2023-11-10
+
+### Features
+- Make `ProcessListener` instances persistable [[98a375f]](https://github.com/aiidateam/plumpy/commit/98a375f07db0cacaacdc1545d4d12f25dd00bf1d)
+
+### Fixes
+- Catch `ChannelInvalidStateError` in process state change [[db2af9a]](https://github.com/aiidateam/plumpy/commit/db2af9acf7c139798a21e574d6308ae21b3b7513)
+
+### Devops
+- Update ReadTheDocs configuration file [[31f85c7]](https://github.com/aiidateam/plumpy/commit/31f85c71730b488aafd680f240485a51884722b7)
+
+
 ## v0.21.8 - 2023-06-07
 
 ### Devops
