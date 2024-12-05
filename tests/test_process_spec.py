@@ -10,7 +10,6 @@ class StrSubtype(str):
 
 
 class TestProcessSpec(TestCase):
-
     def setUp(self):
         self.spec = ProcessSpec()
 
@@ -18,7 +17,6 @@ class TestProcessSpec(TestCase):
         """
         Get the root, inputs and outputs port namespaces of the ProcessSpec
         """
-        ports = self.spec.ports
         input_ports = self.spec.inputs
         output_ports = self.spec.outputs
 
@@ -77,7 +75,7 @@ class TestProcessSpec(TestCase):
         """Test the port validator with default."""
 
         def dict_validator(dictionary, port):
-            if 'key' not in dictionary or dictionary['key'] is not 'value':
+            if 'key' not in dictionary or dictionary['key'] != 'value':
                 return 'Invalid dictionary'
 
         self.spec.input('dict', default={'key': 'value'}, validator=dict_validator)

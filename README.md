@@ -1,4 +1,6 @@
-# plumpy
+## plumpy
+
+<img src="https://github.com/aiidateam/plumpy/blob/master/docs/source/_static/logo.svg" width="64px" height="auto">
 
 [![Build status][github-ci]][github-link]
 [![Docs status][rtd-badge]][rtd-link]

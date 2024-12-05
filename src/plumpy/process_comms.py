@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Module for process level communication functions and classes"""
+
 import asyncio
 import copy
 import logging
@@ -11,19 +12,19 @@ from . import communications, futures, loaders, persistence
 from .utils import PID_TYPE
 
 __all__ = [
+    'KILL_MSG',
     'PAUSE_MSG',
     'PLAY_MSG',
-    'KILL_MSG',
     'STATUS_MSG',
     'ProcessLauncher',
+    'RemoteProcessController',
+    'RemoteProcessThreadController',
     'create_continue_body',
     'create_launch_body',
-    'RemoteProcessThreadController',
-    'RemoteProcessController',
 ]
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
 ProcessResult = Any
 ProcessStatus = Any
@@ -34,7 +35,7 @@ MESSAGE_KEY = 'message'
 
 class Intent:
     """Intent constants for a process message"""
-    # pylint: disable=too-few-public-methods
+
     PLAY: str = 'play'
     PAUSE: str = 'pause'
     KILL: str = 'kill'
@@ -71,7 +72,7 @@ def create_launch_body(
     init_kwargs: Optional[Dict[str, Any]] = None,
     persist: bool = False,
     loader: Optional[loaders.ObjectLoader] = None,
-    nowait: bool = True
+    nowait: bool = True,
 ) -> Dict[str, Any]:
     """
     Create a message body for the launch action
@@ -95,8 +96,8 @@ def create_launch_body(
             PERSIST_KEY: persist,
             NOWAIT_KEY: nowait,
             ARGS_KEY: init_args,
-            KWARGS_KEY: init_kwargs
-        }
+            KWARGS_KEY: init_kwargs,
+        },
     }
     return msg_body
 
@@ -119,7 +120,7 @@ def create_create_body(
     init_args: Optional[Sequence[Any]] = None,
     init_kwargs: Optional[Dict[str, Any]] = None,
     persist: bool = False,
-    loader: Optional[loaders.ObjectLoader] = None
+    loader: Optional[loaders.ObjectLoader] = None,
 ) -> Dict[str, Any]:
     """
     Create a message body to create a new process
@@ -140,8 +141,8 @@ def create_create_body(
             PROCESS_CLASS_KEY: loader.identify_object(process_class),
             PERSIST_KEY: persist,
             ARGS_KEY: init_args,
-            KWARGS_KEY: init_kwargs
-        }
+            KWARGS_KEY: init_kwargs,
+        },
     }
     return msg_body
 
@@ -216,11 +217,7 @@ class RemoteProcessController:
         return result
 
     async def continue_process(
-        self,
-        pid: 'PID_TYPE',
-        tag: Optional[str] = None,
-        nowait: bool = False,
-        no_reply: bool = False
+        self, pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False, no_reply: bool = False
     ) -> Optional['ProcessResult']:
         """
         Continue the process
@@ -249,7 +246,7 @@ class RemoteProcessController:
         persist: bool = False,
         loader: Optional[loaders.ObjectLoader] = None,
         nowait: bool = False,
-        no_reply: bool = False
+        no_reply: bool = False,
     ) -> 'ProcessResult':
         """
         Launch a process given the class and constructor arguments
@@ -263,7 +260,7 @@ class RemoteProcessController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the result of launching the process
         """
-        # pylint: disable=too-many-arguments
+
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
         launch_future = self._communicator.task_send(message, no_reply=no_reply)
         future = await asyncio.wrap_future(launch_future)
@@ -281,7 +278,7 @@ class RemoteProcessController:
         init_kwargs: Optional[Dict[str, Any]] = None,
         loader: Optional[loaders.ObjectLoader] = None,
         nowait: bool = False,
-        no_reply: bool = False
+        no_reply: bool = False,
     ) -> 'ProcessResult':
         """
         Execute a process.  This call will first send a create task and then a continue task over
@@ -296,7 +293,7 @@ class RemoteProcessController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the result of executing the process
         """
-        # pylint: disable=too-many-arguments
+
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         create_future = self._communicator.task_send(message)
@@ -399,11 +396,7 @@ class RemoteProcessThreadController:
         self._communicator.broadcast_send(msg, subject=Intent.KILL)
 
     def continue_process(
-        self,
-        pid: 'PID_TYPE',
-        tag: Optional[str] = None,
-        nowait: bool = False,
-        no_reply: bool = False
+        self, pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False, no_reply: bool = False
     ) -> Union[None, PID_TYPE, ProcessResult]:
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         return self.task_send(message, no_reply=no_reply)
@@ -416,9 +409,8 @@ class RemoteProcessThreadController:
         persist: bool = False,
         loader: Optional[loaders.ObjectLoader] = None,
         nowait: bool = False,
-        no_reply: bool = False
+        no_reply: bool = False,
     ) -> Union[None, PID_TYPE, ProcessResult]:
-        # pylint: disable=too-many-arguments
         """
         Launch the process
 
@@ -441,7 +433,7 @@ class RemoteProcessThreadController:
         init_kwargs: Optional[Dict[str, Any]] = None,
         loader: Optional[loaders.ObjectLoader] = None,
         nowait: bool = False,
-        no_reply: bool = False
+        no_reply: bool = False,
     ) -> Union[None, PID_TYPE, ProcessResult]:
         """
         Execute a process.  This call will first send a create task and then a continue task over
@@ -456,7 +448,7 @@ class RemoteProcessThreadController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the result of executing the process
         """
-        # pylint: disable=too-many-arguments
+
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         execute_future = kiwipy.Future()
@@ -512,7 +504,7 @@ class ProcessLauncher:
         loop: Optional[asyncio.AbstractEventLoop] = None,
         persister: Optional[persistence.Persister] = None,
         load_context: Optional[persistence.LoadSaveContext] = None,
-        loader: Optional[loaders.ObjectLoader] = None
+        loader: Optional[loaders.ObjectLoader] = None,
     ) -> None:
         self._loop = loop
         self._persister = persister
@@ -573,7 +565,8 @@ class ProcessLauncher:
             self._persister.save_checkpoint(proc)
 
         if nowait:
-            asyncio.ensure_future(proc.step_until_terminated())
+            # XXX: can return a reference and gracefully use task to cancel itself when the upper call stack fails
+            asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
             return proc.pid
 
         await proc.step_until_terminated()
@@ -581,11 +574,7 @@ class ProcessLauncher:
         return proc.future().result()
 
     async def _continue(
-        self,
-        _communicator: kiwipy.Communicator,
-        pid: 'PID_TYPE',
-        nowait: bool,
-        tag: Optional[str] = None
+        self, _communicator: kiwipy.Communicator, pid: 'PID_TYPE', nowait: bool, tag: Optional[str] = None
     ) -> Union[PID_TYPE, ProcessResult]:
         """
         Continue the process
@@ -604,7 +593,8 @@ class ProcessLauncher:
         proc = cast('Process', saved_state.unbundle(self._load_context))
 
         if nowait:
-            asyncio.ensure_future(proc.step_until_terminated())
+            # XXX: can return a reference and gracefully use task to cancel itself when the upper call stack fails
+            asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
             return proc.pid
 
         await proc.step_until_terminated()

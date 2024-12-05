@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Tests for the :mod:`plumpy.communications` module."""
-from kiwipy import CommunicatorHelper
+
 import pytest
+from kiwipy import CommunicatorHelper
 
 from plumpy.communications import LoopCommunicator
 
@@ -14,7 +15,6 @@ class Subscriber:
 
 
 class Communicator(CommunicatorHelper):
-
     def task_send(self, task, no_reply=False):
         pass
 

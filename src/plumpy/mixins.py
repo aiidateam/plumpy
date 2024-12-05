@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from typing import Any
+from typing import Any, Optional
 
 from . import persistence
-from .utils import SAVED_STATE_TYPE, AttributesDict, Optional
+from .utils import SAVED_STATE_TYPE, AttributesDict
 
 __all__ = ['ContextMixin']
 
@@ -12,6 +12,7 @@ class ContextMixin(persistence.Savable):
     Add a context to a Process.  The contents of the context will be saved
     in the instance state unlike standard instance variables.
     """
+
     CONTEXT: str = '_context'
 
     def __init__(self, *args: Any, **kwargs: Any):

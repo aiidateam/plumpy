@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.22.3 - 2024-02-02
+
+### Bug fixes
+- Catch `ChannelInvalidStateError` in process state change [[fda244a]](https://github.com/aiidateam/plumpy/commit/fda244a139e26472c37f698d7d64f3d6e13ad57b)
+- Make `ProcessListener` instances persistable [[fc66001]](https://github.com/aiidateam/plumpy/commit/fc660017e4d21a1122dc1236e4ade2f54d146500)
+
+### Dependencies
+- Add support for Python 3.12 [[8043a63]](https://github.com/aiidateam/plumpy/commit/8043a630c50b60d599d3d8e7d85aefbb3ff46ade)
+- Drop support for Python 3.7 [[14b7c1a]](https://github.com/aiidateam/plumpy/commit/14b7c1a83026699fcc9f01c56a85872a8dd3c25c)
+
+### Devops
+- Update ReadTheDocs configuration file [[5ddba0f]](https://github.com/aiidateam/plumpy/commit/5ddba0f0136994a4703d507d7de98062c26928e7)
+
+
+## v0.22.2 - 2023-06-23
+
+This release applies the fixes that were released on the support branch of `v0.21.x`.
+
+### Bug fixes
+- Workchains: Accept but deprecate conditional predicates returning `None` [[#261]](https://github.com/aiidateam/plumpy/pull/261)
+- `PortNamespace`: Fix bug in valid type checking of dynamic namespaces [[#255]](https://github.com/aiidateam/plumpy/pull/255)
+- `PortNamespace`: Make `dynamic` apply recursively [[#263]](https://github.com/aiidateam/plumpy/pull/263)
+- `PortNamespace.get_port`: Only create if `create_dynamically` is `True` [[#268]](https://github.com/aiidateam/plumpy/pull/268)
+
+
+## v0.22.1 - 2022-11-21
+
+### Dependencies
+- Add support for Python 3.11 [[#249]](https://github.com/aiidateam/plumpy/pull/249)
+- Update requirement `pyyaml~=6.0` [[#248]](https://github.com/aiidateam/plumpy/pull/248)
+
+
+## v0.22.0 - 2022-10-31
+
+### Features
+- `Process`: Add the `is_excepted` property [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+
+### Bug fixes
+- `StateMachine`: transition directly to excepted if transition failed [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+- `Process`: Fix incorrect overriding of `transition_failed` [[#240]](https://github.com/aiidateam/plumpy/pull/240)
+
+### Dependencies
+- Add support for Python 3.10 [[#242]](https://github.com/aiidateam/plumpy/pull/242)
+- Update requirement `kiwipy~=0.8.2` [[#243]](https://github.com/aiidateam/plumpy/pull/243)
+- Add lower limit for patch version of `nest-asyncio` [[#241]](https://github.com/aiidateam/plumpy/pull/241)
+
+### Devops
+- Fix `auto_persist` decorator typing [[#239]](https://github.com/aiidateam/plumpy/pull/239)
+- Fix remaining warnings in unit tests [[#244]](https://github.com/aiidateam/plumpy/pull/244)
+- Update the `mypy` pre-commit dependency [[#246]](https://github.com/aiidateam/plumpy/pull/246)
+
+
 ## v0.21.11 - 2024-07-01
 
 ### Fixes
@@ -96,7 +148,7 @@ This is a backport of changes introduced in `v0.22.0`.
 ## v0.21.0 - 2022-04-08
 
 ### Bug fixes
-- Fix UnboundLocalError in DefaultObjectLoader.load_object. [[#225]](https://github.com/aiidateam/plumpy/pull/225)
+- Fix `UnboundLocalError` in `DefaultObjectLoader.load_object`. [[#225]](https://github.com/aiidateam/plumpy/pull/225)
 
 ### Dependencies
 - Drop support for Python 3.6. [[#228]](https://github.com/aiidateam/plumpy/pull/228)

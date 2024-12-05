@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 import asyncio
-from collections import deque
-from collections.abc import Mapping
 import functools
 import importlib
 import inspect
 import logging
 import types
-from typing import (  # pylint: disable=unused-import
-    TYPE_CHECKING,
+from collections import deque
+from collections.abc import Mapping
+from typing import (
     Any,
     Awaitable,
     Callable,
@@ -17,7 +16,6 @@ from typing import (  # pylint: disable=unused-import
     List,
     MutableMapping,
     Optional,
-    Set,
     Tuple,
     Type,
 )
@@ -25,18 +23,15 @@ from typing import (  # pylint: disable=unused-import
 from . import lang
 from .settings import check_override, check_protected
 
-if TYPE_CHECKING:
-    from .processes import ProcessListener  # pylint: disable=cyclic-import
-
 __all__ = ['AttributesDict']
 
-protected = lang.protected(check=check_protected)  # pylint: disable=invalid-name
-override = lang.override(check=check_override)  # pylint: disable=invalid-name
+protected = lang.protected(check=check_protected)
+override = lang.override(check=check_override)
 
 _LOGGER = logging.getLogger(__name__)
 
-SAVED_STATE_TYPE = MutableMapping[str, Any]  # pylint: disable=invalid-name
-PID_TYPE = Hashable  # pylint: disable=invalid-name
+SAVED_STATE_TYPE = MutableMapping[str, Any]
+PID_TYPE = Hashable
 
 
 class Frozendict(Mapping):
@@ -79,7 +74,6 @@ class Frozendict(Mapping):
 
 
 class AttributesFrozendict(Frozendict):
-
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._initialised: bool = True
