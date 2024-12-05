@@ -4,7 +4,7 @@ Module containing future related methods and classes
 """
 
 import asyncio
-from typing import Any, Callable, Coroutine, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 import kiwipy
 
@@ -55,7 +55,7 @@ class CancellableAction(Future):
             self._action = None  # type: ignore
 
 
-def create_task(coro: Callable[[], Coroutine], loop: Optional[asyncio.AbstractEventLoop] = None) -> Future:
+def create_task(coro: Callable[[], Awaitable[Any]], loop: Optional[asyncio.AbstractEventLoop] = None) -> Future:
     """
     Schedule a call to a coro in the event loop and wrap the outcome
     in a future.
