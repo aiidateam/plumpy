@@ -11,6 +11,8 @@ from plumpy.workchains import *
 
 from . import utils
 
+# FIXME: after deabstract on savable into a protocol, test that all stepper are savable
+# FIXME: workchani itself is savable
 
 class Wf(WorkChain):
     # Keep track of which steps were completed by the workflow

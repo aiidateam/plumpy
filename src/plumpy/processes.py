@@ -37,7 +37,7 @@ from typing import (
 import kiwipy
 
 from plumpy.coordinator import Coordinator
-from plumpy.persistence import _ensure_object_loader
+from plumpy.persistence import ensure_object_loader
 
 try:
     from aiocontextvars import ContextVar
@@ -116,7 +116,7 @@ def ensure_not_closed(func: Callable[..., Any]) -> Callable[..., Any]:
     '_pre_paused_status',
     '_event_helper',
 )
-class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMeta):
+class Process(StateMachine, metaclass=ProcessStateMachineMeta):
     """
     The Process class is the base for any unit of work in plumpy.
 
@@ -265,7 +265,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: An instance of the object with its state loaded from the save state.
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         proc = cls.__new__(cls)
 
         # XXX: load_instance_state
@@ -673,8 +673,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
 
-        # FIXME: the combined ProcessState protocol should cover the case
-        if isinstance(self._state, process_states.Savable):
+        if isinstance(self._state, persistence.Savable):
             out_state['_state'] = self._state.save()
 
         # Inputs/outputs

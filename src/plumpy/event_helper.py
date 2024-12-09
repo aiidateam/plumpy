@@ -2,20 +2,21 @@
 import logging
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+from plumpy.persistence import LoadSaveContext, Savable, auto_load, auto_save, ensure_object_loader
 from plumpy.utils import SAVED_STATE_TYPE
 
 from . import persistence
-from plumpy.persistence import Savable, LoadSaveContext, _ensure_object_loader, auto_load
 
 if TYPE_CHECKING:
     from typing import Set, Type
+
     from .process_listener import ProcessListener
 
 _LOGGER = logging.getLogger(__name__)
 
 
 @persistence.auto_persist('_listeners', '_listener_type')
-class EventHelper(persistence.Savable):
+class EventHelper:
     def __init__(self, listener_type: 'Type[ProcessListener]'):
         assert listener_type is not None, 'Must provide valid listener type'
 
@@ -43,10 +44,15 @@ class EventHelper(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         auto_load(obj, saved_state, load_context)
         return obj
+
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
     @property
     def listeners(self) -> 'Set[ProcessListener]':

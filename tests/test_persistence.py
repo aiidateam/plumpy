@@ -5,16 +5,17 @@ import unittest
 import yaml
 
 import plumpy
-from plumpy.persistence import auto_load
+from plumpy.persistence import auto_load, auto_persist, auto_save
+from plumpy.utils import SAVED_STATE_TYPE
 
 from . import utils
 
 
-class SaveEmpty(plumpy.Savable):
-    pass
+@auto_persist()
+class SaveEmpty:
 
     @classmethod
-    def recreate_from(cls, saved_state, load_context= None):
+    def recreate_from(cls, saved_state, load_context=None):
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -28,9 +29,14 @@ class SaveEmpty(plumpy.Savable):
         auto_load(obj, saved_state, load_context)
         return obj
 
+    def save(self, save_context=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
+
 
 @plumpy.auto_persist('test', 'test_method')
-class Save1(plumpy.Savable):
+class Save1:
     def __init__(self):
         self.test = 'sup yp'
         self.test_method = self.m
@@ -39,7 +45,7 @@ class Save1(plumpy.Savable):
         pass
 
     @classmethod
-    def recreate_from(cls, saved_state, load_context= None):
+    def recreate_from(cls, saved_state, load_context=None):
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -53,14 +59,19 @@ class Save1(plumpy.Savable):
         auto_load(obj, saved_state, load_context)
         return obj
 
+    def save(self, save_context=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
+
 
 @plumpy.auto_persist('test')
-class Save(plumpy.Savable):
+class Save:
     def __init__(self):
         self.test = Save1()
 
     @classmethod
-    def recreate_from(cls, saved_state, load_context= None):
+    def recreate_from(cls, saved_state, load_context=None):
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -73,6 +84,11 @@ class Save(plumpy.Savable):
         obj = cls.__new__(cls)
         auto_load(obj, saved_state, load_context)
         return obj
+
+    def save(self, save_context=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
 
 class TestSavable(unittest.TestCase):
