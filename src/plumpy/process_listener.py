@@ -3,7 +3,8 @@ import abc
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from . import persistence
-from .utils import SAVED_STATE_TYPE, protected
+from .utils import SAVED_STATE_TYPE
+from plumpy.persistence import LoadSaveContext, _ensure_object_loader
 
 if TYPE_CHECKING:
     from .processes import Process
@@ -20,12 +21,21 @@ class ProcessListener(persistence.Savable, metaclass=abc.ABCMeta):
     def init(self, **kwargs: Any) -> None:
         self._params = kwargs
 
-    @protected
-    def load_instance_state(
-        self, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext]
-    ) -> None:
-        super().load_instance_state(saved_state, load_context)
-        self.init(**saved_state['_params'])
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = _ensure_object_loader(load_context, saved_state)
+        obj = cls.__new__(cls)
+        obj.init(**saved_state['_params'])
+        return obj
 
     # endregion
 
