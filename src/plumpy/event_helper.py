@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional
+
+from plumpy.utils import SAVED_STATE_TYPE
 
 from . import persistence
+from plumpy.persistence import Savable, LoadSaveContext, _ensure_object_loader, auto_load
 
 if TYPE_CHECKING:
     from typing import Set, Type
-
     from .process_listener import ProcessListener
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,6 +31,22 @@ class EventHelper(persistence.Savable):
 
     def remove_all_listeners(self) -> None:
         self._listeners.clear()
+
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Savable:
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = _ensure_object_loader(load_context, saved_state)
+        obj = cls.__new__(cls)
+        auto_load(obj, saved_state, load_context)
+        return obj
 
     @property
     def listeners(self) -> 'Set[ProcessListener]':

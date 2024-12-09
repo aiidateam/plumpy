@@ -5,12 +5,28 @@ import unittest
 import yaml
 
 import plumpy
+from plumpy.persistence import auto_load
 
 from . import utils
 
 
 class SaveEmpty(plumpy.Savable):
     pass
+
+    @classmethod
+    def recreate_from(cls, saved_state, load_context= None):
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        obj = cls.__new__(cls)
+        auto_load(obj, saved_state, load_context)
+        return obj
 
 
 @plumpy.auto_persist('test', 'test_method')
@@ -22,11 +38,41 @@ class Save1(plumpy.Savable):
     def m():
         pass
 
+    @classmethod
+    def recreate_from(cls, saved_state, load_context= None):
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        obj = cls.__new__(cls)
+        auto_load(obj, saved_state, load_context)
+        return obj
+
 
 @plumpy.auto_persist('test')
 class Save(plumpy.Savable):
     def __init__(self):
         self.test = Save1()
+
+    @classmethod
+    def recreate_from(cls, saved_state, load_context= None):
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        obj = cls.__new__(cls)
+        auto_load(obj, saved_state, load_context)
+        return obj
 
 
 class TestSavable(unittest.TestCase):
