@@ -75,7 +75,7 @@ class BundleKeys:
     """
     String keys used by the process to save its state in the state bundle.
 
-    See :meth:`plumpy.processes.Process.save` and :meth:`plumpy.processes.Process.load_instance_state`.
+    See :meth:`plumpy.processes.Process.save` and :meth:`plumpy.processes.Process.recreate_from`.
 
     """
 
@@ -257,10 +257,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         cls,
         saved_state: SAVED_STATE_TYPE,
         load_context: Optional[persistence.LoadSaveContext] = None,
-    ) -> 'Process':
-        """
-        Recreate a process from a saved state, passing any positional and
-        keyword arguments on to load_instance_state
+    ) -> Process:
+        """Recreate a process from a saved state, passing any positional
 
         :param saved_state: The saved state to load from
         :param load_context: The load context to use
@@ -269,7 +267,53 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         load_context = _ensure_object_loader(load_context, saved_state)
         proc = cls.__new__(cls)
-        proc.load_instance_state(saved_state, load_context)
+
+        # XXX: load_instance_state
+        # First make sure the state machine constructor is called
+        state_machine.StateMachine.__init__(proc)
+
+        proc._setup_event_hooks()
+
+        # Runtime variables, set initial states
+        proc._future = persistence.SavableFuture()
+        proc._event_helper = EventHelper(ProcessListener)
+        proc._logger = None
+        proc._communicator = None
+
+        if 'loop' in load_context:
+            proc._loop = load_context.loop
+        else:
+            proc._loop = asyncio.get_event_loop()
+
+        proc._state: state_machine.State = proc.recreate_state(saved_state['_state'])
+
+        if 'communicator' in load_context:
+            proc._communicator = load_context.communicator
+
+        if 'logger' in load_context:
+            proc._logger = load_context.logger
+
+        # Need to call this here as things downstream may rely on us having the runtime variable above
+        persistence.auto_load(proc, saved_state, load_context)
+
+        # Inputs/outputs
+        try:
+            decoded = proc.decode_input_args(saved_state[BundleKeys.INPUTS_RAW])
+            proc._raw_inputs = utils.AttributesFrozendict(decoded)
+        except KeyError:
+            proc._raw_inputs = None
+
+        try:
+            decoded = proc.decode_input_args(saved_state[BundleKeys.INPUTS_PARSED])
+            proc._parsed_inputs = utils.AttributesFrozendict(decoded)
+        except KeyError:
+            proc._parsed_inputs = None
+
+        try:
+            decoded = proc.decode_input_args(saved_state[BundleKeys.OUTPUTS])
+            proc._outputs = decoded
+        except KeyError:
+            proc._outputs = {}
 
         call_with_super_check(proc.init)
         return proc
@@ -644,62 +688,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             out_state[BundleKeys.OUTPUTS] = self.encode_input_args(self.outputs)
 
         return out_state
-
-    @protected
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
-        """Load the process from its saved instance state.
-
-        :param saved_state: A bundle to load the state from
-        :param load_context: The load context
-
-        """
-        # First make sure the state machine constructor is called
-        state_machine.StateMachine.__init__(self)
-
-        self._setup_event_hooks()
-
-        # Runtime variables, set initial states
-        self._future = persistence.SavableFuture()
-        self._event_helper = EventHelper(ProcessListener)
-        self._logger = None
-        self._coordinator = None
-
-        if 'loop' in load_context:
-            self._loop = load_context.loop
-        else:
-            self._loop = asyncio.get_event_loop()
-
-        self._state: state_machine.State = self.recreate_state(saved_state['_state'])
-
-        if 'coordinator' in load_context:
-            self._coordinator = load_context.coordinator
-
-        if 'logger' in load_context:
-            self._logger = load_context.logger
-
-        # Need to call this here as things downstream may rely on us having the runtime variable above
-        persistence.auto_load(self, saved_state, load_context)
-
-        # Inputs/outputs
-        try:
-            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS_RAW])
-            self._raw_inputs = utils.AttributesFrozendict(decoded)
-        except KeyError:
-            self._raw_inputs = None
-
-        try:
-            decoded = self.decode_input_args(saved_state[BundleKeys.INPUTS_PARSED])
-            self._parsed_inputs = utils.AttributesFrozendict(decoded)
-        except KeyError:
-            self._parsed_inputs = None
-
-        try:
-            decoded = self.decode_input_args(saved_state[BundleKeys.OUTPUTS])
-            self._outputs = decoded
-        except KeyError:
-            self._outputs = {}
-
-    # endregion
 
     def add_process_listener(self, listener: ProcessListener) -> None:
         """Add a process listener to the process.

@@ -465,11 +465,8 @@ class Savable:
         """
         load_context = _ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
-        obj.load_instance_state(saved_state, load_context)
+        auto_load(obj, saved_state, load_context)
         return obj
-
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext]) -> None:
-        auto_load(self, saved_state, load_context)
 
     def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
         out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
@@ -587,15 +584,16 @@ class SavableFuture(futures.Future, Savable):
             obj = cls(loop=loop)
             obj.cancel()
 
+        # ## XXX: load_instance_state: test not cover
+        # auto_load(obj, saved_state, load_context)
+        #
+        # if obj._callbacks:
+        #     # typing says asyncio.Future._callbacks needs to be called, but in the python 3.7 code it is a simple list
+        #     for callback in obj._callbacks:
+        #         obj.remove_done_callback(callback)  # type: ignore[arg-type]
+        # ## UNTILHERE XXX:
+
         return obj
-
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext) -> None:
-        auto_load(self, saved_state, load_context)
-
-        if self._callbacks:
-            # typing says asyncio.Future._callbacks needs to be called, but in the python 3.7 code it is a simple list
-            for callback in self._callbacks:
-                self.remove_done_callback(callback)  # type: ignore[arg-type]
 
 
 def auto_save(obj: Savable, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
@@ -634,6 +632,7 @@ def auto_save(obj: Savable, save_context: Optional[LoadSaveContext] = None) -> S
             out_state[member] = value
 
     return out_state
+
 
 def auto_load(obj: Savable, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext) -> None:
     obj._ensure_persist_configured()

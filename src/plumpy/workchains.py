@@ -26,6 +26,7 @@ from typing import (
 
 from plumpy.base import state_machine
 from plumpy.coordinator import Coordinator
+from plumpy.base.utils import call_with_super_check
 from plumpy.event_helper import EventHelper
 from plumpy.exceptions import InvalidStateError
 from plumpy.process_listener import ProcessListener
@@ -217,70 +218,87 @@ class WorkChain(processes.Process):
 
         return out_state
 
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
-        #########
-        # FIXME: dup of Process.load_instance_state
-        state_machine.StateMachine.__init__(self)
+    @classmethod
+    def recreate_from(
+        cls,
+        saved_state: SAVED_STATE_TYPE,
+        load_context: Optional[persistence.LoadSaveContext] = None,
+    ) -> WorkChain:
+        """Recreate a workchain from a saved state, passing any positional
 
-        self._setup_event_hooks()
+        :param saved_state: The saved state to load from
+        :param load_context: The load context to use
+        :return: An instance of the object with its state loaded from the save state.
+
+        """
+        ### FIXME: dup from process.create_from
+        load_context = _ensure_object_loader(load_context, saved_state)
+        proc = cls.__new__(cls)
+
+        # XXX: load_instance_state
+        # First make sure the state machine constructor is called
+        state_machine.StateMachine.__init__(proc)
+
+        proc._setup_event_hooks()
 
         # Runtime variables, set initial states
-        self._future = persistence.SavableFuture()
-        self._event_helper = EventHelper(ProcessListener)
-        self._logger = None
-        self._communicator = None
+        proc._future = persistence.SavableFuture()
+        proc._event_helper = EventHelper(ProcessListener)
+        proc._logger = None
+        proc._communicator = None
 
         if 'loop' in load_context:
-            self._loop = load_context.loop
+            proc._loop = load_context.loop
         else:
-            self._loop = asyncio.get_event_loop()
+            proc._loop = asyncio.get_event_loop()
 
-        self._state: state_machine.State = self.recreate_state(saved_state['_state'])
+        proc._state: state_machine.State = proc.recreate_state(saved_state['_state'])
 
         if 'communicator' in load_context:
-            self._communicator = load_context.communicator
+            proc._communicator = load_context.communicator
 
         if 'logger' in load_context:
-            self._logger = load_context.logger
+            proc._logger = load_context.logger
 
         # Need to call this here as things downstream may rely on us having the runtime variable above
-        persistence.auto_load(self, saved_state, load_context)
+        persistence.auto_load(proc, saved_state, load_context)
 
         # Inputs/outputs
         try:
-            decoded = self.decode_input_args(saved_state[processes.BundleKeys.INPUTS_RAW])
-            self._raw_inputs = utils.AttributesFrozendict(decoded)
+            decoded = proc.decode_input_args(saved_state[processes.BundleKeys.INPUTS_RAW])
+            proc._raw_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
-            self._raw_inputs = None
+            proc._raw_inputs = None
 
         try:
-            decoded = self.decode_input_args(saved_state[processes.BundleKeys.INPUTS_PARSED])
-            self._parsed_inputs = utils.AttributesFrozendict(decoded)
+            decoded = proc.decode_input_args(saved_state[processes.BundleKeys.INPUTS_PARSED])
+            proc._parsed_inputs = utils.AttributesFrozendict(decoded)
         except KeyError:
-            self._parsed_inputs = None
+            proc._parsed_inputs = None
 
         try:
-            decoded = self.decode_input_args(saved_state[processes.BundleKeys.OUTPUTS])
-            self._outputs = decoded
+            decoded = proc.decode_input_args(saved_state[processes.BundleKeys.OUTPUTS])
+            proc._outputs = decoded
         except KeyError:
-            self._outputs = {}
-
-        #
-        #########
+            proc._outputs = {}
+        ### UNTILHERE FIXME: dup from process.create_from
 
         # context mixin
         try:
-            self._context = AttributesDict(**saved_state[self.CONTEXT])
+            proc._context = AttributesDict(**saved_state[proc.CONTEXT])
         except KeyError:
             pass
 
         # end of context mixin
 
         # Recreate the stepper
-        self._stepper = None
-        stepper_state = saved_state.get(self._STEPPER_STATE, None)
+        proc._stepper = None
+        stepper_state = saved_state.get(proc._STEPPER_STATE, None)
         if stepper_state is not None:
-            self._stepper = self.spec().get_outline().recreate_stepper(stepper_state, self)
+            proc._stepper = proc.spec().get_outline().recreate_stepper(stepper_state, proc)
+
+        call_with_super_check(proc.init)
+        return proc
 
     def to_context(self, **kwargs: Union[asyncio.Future, processes.Process]) -> None:
         """
