@@ -10,6 +10,7 @@ import contextlib
 import copy
 import enum
 import functools
+import inspect
 import logging
 import re
 import sys
@@ -74,7 +75,7 @@ class BundleKeys:
     """
     String keys used by the process to save its state in the state bundle.
 
-    See :meth:`plumpy.processes.Process.save_instance_state` and :meth:`plumpy.processes.Process.load_instance_state`.
+    See :meth:`plumpy.processes.Process.save` and :meth:`plumpy.processes.Process.load_instance_state`.
 
     """
 
@@ -616,18 +617,14 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region Persistence
 
-    def save_instance_state(
-        self,
-        out_state: SAVED_STATE_TYPE,
-        save_context: Optional[persistence.LoadSaveContext],
-    ) -> None:
+    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
         """
         Ask the process to save its current instance state.
 
         :param out_state: A bundle to save the state to
         :param save_context: The save context
         """
-        super().save_instance_state(out_state, save_context)
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
 
         # FIXME: the combined ProcessState protocol should cover the case
         if isinstance(self._state, process_states.Savable):
@@ -642,6 +639,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if self.outputs:
             out_state[BundleKeys.OUTPUTS] = self.encode_input_args(self.outputs)
+
+        return out_state
 
     @protected
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:

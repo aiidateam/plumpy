@@ -92,7 +92,7 @@ def load(saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = N
     assert load_context.loader is not None  # required for type checking
     try:
         class_name = Savable._get_class_name(saved_state)
-        load_cls = load_context.loader.load_object(class_name)
+        load_cls: Savable = load_context.loader.load_object(class_name)
     except KeyError:
         raise ValueError('Class name not found in saved state')
     else:
@@ -475,43 +475,9 @@ class Savable:
             for member in self._auto_persist:
                 setattr(self, member, self._get_value(saved_state, member, load_context))
 
-    @super_check
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: Optional[LoadSaveContext]) -> None:
-        self._ensure_persist_configured()
-        if self._auto_persist is not None:
-            for member in self._auto_persist:
-                value = getattr(self, member)
-                if inspect.ismethod(value):
-                    if value.__self__ is not self:
-                        raise TypeError('Cannot persist methods of other classes')
-                    Savable._set_meta_type(out_state, member, META__TYPE__METHOD)
-                    value = value.__name__
-                elif isinstance(value, Savable):
-                    Savable._set_meta_type(out_state, member, META__TYPE__SAVABLE)
-                    value = value.save()
-                else:
-                    value = copy.deepcopy(value)
-                out_state[member] = value
-
     def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = {}
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
 
-        if save_context is None:
-            save_context = LoadSaveContext()
-
-        utils.type_check(save_context, LoadSaveContext)
-
-        default_loader = loaders.get_object_loader()
-        # If the user has specified a class loader, then save it in the saved state
-        if save_context.loader is not None:
-            loader_class = default_loader.identify_object(save_context.loader.__class__)
-            Savable.set_custom_meta(out_state, META__OBJECT_LOADER, loader_class)
-            loader = save_context.loader
-        else:
-            loader = default_loader
-
-        Savable._set_class_name(out_state, loader.identify_object(self.__class__))
-        call_with_super_check(self.save_instance_state, out_state, save_context)
         return out_state
 
     def _ensure_persist_configured(self) -> None:
@@ -581,10 +547,12 @@ class SavableFuture(futures.Future, Savable):
     .. note: This does not save any assigned done callbacks.
     """
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
         if self.done() and self.exception() is not None:
             out_state['exception'] = self.exception()
+
+        return out_state
 
     @classmethod
     def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
@@ -631,3 +599,41 @@ class SavableFuture(futures.Future, Savable):
             # typing says asyncio.Future._callbacks needs to be called, but in the python 3.7 code it is a simple list
             for callback in self._callbacks:
                 self.remove_done_callback(callback)  # type: ignore[arg-type]
+
+
+def auto_save(obj: Savable, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+    out_state: SAVED_STATE_TYPE = {}
+
+    if save_context is None:
+        save_context = LoadSaveContext()
+
+    utils.type_check(save_context, LoadSaveContext)
+
+    default_loader = loaders.get_object_loader()
+    # If the user has specified a class loader, then save it in the saved state
+    if save_context.loader is not None:
+        loader_class = default_loader.identify_object(save_context.loader.__class__)
+        Savable.set_custom_meta(out_state, META__OBJECT_LOADER, loader_class)
+        loader = save_context.loader
+    else:
+        loader = default_loader
+
+    Savable._set_class_name(out_state, loader.identify_object(obj.__class__))
+
+    obj._ensure_persist_configured()
+    if obj._auto_persist is not None:
+        for member in obj._auto_persist:
+            value = getattr(obj, member)
+            if inspect.ismethod(value):
+                if value.__self__ is not obj:
+                    raise TypeError('Cannot persist methods of other classes')
+                Savable._set_meta_type(out_state, member, META__TYPE__METHOD)
+                value = value.__name__
+            elif isinstance(value, Savable):
+                Savable._set_meta_type(out_state, member, META__TYPE__SAVABLE)
+                value = value.save()
+            else:
+                value = copy.deepcopy(value)
+            out_state[member] = value
+
+    return out_state

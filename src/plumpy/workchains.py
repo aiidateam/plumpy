@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import copy
 import abc
 import asyncio
 import collections
@@ -28,6 +29,7 @@ from plumpy.exceptions import InvalidStateError
 
 from . import lang, mixins, persistence, process_spec, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
+from plumpy import loaders, utils
 
 ToContext = dict
 
@@ -146,14 +148,68 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         super().on_create()
         self._stepper = self.spec().get_outline().create_stepper(self)
 
-    def save_instance_state(
-        self, out_state: SAVED_STATE_TYPE, save_context: Optional[persistence.LoadSaveContext]
-    ) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        """
+        Ask the process to save its current instance state.
+
+        :param out_state: A bundle to save the state to
+        :param save_context: The save context
+        """
+        out_state: SAVED_STATE_TYPE = {}
+
+        if save_context is None:
+            save_context = persistence.LoadSaveContext()
+
+        utils.type_check(save_context, persistence.LoadSaveContext)
+
+        default_loader = loaders.get_object_loader()
+        # If the user has specified a class loader, then save it in the saved state
+        if save_context.loader is not None:
+            loader_class = default_loader.identify_object(save_context.loader.__class__)
+            persistence.Savable.set_custom_meta(out_state, persistence.META__OBJECT_LOADER, loader_class)
+            loader = save_context.loader
+        else:
+            loader = default_loader
+
+        persistence.Savable._set_class_name(out_state, loader.identify_object(self.__class__))
+
+        self._ensure_persist_configured()
+        if self._auto_persist is not None:
+            for member in self._auto_persist:
+                value = getattr(self, member)
+                if inspect.ismethod(value):
+                    if value.__self__ is not self:
+                        raise TypeError('Cannot persist methods of other classes')
+                    persistence.Savable._set_meta_type(out_state, member, persistence.META__TYPE__METHOD)
+                    value = value.__name__
+                elif isinstance(value, persistence.Savable):
+                    persistence.Savable._set_meta_type(out_state, member, persistence.META__TYPE__SAVABLE)
+                    value = value.save()
+                else:
+                    value = copy.deepcopy(value)
+                out_state[member] = value
+
+        if isinstance(self._state, process_states.Savable):
+            out_state['_state'] = self._state.save()
+
+        # Inputs/outputs
+        if self.raw_inputs is not None:
+            out_state[processes.BundleKeys.INPUTS_RAW] = self.encode_input_args(self.raw_inputs)
+
+        if self.inputs is not None:
+            out_state[processes.BundleKeys.INPUTS_PARSED] = self.encode_input_args(self.inputs)
+
+        if self.outputs:
+            out_state[processes.BundleKeys.OUTPUTS] = self.encode_input_args(self.outputs)
 
         # Ask the stepper to save itself
         if self._stepper is not None:
             out_state[self._STEPPER_STATE] = self._stepper.save()
+
+        if self._context is not None:
+            out_state[self.CONTEXT] = self._context.__dict__
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
@@ -250,9 +306,11 @@ class _FunctionStepper(Stepper):
         super().__init__(workchain)
         self._fn = fn
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
         out_state['_fn'] = self._fn.__name__
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
@@ -323,10 +381,12 @@ class _BlockStepper(Stepper):
     def finished(self) -> bool:
         return self._pos == len(self._block)
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
@@ -461,10 +521,12 @@ class _IfStepper(Stepper):
     def finished(self) -> bool:
         return self._pos == len(self._if_instruction)
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
@@ -555,10 +617,13 @@ class _WhileStepper(Stepper):
 
         return False, result
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
+
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
