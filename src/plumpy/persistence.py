@@ -449,10 +449,6 @@ class Savable:
         cls._auto_persist.update(members)
 
     @classmethod
-    def persist(cls) -> None:
-        pass
-
-    @classmethod
     def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
@@ -463,10 +459,7 @@ class Savable:
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
-        return obj
+        ...
 
     def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
         out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
@@ -475,7 +468,6 @@ class Savable:
 
     def _ensure_persist_configured(self) -> None:
         if not self._persist_configured:
-            self.persist()
             self._persist_configured = True
 
     # region Metadata getter/setters
