@@ -2,16 +2,21 @@
 import abc
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
+from plumpy.persistence import LoadSaveContext, auto_save, ensure_object_loader
+
 from . import persistence
 from .utils import SAVED_STATE_TYPE
-from plumpy.persistence import LoadSaveContext, _ensure_object_loader
 
 if TYPE_CHECKING:
+    from plumpy.persistence import Savable
+
     from .processes import Process
+
+# FIXME: test any process listener is a savable
 
 
 @persistence.auto_persist('_params')
-class ProcessListener(persistence.Savable, metaclass=abc.ABCMeta):
+class ProcessListener(metaclass=abc.ABCMeta):
     # region Persistence methods
 
     def __init__(self) -> None:
@@ -32,10 +37,15 @@ class ProcessListener(persistence.Savable, metaclass=abc.ABCMeta):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         obj.init(**saved_state['_params'])
         return obj
+
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
     # endregion
 

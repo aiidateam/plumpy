@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import copy
-import inspect
 import sys
 import traceback
 from enum import Enum
@@ -14,19 +12,19 @@ from typing import (
     Callable,
     ClassVar,
     Optional,
-    Protocol,
     Tuple,
     Type,
     Union,
     cast,
     final,
-    runtime_checkable,
+    override,
 )
 
 import yaml
 from yaml.loader import Loader
 
 from plumpy.message import MessageBuilder, MessageType
+from plumpy.persistence import ensure_object_loader
 
 try:
     import tblib
@@ -38,8 +36,32 @@ except ImportError:
 from . import exceptions, futures, persistence, utils
 from .base import state_machine as st
 from .lang import NULL
-from .persistence import META__OBJECT_LOADER, META__TYPE__METHOD, META__TYPE__SAVABLE, LoadSaveContext, Savable, auto_persist, auto_save
-from .utils import SAVED_STATE_TYPE, ensure_coroutine
+from .persistence import (
+    LoadSaveContext,
+    Savable,
+    auto_load,
+    auto_persist,
+    auto_save,
+)
+from .utils import SAVED_STATE_TYPE
+
+__all__ = [
+    'Continue',
+    'Created',
+    'Excepted',
+    'Finished',
+    'Interruption',
+    # Commands
+    'Kill',
+    'KillInterruption',
+    'Killed',
+    'PauseInterruption',
+    'ProcessState',
+    'Running',
+    'Stop',
+    'Wait',
+    'Waiting',
+]
 
 if TYPE_CHECKING:
     from .processes import Process
@@ -68,8 +90,26 @@ class PauseInterruption(Interruption):
 # region Commands
 
 
-class Command(persistence.Savable):
-    pass
+class Command:
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        obj = cls.__new__(cls)
+        auto_load(obj, saved_state, load_context)
+        return obj
+
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
 
 @auto_persist('msg')
@@ -115,12 +155,14 @@ class Continue(Command):
         self.args = args
         self.kwargs = kwargs
 
+    @override
     def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
         out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
         out_state[self.CONTINUE_FN] = self.continue_fn.__name__
 
         return out_state
 
+    @override
     @classmethod
     def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
         """
@@ -132,7 +174,7 @@ class Continue(Command):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         auto_load(obj, saved_state, load_context)
 
@@ -163,14 +205,9 @@ class ProcessState(Enum):
     KILLED = 'killed'
 
 
-# @runtime_checkable
-# class Savable(Protocol):
-#     def save(self, save_context: LoadSaveContext | None = None) -> SAVED_STATE_TYPE: ...
-
-
 @final
 @auto_persist('args', 'kwargs')
-class Created(persistence.Savable):
+class Created:
     LABEL: ClassVar = ProcessState.CREATED
     ALLOWED: ClassVar = {ProcessState.RUNNING, ProcessState.KILLED, ProcessState.EXCEPTED}
 
@@ -201,7 +238,7 @@ class Created(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
 
         auto_load(obj, saved_state, load_context)
@@ -224,7 +261,7 @@ class Created(persistence.Savable):
 
 @final
 @auto_persist('args', 'kwargs')
-class Running(persistence.Savable):
+class Running:
     LABEL: ClassVar = ProcessState.RUNNING
     ALLOWED: ClassVar = {
         ProcessState.RUNNING,
@@ -274,7 +311,7 @@ class Running(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         auto_load(obj, saved_state, load_context)
 
@@ -358,7 +395,7 @@ class Running(persistence.Savable):
 
 
 @auto_persist('msg', 'data')
-class Waiting(persistence.Savable):
+class Waiting:
     LABEL: ClassVar = ProcessState.WAITING
     ALLOWED: ClassVar = {
         ProcessState.RUNNING,
@@ -412,7 +449,7 @@ class Waiting(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         auto_load(obj, saved_state, load_context)
 
@@ -465,7 +502,8 @@ class Waiting(persistence.Savable):
 
 
 @final
-class Excepted(persistence.Savable):
+@auto_persist()
+class Excepted:
     """
     Excepted state, can optionally provide exception and traceback
 
@@ -517,7 +555,7 @@ class Excepted(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         auto_load(obj, saved_state, load_context)
 
@@ -550,7 +588,7 @@ class Excepted(persistence.Savable):
 
 @final
 @auto_persist('result', 'successful')
-class Finished(persistence.Savable):
+class Finished:
     """State for process is finished.
 
     :param result: The result of process
@@ -577,10 +615,15 @@ class Finished(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         auto_load(obj, saved_state, load_context)
         return obj
+
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
     def enter(self) -> None: ...
 
@@ -589,7 +632,7 @@ class Finished(persistence.Savable):
 
 @final
 @auto_persist('msg')
-class Killed(persistence.Savable):
+class Killed:
     """
     Represents a state where a process has been killed.
 
@@ -621,10 +664,15 @@ class Killed(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         auto_load(obj, saved_state, load_context)
         return obj
+
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
     def enter(self) -> None: ...
 
