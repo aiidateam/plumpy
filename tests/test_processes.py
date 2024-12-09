@@ -14,6 +14,10 @@ from plumpy.process_comms import KillMessage
 from plumpy.utils import AttributesFrozendict
 from tests import utils
 
+# FIXME: after deabstract on savable into a protocol, test that all state are savable
+# FIXME: also that any process is savable
+# FIXME: any process listener is savable
+# FIXME: any process control commands are savable
 
 class ForgetToCallParent(plumpy.Process):
     def __init__(self, forget_on):

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import copy
 import abc
 import asyncio
 import collections
@@ -9,6 +8,7 @@ import inspect
 import logging
 import re
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -26,16 +26,17 @@ from typing import (
 
 import kiwipy
 
+from plumpy import utils
 from plumpy.base import state_machine
 from plumpy.base.utils import call_with_super_check
 from plumpy.event_helper import EventHelper
 from plumpy.exceptions import InvalidStateError
+from plumpy.persistence import LoadSaveContext, auto_persist, auto_save, ensure_object_loader, Savable
 from plumpy.process_listener import ProcessListener
 
 from . import lang, persistence, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE, AttributesDict
-from plumpy import loaders, utils
-from plumpy.persistence import _ensure_object_loader
+
 
 __all__ = ['ToContext', 'WorkChain', 'WorkChainSpec', 'if_', 'return_', 'while_']
 
@@ -165,41 +166,9 @@ class WorkChain(processes.Process):
         :param out_state: A bundle to save the state to
         :param save_context: The save context
         """
-        out_state: SAVED_STATE_TYPE = {}
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
 
-        if save_context is None:
-            save_context = persistence.LoadSaveContext()
-
-        utils.type_check(save_context, persistence.LoadSaveContext)
-
-        default_loader = loaders.get_object_loader()
-        # If the user has specified a class loader, then save it in the saved state
-        if save_context.loader is not None:
-            loader_class = default_loader.identify_object(save_context.loader.__class__)
-            persistence.Savable.set_custom_meta(out_state, persistence.META__OBJECT_LOADER, loader_class)
-            loader = save_context.loader
-        else:
-            loader = default_loader
-
-        persistence.Savable._set_class_name(out_state, loader.identify_object(self.__class__))
-
-        self._ensure_persist_configured()
-        if self._auto_persist is not None:
-            for member in self._auto_persist:
-                value = getattr(self, member)
-                if inspect.ismethod(value):
-                    if value.__self__ is not self:
-                        raise TypeError('Cannot persist methods of other classes')
-                    persistence.Savable._set_meta_type(out_state, member, persistence.META__TYPE__METHOD)
-                    value = value.__name__
-                elif isinstance(value, persistence.Savable):
-                    persistence.Savable._set_meta_type(out_state, member, persistence.META__TYPE__SAVABLE)
-                    value = value.save()
-                else:
-                    value = copy.deepcopy(value)
-                out_state[member] = value
-
-        if isinstance(self._state, process_states.Savable):
+        if isinstance(self._state, persistence.Savable):
             out_state['_state'] = self._state.save()
 
         # Inputs/outputs
@@ -213,7 +182,7 @@ class WorkChain(processes.Process):
             out_state[processes.BundleKeys.OUTPUTS] = self.encode_input_args(self.outputs)
 
         # Ask the stepper to save itself
-        if self._stepper is not None:
+        if self._stepper is not None and isinstance(self._stepper, Savable):
             out_state[self._STEPPER_STATE] = self._stepper.save()
 
         if self._context is not None:
@@ -235,7 +204,7 @@ class WorkChain(processes.Process):
 
         """
         ### FIXME: dup from process.create_from
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         proc = cls.__new__(cls)
 
         # XXX: load_instance_state
@@ -378,7 +347,8 @@ class _Instruction(metaclass=abc.ABCMeta):
         """
 
 
-class _FunctionStepper(persistence.Savable):
+@auto_persist()
+class _FunctionStepper:
     def __init__(self, workchain: 'WorkChain', fn: WC_COMMAND_TYPE):
         self._workchain = workchain
         self._fn = fn
@@ -390,7 +360,9 @@ class _FunctionStepper(persistence.Savable):
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(
+        cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext] = None
+    ) -> 'Savable':
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -400,7 +372,7 @@ class _FunctionStepper(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         persistence.auto_load(obj, saved_state, load_context)
         obj._workchain = load_context.workchain
@@ -446,7 +418,7 @@ STEPPER_STATE = 'stepper_state'
 
 
 @persistence.auto_persist('_pos')
-class _BlockStepper(persistence.Savable):
+class _BlockStepper:
     def __init__(self, block: Sequence[_Instruction], workchain: 'WorkChain') -> None:
         self._workchain = workchain
         self._block = block
@@ -491,7 +463,7 @@ class _BlockStepper(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         persistence.auto_load(obj, saved_state, load_context)
         obj._workchain = load_context.workchain
@@ -594,7 +566,7 @@ class _Conditional:
 
 
 @persistence.auto_persist('_pos')
-class _IfStepper(persistence.Savable):
+class _IfStepper:
     def __init__(self, if_instruction: '_If', workchain: 'WorkChain') -> None:
         self._workchain = workchain
         self._if_instruction = if_instruction
@@ -646,7 +618,7 @@ class _IfStepper(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         persistence.auto_load(obj, saved_state, load_context)
         obj._workchain = load_context.workchain
@@ -717,7 +689,7 @@ class _If(_Instruction, collections.abc.Sequence):
         return description
 
 
-class _WhileStepper(persistence.Savable):
+class _WhileStepper:
     def __init__(self, while_instruction: '_While', workchain: 'WorkChain') -> None:
         self._workchain = workchain
         self._while_instruction = while_instruction
@@ -747,7 +719,9 @@ class _WhileStepper(persistence.Savable):
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(
+        cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext] = None
+    ) -> 'Savable':
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -757,7 +731,7 @@ class _WhileStepper(persistence.Savable):
         :return: The recreated instance
 
         """
-        load_context = _ensure_object_loader(load_context, saved_state)
+        load_context = ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
         persistence.auto_load(obj, saved_state, load_context)
         obj._workchain = load_context.workchain
@@ -804,7 +778,8 @@ class _PropagateReturn(BaseException):
         self.exit_code = exit_code
 
 
-class _ReturnStepper(persistence.Savable):
+@persistence.auto_persist()
+class _ReturnStepper:
     def __init__(self, return_instruction: '_Return', workchain: 'WorkChain') -> None:
         self._workchain = workchain
         self._return_instruction = return_instruction
