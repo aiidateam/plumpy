@@ -465,15 +465,11 @@ class Savable:
         """
         load_context = _ensure_object_loader(load_context, saved_state)
         obj = cls.__new__(cls)
-        call_with_super_check(obj.load_instance_state, saved_state, load_context)
+        obj.load_instance_state(saved_state, load_context)
         return obj
 
-    @super_check
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext]) -> None:
-        self._ensure_persist_configured()
-        if self._auto_persist is not None:
-            for member in self._auto_persist:
-                setattr(self, member, self._get_value(saved_state, member, load_context))
+        auto_load(self, saved_state, load_context)
 
     def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
         out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
@@ -594,7 +590,8 @@ class SavableFuture(futures.Future, Savable):
         return obj
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext) -> None:
-        super().load_instance_state(saved_state, load_context)
+        auto_load(self, saved_state, load_context)
+
         if self._callbacks:
             # typing says asyncio.Future._callbacks needs to be called, but in the python 3.7 code it is a simple list
             for callback in self._callbacks:
@@ -637,3 +634,9 @@ def auto_save(obj: Savable, save_context: Optional[LoadSaveContext] = None) -> S
             out_state[member] = value
 
     return out_state
+
+def auto_load(obj: Savable, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext) -> None:
+    obj._ensure_persist_configured()
+    if obj._auto_persist is not None:
+        for member in obj._auto_persist:
+            setattr(obj, member, obj._get_value(saved_state, member, load_context))
