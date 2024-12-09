@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import copy
+import inspect
 import sys
 import traceback
 from enum import Enum
@@ -36,7 +38,7 @@ except ImportError:
 from . import exceptions, futures, persistence, utils
 from .base import state_machine as st
 from .lang import NULL
-from .persistence import LoadSaveContext, auto_persist
+from .persistence import META__OBJECT_LOADER, META__TYPE__METHOD, META__TYPE__SAVABLE, LoadSaveContext, Savable, auto_persist, auto_save
 from .utils import SAVED_STATE_TYPE, ensure_coroutine
 
 if TYPE_CHECKING:
@@ -113,9 +115,11 @@ class Continue(Command):
         self.args = args
         self.kwargs = kwargs
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
         out_state[self.CONTINUE_FN] = self.continue_fn.__name__
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
@@ -145,10 +149,9 @@ class ProcessState(Enum):
     KILLED = 'killed'
 
 
-@runtime_checkable
-class Savable(Protocol):
-    def save(self, save_context: LoadSaveContext | None = None) -> SAVED_STATE_TYPE: ...
-
+# @runtime_checkable
+# class Savable(Protocol):
+#     def save(self, save_context: LoadSaveContext | None = None) -> SAVED_STATE_TYPE: ...
 
 @final
 @auto_persist('args', 'kwargs')
@@ -166,9 +169,11 @@ class Created(persistence.Savable):
         self.args = args
         self.kwargs = kwargs
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
         out_state[self.RUN_FN] = self.run_fn.__name__
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
@@ -218,11 +223,14 @@ class Running(persistence.Savable):
         self.kwargs = kwargs
         self._run_handle = None
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
         out_state[self.RUN_FN] = self.run_fn.__name__
         if self._command is not None:
             out_state[self.COMMAND] = self._command.save()
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
@@ -339,10 +347,13 @@ class Waiting(persistence.Savable):
         self.data = data
         self._waiting_future: futures.Future = futures.Future()
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
         if self.done_callback is not None:
             out_state[self.DONE_CALLBACK] = self.done_callback.__name__
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
@@ -426,11 +437,14 @@ class Excepted(persistence.Savable):
         exception = traceback.format_exception_only(type(self.exception) if self.exception else None, self.exception)[0]
         return super().__str__() + f'({exception})'
 
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: persistence.LoadSaveContext) -> None:
-        super().save_instance_state(out_state, save_context)
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
         out_state[self.EXC_VALUE] = yaml.dump(self.exception)
         if self.traceback is not None:
             out_state[self.TRACEBACK] = ''.join(traceback.format_tb(self.traceback))
+
+        return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)

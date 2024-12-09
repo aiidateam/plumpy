@@ -700,7 +700,7 @@ class SavePauseProc(plumpy.Process):
 class TestProcessSaving(unittest.TestCase):
     maxDiff = None
 
-    def test_running_save_instance_state(self):
+    def test_running_save(self):
         loop = asyncio.get_event_loop()
         nsync_comeback = SavePauseProc()
 
