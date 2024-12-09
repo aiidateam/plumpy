@@ -9,7 +9,6 @@ from .events import *
 from .exceptions import *
 from .futures import *
 from .loaders import *
-from .mixins import *
 from .persistence import *
 from .ports import *
 from .process_comms import *
@@ -25,7 +24,6 @@ __all__ = (
     + processes.__all__
     + utils.__all__
     + futures.__all__
-    + mixins.__all__
     + persistence.__all__
     + communications.__all__
     + process_comms.__all__
