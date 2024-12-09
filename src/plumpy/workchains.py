@@ -16,6 +16,7 @@ from typing import (
     Mapping,
     MutableSequence,
     Optional,
+    Protocol,
     Sequence,
     Tuple,
     Type,
@@ -25,11 +26,14 @@ from typing import (
 
 from plumpy.base import state_machine
 from plumpy.coordinator import Coordinator
+from plumpy.event_helper import EventHelper
 from plumpy.exceptions import InvalidStateError
+from plumpy.process_listener import ProcessListener
 
 from . import lang, mixins, persistence, process_spec, process_states, processes
-from .utils import PID_TYPE, SAVED_STATE_TYPE
+from .utils import PID_TYPE, SAVED_STATE_TYPE, AttributesDict
 from plumpy import loaders, utils
+from plumpy.persistence import _ensure_object_loader
 
 ToContext = dict
 
@@ -101,18 +105,15 @@ class Waiting(process_states.Waiting):
         for awaitable in self._awaiting:
             awaitable.add_done_callback(self._awaitable_done)
 
-        self.in_state = True
-
     def exit(self) -> None:
         if self.is_terminal:
             raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
-        self.in_state = False
 
         for awaitable in self._awaiting:
             awaitable.remove_done_callback(self._awaitable_done)
 
 
-class WorkChain(mixins.ContextMixin, processes.Process):
+class WorkChain(processes.Process):
     """
     A WorkChain is a series of instructions carried out with the ability to save
     state in between.
@@ -120,7 +121,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
 
     _spec_class = WorkChainSpec
     _STEPPER_STATE = 'stepper_state'
-    _CONTEXT = 'CONTEXT'
+    CONTEXT = 'CONTEXT'
 
     @classmethod
     def get_state_classes(cls) -> Dict[process_states.ProcessState, Type[state_machine.State]]:
@@ -137,8 +138,13 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         coordinator: Optional[Coordinator] = None,
     ) -> None:
         super().__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, coordinator=coordinator)
+        self._context: Optional[AttributesDict] = AttributesDict()
         self._stepper: Optional[Stepper] = None
         self._awaitables: Dict[Union[asyncio.Future, processes.Process], str] = {}
+
+    @property
+    def ctx(self) -> Optional[AttributesDict]:
+        return self._context
 
     @classmethod
     def spec(cls) -> WorkChainSpec:
@@ -212,7 +218,63 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         return out_state
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
-        super().load_instance_state(saved_state, load_context)
+        #########
+        # FIXME: dup of Process.load_instance_state
+        state_machine.StateMachine.__init__(self)
+
+        self._setup_event_hooks()
+
+        # Runtime variables, set initial states
+        self._future = persistence.SavableFuture()
+        self._event_helper = EventHelper(ProcessListener)
+        self._logger = None
+        self._communicator = None
+
+        if 'loop' in load_context:
+            self._loop = load_context.loop
+        else:
+            self._loop = asyncio.get_event_loop()
+
+        self._state: state_machine.State = self.recreate_state(saved_state['_state'])
+
+        if 'communicator' in load_context:
+            self._communicator = load_context.communicator
+
+        if 'logger' in load_context:
+            self._logger = load_context.logger
+
+        # Need to call this here as things downstream may rely on us having the runtime variable above
+        persistence.auto_load(self, saved_state, load_context)
+
+        # Inputs/outputs
+        try:
+            decoded = self.decode_input_args(saved_state[processes.BundleKeys.INPUTS_RAW])
+            self._raw_inputs = utils.AttributesFrozendict(decoded)
+        except KeyError:
+            self._raw_inputs = None
+
+        try:
+            decoded = self.decode_input_args(saved_state[processes.BundleKeys.INPUTS_PARSED])
+            self._parsed_inputs = utils.AttributesFrozendict(decoded)
+        except KeyError:
+            self._parsed_inputs = None
+
+        try:
+            decoded = self.decode_input_args(saved_state[processes.BundleKeys.OUTPUTS])
+            self._outputs = decoded
+        except KeyError:
+            self._outputs = {}
+
+        #
+        #########
+
+        # context mixin
+        try:
+            self._context = AttributesDict(**saved_state[self.CONTEXT])
+        except KeyError:
+            pass
+
+        # end of context mixin
 
         # Recreate the stepper
         self._stepper = None
@@ -255,15 +317,8 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         return return_value
 
 
-class Stepper(persistence.Savable, metaclass=abc.ABCMeta):
-    def __init__(self, workchain: 'WorkChain') -> None:
-        self._workchain = workchain
-
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
-        super().load_instance_state(saved_state, load_context)
-        self._workchain = load_context.workchain
-
-    @abc.abstractmethod
+# XXX: Stepper is also a Saver with `save` method.
+class Stepper(Protocol):
     def step(self) -> Tuple[bool, Any]:
         """
         Execute on step of the instructions.
@@ -272,6 +327,7 @@ class Stepper(persistence.Savable, metaclass=abc.ABCMeta):
             1. The return value from the executed step
 
         """
+        ...
 
 
 class _Instruction(metaclass=abc.ABCMeta):
@@ -301,9 +357,9 @@ class _Instruction(metaclass=abc.ABCMeta):
         """
 
 
-class _FunctionStepper(Stepper):
+class _FunctionStepper(persistence.Savable):
     def __init__(self, workchain: 'WorkChain', fn: WC_COMMAND_TYPE):
-        super().__init__(workchain)
+        self._workchain = workchain
         self._fn = fn
 
     def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
@@ -312,9 +368,24 @@ class _FunctionStepper(Stepper):
 
         return out_state
 
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
-        super().load_instance_state(saved_state, load_context)
-        self._fn = getattr(self._workchain.__class__, saved_state['_fn'])
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = _ensure_object_loader(load_context, saved_state)
+        obj = cls.__new__(cls)
+        persistence.auto_load(obj, saved_state, load_context)
+        obj._workchain = load_context.workchain
+        obj._fn = getattr(obj._workchain.__class__, saved_state['_fn'])
+
+        return obj
 
     def step(self) -> Tuple[bool, Any]:
         return True, self._fn(self._workchain)
@@ -354,9 +425,9 @@ STEPPER_STATE = 'stepper_state'
 
 
 @persistence.auto_persist('_pos')
-class _BlockStepper(Stepper):
+class _BlockStepper(persistence.Savable):
     def __init__(self, block: Sequence[_Instruction], workchain: 'WorkChain') -> None:
-        super().__init__(workchain)
+        self._workchain = workchain
         self._block = block
         self._pos: int = 0
         self._child_stepper: Optional[Stepper] = self._block[0].create_stepper(self._workchain)
@@ -388,13 +459,28 @@ class _BlockStepper(Stepper):
 
         return out_state
 
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
-        super().load_instance_state(saved_state, load_context)
-        self._block = load_context.block_instruction
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = _ensure_object_loader(load_context, saved_state)
+        obj = cls.__new__(cls)
+        persistence.auto_load(obj, saved_state, load_context)
+        obj._workchain = load_context.workchain
+        obj._block = load_context.block_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
-        self._child_stepper = None
+        obj._child_stepper = None
         if stepper_state is not None:
-            self._child_stepper = self._block[self._pos].recreate_stepper(stepper_state, self._workchain)
+            obj._child_stepper = obj._block[obj._pos].recreate_stepper(stepper_state, obj._workchain)
+
+        return obj
 
     def __str__(self) -> str:
         return str(self._pos) + ':' + str(self._child_stepper)
@@ -487,9 +573,9 @@ class _Conditional:
 
 
 @persistence.auto_persist('_pos')
-class _IfStepper(Stepper):
+class _IfStepper(persistence.Savable):
     def __init__(self, if_instruction: '_If', workchain: 'WorkChain') -> None:
-        super().__init__(workchain)
+        self._workchain = workchain
         self._if_instruction = if_instruction
         self._pos = 0
         self._child_stepper: Optional[Stepper] = None
@@ -528,13 +614,27 @@ class _IfStepper(Stepper):
 
         return out_state
 
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
-        super().load_instance_state(saved_state, load_context)
-        self._if_instruction = load_context.if_instruction
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = _ensure_object_loader(load_context, saved_state)
+        obj = cls.__new__(cls)
+        persistence.auto_load(obj, saved_state, load_context)
+        obj._workchain = load_context.workchain
+        obj._if_instruction = load_context.if_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
-        self._child_stepper = None
+        obj._child_stepper = None
         if stepper_state is not None:
-            self._child_stepper = self._if_instruction[self._pos].body.recreate_stepper(stepper_state, self._workchain)
+            obj._child_stepper = obj._if_instruction[obj._pos].body.recreate_stepper(stepper_state, obj._workchain)
+        return obj
 
     def __str__(self) -> str:
         string = str(self._if_instruction[self._pos])
@@ -596,9 +696,9 @@ class _If(_Instruction, collections.abc.Sequence):
         return description
 
 
-class _WhileStepper(Stepper):
+class _WhileStepper(persistence.Savable):
     def __init__(self, while_instruction: '_While', workchain: 'WorkChain') -> None:
-        super().__init__(workchain)
+        self._workchain = workchain
         self._while_instruction = while_instruction
         self._child_stepper: Optional[_BlockStepper] = None
 
@@ -625,13 +725,27 @@ class _WhileStepper(Stepper):
 
         return out_state
 
-    def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
-        super().load_instance_state(saved_state, load_context)
-        self._while_instruction = load_context.while_instruction
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = _ensure_object_loader(load_context, saved_state)
+        obj = cls.__new__(cls)
+        persistence.auto_load(obj, saved_state, load_context)
+        obj._workchain = load_context.workchain
+        obj._while_instruction = load_context.while_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
-        self._child_stepper = None
+        obj._child_stepper = None
         if stepper_state is not None:
-            self._child_stepper = self._while_instruction.body.recreate_stepper(stepper_state, self._workchain)
+            obj._child_stepper = obj._while_instruction.body.recreate_stepper(stepper_state, obj._workchain)
+        return obj
 
     def __str__(self) -> str:
         string = str(self._while_instruction)
@@ -669,9 +783,9 @@ class _PropagateReturn(BaseException):
         self.exit_code = exit_code
 
 
-class _ReturnStepper(Stepper):
+class _ReturnStepper(persistence.Savable):
     def __init__(self, return_instruction: '_Return', workchain: 'WorkChain') -> None:
-        super().__init__(workchain)
+        self._workchain = workchain
         self._return_instruction = return_instruction
 
     def step(self) -> Tuple[bool, Any]:

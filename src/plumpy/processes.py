@@ -10,7 +10,6 @@ import contextlib
 import copy
 import enum
 import functools
-import inspect
 import logging
 import re
 import sys
@@ -38,6 +37,7 @@ from typing import (
 import kiwipy
 
 from plumpy.coordinator import Coordinator
+from plumpy.persistence import _ensure_object_loader
 
 try:
     from aiocontextvars import ContextVar
@@ -267,9 +267,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: An instance of the object with its state loaded from the save state.
 
         """
-        process = cast(Process, super().recreate_from(saved_state, load_context))
-        call_with_super_check(process.init)
-        return process
+        load_context = _ensure_object_loader(load_context, saved_state)
+        proc = cls.__new__(cls)
+        proc.load_instance_state(saved_state, load_context)
+
+        call_with_super_check(proc.init)
+        return proc
 
     def __init__(
         self,
@@ -651,7 +654,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         """
         # First make sure the state machine constructor is called
-        super().__init__()
+        state_machine.StateMachine.__init__(self)
 
         self._setup_event_hooks()
 
@@ -675,7 +678,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._logger = load_context.logger
 
         # Need to call this here as things downstream may rely on us having the runtime variable above
-        super().load_instance_state(saved_state, load_context)
+        persistence.auto_load(self, saved_state, load_context)
 
         # Inputs/outputs
         try:
