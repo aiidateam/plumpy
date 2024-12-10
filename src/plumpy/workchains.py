@@ -8,7 +8,6 @@ import inspect
 import logging
 import re
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -31,12 +30,11 @@ from plumpy.base import state_machine
 from plumpy.base.utils import call_with_super_check
 from plumpy.event_helper import EventHelper
 from plumpy.exceptions import InvalidStateError
-from plumpy.persistence import LoadSaveContext, auto_persist, auto_save, ensure_object_loader, Savable
+from plumpy.persistence import LoadSaveContext, Savable, auto_persist, auto_save, ensure_object_loader
 from plumpy.process_listener import ProcessListener
 
 from . import lang, persistence, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE, AttributesDict
-
 
 __all__ = ['ToContext', 'WorkChain', 'WorkChainSpec', 'if_', 'return_', 'while_']
 
@@ -224,7 +222,7 @@ class WorkChain(processes.Process):
         else:
             proc._loop = asyncio.get_event_loop()
 
-        proc._state: state_machine.State = proc.recreate_state(saved_state['_state'])
+        proc._state = proc.recreate_state(saved_state['_state'])
 
         if 'communicator' in load_context:
             proc._communicator = load_context.communicator
@@ -233,7 +231,7 @@ class WorkChain(processes.Process):
             proc._logger = load_context.logger
 
         # Need to call this here as things downstream may rely on us having the runtime variable above
-        persistence.auto_load(proc, saved_state, load_context)
+        persistence.load_auto_persist_params(proc, saved_state, load_context)
 
         # Inputs/outputs
         try:
@@ -373,8 +371,7 @@ class _FunctionStepper:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        persistence.auto_load(obj, saved_state, load_context)
+        obj = persistence.auto_load(cls, saved_state, load_context)
         obj._workchain = load_context.workchain
         obj._fn = getattr(obj._workchain.__class__, saved_state['_fn'])
 
@@ -447,7 +444,7 @@ class _BlockStepper:
 
     def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
         out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
-        if self._child_stepper is not None:
+        if self._child_stepper is not None and isinstance(self._child_stepper, Savable):
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
         return out_state
@@ -464,8 +461,7 @@ class _BlockStepper:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        persistence.auto_load(obj, saved_state, load_context)
+        obj = persistence.auto_load(cls, saved_state, load_context)
         obj._workchain = load_context.workchain
         obj._block = load_context.block_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
@@ -602,7 +598,7 @@ class _IfStepper:
 
     def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
         out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
-        if self._child_stepper is not None:
+        if self._child_stepper is not None and isinstance(self._child_stepper, Savable):
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
         return out_state
@@ -619,8 +615,7 @@ class _IfStepper:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        persistence.auto_load(obj, saved_state, load_context)
+        obj = persistence.auto_load(cls, saved_state, load_context)
         obj._workchain = load_context.workchain
         obj._if_instruction = load_context.if_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)
@@ -732,8 +727,7 @@ class _WhileStepper:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        persistence.auto_load(obj, saved_state, load_context)
+        obj = persistence.auto_load(cls, saved_state, load_context)
         obj._workchain = load_context.workchain
         obj._while_instruction = load_context.while_instruction
         stepper_state = saved_state.get(STEPPER_STATE, None)

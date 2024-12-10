@@ -468,7 +468,7 @@ def run_until_waiting(proc):
     listener = plumpy.ProcessListener()
     in_waiting = plumpy.Future()
 
-    if proc.state == ProcessState.WAITING:
+    if proc.state_label == ProcessState.WAITING:
         in_waiting.set_result(True)
     else:
 

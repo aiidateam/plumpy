@@ -45,8 +45,7 @@ class EventHelper:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
+        obj = auto_load(cls, saved_state, load_context)
         return obj
 
     def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:

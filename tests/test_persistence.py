@@ -5,7 +5,7 @@ import unittest
 import yaml
 
 import plumpy
-from plumpy.persistence import auto_load, auto_persist, auto_save
+from plumpy.persistence import auto_load, auto_persist, auto_save, ensure_object_loader
 from plumpy.utils import SAVED_STATE_TYPE
 
 from . import utils
@@ -25,8 +25,8 @@ class SaveEmpty:
         :return: The recreated instance
 
         """
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
+        load_context = ensure_object_loader(load_context, saved_state)
+        obj = auto_load(cls, saved_state, load_context)
         return obj
 
     def save(self, save_context=None) -> SAVED_STATE_TYPE:
@@ -55,8 +55,8 @@ class Save1:
         :return: The recreated instance
 
         """
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
+        load_context = ensure_object_loader(load_context, saved_state)
+        obj = auto_load(cls, saved_state, load_context)
         return obj
 
     def save(self, save_context=None) -> SAVED_STATE_TYPE:
@@ -81,8 +81,8 @@ class Save:
         :return: The recreated instance
 
         """
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
+        load_context = ensure_object_loader(load_context, saved_state)
+        obj = auto_load(cls, saved_state, load_context)
         return obj
 
     def save(self, save_context=None) -> SAVED_STATE_TYPE:
