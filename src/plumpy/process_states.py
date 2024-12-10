@@ -3,7 +3,7 @@ import sys
 import traceback
 from enum import Enum
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Tuple, Type, Union, cast
 
 import yaml
 from yaml.loader import Loader
@@ -19,7 +19,7 @@ from . import exceptions, futures, persistence, utils
 from .base import state_machine
 from .lang import NULL
 from .persistence import auto_persist
-from .utils import SAVED_STATE_TYPE
+from .utils import SAVED_STATE_TYPE, ensure_coroutine
 
 __all__ = [
     'Continue',
@@ -195,10 +195,16 @@ class Running(State):
     _running: bool = False
     _run_handle = None
 
-    def __init__(self, process: 'Process', run_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, process: 'Process', run_fn: Callable[..., Union[Awaitable[Any], Any]], *args: Any, **kwargs: Any
+    ) -> None:
         super().__init__(process)
         assert run_fn is not None
-        self.run_fn = run_fn
+        self.run_fn = ensure_coroutine(run_fn)
+        # We wrap `run_fn` to a coroutine so we can apply await on it,
+        # even it if it was not a coroutine in the first place.
+        # This allows the same usage of async and non-async function
+        # with the await syntax while not changing the program logic.
         self.args = args
         self.kwargs = kwargs
         self._run_handle = None
@@ -211,7 +217,7 @@ class Running(State):
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext) -> None:
         super().load_instance_state(saved_state, load_context)
-        self.run_fn = getattr(self.process, saved_state[self.RUN_FN])
+        self.run_fn = ensure_coroutine(getattr(self.process, saved_state[self.RUN_FN]))
         if self.COMMAND in saved_state:
             self._command = persistence.Savable.load(saved_state[self.COMMAND], load_context)  # type: ignore
 
@@ -225,7 +231,7 @@ class Running(State):
             try:
                 try:
                     self._running = True
-                    result = self.run_fn(*self.args, **self.kwargs)
+                    result = await self.run_fn(*self.args, **self.kwargs)
                 finally:
                     self._running = False
             except Interruption:

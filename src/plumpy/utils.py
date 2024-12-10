@@ -9,6 +9,7 @@ from collections import deque
 from collections.abc import Mapping
 from typing import (
     Any,
+    Awaitable,
     Callable,
     Hashable,
     Iterator,
@@ -185,7 +186,7 @@ def type_check(obj: Any, expected_type: Type) -> None:
         raise TypeError(f"Got object of type '{type(obj)}' when expecting '{expected_type}'")
 
 
-def ensure_coroutine(coro_or_fn: Any) -> Callable[..., Any]:
+def ensure_coroutine(coro_or_fn: Any) -> Callable[..., Awaitable[Any]]:
     """
     Ensure that the given function ``fct`` is a coroutine
 
