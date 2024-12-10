@@ -42,6 +42,7 @@ from .persistence import (
     auto_load,
     auto_persist,
     auto_save,
+    ensure_object_loader,
 )
 from .utils import SAVED_STATE_TYPE
 
@@ -102,8 +103,8 @@ class Command:
         :return: The recreated instance
 
         """
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
+        load_context = ensure_object_loader(load_context, saved_state)
+        obj = auto_load(cls, saved_state, load_context)
         return obj
 
     def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
@@ -175,15 +176,15 @@ class Continue(Command):
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
+        obj = auto_load(cls, saved_state, load_context)
 
-        obj.state_machine = load_context.process
         try:
             obj.continue_fn = utils.load_function(saved_state[obj.CONTINUE_FN])
         except ValueError:
-            process = load_context.process
-            obj.continue_fn = getattr(process, saved_state[obj.CONTINUE_FN])
+            if load_context is not None:
+                obj.continue_fn = getattr(load_context.proc, saved_state[obj.CONTINUE_FN])
+            else:
+                raise
         return obj
 
 
@@ -239,12 +240,8 @@ class Created:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-
-        auto_load(obj, saved_state, load_context)
-
+        obj = auto_load(cls, saved_state, load_context)
         obj.process = load_context.process
-
         obj.run_fn = getattr(obj.process, saved_state[obj.RUN_FN])
 
         return obj
@@ -312,15 +309,13 @@ class Running:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
-
+        obj = auto_load(cls, saved_state, load_context)
         obj.process = load_context.process
 
         obj.run_fn = ensure_coroutine(getattr(self.process, saved_state[self.RUN_FN]))
         if obj.COMMAND in saved_state:
-            # FIXME: typing
             obj._command = persistence.load(saved_state[obj.COMMAND], load_context)  # type: ignore
+
         return obj
 
     def interrupt(self, reason: Any) -> None:
@@ -450,9 +445,7 @@ class Waiting:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
-
+        obj = auto_load(cls, saved_state, load_context)
         obj.process = load_context.process
 
         callback_name = saved_state.get(obj.DONE_CALLBACK, None)
@@ -556,8 +549,7 @@ class Excepted:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
+        obj = auto_load(cls, saved_state, load_context)
 
         obj.exception = yaml.load(saved_state[obj.EXC_VALUE], Loader=Loader)
         if _HAS_TBLIB:
@@ -616,8 +608,7 @@ class Finished:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
+        obj = auto_load(cls, saved_state, load_context)
         return obj
 
     def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
@@ -665,8 +656,7 @@ class Killed:
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = cls.__new__(cls)
-        auto_load(obj, saved_state, load_context)
+        obj = auto_load(cls, saved_state, load_context)
         return obj
 
     def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:

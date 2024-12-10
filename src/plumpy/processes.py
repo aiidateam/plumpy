@@ -21,6 +21,7 @@ from typing import (
     Any,
     Awaitable,
     Callable,
+    ClassVar,
     Dict,
     Generator,
     Hashable,
@@ -166,6 +167,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
     _cleanups: Optional[List[Callable[[], None]]] = None
 
     __called: bool = False
+    _auto_persist: ClassVar[set[str]]
 
     @classmethod
     def current(cls) -> Optional['Process']:
@@ -285,7 +287,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         else:
             proc._loop = asyncio.get_event_loop()
 
-        proc._state: state_machine.State = proc.recreate_state(saved_state['_state'])
+        proc._state = proc.recreate_state(saved_state['_state'])
 
         if 'communicator' in load_context:
             proc._communicator = load_context.communicator
@@ -294,7 +296,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
             proc._logger = load_context.logger
 
         # Need to call this here as things downstream may rely on us having the runtime variable above
-        persistence.auto_load(proc, saved_state, load_context)
+        persistence.load_auto_persist_params(proc, saved_state, load_context)
 
         # Inputs/outputs
         try:
@@ -519,7 +521,9 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
     def has_terminated(self) -> bool:
         """Return whether the process was terminated."""
-        return self._state.is_terminal
+        if self.state is None:
+            raise exceptions.InvalidStateError('process is not in state None that is invalid')
+        return self.state.is_terminal
 
     def result(self) -> Any:
         """
@@ -529,12 +533,12 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         If in any other state this will raise an InvalidStateError.
         :return: The result of the process
         """
-        if isinstance(self._state, process_states.Finished):
-            return self._state.result
-        if isinstance(self._state, process_states.Killed):
-            raise exceptions.KilledError(self._state.msg)
-        if isinstance(self._state, process_states.Excepted):
-            raise (self._state.exception or Exception('process excepted'))
+        if isinstance(self.state, process_states.Finished):
+            return self.state.result
+        if isinstance(self.state, process_states.Killed):
+            raise exceptions.KilledError(self.state.msg)
+        if isinstance(self.state, process_states.Excepted):
+            raise (self.state.exception or Exception('process excepted'))
 
         raise exceptions.InvalidStateError
 
@@ -544,7 +548,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         Will raise if the process is not in the FINISHED state
         """
         try:
-            return self._state.successful  # type: ignore
+            return self.state.successful  # type: ignore
         except AttributeError as exception:
             raise exceptions.InvalidStateError('process is not in the finished state') from exception
 
@@ -555,25 +559,25 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         :return: boolean, True if the process is in `Finished` state with `successful` attribute set to `True`
         """
         try:
-            return self._state.successful  # type: ignore
+            return self.state.successful  # type: ignore
         except AttributeError:
             return False
 
     def killed(self) -> bool:
         """Return whether the process is killed."""
-        return self.state == process_states.ProcessState.KILLED
+        return self.state_label == process_states.ProcessState.KILLED
 
     def killed_msg(self) -> Optional[MessageType]:
         """Return the killed message."""
-        if isinstance(self._state, process_states.Killed):
-            return self._state.msg
+        if isinstance(self.state, process_states.Killed):
+            return self.state.msg
 
         raise exceptions.InvalidStateError('Has not been killed')
 
     def exception(self) -> Optional[BaseException]:
         """Return exception, if the process is terminated in excepted state."""
-        if isinstance(self._state, process_states.Excepted):
-            return self._state.exception
+        if isinstance(self.state, process_states.Excepted):
+            return self.state.exception
 
         return None
 
@@ -583,7 +587,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
         :return: boolean, True if the process is in ``EXCEPTED`` state.
         """
-        return self.state == process_states.ProcessState.EXCEPTED
+        return self.state_label == process_states.ProcessState.EXCEPTED
 
     def done(self) -> bool:
         """Return True if the call was successfully killed or finished running.
@@ -592,7 +596,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
             Use the `has_terminated` method instead
         """
         warnings.warn('method is deprecated, use `has_terminated` instead', DeprecationWarning)
-        return self._state.is_terminal
+        return self.has_terminated()
 
     # endregion
 
@@ -620,7 +624,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         exception: Optional[BaseException],
         trace: Optional[TracebackType],
     ) -> None:
-        if self.state != process_states.ProcessState.EXCEPTED:
+        if self.state_label != process_states.ProcessState.EXCEPTED:
             self.fail(exception, trace)
 
     @contextlib.contextmanager
@@ -673,8 +677,8 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         """
         out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
 
-        if isinstance(self._state, persistence.Savable):
-            out_state['_state'] = self._state.save()
+        if isinstance(self.state, persistence.Savable):
+            out_state['_state'] = self.state.save()
 
         # Inputs/outputs
         if self.raw_inputs is not None:
@@ -732,7 +736,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
     def on_entered(self, from_state: Optional[state_machine.State]) -> None:
         # Map these onto direct functions that the subclass can implement
-        state_label = self._state.LABEL
+        state_label = self.state_label
         if state_label == process_states.ProcessState.RUNNING:
             call_with_super_check(self.on_running)
         elif state_label == process_states.ProcessState.WAITING:
@@ -746,7 +750,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
         if self._coordinator and isinstance(self.state, enum.Enum):
             from_label = cast(enum.Enum, from_state.LABEL).value if from_state is not None else None
-            subject = f'state_changed.{from_label}.{self.state.value}'
+            subject = f'state_changed.{from_label}.{self.state_label.value}'
             self.logger.info('Process<%s>: Broadcasting state change: %s', self.pid, subject)
             try:
                 self._coordinator.broadcast_send(body=None, sender=self.pid, subject=subject)
@@ -759,7 +763,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
                 raise
 
     def on_exiting(self) -> None:
-        state = self.state
+        state = self.state_label
         if state == process_states.ProcessState.WAITING:
             call_with_super_check(self.on_exit_waiting)
         elif state == process_states.ProcessState.RUNNING:
@@ -1099,7 +1103,6 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         if final_state == process_states.ProcessState.CREATED:
             raise exception.with_traceback(trace)
 
-        # state_class = self.get_states_map()[process_states.ProcessState.EXCEPTED]
         new_state = create_state(self, process_states.ProcessState.EXCEPTED, exception=exception, traceback=trace)
         self.transition_to(new_state)
 
@@ -1125,9 +1128,9 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
             return self._pausing
 
         if self._stepping:
-            if not isinstance(self._state, Interruptable):
+            if not isinstance(self.state, Interruptable):
                 raise exceptions.InvalidStateError(
-                    f'cannot interrupt {self._state.__class__}, method `interrupt` not implement'
+                    f'cannot interrupt {self.state.__class__}, method `interrupt` not implement'
                 )
 
             # Ask the step function to pause by setting this flag and giving the
@@ -1226,7 +1229,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
     @event(from_states=process_states.Waiting)
     def resume(self, *args: Any) -> None:
         """Start running the process again."""
-        return self._state.resume(*args)  # type: ignore
+        return self.state.resume(*args)  # type: ignore
 
     @event(to_states=process_states.Excepted)
     def fail(self, exception: Optional[BaseException], traceback: Optional[TracebackType]) -> None:
@@ -1244,7 +1247,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         Kill the process
         :param msg: An optional kill message
         """
-        if self.state == process_states.ProcessState.KILLED:
+        if self.state_label == process_states.ProcessState.KILLED:
             # Already killed
             return True
 
@@ -1256,7 +1259,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
             # Already killing
             return self._killing
 
-        if self._stepping and isinstance(self._state, Interruptable):
+        if self._stepping and isinstance(self.state, Interruptable):
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
             interrupt_exception = process_states.KillInterruption(msg_text)
@@ -1332,8 +1335,8 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         if self.paused and self._paused is not None:
             await self._paused
 
-        if not isinstance(self._state, Proceedable):
-            raise StateMachineError(f'cannot step from {self._state.__class__}, async method `execute` not implemented')
+        if not isinstance(self.state, Proceedable):
+            raise StateMachineError(f'cannot step from {self.state.__class__}, async method `execute` not implemented')
 
         try:
             self._stepping = True

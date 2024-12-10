@@ -266,7 +266,13 @@ class StateMachine(metaclass=StateMachineMeta):
         return self.get_state_class(self.initial_state_label())(self, *args, **kwargs)
 
     @property
-    def state(self) -> Any:
+    def state(self) -> State | None:
+        if self._state is None:
+            return None
+        return self._state
+
+    @property
+    def state_label(self) -> Any:
         if self._state is None:
             return None
         return self._state.LABEL
@@ -314,7 +320,7 @@ class StateMachine(metaclass=StateMachineMeta):
             # it can happened when transit from terminal state
             return None
 
-        initial_state_label = self._state.LABEL if self._state is not None else None
+        initial_state_label = self.state_label
         label = None
         try:
             self._transitioning = True
