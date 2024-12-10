@@ -1173,7 +1173,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         call_with_super_check(self.on_playing)
         return True
 
-    @event(from_states=(process_states.Waiting))
+    @event(from_states=process_states.Waiting)
     def resume(self, *args: Any) -> None:
         """Start running the process again."""
         return self._state.resume(*args)  # type: ignore
@@ -1253,7 +1253,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region Execution related methods
 
-    def run(self) -> Any:
+    async def run(self) -> Any:
         """This function will be run when the process is triggered.
         It should be overridden by a subclass.
         """
