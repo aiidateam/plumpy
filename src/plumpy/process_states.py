@@ -201,6 +201,10 @@ class Running(State):
         super().__init__(process)
         assert run_fn is not None
         self.run_fn = ensure_coroutine(run_fn)
+        # We wrap `run_fn` to a coroutine so we can apply await on it,
+        # even it if it was not a coroutine in the first place.
+        # This allows the same usage of async and non-async function
+        # with the await syntax while not changing the program logic.
         self.args = args
         self.kwargs = kwargs
         self._run_handle = None
