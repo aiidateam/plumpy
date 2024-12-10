@@ -19,6 +19,7 @@ from . import utils
 # FIXME: any process listener is savable
 # FIXME: any process control commands are savable
 
+
 class ForgetToCallParent(plumpy.Process):
     def __init__(self, forget_on):
         super().__init__()
@@ -239,7 +240,7 @@ class TestProcess(unittest.TestCase):
         proc.execute()
 
         self.assertTrue(proc.has_terminated())
-        self.assertEqual(proc.state, ProcessState.FINISHED)
+        self.assertEqual(proc.state_label, ProcessState.FINISHED)
         self.assertEqual(proc.outputs, {'default': 5})
 
     def test_run_from_class(self):
@@ -277,7 +278,7 @@ class TestProcess(unittest.TestCase):
         proc = utils.ExceptionProcess()
         with self.assertRaises(RuntimeError):
             proc.execute()
-        self.assertEqual(proc.state, ProcessState.EXCEPTED)
+        self.assertEqual(proc.state_label, ProcessState.EXCEPTED)
 
     def test_run_kill(self):
         proc = utils.KillProcess()
@@ -344,7 +345,7 @@ class TestProcess(unittest.TestCase):
 
         # Check it's done
         self.assertTrue(proc.has_terminated())
-        self.assertEqual(proc.state, ProcessState.FINISHED)
+        self.assertEqual(proc.state_label, ProcessState.FINISHED)
 
     def test_exc_info(self):
         proc = utils.ExceptionProcess()
@@ -368,7 +369,7 @@ class TestProcess(unittest.TestCase):
 
         async def async_test():
             await utils.run_until_waiting(proc)
-            self.assertEqual(proc.state, ProcessState.WAITING)
+            self.assertEqual(proc.state_label, ProcessState.WAITING)
 
             result = await proc.pause()
             self.assertTrue(result)
@@ -384,7 +385,7 @@ class TestProcess(unittest.TestCase):
 
             # Check it's done
             self.assertTrue(proc.has_terminated())
-            self.assertEqual(proc.state, ProcessState.FINISHED)
+            self.assertEqual(proc.state_label, ProcessState.FINISHED)
 
         loop.create_task(proc.step_until_terminated())
         loop.run_until_complete(async_test())
@@ -405,7 +406,7 @@ class TestProcess(unittest.TestCase):
 
         async def async_test():
             await utils.run_until_waiting(proc)
-            self.assertEqual(proc.state, ProcessState.WAITING)
+            self.assertEqual(proc.state_label, ProcessState.WAITING)
 
             result = await proc.pause(PAUSE_STATUS)
             self.assertTrue(result)
@@ -425,7 +426,7 @@ class TestProcess(unittest.TestCase):
         loop.run_until_complete(async_test())
 
         self.assertTrue(proc.has_terminated())
-        self.assertEqual(proc.state, ProcessState.FINISHED)
+        self.assertEqual(proc.state_label, ProcessState.FINISHED)
 
     def test_kill_in_run(self):
         class KillProcess(Process):
@@ -443,7 +444,7 @@ class TestProcess(unittest.TestCase):
             proc.execute()
 
         self.assertTrue(proc.after_kill)
-        self.assertEqual(proc.state, ProcessState.KILLED)
+        self.assertEqual(proc.state_label, ProcessState.KILLED)
 
     def test_kill_when_paused_in_run(self):
         class PauseProcess(Process):
@@ -455,7 +456,7 @@ class TestProcess(unittest.TestCase):
         with self.assertRaises(plumpy.KilledError):
             proc.execute()
 
-        self.assertEqual(proc.state, ProcessState.KILLED)
+        self.assertEqual(proc.state_label, ProcessState.KILLED)
 
     def test_kill_when_paused(self):
         loop = asyncio.get_event_loop()
@@ -479,7 +480,7 @@ class TestProcess(unittest.TestCase):
         loop.create_task(proc.step_until_terminated())
         loop.run_until_complete(async_test())
 
-        self.assertEqual(proc.state, ProcessState.KILLED)
+        self.assertEqual(proc.state_label, ProcessState.KILLED)
 
     def test_run_multiple(self):
         # Create and play some processes
@@ -555,7 +556,7 @@ class TestProcess(unittest.TestCase):
         loop.run_forever()
 
         self.assertTrue(proc.paused)
-        self.assertEqual(plumpy.ProcessState.FINISHED, proc.state)
+        self.assertEqual(proc.state_label, plumpy.ProcessState.FINISHED)
 
     def test_pause_play_in_process(self):
         """Test that we can pause and play that by playing within the process"""
@@ -573,7 +574,7 @@ class TestProcess(unittest.TestCase):
 
         proc.execute()
         self.assertFalse(proc.paused)
-        self.assertEqual(plumpy.ProcessState.FINISHED, proc.state)
+        self.assertEqual(proc.state_label, plumpy.ProcessState.FINISHED)
 
     def test_process_stack(self):
         test_case = self
@@ -784,7 +785,7 @@ class TestProcessSaving(unittest.TestCase):
             proc = proc_class()
             saver = utils.ProcessSaver(proc)
             saver.capture()
-            self.assertEqual(proc.state, ProcessState.FINISHED)
+            self.assertEqual(proc.state_label, ProcessState.FINISHED)
             self.assertTrue(utils.check_process_against_snapshots(loop, proc_class, saver.snapshots))
 
     def test_restart(self):
@@ -799,7 +800,7 @@ class TestProcessSaving(unittest.TestCase):
 
             # Load a process from the saved state
             loaded_proc = saved_state.unbundle()
-            self.assertEqual(loaded_proc.state, ProcessState.WAITING)
+            self.assertEqual(loaded_proc.state_label, ProcessState.WAITING)
 
             # Now resume it
             loaded_proc.resume()
@@ -822,7 +823,7 @@ class TestProcessSaving(unittest.TestCase):
 
             # Load a process from the saved state
             loaded_proc = saved_state.unbundle()
-            self.assertEqual(loaded_proc.state, ProcessState.WAITING)
+            self.assertEqual(loaded_proc.state_label, ProcessState.WAITING)
 
             # Now resume it twice in succession
             loaded_proc.resume()
@@ -864,7 +865,7 @@ class TestProcessSaving(unittest.TestCase):
     def test_killed(self):
         proc = utils.DummyProcess()
         proc.kill()
-        self.assertEqual(proc.state, plumpy.ProcessState.KILLED)
+        self.assertEqual(proc.state_label, plumpy.ProcessState.KILLED)
         self._check_round_trip(proc)
 
     def _check_round_trip(self, proc1):
@@ -987,40 +988,40 @@ class TestProcessNamespace(unittest.TestCase):
                     self.out(namespace_nested + '.two', 2)
 
         # Run the process in default mode which should not add any outputs and therefore fail
-        process = DummyDynamicProcess()
-        process.execute()
+        proc = DummyDynamicProcess()
+        proc.execute()
 
-        self.assertEqual(process.state, ProcessState.FINISHED)
-        self.assertFalse(process.is_successful)
-        self.assertDictEqual(process.outputs, {})
+        self.assertEqual(proc.state_label, ProcessState.FINISHED)
+        self.assertFalse(proc.is_successful)
+        self.assertDictEqual(proc.outputs, {})
 
         # Attaching only namespaced ports should fail, because the required port is not added
-        process = DummyDynamicProcess(inputs={'output_mode': OutputMode.DYNAMIC_PORT_NAMESPACE})
-        process.execute()
+        proc = DummyDynamicProcess(inputs={'output_mode': OutputMode.DYNAMIC_PORT_NAMESPACE})
+        proc.execute()
 
-        self.assertEqual(process.state, ProcessState.FINISHED)
-        self.assertFalse(process.is_successful)
-        self.assertEqual(process.outputs[namespace]['nested']['one'], 1)
-        self.assertEqual(process.outputs[namespace]['nested']['two'], 2)
+        self.assertEqual(proc.state_label, ProcessState.FINISHED)
+        self.assertFalse(proc.is_successful)
+        self.assertEqual(proc.outputs[namespace]['nested']['one'], 1)
+        self.assertEqual(proc.outputs[namespace]['nested']['two'], 2)
 
         # Attaching only the single required top-level port should be fine
-        process = DummyDynamicProcess(inputs={'output_mode': OutputMode.SINGLE_REQUIRED_PORT})
-        process.execute()
+        proc = DummyDynamicProcess(inputs={'output_mode': OutputMode.SINGLE_REQUIRED_PORT})
+        proc.execute()
 
-        self.assertEqual(process.state, ProcessState.FINISHED)
-        self.assertTrue(process.is_successful)
-        self.assertEqual(process.outputs['required_bool'], False)
+        self.assertEqual(proc.state_label, ProcessState.FINISHED)
+        self.assertTrue(proc.is_successful)
+        self.assertEqual(proc.outputs['required_bool'], False)
 
         # Attaching both the required and namespaced ports should result in a successful termination
-        process = DummyDynamicProcess(inputs={'output_mode': OutputMode.BOTH_SINGLE_AND_NAMESPACE})
-        process.execute()
+        proc = DummyDynamicProcess(inputs={'output_mode': OutputMode.BOTH_SINGLE_AND_NAMESPACE})
+        proc.execute()
 
-        self.assertIsNotNone(process.outputs)
-        self.assertEqual(process.state, ProcessState.FINISHED)
-        self.assertTrue(process.is_successful)
-        self.assertEqual(process.outputs['required_bool'], False)
-        self.assertEqual(process.outputs[namespace]['nested']['one'], 1)
-        self.assertEqual(process.outputs[namespace]['nested']['two'], 2)
+        self.assertIsNotNone(proc.outputs)
+        self.assertEqual(proc.state_label, ProcessState.FINISHED)
+        self.assertTrue(proc.is_successful)
+        self.assertEqual(proc.outputs['required_bool'], False)
+        self.assertEqual(proc.outputs[namespace]['nested']['one'], 1)
+        self.assertEqual(proc.outputs[namespace]['nested']['two'], 2)
 
 
 class TestProcessEvents(unittest.TestCase):

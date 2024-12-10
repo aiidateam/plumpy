@@ -20,6 +20,7 @@ from typing import (
     List,
     Optional,
     Protocol,
+    TypeVar,
     cast,
     runtime_checkable,
 )
@@ -523,6 +524,8 @@ def auto_save(obj: Savable, save_context: Optional[LoadSaveContext] = None) -> S
                 value = value.__name__
             elif isinstance(value, Savable) and not isinstance(value, type):
                 # persist for a savable obj, call `save` method of obj.
+                # the rhs branch is for when value is a Savable class, it is true runtime check
+                # of lhs condition.
                 SaveUtil.set_meta_type(out_state, member, META__TYPE__SAVABLE)
                 value = value.save()
             else:
@@ -532,9 +535,23 @@ def auto_save(obj: Savable, save_context: Optional[LoadSaveContext] = None) -> S
     return out_state
 
 
-def auto_load(obj: SavableWithAutoPersist, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext) -> None:
+def load_auto_persist_params(
+    obj: SavableWithAutoPersist, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None
+) -> None:
     for member in obj._auto_persist:
         setattr(obj, member, _get_value(obj, saved_state, member, load_context))
+
+
+T = TypeVar('T', bound=Savable)
+
+
+def auto_load(cls: type[T], saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None) -> T:
+    obj = cls.__new__(cls)
+
+    if isinstance(obj, SavableWithAutoPersist):
+        load_auto_persist_params(obj, saved_state, load_context)
+
+    return obj
 
 
 def _get_value(

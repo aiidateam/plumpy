@@ -68,7 +68,7 @@ class TestRemoteProcessController:
 
         # Check that all is as we expect
         assert result
-        assert proc.state == plumpy.ProcessState.WAITING
+        assert proc.state_label == plumpy.ProcessState.WAITING
 
         # if not close the background process will raise exception
         # make sure proc reach the final state
@@ -85,7 +85,7 @@ class TestRemoteProcessController:
 
         # Check the outcome
         assert result
-        assert proc.state == plumpy.ProcessState.KILLED
+        assert proc.state_label == plumpy.ProcessState.KILLED
 
     @pytest.mark.asyncio
     async def test_status(self, _coordinator, async_controller):
@@ -173,7 +173,7 @@ class TestRemoteProcessThreadController:
 
         # Check that all is as we expect
         assert result
-        assert proc.state == plumpy.ProcessState.CREATED
+        assert proc.state_label == plumpy.ProcessState.CREATED
 
     @pytest.mark.asyncio
     async def test_kill(self, _coordinator, sync_controller):
@@ -187,7 +187,7 @@ class TestRemoteProcessThreadController:
         # Check the outcome
         assert result
         # Occasionally fail
-        assert proc.state == plumpy.ProcessState.KILLED
+        assert proc.state_label == plumpy.ProcessState.KILLED
 
     @pytest.mark.asyncio
     async def test_kill_all(self, _coordinator, sync_controller):
@@ -198,7 +198,7 @@ class TestRemoteProcessThreadController:
 
         sync_controller.kill_all(msg_text='bang bang, I shot you down')
         await utils.wait_util(lambda: all([proc.killed() for proc in procs]))
-        assert all([proc.state == plumpy.ProcessState.KILLED for proc in procs])
+        assert all([proc.state_label == plumpy.ProcessState.KILLED for proc in procs])
 
     @pytest.mark.asyncio
     async def test_status(self, _coordinator, sync_controller):
