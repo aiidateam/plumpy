@@ -3,7 +3,6 @@ import plumpy
 
 
 class HelloWorld(plumpy.Process):
-
     @classmethod
     def define(cls, spec):
         super().define(spec)

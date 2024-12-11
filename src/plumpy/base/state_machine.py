@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """The state machine for processes"""
+
 import enum
 import functools
 import inspect
@@ -13,24 +14,24 @@ from plumpy.futures import Future
 
 from .utils import call_with_super_check, super_check
 
-__all__ = ['StateMachine', 'StateMachineMeta', 'event', 'TransitionFailed']
+__all__ = ['StateMachine', 'StateMachineMeta', 'TransitionFailed', 'event']
 
 _LOGGER = logging.getLogger(__name__)
 
-LABEL_TYPE = Union[None, enum.Enum, str]  # pylint: disable=invalid-name
-EVENT_CALLBACK_TYPE = Callable[['StateMachine', Hashable, Optional['State']], None]  # pylint: disable=invalid-name
+LABEL_TYPE = Union[None, enum.Enum, str]
+EVENT_CALLBACK_TYPE = Callable[['StateMachine', Hashable, Optional['State']], None]
 
 
 class StateMachineError(Exception):
     """Base class for state machine errors"""
 
 
-class StateEntryFailed(Exception):
+class StateEntryFailed(Exception):  # noqa: N818
     """
     Failed to enter a state, can provide the next state to go to via this exception
     """
 
-    def __init__(self, state: Hashable = None, *args: Any, **kwargs: Any) -> None:  # pylint: disable=keyword-arg-before-vararg
+    def __init__(self, state: Hashable = None, *args: Any, **kwargs: Any) -> None:
         super().__init__('failed to enter state')
         self.state = state
         self.args = args
@@ -42,20 +43,16 @@ class InvalidStateError(Exception):
 
 
 class EventError(StateMachineError):
-
     def __init__(self, evt: str, msg: str):
         super().__init__(msg)
         self.event = evt
 
 
-class TransitionFailed(Exception):
+class TransitionFailed(Exception):  # noqa: N818
     """A state transition failed"""
 
     def __init__(
-        self,
-        initial_state: 'State',
-        final_state: Optional['State'] = None,
-        traceback_str: Optional[str] = None
+        self, initial_state: 'State', final_state: Optional['State'] = None, traceback_str: Optional[str] = None
     ) -> None:
         self.initial_state = initial_state
         self.final_state = final_state
@@ -71,7 +68,7 @@ class TransitionFailed(Exception):
 
 def event(
     from_states: Union[str, Type['State'], Iterable[Type['State']]] = '*',
-    to_states: Union[str, Type['State'], Iterable[Type['State']]] = '*'
+    to_states: Union[str, Type['State'], Iterable[Type['State']]] = '*',
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """A decorator to check for correct transitions, raising ``EventError`` on invalid transitions."""
     if from_states != '*':
@@ -102,8 +99,8 @@ def event(
                         raise EventError(evt_label, 'Machine did not transition')
 
                     raise EventError(
-                        evt_label, 'Event produced invalid state transition from '
-                        f'{initial.LABEL} to {self._state.LABEL}'
+                        evt_label,
+                        'Event produced invalid state transition from ' f'{initial.LABEL} to {self._state.LABEL}',
                     )
 
             return result
@@ -126,7 +123,7 @@ class State:
     def is_terminal(cls) -> bool:
         return not cls.ALLOWED
 
-    def __init__(self, state_machine: 'StateMachine', *args: Any, **kwargs: Any):  # pylint: disable=unused-argument
+    def __init__(self, state_machine: 'StateMachine', *args: Any, **kwargs: Any):
         """
         :param state_machine: The process this state belongs to
         """
@@ -138,12 +135,12 @@ class State:
 
     @property
     def label(self) -> LABEL_TYPE:
-        """ Convenience property to get the state label """
+        """Convenience property to get the state label"""
         return self.LABEL
 
     @super_check
     def enter(self) -> None:
-        """ Entering the state """
+        """Entering the state"""
 
     def execute(self) -> Optional['State']:
         """
@@ -153,7 +150,7 @@ class State:
 
     @super_check
     def exit(self) -> None:
-        """ Exiting the state """
+        """Exiting the state"""
         if self.is_terminal():
             raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
 
@@ -175,13 +172,13 @@ class StateEventHook(enum.Enum):
     procedure.  The callback will be passed a state instance whose meaning will differ depending
     on the hook as commented below.
     """
+
     ENTERING_STATE: int = 0  # State passed will be the state that is being entered
     ENTERED_STATE: int = 1  # State passed will be the last state that we entered from
     EXITING_STATE: int = 2  # State passed will be the next state that will be entered (or None for terminal)
 
 
 class StateMachineMeta(type):
-
     def __call__(cls, *args: Any, **kwargs: Any) -> 'StateMachine':
         """
         Create the state machine and enter the initial state.
@@ -220,13 +217,13 @@ class StateMachine(metaclass=StateMachineMeta):
     def initial_state_label(cls) -> LABEL_TYPE:
         cls.__ensure_built()
         assert cls.STATES is not None
-        return cls.STATES[0].LABEL  # pylint: disable=unsubscriptable-object
+        return cls.STATES[0].LABEL
 
     @classmethod
     def get_state_class(cls, label: LABEL_TYPE) -> Type[State]:
         cls.__ensure_built()
         assert cls._STATES_MAP is not None
-        return cls._STATES_MAP[label]  # pylint: disable=unsubscriptable-object
+        return cls._STATES_MAP[label]
 
     @classmethod
     def __ensure_built(cls) -> None:
@@ -238,15 +235,15 @@ class StateMachine(metaclass=StateMachineMeta):
             pass
 
         cls.STATES = cls.get_states()
-        assert isinstance(cls.STATES, Iterable)  # pylint: disable=isinstance-second-argument-not-valid-type
+        assert isinstance(cls.STATES, Iterable)
 
         # Build the states map
         cls._STATES_MAP = {}
-        for state_cls in cls.STATES:  # pylint: disable=not-an-iterable
+        for state_cls in cls.STATES:
             assert issubclass(state_cls, State)
             label = state_cls.LABEL
-            assert label not in cls._STATES_MAP, f"Duplicate label '{label}'"  # pylint: disable=unsupported-membership-test
-            cls._STATES_MAP[label] = state_cls  # pylint: disable=unsupported-assignment-operation
+            assert label not in cls._STATES_MAP, f"Duplicate label '{label}'"
+            cls._STATES_MAP[label] = state_cls
 
         # should class initialise sealed = False?
         cls.sealed = True  # type: ignore
@@ -301,11 +298,10 @@ class StateMachine(metaclass=StateMachineMeta):
 
     @super_check
     def on_terminated(self) -> None:
-        """ Called when a terminal state is entered """
+        """Called when a terminal state is entered"""
 
     def transition_to(self, new_state: Union[Hashable, State, Type[State]], *args: Any, **kwargs: Any) -> None:
-        assert not self._transitioning, \
-            'Cannot call transition_to when already transitioning state'
+        assert not self._transitioning, 'Cannot call transition_to when already transitioning state'
 
         initial_state_label = self._state.LABEL if self._state is not None else None
         label = None
@@ -331,7 +327,7 @@ class StateMachine(metaclass=StateMachineMeta):
 
             if self._state is not None and self._state.is_terminal():
                 call_with_super_check(self.on_terminated)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self._transitioning = False
             if self._transition_failing:
                 raise
@@ -360,12 +356,12 @@ class StateMachine(metaclass=StateMachineMeta):
 
     def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> State:
         try:
-            return self.get_states_map()[state_label](self, *args, **kwargs)  # pylint: disable=unsubscriptable-object
+            return self.get_states_map()[state_label](self, *args, **kwargs)
         except KeyError:
             raise ValueError(f'{state_label} is not a valid state')
 
     def _exit_current_state(self, next_state: State) -> None:
-        """ Exit the given state """
+        """Exit the given state"""
 
         # If we're just being constructed we may not have a state yet to exit,
         # in which case check the new state is the initial state
@@ -401,6 +397,6 @@ class StateMachine(metaclass=StateMachineMeta):
             return state
 
         try:
-            return self.get_states_map()[cast(Hashable, state)]  # pylint: disable=unsubscriptable-object
+            return self.get_states_map()[cast(Hashable, state)]
         except KeyError:
             raise ValueError(f'{state} is not a valid state')

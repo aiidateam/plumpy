@@ -5,7 +5,6 @@ from .utils import TestCase
 
 
 class A:
-
     def __init__(self):
         self._a = None
 
@@ -22,27 +21,24 @@ class A:
     def protected_fn_nocheck(self):
         return self._a
 
-    def testA(self):
+    def testA(self):  # noqa: N802
         self.protected_fn()
         self.protected_property
 
 
 class B(A):
-
-    def testB(self):
+    def testB(self):  # noqa: N802
         self.protected_fn()
         self.protected_property
 
 
 class C(B):
-
-    def testC(self):
+    def testC(self):  # noqa: N802
         self.protected_fn()
         self.protected_property
 
 
 class TestProtected(TestCase):
-
     def test_free_function(self):
         with self.assertRaises(RuntimeError):
 
@@ -79,7 +75,6 @@ class TestProtected(TestCase):
         with self.assertRaises(RuntimeError):
 
             class TestWrongDecoratorOrder:
-
                 @protected(check=True)
                 @property
                 def a(self):
@@ -87,13 +82,11 @@ class TestProtected(TestCase):
 
 
 class Superclass:
-
     def test(self):
         pass
 
 
 class TestOverride(TestCase):
-
     def test_free_function(self):
         with self.assertRaises(RuntimeError):
 
@@ -102,9 +95,7 @@ class TestOverride(TestCase):
                 pass
 
     def test_correct_usage(self):
-
         class Derived(Superclass):
-
             @override(check=True)
             def test(self):
                 return True
@@ -115,7 +106,6 @@ class TestOverride(TestCase):
             pass
 
         class Next(Middle):
-
             @override(check=True)
             def test(self):
                 return True
@@ -123,9 +113,7 @@ class TestOverride(TestCase):
         self.assertTrue(Next().test())
 
     def test_incorrect_usage(self):
-
         class Derived:
-
             @override(check=True)
             def test(self):
                 pass
@@ -136,7 +124,6 @@ class TestOverride(TestCase):
         with self.assertRaises(RuntimeError):
 
             class TestWrongDecoratorOrder(Superclass):
-
                 @override(check=True)
                 @property
                 def test(self):

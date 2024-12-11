@@ -15,7 +15,6 @@ class SaveEmpty(plumpy.Savable):
 
 @plumpy.auto_persist('test', 'test_method')
 class Save1(plumpy.Savable):
-
     def __init__(self):
         self.test = 'sup yp'
         self.test_method = self.m
@@ -26,13 +25,11 @@ class Save1(plumpy.Savable):
 
 @plumpy.auto_persist('test')
 class Save(plumpy.Savable):
-
     def __init__(self):
         self.test = Save1()
 
 
 class TestSavable(unittest.TestCase):
-
     def test_empty_savable(self):
         self._save_round_trip(SaveEmpty())
 
@@ -79,9 +76,8 @@ class TestSavable(unittest.TestCase):
 
 
 class TestBundle(unittest.TestCase):
-
     def test_bundle_load_context(self):
-        """ Check that the loop from the load context is used """
+        """Check that the loop from the load context is used"""
         loop1 = asyncio.get_event_loop()
         proc = utils.DummyProcess(loop=loop1)
         bundle = plumpy.Bundle(proc)
