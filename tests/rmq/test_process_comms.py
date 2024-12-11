@@ -8,7 +8,7 @@ import shortuuid
 from kiwipy import rmq
 
 import plumpy
-import plumpy.communications
+import plumpy.rmq.communications
 from plumpy import process_comms
 
 from .. import utils

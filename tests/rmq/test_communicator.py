@@ -13,7 +13,8 @@ import yaml
 from kiwipy import BroadcastFilter, rmq
 
 import plumpy
-from plumpy import communications, process_comms
+from plumpy import process_comms
+from plumpy.rmq import communications
 
 from .. import utils
 

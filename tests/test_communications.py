@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Tests for the :mod:`plumpy.communications` module."""
+"""Tests for the :mod:`plumpy.rmq.communications` module."""
 
 import pytest
 from kiwipy import CommunicatorHelper
 
-from plumpy.communications import LoopCommunicator
+from plumpy.rmq.communications import LoopCommunicator
 
 
 class Subscriber:
