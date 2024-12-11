@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
 
 import kiwipy
 
-from . import futures, loaders, persistence
+from . import loaders, persistence
 from .utils import PID_TYPE
 
 __all__ = [
@@ -448,11 +448,12 @@ class RemoteProcessThreadController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the result of executing the process
         """
+        from plumpy.rmq.futures import unwrap_kiwi_future
 
         message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         execute_future = kiwipy.Future()
-        create_future = futures.unwrap_kiwi_future(self._communicator.task_send(message))
+        create_future = unwrap_kiwi_future(self._communicator.task_send(message))
 
         def on_created(_: Any) -> None:
             with kiwipy.capture_exceptions(execute_future):
