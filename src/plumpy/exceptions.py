@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 from typing import Optional
 
-from aio_pika.exceptions import ChannelInvalidStateError, ConnectionClosed
-
 __all__ = [
     'ClosedError',
-    'CommunicatorChannelInvalidStateError',
-    'CommunicatorConnectionClosed',
     'InvalidStateError',
     'KilledError',
     'PersistenceError',
@@ -43,7 +39,3 @@ class PersistenceError(Exception):
 class ClosedError(Exception):
     """Raised when an mutable operation is attempted on a closed process"""
 
-
-# Alias aio_pika
-CommunicatorConnectionClosed = ConnectionClosed
-CommunicatorChannelInvalidStateError = ChannelInvalidStateError
