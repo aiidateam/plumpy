@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import asyncio
-import copy
 
 import kiwipy
 import pytest
@@ -196,8 +195,7 @@ class TestRemoteProcessThreadController:
         for _ in range(10):
             procs.append(utils.WaitForSignalProcess(communicator=thread_communicator))
 
-        msg = copy.copy(process_comms.KILL_MSG)
-        msg[process_comms.MESSAGE_KEY] = 'bang bang, I shot you down'
+        msg = process_comms.MessageBuilder.kill(text='bang bang, I shot you down')
 
         sync_controller.kill_all(msg)
         await utils.wait_util(lambda: all([proc.killed() for proc in procs]))

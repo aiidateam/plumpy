@@ -2,18 +2,17 @@
 """Process tests"""
 
 import asyncio
-import copy
 import enum
 import unittest
 
 import kiwipy
 import pytest
-from tests import utils
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
-from plumpy.process_comms import KILL_MSG, MESSAGE_KEY
+from plumpy.process_comms import MessageBuilder
 from plumpy.utils import AttributesFrozendict
+from tests import utils
 
 
 class ForgetToCallParent(plumpy.Process):
@@ -323,8 +322,7 @@ class TestProcess(unittest.TestCase):
     def test_kill(self):
         proc: Process = utils.DummyProcess()
 
-        msg = copy.copy(KILL_MSG)
-        msg[MESSAGE_KEY] = 'Farewell!'
+        msg = MessageBuilder.kill(text='Farewell!')
         proc.kill(msg)
         self.assertTrue(proc.killed())
         self.assertEqual(proc.killed_msg(), msg)
@@ -430,8 +428,7 @@ class TestProcess(unittest.TestCase):
             after_kill = False
 
             def run(self, **kwargs):
-                msg = copy.copy(KILL_MSG)
-                msg[MESSAGE_KEY] = 'killed'
+                msg = MessageBuilder.kill(text='killed')
                 self.kill(msg)
                 # The following line should be executed because kill will not
                 # interrupt execution of a method call in the RUNNING state

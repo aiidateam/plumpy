@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Module for process level communication functions and classes"""
 
+from __future__ import annotations
+
 import asyncio
-import copy
 import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
 
@@ -12,10 +13,7 @@ from . import communications, futures, loaders, persistence
 from .utils import PID_TYPE
 
 __all__ = [
-    'KILL_MSG',
-    'PAUSE_MSG',
-    'PLAY_MSG',
-    'STATUS_MSG',
+    'MessageBuilder',
     'ProcessLauncher',
     'RemoteProcessController',
     'RemoteProcessThreadController',
@@ -31,6 +29,7 @@ ProcessStatus = Any
 
 INTENT_KEY = 'intent'
 MESSAGE_KEY = 'message'
+FORCE_KILL_KEY = 'force_kill'
 
 
 class Intent:
@@ -42,10 +41,45 @@ class Intent:
     STATUS: str = 'status'
 
 
-PAUSE_MSG = {INTENT_KEY: Intent.PAUSE}
-PLAY_MSG = {INTENT_KEY: Intent.PLAY}
-KILL_MSG = {INTENT_KEY: Intent.KILL}
-STATUS_MSG = {INTENT_KEY: Intent.STATUS}
+MessageType = Dict[str, Any]
+
+
+class MessageBuilder:
+    """MessageBuilder will construct different messages that can passing over communicator."""
+
+    @classmethod
+    def play(cls, text: str | None = None) -> MessageType:
+        """The play message send over communicator."""
+        return {
+            INTENT_KEY: Intent.PLAY,
+            MESSAGE_KEY: text,
+        }
+
+    @classmethod
+    def pause(cls, text: str | None = None) -> MessageType:
+        """The pause message send over communicator."""
+        return {
+            INTENT_KEY: Intent.PAUSE,
+            MESSAGE_KEY: text,
+        }
+
+    @classmethod
+    def kill(cls, text: str | None = None, force_kill: bool = False) -> MessageType:
+        """The kill message send over communicator."""
+        return {
+            INTENT_KEY: Intent.KILL,
+            MESSAGE_KEY: text,
+            FORCE_KILL_KEY: force_kill,
+        }
+
+    @classmethod
+    def status(cls, text: str | None = None) -> MessageType:
+        """The status message send over communicator."""
+        return {
+            INTENT_KEY: Intent.STATUS,
+            MESSAGE_KEY: text,
+        }
+
 
 TASK_KEY = 'task'
 TASK_ARGS = 'args'
@@ -162,7 +196,7 @@ class RemoteProcessController:
         :param pid: the process id
         :return: the status response from the process
         """
-        future = self._communicator.rpc_send(pid, STATUS_MSG)
+        future = self._communicator.rpc_send(pid, MessageBuilder.status())
         result = await asyncio.wrap_future(future)
         return result
 
@@ -174,11 +208,9 @@ class RemoteProcessController:
         :param msg: optional pause message
         :return: True if paused, False otherwise
         """
-        message = copy.copy(PAUSE_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
+        msg = MessageBuilder.pause(text=msg)
 
-        pause_future = self._communicator.rpc_send(pid, message)
+        pause_future = self._communicator.rpc_send(pid, msg)
         # rpc_send return a thread future from communicator
         future = await asyncio.wrap_future(pause_future)
         # future is just returned from rpc call which return a kiwipy future
@@ -192,12 +224,12 @@ class RemoteProcessController:
         :param pid: the pid of the process to play
         :return: True if played, False otherwise
         """
-        play_future = self._communicator.rpc_send(pid, PLAY_MSG)
+        play_future = self._communicator.rpc_send(pid, MessageBuilder.play())
         future = await asyncio.wrap_future(play_future)
         result = await asyncio.wrap_future(future)
         return result
 
-    async def kill_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> 'ProcessResult':
+    async def kill_process(self, pid: 'PID_TYPE', msg: Optional[MessageType] = None) -> 'ProcessResult':
         """
         Kill the process
 
@@ -205,12 +237,11 @@ class RemoteProcessController:
         :param msg: optional kill message
         :return: True if killed, False otherwise
         """
-        message = copy.copy(KILL_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
+        if msg is None:
+            msg = MessageBuilder.kill()
 
         # Wait for the communication to go through
-        kill_future = self._communicator.rpc_send(pid, message)
+        kill_future = self._communicator.rpc_send(pid, msg)
         future = await asyncio.wrap_future(kill_future)
         # Now wait for the kill to be enacted
         result = await asyncio.wrap_future(future)
@@ -331,7 +362,7 @@ class RemoteProcessThreadController:
         :param pid: the process id
         :return: the status response from the process
         """
-        return self._communicator.rpc_send(pid, STATUS_MSG)
+        return self._communicator.rpc_send(pid, MessageBuilder.status())
 
     def pause_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> kiwipy.Future:
         """
@@ -342,11 +373,9 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be paused
 
         """
-        message = copy.copy(PAUSE_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
+        msg = MessageBuilder.pause(text=msg)
 
-        return self._communicator.rpc_send(pid, message)
+        return self._communicator.rpc_send(pid, msg)
 
     def pause_all(self, msg: Any) -> None:
         """
@@ -364,7 +393,7 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be played
 
         """
-        return self._communicator.rpc_send(pid, PLAY_MSG)
+        return self._communicator.rpc_send(pid, MessageBuilder.play())
 
     def play_all(self) -> None:
         """
@@ -372,7 +401,7 @@ class RemoteProcessThreadController:
         """
         self._communicator.broadcast_send(None, subject=Intent.PLAY)
 
-    def kill_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> kiwipy.Future:
+    def kill_process(self, pid: 'PID_TYPE', msg: Optional[MessageType] = None) -> kiwipy.Future:
         """
         Kill the process
 
@@ -381,18 +410,20 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be killed
 
         """
-        message = copy.copy(KILL_MSG)
-        if msg is not None:
-            message[MESSAGE_KEY] = msg
+        if msg is None:
+            msg = MessageBuilder.kill()
 
-        return self._communicator.rpc_send(pid, message)
+        return self._communicator.rpc_send(pid, msg)
 
-    def kill_all(self, msg: Optional[Any]) -> None:
+    def kill_all(self, msg: Optional[MessageType]) -> None:
         """
         Kill all processes that are subscribed to the same communicator
 
         :param msg: an optional pause message
         """
+        if msg is None:
+            msg = MessageBuilder.kill()
+
         self._communicator.broadcast_send(msg, subject=Intent.KILL)
 
     def continue_process(
