@@ -9,20 +9,27 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
 
 import kiwipy
 
-from . import communications, futures, loaders, persistence
-from .utils import PID_TYPE
+from plumpy.message import (
+    MESSAGE_KEY,
+    PAUSE_MSG,
+    PLAY_MSG,
+    STATUS_MSG,
+    KILL_MSG,
+    Intent,
+    create_continue_body,
+    create_create_body,
+    create_launch_body,
+)
+
+from plumpy import loaders
+from plumpy.utils import PID_TYPE
 
 __all__ = [
     'MessageBuilder',
     'ProcessLauncher',
     'RemoteProcessController',
     'RemoteProcessThreadController',
-    'create_continue_body',
-    'create_launch_body',
 ]
-
-if TYPE_CHECKING:
-    from .processes import Process
 
 ProcessResult = Any
 ProcessStatus = Any
@@ -498,164 +505,3 @@ class RemoteProcessThreadController:
         :return: the response from the remote side (if no_reply=False)
         """
         return self._communicator.task_send(message, no_reply=no_reply)
-
-
-class ProcessLauncher:
-    """
-    Takes incoming task messages and uses them to launch processes.
-
-    Expected format of task:
-
-    For launch::
-
-        {
-            'task': <LAUNCH_TASK>
-            'process_class': <Process class to launch>
-            'args': <tuple of positional args for process constructor>
-            'kwargs': <dict of keyword args for process constructor>.
-            'nowait': True or False
-        }
-
-    For continue::
-
-        {
-            'task': <CONTINUE_TASK>
-            'pid': <Process ID>
-            'nowait': True or False
-        }
-    """
-
-    def __init__(
-        self,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
-        persister: Optional[persistence.Persister] = None,
-        load_context: Optional[persistence.LoadSaveContext] = None,
-        loader: Optional[loaders.ObjectLoader] = None,
-    ) -> None:
-        self._loop = loop
-        self._persister = persister
-        self._load_context = load_context if load_context is not None else persistence.LoadSaveContext()
-
-        if loader is not None:
-            self._loader = loader
-            self._load_context = self._load_context.copyextend(loader=loader)
-        else:
-            self._loader = loaders.get_object_loader()
-
-    async def __call__(self, communicator: kiwipy.Communicator, task: Dict[str, Any]) -> Union[PID_TYPE, ProcessResult]:
-        """
-        Receive a task.
-        :param task: The task message
-        """
-        task_type = task[TASK_KEY]
-        if task_type == LAUNCH_TASK:
-            return await self._launch(communicator, **task.get(TASK_ARGS, {}))
-        if task_type == CONTINUE_TASK:
-            return await self._continue(communicator, **task.get(TASK_ARGS, {}))
-        if task_type == CREATE_TASK:
-            return await self._create(communicator, **task.get(TASK_ARGS, {}))
-
-        raise communications.TaskRejected
-
-    async def _launch(
-        self,
-        _communicator: kiwipy.Communicator,
-        process_class: str,
-        persist: bool,
-        nowait: bool,
-        init_args: Optional[Sequence[Any]] = None,
-        init_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Union[PID_TYPE, ProcessResult]:
-        """
-        Launch the process
-
-        :param _communicator: the communicator
-        :param process_class: the process class to launch
-        :param persist: should the process be persisted
-        :param nowait: if True only return when the process finishes
-        :param init_args: positional arguments to the process constructor
-        :param init_kwargs: keyword arguments to the process constructor
-        :return: the pid of the created process or the outputs (if nowait=False)
-        """
-        if persist and not self._persister:
-            raise communications.TaskRejected('Cannot persist process, no persister')
-
-        if init_args is None:
-            init_args = ()
-        if init_kwargs is None:
-            init_kwargs = {}
-
-        proc_class = self._loader.load_object(process_class)
-        proc = proc_class(*init_args, **init_kwargs)
-        if persist and self._persister is not None:
-            self._persister.save_checkpoint(proc)
-
-        if nowait:
-            # XXX: can return a reference and gracefully use task to cancel itself when the upper call stack fails
-            asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
-            return proc.pid
-
-        await proc.step_until_terminated()
-
-        return proc.future().result()
-
-    async def _continue(
-        self, _communicator: kiwipy.Communicator, pid: 'PID_TYPE', nowait: bool, tag: Optional[str] = None
-    ) -> Union[PID_TYPE, ProcessResult]:
-        """
-        Continue the process
-
-        :param _communicator: the communicator
-        :param pid: the pid of the process to continue
-        :param nowait: if True don't wait for the process to complete
-        :param tag: the checkpoint tag to continue from
-        """
-        if not self._persister:
-            LOGGER.warning('rejecting task: cannot continue process<%d> because no persister is available', pid)
-            raise communications.TaskRejected('Cannot continue process, no persister')
-
-        # Do not catch exceptions here, because if these operations fail, the continue task should except and bubble up
-        saved_state = self._persister.load_checkpoint(pid, tag)
-        proc = cast('Process', saved_state.unbundle(self._load_context))
-
-        if nowait:
-            # XXX: can return a reference and gracefully use task to cancel itself when the upper call stack fails
-            asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
-            return proc.pid
-
-        await proc.step_until_terminated()
-
-        return proc.future().result()
-
-    async def _create(
-        self,
-        _communicator: kiwipy.Communicator,
-        process_class: str,
-        persist: bool,
-        init_args: Optional[Sequence[Any]] = None,
-        init_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> 'PID_TYPE':
-        """
-        Create the process
-
-        :param _communicator: the communicator
-        :param process_class: the process class to create
-        :param persist: should the process be persisted
-        :param init_args: positional arguments to the process constructor
-        :param init_kwargs: keyword arguments to the process constructor
-        :return: the pid of the created process
-        """
-        if persist and not self._persister:
-            raise communications.TaskRejected('Cannot persist process, no persister')
-
-        if init_args is None:
-            init_args = ()
-        if init_kwargs is None:
-            init_kwargs = {}
-
-        proc_class = self._loader.load_object(process_class)
-        proc = proc_class(*init_args, **init_kwargs)
-        if persist and self._persister is not None:
-            self._persister.save_checkpoint(proc)
-
-        return proc.pid

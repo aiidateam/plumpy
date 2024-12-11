@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any, Callable, Hashable, Optional
 
 import kiwipy
 
-from . import futures
-from .utils import ensure_coroutine
+from plumpy import futures
+from plumpy.utils import ensure_coroutine
 
 __all__ = [
     'Communicator',
