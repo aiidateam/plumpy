@@ -7,6 +7,8 @@ import unittest
 
 import kiwipy
 import pytest
+from plumpy.futures import CancellableAction
+from tests import utils
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
@@ -537,7 +539,7 @@ class TestProcess(unittest.TestCase):
         class TestPausePlay(plumpy.Process):
             def run(self):
                 fut = self.pause()
-                test_case.assertIsInstance(fut, plumpy.Future)
+                assert isinstance(fut, CancellableAction)
 
         loop = asyncio.get_event_loop()
 
@@ -561,7 +563,7 @@ class TestProcess(unittest.TestCase):
         class TestPausePlay(plumpy.Process):
             def run(self):
                 fut = self.pause()
-                test_case.assertIsInstance(fut, plumpy.Future)
+                test_case.assertIsInstance(fut, CancellableAction)
                 result = self.play()
                 test_case.assertTrue(result)
 
