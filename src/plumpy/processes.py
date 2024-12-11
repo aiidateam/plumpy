@@ -696,7 +696,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             call_with_super_check(self.on_except, state.get_exc_info())  # type: ignore
 
     def on_entered(self, from_state: Optional[process_states.State]) -> None:
-        from plumpy.exceptions import CommunicatorChannelInvalidStateError, CommunicatorConnectionClosed
+        from plumpy.rmq.exceptions import CommunicatorChannelInvalidStateError, CommunicatorConnectionClosed
 
         # Map these onto direct functions that the subclass can implement
         state_label = self._state.LABEL
