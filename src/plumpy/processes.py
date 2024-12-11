@@ -39,16 +39,8 @@ except ModuleNotFoundError:
 import kiwipy
 import yaml
 
-from . import (
-    events,
-    exceptions,
-    futures,
-    persistence,
-    ports,
-    process_comms,
-    process_states,
-    utils,
-)
+from . import events, exceptions, message, persistence, ports, process_states, utils
+from .futures import capture_exceptions, CancellableAction
 from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
@@ -153,10 +145,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     _spec_class = ProcessSpec
     # Default placeholders, will be populated in init()
     _stepping = False
-    _pausing: Optional[futures.CancellableAction] = None
+    _pausing: Optional[CancellableAction] = None
     _paused: Optional[persistence.SavableFuture] = None
-    _killing: Optional[futures.CancellableAction] = None
-    _interrupt_action: Optional[futures.CancellableAction] = None
+    _killing: Optional[CancellableAction] = None
+    _interrupt_action: Optional[CancellableAction] = None
     _closed = False
     _cleanups: Optional[List[Callable[[], None]]] = None
 
@@ -341,7 +333,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if not self._future.done():
 
-            def try_killing(future: futures.Future) -> None:
+            def try_killing(future: asyncio.Future) -> None:
                 if future.cancelled():
                     if not self.kill('Killed by future being cancelled'):
                         self.logger.warning(
@@ -959,15 +951,15 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             msg,
         )
 
-        intent = msg[process_comms.INTENT_KEY]
+        intent = msg[message.INTENT_KEY]
 
-        if intent == process_comms.Intent.PLAY:
+        if intent == message.Intent.PLAY:
             return self._schedule_rpc(self.play)
-        if intent == process_comms.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
-        if intent == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
-        if intent == process_comms.Intent.STATUS:
+        if intent == message.Intent.PAUSE:
+            return self._schedule_rpc(self.pause, msg_text=msg.get(message.MESSAGE_KEY, None))
+        if intent == message.Intent.KILL:
+            return self._schedule_rpc(self.kill, msg_text=msg.get(message.MESSAGE_KEY, None))
+        if intent == message.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
             return status_info
@@ -994,7 +986,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
 
         # If we get a message we recognise then action it, otherwise ignore
-        if subject == process_comms.Intent.PLAY:
+        if subject == message.Intent.PLAY:
             return self._schedule_rpc(self.play)
         if subject == process_comms.Intent.PAUSE:
             return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
@@ -1020,7 +1012,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         kiwi_future = concurrent.futures.Future()
 
         async def run_callback() -> None:
-            with kiwipy.capture_exceptions(kiwi_future):
+            with capture_exceptions(kiwi_future):
                 try:
                     result = callback(*args, **kwargs)
                 except Exception as exc:
@@ -1097,7 +1089,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
         self.transition_to(new_state)
 
-    def pause(self, msg_text: Optional[str] = None) -> Union[bool, futures.CancellableAction]:
+    def pause(self, msg_text: Optional[str] = None) -> Union[bool, CancellableAction]:
         """Pause the process.
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
@@ -1126,7 +1118,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._pausing = self._interrupt_action
             # Try to interrupt the state
             self._state.interrupt(interrupt_exception)
-            return cast(futures.CancellableAction, self._interrupt_action)
+            return cast(CancellableAction, self._interrupt_action)
 
         msg = MessageBuilder.pause(msg_text)
         return self._do_pause(state_msg=msg)
@@ -1149,7 +1141,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         return True
 
-    def _create_interrupt_action(self, exception: process_states.Interruption) -> futures.CancellableAction:
+    def _create_interrupt_action(self, exception: process_states.Interruption) -> CancellableAction:
         """
         Create an interrupt action from the corresponding interrupt exception
 
@@ -1159,7 +1151,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         if isinstance(exception, process_states.PauseInterruption):
             do_pause = functools.partial(self._do_pause, exception.msg)
-            return futures.CancellableAction(do_pause, cookie=exception)
+            return CancellableAction(do_pause, cookie=exception)
 
         if isinstance(exception, process_states.KillInterruption):
 
@@ -1171,11 +1163,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 finally:
                     self._killing = None
 
-            return futures.CancellableAction(do_kill, cookie=exception)
+            return CancellableAction(do_kill, cookie=exception)
 
         raise ValueError(f"Got unknown interruption type '{type(exception)}'")
 
-    def _set_interrupt_action(self, new_action: Optional[futures.CancellableAction]) -> None:
+    def _set_interrupt_action(self, new_action: Optional[CancellableAction]) -> None:
         """
         Set the interrupt action cancelling the current one if it exists
         :param new_action: The new interrupt action to set
@@ -1247,7 +1239,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._set_interrupt_action_from_exception(interrupt_exception)
             self._killing = self._interrupt_action
             self._state.interrupt(interrupt_exception)
-            return cast(futures.CancellableAction, self._interrupt_action)
+            return cast(CancellableAction, self._interrupt_action)
 
         msg = MessageBuilder.kill(msg_text)
         new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)

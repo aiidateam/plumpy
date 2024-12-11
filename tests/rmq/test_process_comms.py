@@ -7,8 +7,8 @@ import shortuuid
 from kiwipy import rmq
 
 import plumpy
-import plumpy.communications
-from plumpy import process_comms
+from plumpy.message import KILL_MSG, MESSAGE_KEY
+from plumpy.rmq import process_comms
 
 from .. import utils
 

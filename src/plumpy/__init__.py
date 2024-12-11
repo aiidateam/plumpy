@@ -4,21 +4,20 @@ __version__ = '0.24.0'
 
 import logging
 
-from .communications import *
 from .events import *
 from .exceptions import *
 from .futures import *
 from .loaders import *
+from .message import *
 from .mixins import *
 from .persistence import *
 from .ports import *
-from .process_comms import *
 from .process_listener import *
 from .process_states import *
 from .processes import *
-from .rmq import *
 from .utils import *
 from .workchains import *
+from .rmq import *
 
 __all__ = (
     events.__all__
@@ -28,8 +27,7 @@ __all__ = (
     + futures.__all__
     + mixins.__all__
     + persistence.__all__
-    + communications.__all__
-    + process_comms.__all__
+    + message.__all__
     + process_listener.__all__
     + workchains.__all__
     + loaders.__all__
