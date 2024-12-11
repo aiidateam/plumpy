@@ -325,6 +325,8 @@ class StateMachine(metaclass=StateMachineMeta):
         assert not self._transitioning, 'Cannot call transition_to when already transitioning state'
 
         if new_state is None:
+            # early return if the new state is `None`
+            # it can happened when transit from terminal state
             return None
 
         initial_state_label = self._state.LABEL if self._state is not None else None
@@ -411,8 +413,10 @@ class StateMachine(metaclass=StateMachineMeta):
         self._state = next_state
         self._fire_state_event(StateEventHook.ENTERED_STATE, last_state)
 
-    def _create_state_instance(self, state_cls: type[State], **kwargs: Any) -> State:
-        if state_cls.LABEL not in self.get_states_map():
-            raise ValueError(f'{state_cls.LABEL} is not a valid state')
+    def _create_state_instance(self, state_cls: Hashable, **kwargs: Any) -> State:
+        if state_cls not in self.get_states_map():
+            raise ValueError(f'{state_cls} is not a valid state')
 
-        return state_cls(self, **kwargs)
+        cls = self.get_states_map()[state_cls]
+
+        return cls(self, **kwargs)

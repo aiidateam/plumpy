@@ -1066,8 +1066,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if final_state == process_states.ProcessState.CREATED:
             raise exception.with_traceback(trace)
 
-        state_class = self.get_states_map()[process_states.ProcessState.EXCEPTED]
-        new_state = self._create_state_instance(state_class, exception=exception, trace_back=trace)
+        new_state = self._create_state_instance(
+            process_states.ProcessState.EXCEPTED, exception=exception, trace_back=trace
+        )
         self.transition_to(new_state)
 
     def pause(self, msg: Union[str, None] = None) -> Union[bool, futures.CancellableAction]:
@@ -1131,8 +1132,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             def do_kill(_next_state: process_states.State) -> Any:
                 try:
-                    state_class = self.get_states_map()[process_states.ProcessState.KILLED]
-                    new_state = self._create_state_instance(state_class, msg=exception.msg)
+                    new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=exception.msg)
                     self.transition_to(new_state)
                     return True
                 finally:
@@ -1185,8 +1185,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param exception: The exception that caused the failure
         :param trace_back: Optional exception traceback
         """
-        state_class = self.get_states_map()[process_states.ProcessState.EXCEPTED]
-        new_state = self._create_state_instance(state_class, exception=exception, trace_back=trace_back)
+        new_state = self._create_state_instance(
+            process_states.ProcessState.EXCEPTED, exception=exception, trace_back=trace_back
+        )
         self.transition_to(new_state)
 
     def kill(self, msg: Optional[MessageType] = None) -> Union[bool, asyncio.Future]:
@@ -1215,8 +1216,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._state.interrupt(interrupt_exception)
             return cast(futures.CancellableAction, self._interrupt_action)
 
-        state_class = self.get_states_map()[process_states.ProcessState.KILLED]
-        new_state = self._create_state_instance(state_class, msg=msg)
+        new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)
         self.transition_to(new_state)
         return True
 

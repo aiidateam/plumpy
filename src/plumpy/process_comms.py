@@ -48,6 +48,8 @@ MessageType = Dict[str, Any]
 
 
 class PlayMessage:
+    """The play message send over communicator."""
+
     @classmethod
     def build(cls, message: str | None = None) -> MessageType:
         return {
@@ -57,6 +59,8 @@ class PlayMessage:
 
 
 class PauseMessage:
+    """The pause message send over communicator."""
+
     @classmethod
     def build(cls, message: str | None = None) -> MessageType:
         return {
@@ -66,16 +70,20 @@ class PauseMessage:
 
 
 class KillMessage:
+    """The kill message send over communicator."""
+
     @classmethod
-    def build(cls, message: str | None = None, force: bool = False) -> MessageType:
+    def build(cls, message: str | None = None, force_kill: bool = False) -> MessageType:
         return {
             INTENT_KEY: Intent.KILL,
             MESSAGE_KEY: message,
-            FORCE_KILL_KEY: force,
+            FORCE_KILL_KEY: force_kill,
         }
 
 
 class StatusMessage:
+    """The status message send over communicator."""
+
     @classmethod
     def build(cls, message: str | None = None) -> MessageType:
         return {
