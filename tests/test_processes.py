@@ -10,7 +10,7 @@ import pytest
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
-from plumpy.process_comms import KillMessage
+from plumpy.process_comms import MessageBuilder
 from plumpy.utils import AttributesFrozendict
 from tests import utils
 
@@ -322,7 +322,7 @@ class TestProcess(unittest.TestCase):
     def test_kill(self):
         proc: Process = utils.DummyProcess()
 
-        msg = KillMessage.build(message='Farewell!')
+        msg = MessageBuilder.kill(text='Farewell!')
         proc.kill(msg)
         self.assertTrue(proc.killed())
         self.assertEqual(proc.killed_msg(), msg)
@@ -428,7 +428,7 @@ class TestProcess(unittest.TestCase):
             after_kill = False
 
             def run(self, **kwargs):
-                msg = KillMessage.build(message='killed')
+                msg = MessageBuilder.kill(text='killed')
                 self.kill(msg)
                 # The following line should be executed because kill will not
                 # interrupt execution of a method call in the RUNNING state

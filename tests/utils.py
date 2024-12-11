@@ -8,7 +8,7 @@ from collections.abc import Mapping
 
 import plumpy
 from plumpy import persistence, process_states, processes, utils
-from plumpy.process_comms import KillMessage
+from plumpy.process_comms import  MessageBuilder
 
 Snapshot = collections.namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
@@ -85,7 +85,7 @@ class WaitForSignalProcess(processes.Process):
 class KillProcess(processes.Process):
     @utils.override
     def run(self):
-        msg = KillMessage.build(message='killed')
+        msg = MessageBuilder.kill(text='killed')
         return process_states.Kill(msg=msg)
 
 

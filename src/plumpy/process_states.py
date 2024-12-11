@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Tuple, Typ
 import yaml
 from yaml.loader import Loader
 
-from plumpy.process_comms import KillMessage, MessageType
+from plumpy.process_comms import MessageBuilder, MessageType
 
 try:
     import tblib
@@ -55,7 +55,7 @@ class KillInterruption(Interruption):
     def __init__(self, msg: MessageType | None):
         super().__init__()
         if msg is None:
-            msg = KillMessage.build()
+            msg = MessageBuilder.kill()
 
         self.msg: MessageType = msg
 

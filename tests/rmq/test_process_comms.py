@@ -195,7 +195,7 @@ class TestRemoteProcessThreadController:
         for _ in range(10):
             procs.append(utils.WaitForSignalProcess(communicator=thread_communicator))
 
-        msg = process_comms.KillMessage.build(message='bang bang, I shot you down')
+        msg = process_comms.MessageBuilder.kill(text='bang bang, I shot you down')
 
         sync_controller.kill_all(msg)
         await utils.wait_util(lambda: all([proc.killed() for proc in procs]))

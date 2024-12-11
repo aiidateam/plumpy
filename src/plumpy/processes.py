@@ -54,7 +54,7 @@ from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .process_comms import MESSAGE_KEY, KillMessage, MessageType
+from .process_comms import MESSAGE_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
@@ -344,7 +344,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             def try_killing(future: futures.Future) -> None:
                 if future.cancelled():
-                    msg = KillMessage.build(message='Killed by future being cancelled')
+                    msg = MessageBuilder.kill(text='Killed by future being cancelled')
                     if not self.kill(msg):
                         self.logger.warning(
                             'Process<%s>: Failed to kill process on future cancel',
