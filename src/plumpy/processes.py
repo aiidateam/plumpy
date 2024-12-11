@@ -37,7 +37,6 @@ except ModuleNotFoundError:
 
 import kiwipy
 import yaml
-from aio_pika.exceptions import ChannelInvalidStateError, ConnectionClosed
 
 from . import events, exceptions, futures, persistence, ports, process_comms, process_states, utils
 from .base import state_machine
@@ -697,6 +696,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             call_with_super_check(self.on_except, state.get_exc_info())  # type: ignore
 
     def on_entered(self, from_state: Optional[process_states.State]) -> None:
+        from plumpy.exceptions import CommunicatorChannelInvalidStateError, CommunicatorConnectionClosed
+
         # Map these onto direct functions that the subclass can implement
         state_label = self._state.LABEL
         if state_label == process_states.ProcessState.RUNNING:
@@ -716,7 +717,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self.logger.info('Process<%s>: Broadcasting state change: %s', self.pid, subject)
             try:
                 self._communicator.broadcast_send(body=None, sender=self.pid, subject=subject)
-            except (ConnectionClosed, ChannelInvalidStateError):
+            except (CommunicatorConnectionClosed, CommunicatorChannelInvalidStateError):
                 message = 'Process<%s>: no connection available to broadcast state change from %s to %s'
                 self.logger.warning(message, self.pid, from_label, self.state.value)
             except kiwipy.TimeoutError:
