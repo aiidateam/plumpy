@@ -977,7 +977,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def broadcast_receive(
         self, _comm: kiwipy.Communicator, msg: MessageType, sender: Any, subject: Any, correlation_id: Any
-    ) -> Optional[kiwipy.Future]:
+    ) -> Optional[concurrent.futures.Future]:
         """
         Coroutine called when the process receives a message from the communicator
 
@@ -1002,7 +1002,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         return None
 
-    def _schedule_rpc(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> kiwipy.Future:
+    def _schedule_rpc(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> concurrent.futures.Future:
         """
         Schedule a call to a callback as a result of an RPC communication call, this will return
         a future that resolves to the final result (even after one or more layer of futures being
@@ -1017,7 +1017,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: a kiwi future that resolves to the outcome of the callback
 
         """
-        kiwi_future = kiwipy.Future()
+        kiwi_future = concurrent.futures.Future()
 
         async def run_callback() -> None:
             with kiwipy.capture_exceptions(kiwi_future):

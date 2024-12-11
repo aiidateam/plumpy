@@ -23,7 +23,7 @@ from typing import (
     cast,
 )
 
-import kiwipy
+from plumpy.coordinator import Communicator
 
 from . import lang, mixins, persistence, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
@@ -128,7 +128,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
         pid: Optional[PID_TYPE] = None,
         logger: Optional[logging.Logger] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
-        communicator: Optional[kiwipy.Communicator] = None,
+        communicator: Optional[Communicator] = None,
     ) -> None:
         super().__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, communicator=communicator)
         self._stepper: Optional[Stepper] = None
