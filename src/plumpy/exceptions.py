@@ -38,4 +38,3 @@ class PersistenceError(Exception):
 
 class ClosedError(Exception):
     """Raised when an mutable operation is attempted on a closed process"""
-
