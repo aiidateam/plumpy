@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from .exceptions import *
+# mypy: disable-error-code=name-defined
 from .communications import *
+from .exceptions import *
 
 __all__ = exceptions.__all__ + communications.__all__

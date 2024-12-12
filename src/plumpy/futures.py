@@ -5,9 +5,9 @@ Module containing future related methods and classes
 
 import asyncio
 import contextlib
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Generator, Optional
 
-__all__ = ['create_task', 'CancellableAction', 'create_task']
+__all__ = ['CancellableAction', 'create_task', 'create_task']
 
 
 class InvalidFutureError(Exception):
@@ -18,7 +18,7 @@ Future = asyncio.Future
 
 
 @contextlib.contextmanager
-def capture_exceptions(future: Future[Any], ignore: tuple[type[BaseException], ...] = ()):
+def capture_exceptions(future: Future[Any], ignore: tuple[type[BaseException], ...] = ()) -> Generator[None, Any, None]:
     """
     Capture any exceptions in the context and set them as the result of the given future
 
