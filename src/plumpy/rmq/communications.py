@@ -7,15 +7,15 @@ from typing import TYPE_CHECKING, Any, Callable, Hashable, Optional
 
 import kiwipy
 
-from . import futures
-from .utils import ensure_coroutine
+from plumpy import futures
+from plumpy.rmq.futures import wrap_to_concurrent_future
+from plumpy.utils import ensure_coroutine
 
 __all__ = [
     'Communicator',
     'DeliveryFailed',
     'RemoteException',
     'TaskRejected',
-    'plum_to_kiwi_future',
     'wrap_communicator',
 ]
 
@@ -34,31 +34,6 @@ if TYPE_CHECKING:
     TaskSubscriber = Callable[[kiwipy.Communicator, Any], Any]
     # Broadcast subscribers params: communicator, body, sender, subject, correlation id
     BroadcastSubscriber = Callable[[kiwipy.Communicator, Any, Any, Any, ID_TYPE], Any]
-
-
-def plum_to_kiwi_future(plum_future: futures.Future) -> kiwipy.Future:
-    """
-    Return a kiwi future that resolves to the outcome of the plum future
-
-    :param plum_future: the plum future
-    :return: the kiwipy future
-
-    """
-    kiwi_future = kiwipy.Future()
-
-    def on_done(_plum_future: futures.Future) -> None:
-        with kiwipy.capture_exceptions(kiwi_future):
-            if plum_future.cancelled():
-                kiwi_future.cancel()
-            else:
-                result = plum_future.result()
-                # Did we get another future?  In which case convert it too
-                if isinstance(result, futures.Future):
-                    result = plum_to_kiwi_future(result)
-                kiwi_future.set_result(result)
-
-    plum_future.add_done_callback(on_done)
-    return kiwi_future
 
 
 def convert_to_comm(
@@ -97,7 +72,7 @@ def convert_to_comm(
 
         msg_fn = functools.partial(coro, communicator, *args, **kwargs)
         task_future = futures.create_task(msg_fn, loop)
-        return plum_to_kiwi_future(task_future)
+        return wrap_to_concurrent_future(task_future)
 
     return converted
 

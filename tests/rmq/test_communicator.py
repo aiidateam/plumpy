@@ -13,7 +13,8 @@ import yaml
 from kiwipy import BroadcastFilter, rmq
 
 import plumpy
-from plumpy import communications, process_comms
+from plumpy import process_comms
+from plumpy.rmq import communications
 
 from .. import utils
 
@@ -63,7 +64,7 @@ class TestLoopCommunicator:
     @pytest.mark.asyncio
     async def test_broadcast(self, loop_communicator):
         BROADCAST = {'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420}  # noqa: N806
-        broadcast_future = plumpy.Future()
+        broadcast_future = asyncio.Future()
 
         loop = asyncio.get_event_loop()
 
@@ -82,7 +83,7 @@ class TestLoopCommunicator:
 
     @pytest.mark.asyncio
     async def test_broadcast_filter(self, loop_communicator):
-        broadcast_future = plumpy.Future()
+        broadcast_future = asyncio.Future()
 
         def ignore_broadcast(_comm, body, sender, subject, correlation_id):
             broadcast_future.set_exception(AssertionError('broadcast received'))
@@ -102,7 +103,7 @@ class TestLoopCommunicator:
     @pytest.mark.asyncio
     async def test_rpc(self, loop_communicator):
         MSG = 'rpc this'  # noqa: N806
-        rpc_future = plumpy.Future()
+        rpc_future = asyncio.Future()
 
         loop = asyncio.get_event_loop()
 
@@ -119,7 +120,7 @@ class TestLoopCommunicator:
     @pytest.mark.asyncio
     async def test_task(self, loop_communicator):
         TASK = 'task this'  # noqa: N806
-        task_future = plumpy.Future()
+        task_future = asyncio.Future()
 
         loop = asyncio.get_event_loop()
 
