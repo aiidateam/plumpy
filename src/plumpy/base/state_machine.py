@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """The state machine for processes"""
 
+from __future__ import annotations
+
 import enum
 import functools
 import inspect
@@ -8,7 +10,19 @@ import logging
 import os
 import sys
 from types import TracebackType
-from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Sequence, Set, Type, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Type,
+    Union,
+)
 
 from plumpy.futures import Future
 
@@ -31,7 +45,7 @@ class StateEntryFailed(Exception):  # noqa: N818
     Failed to enter a state, can provide the next state to go to via this exception
     """
 
-    def __init__(self, state: Hashable = None, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, state: State, *args: Any, **kwargs: Any) -> None:
         super().__init__('failed to enter state')
         self.state = state
         self.args = args
@@ -187,7 +201,7 @@ class StateMachineMeta(type):
         :param kwargs: Any keyword arguments to be passed to the constructor
         :return: An instance of the state machine
         """
-        inst = super().__call__(*args, **kwargs)
+        inst: StateMachine = super().__call__(*args, **kwargs)
         inst.transition_to(inst.create_initial_state())
         call_with_super_check(inst.init)
         return inst
@@ -300,16 +314,25 @@ class StateMachine(metaclass=StateMachineMeta):
     def on_terminated(self) -> None:
         """Called when a terminal state is entered"""
 
-    def transition_to(self, new_state: Union[Hashable, State, Type[State]], *args: Any, **kwargs: Any) -> None:
+    def transition_to(self, new_state: State | None, **kwargs: Any) -> None:
+        """Transite to the new state.
+
+        The new target state will be create lazily when the state is not yet instantiated,
+        which will happened for states not in the expect path such as pause and kill.
+        The arguments are passed to the state class to create state instance.
+        (process arg does not need to pass since it will always call with 'self' as process)
+        """
         assert not self._transitioning, 'Cannot call transition_to when already transitioning state'
+
+        if new_state is None:
+            # early return if the new state is `None`
+            # it can happened when transit from terminal state
+            return None
 
         initial_state_label = self._state.LABEL if self._state is not None else None
         label = None
         try:
             self._transitioning = True
-
-            # Make sure we have a state instance
-            new_state = self._create_state_instance(new_state, *args, **kwargs)
             label = new_state.LABEL
 
             # If the previous transition failed, do not try to exit it but go straight to next state
@@ -319,8 +342,7 @@ class StateMachine(metaclass=StateMachineMeta):
             try:
                 self._enter_next_state(new_state)
             except StateEntryFailed as exception:
-                # Make sure we have a state instance
-                new_state = self._create_state_instance(exception.state, *exception.args, **exception.kwargs)
+                new_state = exception.state
                 label = new_state.LABEL
                 self._exit_current_state(new_state)
                 self._enter_next_state(new_state)
@@ -338,7 +360,11 @@ class StateMachine(metaclass=StateMachineMeta):
             self._transitioning = False
 
     def transition_failed(
-        self, initial_state: Hashable, final_state: Hashable, exception: Exception, trace: TracebackType
+        self,
+        initial_state: Hashable,
+        final_state: Hashable,
+        exception: Exception,
+        trace: TracebackType,
     ) -> None:
         """Called when a state transitions fails.
 
@@ -355,6 +381,10 @@ class StateMachine(metaclass=StateMachineMeta):
         self._debug: bool = enabled
 
     def create_state(self, state_label: Hashable, *args: Any, **kwargs: Any) -> State:
+        # XXX: this method create state from label, which is duplicate as _create_state_instance and less generic
+        # because the label is defined after the state and required to be know before calling this function.
+        # This method should be replaced by `_create_state_instance`.
+        # aiida-core using this method for its Waiting state override.
         try:
             return self.get_states_map()[state_label](self, *args, **kwargs)
         except KeyError:
@@ -383,20 +413,10 @@ class StateMachine(metaclass=StateMachineMeta):
         self._state = next_state
         self._fire_state_event(StateEventHook.ENTERED_STATE, last_state)
 
-    def _create_state_instance(self, state: Union[Hashable, State, Type[State]], *args: Any, **kwargs: Any) -> State:
-        if isinstance(state, State):
-            # It's already a state instance
-            return state
+    def _create_state_instance(self, state_cls: Hashable, **kwargs: Any) -> State:
+        if state_cls not in self.get_states_map():
+            raise ValueError(f'{state_cls} is not a valid state')
 
-        # OK, have to create it
-        state_cls = self._ensure_state_class(state)
-        return state_cls(self, *args, **kwargs)
+        cls = self.get_states_map()[state_cls]
 
-    def _ensure_state_class(self, state: Union[Hashable, Type[State]]) -> Type[State]:
-        if inspect.isclass(state) and issubclass(state, State):
-            return state
-
-        try:
-            return self.get_states_map()[cast(Hashable, state)]
-        except KeyError:
-            raise ValueError(f'{state} is not a valid state')
+        return cls(self, **kwargs)
