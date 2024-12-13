@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.23.0 - 2024-12-13
+
+### Bug fixes
+- Make `Waiting.resume()` idempotent [[20e5898]](https://github.com/aiidateam/plumpy/pull/285)
+
+### Features
+- Message builder for constructing message with carrying more information [[f760b4a]](https://github.com/aiidateam/plumpy/pull/291)
+
+### Devops
+- Make Process.run async [[4611154]](https://github.com/aiidateam/plumpy/pull/272)
+- Devops: Switch to ruff and other devops improvements [[55e05e9]](https://github.com/aiidateam/plumpy/pull/289)
+
+### Dependencies
+- Dependencies: Add `type-extensions` to direct dependencies [[3b9318c]](https://github.com/aiidateam/plumpy/pull/293)
+
+
+
 ## v0.22.3 - 2024-02-02
 
 ### Bug fixes
