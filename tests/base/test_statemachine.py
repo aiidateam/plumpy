@@ -57,6 +57,7 @@ class Paused(state_machine.State):
     def __init__(self, player, playing_state):
         assert isinstance(playing_state, Playing), 'Must provide the playing state to pause'
         super().__init__(player)
+        self._player = player
         self.playing_state = playing_state
 
     def __str__(self):
@@ -64,7 +65,7 @@ class Paused(state_machine.State):
 
     def play(self, track=None):
         if track is not None:
-            self.state_machine.transition_to(Playing, track=track)
+            self.state_machine.transition_to(Playing(player=self.state_machine, track=track))
         else:
             self.state_machine.transition_to(self.playing_state)
 
@@ -80,7 +81,7 @@ class Stopped(state_machine.State):
         return '[]'
 
     def play(self, track):
-        self.state_machine.transition_to(Playing, track=track)
+        self.state_machine.transition_to(Playing(self.state_machine, track=track))
 
 
 class CdPlayer(state_machine.StateMachine):
@@ -107,12 +108,12 @@ class CdPlayer(state_machine.StateMachine):
 
     @state_machine.event(from_states=Playing, to_states=Paused)
     def pause(self):
-        self.transition_to(Paused, playing_state=self._state)
+        self.transition_to(Paused(self, playing_state=self._state))
         return True
 
     @state_machine.event(from_states=(Playing, Paused), to_states=Stopped)
     def stop(self):
-        self.transition_to(Stopped)
+        self.transition_to(Stopped(self))
 
 
 class TestStateMachine(unittest.TestCase):

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import sys
 import traceback
 from enum import Enum
@@ -7,6 +9,8 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Tuple, Typ
 
 import yaml
 from yaml.loader import Loader
+
+from plumpy.process_comms import MessageBuilder, MessageType
 
 try:
     import tblib
@@ -48,7 +52,12 @@ class Interruption(Exception):  # noqa: N818
 
 
 class KillInterruption(Interruption):
-    pass
+    def __init__(self, msg: MessageType | None):
+        super().__init__()
+        if msg is None:
+            msg = MessageBuilder.kill()
+
+        self.msg: MessageType = msg
 
 
 class PauseInterruption(Interruption):
@@ -64,7 +73,7 @@ class Command(persistence.Savable):
 
 @auto_persist('msg')
 class Kill(Command):
-    def __init__(self, msg: Optional[Any] = None):
+    def __init__(self, msg: Optional[MessageType] = None):
         super().__init__()
         self.msg = msg
 
@@ -76,7 +85,10 @@ class Pause(Command):
 @auto_persist('msg', 'data')
 class Wait(Command):
     def __init__(
-        self, continue_fn: Optional[Callable[..., Any]] = None, msg: Optional[Any] = None, data: Optional[Any] = None
+        self,
+        continue_fn: Optional[Callable[..., Any]] = None,
+        msg: Optional[Any] = None,
+        data: Optional[Any] = None,
     ):
         super().__init__()
         self.continue_fn = continue_fn
@@ -349,13 +361,23 @@ class Waiting(State):
 
 
 class Excepted(State):
+    """
+    Excepted state, can optionally provide exception and trace_back
+
+    :param exception: The exception instance
+    :param trace_back: An optional exception traceback
+    """
+
     LABEL = ProcessState.EXCEPTED
 
     EXC_VALUE = 'ex_value'
     TRACEBACK = 'traceback'
 
     def __init__(
-        self, process: 'Process', exception: Optional[BaseException], trace_back: Optional[TracebackType] = None
+        self,
+        process: 'Process',
+        exception: Optional[BaseException],
+        trace_back: Optional[TracebackType] = None,
     ):
         """
         :param process: The associated process
@@ -387,15 +409,27 @@ class Excepted(State):
         else:
             self.traceback = None
 
-    def get_exc_info(self) -> Tuple[Optional[Type[BaseException]], Optional[BaseException], Optional[TracebackType]]:
+    def get_exc_info(
+        self,
+    ) -> Tuple[Optional[Type[BaseException]], Optional[BaseException], Optional[TracebackType]]:
         """
         Recreate the exc_info tuple and return it
         """
-        return type(self.exception) if self.exception else None, self.exception, self.traceback
+        return (
+            type(self.exception) if self.exception else None,
+            self.exception,
+            self.traceback,
+        )
 
 
 @auto_persist('result', 'successful')
 class Finished(State):
+    """State for process is finished.
+
+    :param result: The result of process
+    :param successful: Boolean for the exit code is ``0`` the process is successful.
+    """
+
     LABEL = ProcessState.FINISHED
 
     def __init__(self, process: 'Process', result: Any, successful: bool) -> None:
@@ -406,13 +440,21 @@ class Finished(State):
 
 @auto_persist('msg')
 class Killed(State):
+    """
+    Represents a state where a process has been killed.
+
+    This state is used to indicate that a process has been terminated and can optionally
+    include a message providing details about the termination.
+
+    :param msg: An optional message explaining the reason for the process termination.
+    """
+
     LABEL = ProcessState.KILLED
 
-    def __init__(self, process: 'Process', msg: Optional[str]):
+    def __init__(self, process: 'Process', msg: Optional[MessageType]):
         """
         :param process: The associated process
         :param msg: Optional kill message
-
         """
         super().__init__(process)
         self.msg = msg

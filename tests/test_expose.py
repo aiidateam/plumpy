@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import unittest
 
-from .utils import NewLoopProcess
-
 from plumpy.ports import PortNamespace
 from plumpy.process_spec import ProcessSpec
 from plumpy.processes import Process
+
+from .utils import NewLoopProcess
 
 
 def validator_function(input, port):

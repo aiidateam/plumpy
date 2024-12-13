@@ -26,6 +26,7 @@ from typing import (
     Sequence,
     Tuple,
     Type,
+    TypeVar,
     Union,
     cast,
 )
@@ -39,14 +40,26 @@ import kiwipy
 import yaml
 from aio_pika.exceptions import ChannelInvalidStateError, ConnectionClosed
 
-from . import events, exceptions, futures, persistence, ports, process_comms, process_states, utils
+from . import (
+    events,
+    exceptions,
+    futures,
+    persistence,
+    ports,
+    process_comms,
+    process_states,
+    utils,
+)
 from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
+from .process_comms import MESSAGE_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
+
+T = TypeVar('T')
 
 __all__ = ['BundleKeys', 'Process', 'ProcessSpec', 'TransitionFailed']
 
@@ -91,7 +104,13 @@ def ensure_not_closed(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 @persistence.auto_persist(
-    '_pid', '_creation_time', '_future', '_paused', '_status', '_pre_paused_status', '_event_helper'
+    '_pid',
+    '_creation_time',
+    '_future',
+    '_paused',
+    '_status',
+    '_pre_paused_status',
+    '_event_helper',
 )
 class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMeta):
     """
@@ -231,7 +250,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @classmethod
     def recreate_from(
-        cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext] = None
+        cls,
+        saved_state: SAVED_STATE_TYPE,
+        load_context: Optional[persistence.LoadSaveContext] = None,
     ) -> 'Process':
         """
         Recreate a process from a saved state, passing any positional and
@@ -314,14 +335,21 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 identifier = self._communicator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
                 self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
             except kiwipy.TimeoutError:
-                self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
+                self.logger.exception(
+                    'Process<%s>: failed to register as a broadcast subscriber',
+                    self.pid,
+                )
 
         if not self._future.done():
 
             def try_killing(future: futures.Future) -> None:
                 if future.cancelled():
-                    if not self.kill('Killed by future being cancelled'):
-                        self.logger.warning('Process<%s>: Failed to kill process on future cancel', self.pid)
+                    msg = MessageBuilder.kill(text='Killed by future being cancelled')
+                    if not self.kill(msg):
+                        self.logger.warning(
+                            'Process<%s>: Failed to kill process on future cancel',
+                            self.pid,
+                        )
 
             self._future.add_done_callback(try_killing)
 
@@ -425,7 +453,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         The process is started asynchronously, without blocking other task in the event loop.
         """
-        process = process_class(inputs=inputs, pid=pid, logger=logger, loop=self.loop, communicator=self._communicator)
+        process = process_class(
+            inputs=inputs,
+            pid=pid,
+            logger=logger,
+            loop=self.loop,
+            communicator=self._communicator,
+        )
         self.loop.create_task(process.step_until_terminated())
         return process
 
@@ -477,7 +511,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """Return whether the process is killed."""
         return self.state == process_states.ProcessState.KILLED
 
-    def killed_msg(self) -> Optional[str]:
+    def killed_msg(self) -> Optional[MessageType]:
         """Return the killed message."""
         if isinstance(self._state, process_states.Killed):
             return self._state.msg
@@ -529,7 +563,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         return handle
 
     def callback_excepted(
-        self, _callback: Callable[..., Any], exception: Optional[BaseException], trace: Optional[TracebackType]
+        self,
+        _callback: Callable[..., Any],
+        exception: Optional[BaseException],
+        trace: Optional[TracebackType],
     ) -> None:
         if self.state != process_states.ProcessState.EXCEPTED:
             self.fail(exception, trace)
@@ -555,7 +592,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             stack_copy.pop()
             PROCESS_STACK.set(stack_copy)
 
-    async def _run_task(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    async def _run_task(self, callback: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """
         This method should be used to run all Process related functions and coroutines.
         If there is an exception the process will enter the EXCEPTED state.
@@ -576,7 +613,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     # region Persistence
 
     def save_instance_state(
-        self, out_state: SAVED_STATE_TYPE, save_context: Optional[persistence.LoadSaveContext]
+        self,
+        out_state: SAVED_STATE_TYPE,
+        save_context: Optional[persistence.LoadSaveContext],
     ) -> None:
         """
         Ask the process to save its current instance state.
@@ -828,7 +867,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if successful:
             validation_error = self.spec().outputs.validate(self.outputs)
             if validation_error:
-                raise StateEntryFailed(process_states.ProcessState.FINISHED, result, False)
+                state_cls = self.get_states_map()[process_states.ProcessState.FINISHED]
+                finished_state = state_cls(self, result=result, successful=False)
+                raise StateEntryFailed(finished_state)
 
         self.future().set_result(self.outputs)
 
@@ -857,10 +898,15 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._fire_event(ProcessListener.on_process_excepted, str(self.future().exception()))
 
     @super_check
-    def on_kill(self, msg: Optional[str]) -> None:
+    def on_kill(self, msg: Optional[MessageType]) -> None:
         """Entering the KILLED state."""
-        self.set_status(msg)
-        self.future().set_exception(exceptions.KilledError(msg))
+        if msg is None:
+            msg_txt = ''
+        else:
+            msg_txt = msg[MESSAGE_KEY] or ''
+
+        self.set_status(msg_txt)
+        self.future().set_exception(exceptions.KilledError(msg_txt))
 
     @super_check
     def on_killed(self) -> None:
@@ -906,7 +952,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param msg: the message
         :return: the outcome of processing the message, the return value will be sent back as a response to the sender
         """
-        self.logger.debug("Process<%s>: received RPC message with communicator '%s': %r", self.pid, _comm, msg)
+        self.logger.debug(
+            "Process<%s>: received RPC message with communicator '%s': %r",
+            self.pid,
+            _comm,
+            msg,
+        )
 
         intent = msg[process_comms.INTENT_KEY]
 
@@ -915,7 +966,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == process_comms.Intent.PAUSE:
             return self._schedule_rpc(self.pause, msg=msg.get(process_comms.MESSAGE_KEY, None))
         if intent == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg=msg.get(process_comms.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.kill, msg=msg)
         if intent == process_comms.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
@@ -935,7 +986,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
 
         self.logger.debug(
-            "Process<%s>: received broadcast message '%s' with communicator '%s': %r", self.pid, subject, _comm, body
+            "Process<%s>: received broadcast message '%s' with communicator '%s': %r",
+            self.pid,
+            subject,
+            _comm,
+            body,
         )
 
         # If we get a message we recognise then action it, otherwise ignore
@@ -1001,13 +1056,20 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     # region State related methods
 
     def transition_failed(
-        self, initial_state: Hashable, final_state: Hashable, exception: Exception, trace: TracebackType
+        self,
+        initial_state: Hashable,
+        final_state: Hashable,
+        exception: Exception,
+        trace: TracebackType,
     ) -> None:
         # If we are creating, then reraise instead of failing.
         if final_state == process_states.ProcessState.CREATED:
             raise exception.with_traceback(trace)
 
-        self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace)
+        new_state = self._create_state_instance(
+            process_states.ProcessState.EXCEPTED, exception=exception, trace_back=trace
+        )
+        self.transition_to(new_state)
 
     def pause(self, msg: Union[str, None] = None) -> Union[bool, futures.CancellableAction]:
         """Pause the process.
@@ -1070,8 +1132,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             def do_kill(_next_state: process_states.State) -> Any:
                 try:
-                    # Ignore the next state
-                    self.transition_to(process_states.ProcessState.KILLED, str(exception))
+                    new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=exception.msg)
+                    self.transition_to(new_state)
                     return True
                 finally:
                     self._killing = None
@@ -1123,9 +1185,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :param exception: The exception that caused the failure
         :param trace_back: Optional exception traceback
         """
-        self.transition_to(process_states.ProcessState.EXCEPTED, exception, trace_back)
+        new_state = self._create_state_instance(
+            process_states.ProcessState.EXCEPTED, exception=exception, trace_back=trace_back
+        )
+        self.transition_to(new_state)
 
-    def kill(self, msg: Union[str, None] = None) -> Union[bool, asyncio.Future]:
+    def kill(self, msg: Optional[MessageType] = None) -> Union[bool, asyncio.Future]:
         """
         Kill the process
         :param msg: An optional kill message
@@ -1151,7 +1216,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._state.interrupt(interrupt_exception)
             return cast(futures.CancellableAction, self._interrupt_action)
 
-        self.transition_to(process_states.ProcessState.KILLED, msg)
+        new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)
+        self.transition_to(new_state)
         return True
 
     @property
@@ -1168,7 +1234,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         :return: A Created state
         """
-        return cast(process_states.State, self.get_state_class(process_states.ProcessState.CREATED)(self, self.run))
+        return cast(
+            process_states.State,
+            self.get_state_class(process_states.ProcessState.CREATED)(self, self.run),
+        )
 
     def recreate_state(self, saved_state: persistence.Bundle) -> process_states.State:
         """
