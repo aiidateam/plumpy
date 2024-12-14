@@ -192,17 +192,16 @@ class ProcessLauncher:
         """
         task_type = task[TASK_KEY]
         if task_type == LAUNCH_TASK:
-            return await self._launch(communicator, **task.get(TASK_ARGS, {}))
+            return await self._launch(**task.get(TASK_ARGS, {}))
         if task_type == CONTINUE_TASK:
-            return await self._continue(communicator, **task.get(TASK_ARGS, {}))
+            return await self._continue(**task.get(TASK_ARGS, {}))
         if task_type == CREATE_TASK:
-            return await self._create(communicator, **task.get(TASK_ARGS, {}))
+            return await self._create(**task.get(TASK_ARGS, {}))
 
         raise TaskRejectedError
 
     async def _launch(
         self,
-        _communicator: kiwipy.Communicator,
         process_class: str,
         persist: bool,
         nowait: bool,
@@ -242,9 +241,7 @@ class ProcessLauncher:
 
         return proc.future().result()
 
-    async def _continue(
-        self, _communicator: kiwipy.Communicator, pid: 'PID_TYPE', nowait: bool, tag: Optional[str] = None
-    ) -> Union[PID_TYPE, Any]:
+    async def _continue(self, pid: 'PID_TYPE', nowait: bool, tag: Optional[str] = None) -> Union[PID_TYPE, Any]:
         """
         Continue the process
 
@@ -272,7 +269,6 @@ class ProcessLauncher:
 
     async def _create(
         self,
-        _communicator: kiwipy.Communicator,
         process_class: str,
         persist: bool,
         init_args: Optional[Sequence[Any]] = None,
