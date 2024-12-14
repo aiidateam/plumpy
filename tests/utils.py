@@ -8,7 +8,7 @@ from collections.abc import Mapping
 
 import plumpy
 from plumpy import persistence, process_states, processes, utils
-from plumpy.process_comms import  MessageBuilder
+from plumpy.message import MessageBuilder
 
 Snapshot = collections.namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 

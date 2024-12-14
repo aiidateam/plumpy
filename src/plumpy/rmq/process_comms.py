@@ -4,188 +4,28 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
+from typing import Any, Dict, Optional, Sequence, Union
 
 import kiwipy
 
+from plumpy import loaders
 from plumpy.message import (
-    MESSAGE_KEY,
-    PAUSE_MSG,
-    PLAY_MSG,
-    STATUS_MSG,
-    KILL_MSG,
     Intent,
+    MessageBuilder,
+    MessageType,
     create_continue_body,
     create_create_body,
     create_launch_body,
 )
-
-from plumpy import loaders
 from plumpy.utils import PID_TYPE
 
 __all__ = [
-    'MessageBuilder',
-    'ProcessLauncher',
     'RemoteProcessController',
     'RemoteProcessThreadController',
 ]
 
 ProcessResult = Any
 ProcessStatus = Any
-
-INTENT_KEY = 'intent'
-MESSAGE_TEXT_KEY = 'message'
-FORCE_KILL_KEY = 'force_kill'
-
-
-class Intent:
-    """Intent constants for a process message"""
-
-    PLAY: str = 'play'
-    PAUSE: str = 'pause'
-    KILL: str = 'kill'
-    STATUS: str = 'status'
-
-
-MessageType = Dict[str, Any]
-
-
-class MessageBuilder:
-    """MessageBuilder will construct different messages that can passing over communicator."""
-
-    @classmethod
-    def play(cls, text: str | None = None) -> MessageType:
-        """The play message send over communicator."""
-        return {
-            INTENT_KEY: Intent.PLAY,
-            MESSAGE_TEXT_KEY: text,
-        }
-
-    @classmethod
-    def pause(cls, text: str | None = None) -> MessageType:
-        """The pause message send over communicator."""
-        return {
-            INTENT_KEY: Intent.PAUSE,
-            MESSAGE_TEXT_KEY: text,
-        }
-
-    @classmethod
-    def kill(cls, text: str | None = None, force_kill: bool = False) -> MessageType:
-        """The kill message send over communicator."""
-        return {
-            INTENT_KEY: Intent.KILL,
-            MESSAGE_TEXT_KEY: text,
-            FORCE_KILL_KEY: force_kill,
-        }
-
-    @classmethod
-    def status(cls, text: str | None = None) -> MessageType:
-        """The status message send over communicator."""
-        return {
-            INTENT_KEY: Intent.STATUS,
-            MESSAGE_TEXT_KEY: text,
-        }
-
-
-TASK_KEY = 'task'
-TASK_ARGS = 'args'
-PERSIST_KEY = 'persist'
-# Launch
-PROCESS_CLASS_KEY = 'process_class'
-ARGS_KEY = 'init_args'
-KWARGS_KEY = 'init_kwargs'
-NOWAIT_KEY = 'nowait'
-# Continue
-PID_KEY = 'pid'
-TAG_KEY = 'tag'
-# Task types
-LAUNCH_TASK = 'launch'
-CONTINUE_TASK = 'continue'
-CREATE_TASK = 'create'
-
-LOGGER = logging.getLogger(__name__)
-
-
-def create_launch_body(
-    process_class: str,
-    init_args: Optional[Sequence[Any]] = None,
-    init_kwargs: Optional[Dict[str, Any]] = None,
-    persist: bool = False,
-    loader: Optional[loaders.ObjectLoader] = None,
-    nowait: bool = True,
-) -> Dict[str, Any]:
-    """
-    Create a message body for the launch action
-
-    :param process_class: the class of the process to launch
-    :param init_args: any initialisation positional arguments
-    :param init_kwargs: any initialisation keyword arguments
-    :param persist: persist this process if True, otherwise don't
-    :param loader: the loader to use to load the persisted process
-    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
-    :return: a dictionary with the body of the message to launch the process
-    :rtype: dict
-    """
-    if loader is None:
-        loader = loaders.get_object_loader()
-
-    msg_body = {
-        TASK_KEY: LAUNCH_TASK,
-        TASK_ARGS: {
-            PROCESS_CLASS_KEY: loader.identify_object(process_class),
-            PERSIST_KEY: persist,
-            NOWAIT_KEY: nowait,
-            ARGS_KEY: init_args,
-            KWARGS_KEY: init_kwargs,
-        },
-    }
-    return msg_body
-
-
-def create_continue_body(pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False) -> Dict[str, Any]:
-    """
-    Create a message body to continue an existing process
-    :param pid: the pid of the existing process
-    :param tag: the optional persistence tag
-    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
-    :return: a dictionary with the body of the message to continue the process
-
-    """
-    msg_body = {TASK_KEY: CONTINUE_TASK, TASK_ARGS: {PID_KEY: pid, NOWAIT_KEY: nowait, TAG_KEY: tag}}
-    return msg_body
-
-
-def create_create_body(
-    process_class: str,
-    init_args: Optional[Sequence[Any]] = None,
-    init_kwargs: Optional[Dict[str, Any]] = None,
-    persist: bool = False,
-    loader: Optional[loaders.ObjectLoader] = None,
-) -> Dict[str, Any]:
-    """
-    Create a message body to create a new process
-    :param process_class: the class of the process to launch
-    :param init_args: any initialisation positional arguments
-    :param init_kwargs: any initialisation keyword arguments
-    :param persist: persist this process if True, otherwise don't
-    :param loader: the loader to use to load the persisted process
-    :return: a dictionary with the body of the message to launch the process
-
-    """
-    if loader is None:
-        loader = loaders.get_object_loader()
-
-    msg_body = {
-        TASK_KEY: CREATE_TASK,
-        TASK_ARGS: {
-            PROCESS_CLASS_KEY: loader.identify_object(process_class),
-            PERSIST_KEY: persist,
-            ARGS_KEY: init_args,
-            KWARGS_KEY: init_kwargs,
-        },
-    }
-    return msg_body
 
 
 class RemoteProcessController:
