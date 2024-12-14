@@ -3,6 +3,7 @@
 
 import abc
 import asyncio
+import concurrent.futures
 import contextlib
 import copy
 import enum
@@ -30,6 +31,8 @@ from typing import (
     Union,
     cast,
 )
+
+from plumpy.coordinator import Communicator
 
 try:
     from aiocontextvars import ContextVar
@@ -264,7 +267,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         pid: Optional[PID_TYPE] = None,
         logger: Optional[logging.Logger] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
-        communicator: Optional[kiwipy.Communicator] = None,
+        communicator: Optional[Communicator] = None,
     ) -> None:
         """
         The signature of the constructor should not be changed by subclassing processes.
@@ -317,19 +320,17 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             try:
                 identifier = self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
                 self.add_cleanup(functools.partial(self._communicator.remove_rpc_subscriber, identifier))
-            except kiwipy.TimeoutError:
+            except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as an RPC subscriber', self.pid)
 
             try:
                 # filter out state change broadcasts
+                # TODO: pattern filter should be moved to add_broadcast_subscriber.
                 subscriber = kiwipy.BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
                 identifier = self._communicator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
                 self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
-            except kiwipy.TimeoutError:
-                self.logger.exception(
-                    'Process<%s>: failed to register as a broadcast subscriber',
-                    self.pid,
-                )
+            except concurrent.futures.TimeoutError:
+                self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
 
         if not self._future.done():
 
@@ -726,8 +727,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             call_with_super_check(self.on_except, state.get_exc_info())  # type: ignore
 
     def on_entered(self, from_state: Optional[process_states.State]) -> None:
-        from plumpy.rmq.exceptions import CommunicatorChannelInvalidStateError, CommunicatorConnectionClosed
-
         # Map these onto direct functions that the subclass can implement
         state_label = self._state.LABEL
         if state_label == process_states.ProcessState.RUNNING:
@@ -742,6 +741,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             call_with_super_check(self.on_killed)
 
         if self._communicator and isinstance(self.state, enum.Enum):
+            from plumpy.rmq.exceptions import CommunicatorChannelInvalidStateError, CommunicatorConnectionClosed
+
             from_label = cast(enum.Enum, from_state.LABEL).value if from_state is not None else None
             subject = f'state_changed.{from_label}.{self.state.value}'
             self.logger.info('Process<%s>: Broadcasting state change: %s', self.pid, subject)
@@ -750,7 +751,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             except (CommunicatorConnectionClosed, CommunicatorChannelInvalidStateError):
                 message = 'Process<%s>: no connection available to broadcast state change from %s to %s'
                 self.logger.warning(message, self.pid, from_label, self.state.value)
-            except kiwipy.TimeoutError:
+            except concurrent.futures.TimeoutError:
                 message = 'Process<%s>: sending broadcast of state change from %s to %s timed out'
                 self.logger.warning(message, self.pid, from_label, self.state.value)
 
@@ -936,7 +937,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region Communication
 
-    def message_receive(self, _comm: kiwipy.Communicator, msg: MessageType) -> Any:
+    def message_receive(self, _comm: Communicator, msg: MessageType) -> Any:
         """
         Coroutine called when the process receives a message from the communicator
 
@@ -984,15 +985,24 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             _comm,
             msg,
         )
-
         # If we get a message we recognise then action it, otherwise ignore
+        fn = None
         if subject == message.Intent.PLAY:
-            return self._schedule_rpc(self.play)
-        if subject == process_comms.Intent.PAUSE:
+            fn = self._schedule_rpc(self.play)
+        elif subject == message.Intent.PAUSE:
             return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
-        if subject == process_comms.Intent.KILL:
+        elif subject == message.Intent.KILL:
             return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
-        return None
+
+        if fn is None:
+            self.logger.warning(
+                "Process<%s>: received unsupported broadcast message '%s'.",
+                self.pid,
+                subject,
+            )
+            return None
+
+        return fn
 
     def _schedule_rpc(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> concurrent.futures.Future:
         """
