@@ -9,19 +9,18 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
 
 import kiwipy
 
+from plumpy import loaders
 from plumpy.message import (
+    KILL_MSG,
     MESSAGE_KEY,
     PAUSE_MSG,
     PLAY_MSG,
     STATUS_MSG,
-    KILL_MSG,
     Intent,
     create_continue_body,
     create_create_body,
     create_launch_body,
 )
-
-from plumpy import loaders
 from plumpy.utils import PID_TYPE
 
 __all__ = [

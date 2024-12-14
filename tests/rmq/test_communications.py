@@ -56,7 +56,7 @@ def test_add_broadcast_subscriber(loop_communicator, subscriber):
     assert loop_communicator.add_broadcast_subscriber(subscriber) is not None
 
     identifier = 'identifier'
-    assert loop_communicator.add_broadcast_subscriber(subscriber, identifier) == identifier
+    assert loop_communicator.add_broadcast_subscriber(subscriber, identifier=identifier) == identifier
 
 
 def test_remove_broadcast_subscriber(loop_communicator, subscriber):

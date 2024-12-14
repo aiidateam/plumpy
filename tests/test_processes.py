@@ -1066,6 +1066,7 @@ class TestProcessEvents(unittest.TestCase):
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_broadcast(self):
+        # FIXME: here I need a mock test
         communicator = kiwipy.LocalCommunicator()
 
         messages = []
