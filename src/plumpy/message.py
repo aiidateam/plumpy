@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 INTENT_KEY = 'intent'
 MESSAGE_KEY = 'message'
+FORCE_KILL_KEY = 'force_kill'
 
 
 class Intent:
@@ -61,6 +62,45 @@ CONTINUE_TASK = 'continue'
 CREATE_TASK = 'create'
 
 LOGGER = logging.getLogger(__name__)
+
+MessageType = Dict[str, Any]
+
+
+class MessageBuilder:
+    """MessageBuilder will construct different messages that can passing over communicator."""
+
+    @classmethod
+    def play(cls, text: str | None = None) -> MessageType:
+        """The play message send over communicator."""
+        return {
+            INTENT_KEY: Intent.PLAY,
+            MESSAGE_KEY: text,
+        }
+
+    @classmethod
+    def pause(cls, text: str | None = None) -> MessageType:
+        """The pause message send over communicator."""
+        return {
+            INTENT_KEY: Intent.PAUSE,
+            MESSAGE_KEY: text,
+        }
+
+    @classmethod
+    def kill(cls, text: str | None = None, force_kill: bool = False) -> MessageType:
+        """The kill message send over communicator."""
+        return {
+            INTENT_KEY: Intent.KILL,
+            MESSAGE_KEY: text,
+            FORCE_KILL_KEY: force_kill,
+        }
+
+    @classmethod
+    def status(cls, text: str | None = None) -> MessageType:
+        """The status message send over communicator."""
+        return {
+            INTENT_KEY: Intent.STATUS,
+            MESSAGE_KEY: text,
+        }
 
 
 def create_launch_body(

@@ -39,16 +39,15 @@ try:
 except ModuleNotFoundError:
     from contextvars import ContextVar
 
-import kiwipy
 import yaml
 
 from . import events, exceptions, message, persistence, ports, process_states, utils
-from .futures import capture_exceptions, CancellableAction
 from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .process_comms import MESSAGE_TEXT_KEY, MessageBuilder, MessageType
+from .futures import CancellableAction, capture_exceptions
+from .message import MESSAGE_TEXT_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
@@ -325,9 +324,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             try:
                 # filter out state change broadcasts
-                # TODO: pattern filter should be moved to add_broadcast_subscriber.
-                subscriber = kiwipy.BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
-                identifier = self._communicator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
+                identifier = self._communicator.add_broadcast_subscriber(
+                    self.broadcast_receive, subject_filter=re.compile(r'^(?!state_changed).*'), identifier=str(self.pid)
+                )
                 self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
             except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
@@ -741,6 +740,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             call_with_super_check(self.on_killed)
 
         if self._communicator and isinstance(self.state, enum.Enum):
+            # FIXME: move all to `coordinator.broadcast()` call and in rmq implement coordinator
             from plumpy.rmq.exceptions import CommunicatorChannelInvalidStateError, CommunicatorConnectionClosed
 
             from_label = cast(enum.Enum, from_state.LABEL).value if from_state is not None else None

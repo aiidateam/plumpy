@@ -130,10 +130,10 @@ class LoopCommunicator(kiwipy.Communicator):  # type: ignore
         return self._communicator.remove_task_subscriber(identifier)
 
     def add_broadcast_subscriber(
-        self, subscriber: 'BroadcastSubscriber', identifier: Optional['ID_TYPE'] = None
+        self, subscriber: 'BroadcastSubscriber', subject_filter=None, identifier: Optional['ID_TYPE'] = None
     ) -> 'ID_TYPE':
         converted = convert_to_comm(subscriber, self._loop)
-        return self._communicator.add_broadcast_subscriber(converted, identifier)
+        return self._communicator.add_broadcast_subscriber(converted, subject_filter, identifier)
 
     def remove_broadcast_subscriber(self, identifier: 'ID_TYPE') -> None:
         return self._communicator.remove_broadcast_subscriber(identifier)

@@ -7,7 +7,7 @@ import asyncio
 import contextlib
 from typing import Any, Awaitable, Callable, Generator, Optional
 
-__all__ = ['CancellableAction', 'create_task', 'create_task', 'capture_exceptions']
+__all__ = ['CancellableAction', 'capture_exceptions', 'create_task', 'create_task']
 
 
 class InvalidFutureError(Exception):
