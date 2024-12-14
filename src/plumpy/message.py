@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
 from plumpy.coordinator import Communicator
 from plumpy.exceptions import PersistenceError, TaskRejectedError
 
+from plumpy.exceptions import PersistenceError, TaskRejectedError
+
 from . import loaders, persistence
 from .utils import PID_TYPE
 

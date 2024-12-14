@@ -38,3 +38,6 @@ class PersistenceError(Exception):
 
 class ClosedError(Exception):
     """Raised when an mutable operation is attempted on a closed process"""
+
+class TaskRejectedError(Exception):
+    """ A task was rejected by the coordinacor"""
