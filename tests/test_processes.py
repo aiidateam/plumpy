@@ -12,7 +12,7 @@ from tests import utils
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
-from plumpy.process_comms import MessageBuilder
+from plumpy.message import MessageBuilder
 from plumpy.utils import AttributesFrozendict
 from tests import utils
 
