@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import uuid
 
+from kiwipy.rmq.communicator import kiwipy
 import pytest
 import shortuuid
 import yaml
@@ -84,7 +85,7 @@ class TestLoopCommunicator:
         assert result == BROADCAST
 
     @pytest.mark.asyncio
-    async def test_broadcast_filter(self, loop_communicator):
+    async def test_broadcast_filter(self, loop_communicator: kiwipy.Communicator):
         broadcast_future = asyncio.Future()
 
         def ignore_broadcast(_comm, body, sender, subject, correlation_id):
@@ -93,7 +94,7 @@ class TestLoopCommunicator:
         def get_broadcast(_comm, body, sender, subject, correlation_id):
             broadcast_future.set_result(True)
 
-        loop_communicator.add_broadcast_subscriber(BroadcastFilter(ignore_broadcast, subject='other'))
+        loop_communicator.add_broadcast_subscriber(ignore_broadcast, subject_filter='other')
         loop_communicator.add_broadcast_subscriber(get_broadcast)
         loop_communicator.broadcast_send(
             **{'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420}

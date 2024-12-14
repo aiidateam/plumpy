@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Tuple, Typ
 import yaml
 from yaml.loader import Loader
 
-from plumpy.process_comms import MessageBuilder, MessageType
+from plumpy.message import MessageBuilder, MessageType
 
 try:
     import tblib

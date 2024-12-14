@@ -12,7 +12,7 @@ from tests import utils
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
-from plumpy.process_comms import MESSAGE_TEXT_KEY, MessageBuilder
+from plumpy.message import MessageBuilder
 from plumpy.utils import AttributesFrozendict
 from tests import utils
 
@@ -1066,6 +1066,7 @@ class TestProcessEvents(unittest.TestCase):
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_broadcast(self):
+        # FIXME: here I need a mock test
         communicator = kiwipy.LocalCommunicator()
 
         messages = []
