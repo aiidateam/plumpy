@@ -18,18 +18,24 @@ from .base.utils import call_with_super_check, super_check
 from .utils import PID_TYPE, SAVED_STATE_TYPE
 
 __all__ = [
-    'Bundle', 'Persister', 'PicklePersister', 'auto_persist', 'Savable', 'SavableFuture', 'LoadSaveContext',
-    'PersistedCheckpoint', 'InMemoryPersister'
+    'Bundle',
+    'InMemoryPersister',
+    'LoadSaveContext',
+    'PersistedCheckpoint',
+    'Persister',
+    'PicklePersister',
+    'Savable',
+    'SavableFuture',
+    'auto_persist',
 ]
 
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
 
 if TYPE_CHECKING:
-    from .processes import Process  # pylint: disable=cyclic-import
+    from .processes import Process
 
 
 class Bundle(dict):
-
     def __init__(self, savable: 'Savable', save_context: Optional['LoadSaveContext'] = None, dereference: bool = False):
         """
         Create a bundle from a savable.  Optionally keep information about the
@@ -77,7 +83,6 @@ yaml.add_constructor(_BUNDLE_TAG, _bundle_constructor)  # type: ignore[arg-type]
 
 
 class Persister(metaclass=abc.ABCMeta):
-
     @abc.abstractmethod
     def save_checkpoint(self, process: 'Process', tag: Optional[str] = None) -> None:
         """
@@ -301,7 +306,7 @@ class PicklePersister(Persister):
 
 
 class InMemoryPersister(Persister):
-    """ Mainly to be used in testing/debugging """
+    """Mainly to be used in testing/debugging"""
 
     def __init__(self, loader: Optional[loaders.ObjectLoader] = None) -> None:
         super().__init__()
@@ -340,13 +345,11 @@ class InMemoryPersister(Persister):
             del self._checkpoints[pid]
 
 
-SavableClsType = TypeVar('SavableClsType', bound='Type[Savable]')  # type: ignore[name-defined]  # pylint: disable=invalid-name
+SavableClsType = TypeVar('SavableClsType', bound='type[Savable]')
 
 
 def auto_persist(*members: str) -> Callable[[SavableClsType], SavableClsType]:
-
     def wrapped(savable: SavableClsType) -> SavableClsType:
-        # pylint: disable=protected-access
         if savable._auto_persist is None:
             savable._auto_persist = set()
         else:
@@ -390,7 +393,6 @@ def _ensure_object_loader(context: Optional['LoadSaveContext'], saved_state: SAV
 
 
 class LoadSaveContext:
-
     def __init__(self, loader: Optional[loaders.ObjectLoader] = None, **kwargs: Any) -> None:
         self._values = dict(**kwargs)
         self.loader = loader
@@ -408,7 +410,7 @@ class LoadSaveContext:
         return self._values.__contains__(item)
 
     def copyextend(self, **kwargs: Any) -> 'LoadSaveContext':
-        """ Add additional information to the context by making a copy with the new values """
+        """Add additional information to the context by making a copy with the new values"""
         extended = self._values.copy()
         extended.update(kwargs)
         loader = extended.pop('loader', self.loader)
@@ -485,7 +487,7 @@ class Savable:
             self.load_members(self._auto_persist, saved_state, load_context)
 
     @super_check
-    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: Optional[LoadSaveContext]) -> None:  # pylint: disable=unused-argument
+    def save_instance_state(self, out_state: SAVED_STATE_TYPE, save_context: Optional[LoadSaveContext]) -> None:
         self._ensure_persist_configured()
         if self._auto_persist is not None:
             self.save_members(self._auto_persist, out_state)
@@ -527,10 +529,7 @@ class Savable:
             out_state[member] = value
 
     def load_members(
-        self,
-        members: Iterable[str],
-        saved_state: SAVED_STATE_TYPE,
-        load_context: Optional[LoadSaveContext] = None
+        self, members: Iterable[str], saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None
     ) -> None:
         for member in members:
             setattr(self, member, self._get_value(saved_state, member, load_context))
@@ -580,8 +579,9 @@ class Savable:
 
     # endregion
 
-    def _get_value(self, saved_state: SAVED_STATE_TYPE, name: str,
-                   load_context: Optional[LoadSaveContext]) -> Union[MethodType, 'Savable']:
+    def _get_value(
+        self, saved_state: SAVED_STATE_TYPE, name: str, load_context: Optional[LoadSaveContext]
+    ) -> Union[MethodType, 'Savable']:
         value = saved_state[name]
 
         typ = Savable._get_meta_type(saved_state, name)
@@ -626,10 +626,10 @@ class SavableFuture(futures.Future, Savable):
 
         state = saved_state['_state']
 
-        if state == asyncio.futures._PENDING:  # type: ignore # pylint: disable=protected-access
+        if state == asyncio.futures._PENDING:  # type: ignore
             obj = cls(loop=loop)
 
-        if state == asyncio.futures._FINISHED:  # type: ignore # pylint: disable=protected-access
+        if state == asyncio.futures._FINISHED:  # type: ignore
             obj = cls(loop=loop)
             result = saved_state['_result']
 
@@ -639,14 +639,13 @@ class SavableFuture(futures.Future, Savable):
             except KeyError:
                 obj.set_result(result)
 
-        if state == asyncio.futures._CANCELLED:  # type: ignore # pylint: disable=protected-access
+        if state == asyncio.futures._CANCELLED:  # type: ignore
             obj = cls(loop=loop)
             obj.cancel()
 
         return obj
 
     def load_instance_state(self, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext) -> None:
-        # pylint: disable=attribute-defined-outside-init
         super().load_instance_state(saved_state, load_context)
         if self._callbacks:
             # typing says asyncio.Future._callbacks needs to be called, but in the python 3.7 code it is a simple list

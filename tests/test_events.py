@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for the :mod:`plumpy.events` module."""
+
 import asyncio
 import pathlib
 
