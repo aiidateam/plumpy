@@ -31,10 +31,11 @@ __all__ = [
     'Excepted',
     'Finished',
     'Interruption',
+    'Killed',
     # Commands
     'Kill',
     'KillInterruption',
-    'Killed',
+    'ForceKillInterruption',
     'PauseInterruption',
     'ProcessState',
     'Running',
@@ -58,6 +59,10 @@ class KillInterruption(Interruption):
             msg = MessageBuilder.kill()
 
         self.msg: MessageType = msg
+
+
+class ForceKillInterruption(Interruption):
+    pass
 
 
 class PauseInterruption(Interruption):

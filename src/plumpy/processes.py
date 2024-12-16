@@ -1128,7 +1128,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             do_pause = functools.partial(self._do_pause, str(exception))
             return futures.CancellableAction(do_pause, cookie=exception)
 
-        if isinstance(exception, process_states.KillInterruption):
+        if isinstance(exception, (process_states.KillInterruption, process_states.ForceKillInterruption)):
 
             def do_kill(_next_state: process_states.State) -> Any:
                 try:
@@ -1195,6 +1195,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         Kill the process
         :param msg: An optional kill message
         """
+        force_kill = isinstance(msg, str) and '-F' in msg
+
         if self.state == process_states.ProcessState.KILLED:
             # Already killed
             return True
@@ -1203,14 +1205,20 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             # Can't kill
             return False
 
-        if self._killing:
+        if self._killing and not force_kill:
             # Already killing
             return self._killing
 
-        if self._stepping:
+        if force_kill:
+            # Skip interrupting the state and go straight to killed
+            interrupt_exception = process_states.ForceKillInterruption(msg)
+            self._killing = self._interrupt_action
+            self._state.interrupt(interrupt_exception)
+
+        elif self._stepping:
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
-            interrupt_exception = process_states.KillInterruption(msg)
+            interrupt_exception = process_states.KillInterruption(msg)  # type: ignore
             self._set_interrupt_action_from_exception(interrupt_exception)
             self._killing = self._interrupt_action
             self._state.interrupt(interrupt_exception)
