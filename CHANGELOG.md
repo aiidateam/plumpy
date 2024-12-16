@@ -2,18 +2,18 @@
 
 ## v0.23.0 - 2024-12-13
 
-### Bug fixes
-- Make `Waiting.resume()` idempotent [[20e5898]](https://github.com/aiidateam/plumpy/pull/285)
-
 ### Features
-- Message builder for constructing message with carrying more information [[f760b4a]](https://github.com/aiidateam/plumpy/pull/291)
+- Message builder for constructing message with carrying more information (#291) [[f760b4a]](https://github.com/aiidateam/plumpy/commit/f760b4aaf6a46bbfc13bab88e36271aab122a641)
+  - Breaking behavior: Direct message constants (`KILL_MSG`, `PAUSE_MSG`, `PLAY_MSG`, `STATUS_MSG`) are replaced with the `MessageBuilder` class methods.
+
+### Bug fixes
+- Make `Waiting.resume()` idempotent (#285) [[20e5898]](https://github.com/aiidateam/plumpy/commit/20e5898e0c9037624988fe321e784f4fe38a2e8d)
 
 ### Devops
-- Make Process.run async [[4611154]](https://github.com/aiidateam/plumpy/pull/272)
-- Devops: Switch to ruff and other devops improvements [[55e05e9]](https://github.com/aiidateam/plumpy/pull/289)
-
-### Dependencies
-- Dependencies: Add `type-extensions` to direct dependencies [[3b9318c]](https://github.com/aiidateam/plumpy/pull/293)
+- Make `Process.run` async (#272) [[4611154]](https://github.com/aiidateam/plumpy/commit/4611154c76ac0991bcf7371b21488f4390648c28)
+  - Breaking behavior: Changes from `Coroutine` to `Awaitable` in function signatures.
+  - Breaking behavior: All the `run()` methods across the interface are now asynchronous (async def).
+- Switch to ruff and other devops improvements (#289) [[55e05e9]](https://github.com/aiidateam/plumpy/commit/55e05e956c9715fb69785d83d0194b65811b4720)
 
 
 
