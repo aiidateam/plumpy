@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 from collections.abc import Sequence
 from typing import Any, Protocol
 
@@ -53,7 +56,7 @@ class ProcessController(Protocol):
         ...
 
     def continue_process(
-        self, pid: 'PID_TYPE', tag: str|None = None, nowait: bool = False, no_reply: bool = False
+        self, pid: 'PID_TYPE', tag: str | None = None, nowait: bool = False, no_reply: bool = False
     ) -> ProcessResult | None:
         """
         Continue the process

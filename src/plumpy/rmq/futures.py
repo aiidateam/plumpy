@@ -2,6 +2,8 @@
 # mypy: disable-error-code="no-untyped-def, no-untyped-call"
 """Module containing future related methods and classes"""
 
+from __future__ import annotations
+
 import asyncio
 import concurrent.futures
 from typing import Any
