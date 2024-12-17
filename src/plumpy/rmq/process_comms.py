@@ -273,7 +273,7 @@ class RemoteProcessThreadController:
         self, pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False, no_reply: bool = False
     ) -> Union[None, PID_TYPE, ProcessResult]:
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
-        return self.task_send(message, no_reply=no_reply)
+        return self._communicator.task_send(message, no_reply=no_reply)
 
     def launch_process(
         self,
@@ -298,7 +298,7 @@ class RemoteProcessThreadController:
         :return: the pid of the created process or the outputs (if nowait=False)
         """
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
-        return self.task_send(message, no_reply=no_reply)
+        return self._communicator.task_send(message, no_reply=no_reply)
 
     def execute_process(
         self,
@@ -335,13 +335,3 @@ class RemoteProcessThreadController:
 
         create_future.add_done_callback(on_created)
         return execute_future
-
-    def task_send(self, message: Any, no_reply: bool = False) -> Optional[Any]:
-        """
-        Send a task to be performed using the communicator
-
-        :param message: the task message
-        :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
-        :return: the response from the remote side (if no_reply=False)
-        """
-        return self._communicator.task_send(message, no_reply=no_reply)
