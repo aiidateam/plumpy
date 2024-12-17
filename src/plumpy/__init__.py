@@ -18,6 +18,10 @@ from .processes import *
 from .utils import *
 from .workchains import *
 
+# interfaces
+from .controller import ProcessController
+from .coordinator import Coordinator
+
 __all__ = (
     events.__all__
     + exceptions.__all__
@@ -32,7 +36,7 @@ __all__ = (
     + loaders.__all__
     + ports.__all__
     + process_states.__all__
-)
+) + ['ProcessController', 'Coordinator']
 
 
 # Do this se we don't get the "No handlers could be found..." warnings that will be produced
