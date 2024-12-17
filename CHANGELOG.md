@@ -3,9 +3,9 @@
 ## v0.23.0 - 2024-12-13
 
 ### Breaking changes
-  - Breaking behavior: Direct message constants (`KILL_MSG`, `PAUSE_MSG`, `PLAY_MSG`, `STATUS_MSG`) are replaced with the `MessageBuilder` class methods.
-  - Breaking behavior: All the `run()` methods across the interface are now asynchronous (async def).
-  - Breaking behavior: Changes from `Coroutine` to `Awaitable` in function signatures.
+  - Direct message constants (`KILL_MSG`, `PAUSE_MSG`, `PLAY_MSG`, `STATUS_MSG`) are replaced with the `MessageBuilder` class methods.
+  - All the `run()` methods across the interface are now asynchronous (async def).
+  - Changes from `Coroutine` to `Awaitable` in function signatures.
 
 ### Features
 - Message builder for constructing message with carrying more information (#291) [[f760b4a]](https://github.com/aiidateam/plumpy/commit/f760b4aaf6a46bbfc13bab88e36271aab122a641)
