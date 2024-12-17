@@ -5,7 +5,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
 
-from plumpy.coordinator import Communicator
+from plumpy.coordinator import Coordinator
 from plumpy.exceptions import PersistenceError, TaskRejectedError
 
 from plumpy.exceptions import PersistenceError, TaskRejectedError
@@ -226,7 +226,7 @@ class ProcessLauncher:
         else:
             self._loader = loaders.get_object_loader()
 
-    async def __call__(self, communicator: Communicator, task: Dict[str, Any]) -> Union[PID_TYPE, Any]:
+    async def __call__(self, coordinator: Coordinator, task: Dict[str, Any]) -> Union[PID_TYPE, Any]:
         """
         Receive a task.
         :param task: The task message
