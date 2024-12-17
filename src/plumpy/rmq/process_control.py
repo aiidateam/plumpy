@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Optional, Sequence, Union
+from typing import Any, Dict, Hashable, Optional, Sequence, Union
 
 import kiwipy
 
@@ -269,6 +269,17 @@ class RemoteProcessThreadController:
         msg = MessageBuilder.kill(msg_text)
 
         self._coordinator.broadcast_send(msg, subject=Intent.KILL)
+
+    def notify_all(self, msg: MessageType | None, sender: Hashable | None = None, subject: str | None = None) -> None:
+        """
+        Notify all processes by broadcasting
+
+        :param msg: an optional pause message
+        """
+        if msg is None:
+            msg = MessageBuilder.kill()
+
+        self._coordinator.broadcast_send(msg, sender=sender, subject=subject)
 
     def continue_process(
         self, pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False, no_reply: bool = False
