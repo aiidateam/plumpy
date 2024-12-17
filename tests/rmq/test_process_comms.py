@@ -45,7 +45,7 @@ def sync_controller(thread_communicator: rmq.RmqThreadCommunicator):
 class TestRemoteProcessController:
     @pytest.mark.asyncio
     async def test_pause(self, thread_communicator, async_controller):
-        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+        proc = utils.WaitForSignalProcess(coordinator=thread_communicator)
         # Run the process in the background
         asyncio.ensure_future(proc.step_until_terminated())
         # Send a pause message
@@ -57,7 +57,7 @@ class TestRemoteProcessController:
 
     @pytest.mark.asyncio
     async def test_play(self, thread_communicator, async_controller):
-        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+        proc = utils.WaitForSignalProcess(coordinator=thread_communicator)
         # Run the process in the background
         asyncio.ensure_future(proc.step_until_terminated())
         assert proc.pause()
@@ -75,7 +75,7 @@ class TestRemoteProcessController:
 
     @pytest.mark.asyncio
     async def test_kill(self, thread_communicator, async_controller):
-        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+        proc = utils.WaitForSignalProcess(coordinator=thread_communicator)
         # Run the process in the event loop
         asyncio.ensure_future(proc.step_until_terminated())
 
@@ -88,7 +88,7 @@ class TestRemoteProcessController:
 
     @pytest.mark.asyncio
     async def test_status(self, thread_communicator, async_controller):
-        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+        proc = utils.WaitForSignalProcess(coordinator=thread_communicator)
         # Run the process in the background
         asyncio.ensure_future(proc.step_until_terminated())
 
@@ -108,7 +108,7 @@ class TestRemoteProcessController:
 
         thread_communicator.add_broadcast_subscriber(on_broadcast_receive)
 
-        proc = utils.DummyProcess(communicator=thread_communicator)
+        proc = utils.DummyProcess(coordinator=thread_communicator)
         proc.execute()
 
         expected_subjects = []
@@ -123,7 +123,7 @@ class TestRemoteProcessController:
 class TestRemoteProcessThreadController:
     @pytest.mark.asyncio
     async def test_pause(self, thread_communicator, sync_controller):
-        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+        proc = utils.WaitForSignalProcess(coordinator=thread_communicator)
 
         # Send a pause message
         pause_future = sync_controller.pause_process(proc.pid)
@@ -140,7 +140,7 @@ class TestRemoteProcessThreadController:
         """Test pausing all processes on a communicator"""
         procs = []
         for _ in range(10):
-            procs.append(utils.WaitForSignalProcess(communicator=thread_communicator))
+            procs.append(utils.WaitForSignalProcess(coordinator=thread_communicator))
 
         sync_controller.pause_all("Slow yo' roll")
         # Wait until they are all paused
@@ -151,7 +151,7 @@ class TestRemoteProcessThreadController:
         """Test pausing all processes on a communicator"""
         procs = []
         for _ in range(10):
-            proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+            proc = utils.WaitForSignalProcess(coordinator=thread_communicator)
             procs.append(proc)
             proc.pause('hold tight')
 
@@ -162,7 +162,7 @@ class TestRemoteProcessThreadController:
 
     @pytest.mark.asyncio
     async def test_play(self, thread_communicator, sync_controller):
-        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+        proc = utils.WaitForSignalProcess(coordinator=thread_communicator)
         assert proc.pause()
 
         # Send a play message
@@ -176,7 +176,7 @@ class TestRemoteProcessThreadController:
 
     @pytest.mark.asyncio
     async def test_kill(self, thread_communicator, sync_controller):
-        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+        proc = utils.WaitForSignalProcess(coordinator=thread_communicator)
 
         # Send a kill message
         kill_future = sync_controller.kill_process(proc.pid)
@@ -193,7 +193,7 @@ class TestRemoteProcessThreadController:
         """Test pausing all processes on a communicator"""
         procs = []
         for _ in range(10):
-            procs.append(utils.WaitForSignalProcess(communicator=thread_communicator))
+            procs.append(utils.WaitForSignalProcess(coordinator=thread_communicator))
 
         sync_controller.kill_all(msg_text='bang bang, I shot you down')
         await utils.wait_util(lambda: all([proc.killed() for proc in procs]))
@@ -201,7 +201,7 @@ class TestRemoteProcessThreadController:
 
     @pytest.mark.asyncio
     async def test_status(self, thread_communicator, sync_controller):
-        proc = utils.WaitForSignalProcess(communicator=thread_communicator)
+        proc = utils.WaitForSignalProcess(coordinator=thread_communicator)
         # Run the process in the background
         asyncio.ensure_future(proc.step_until_terminated())
 
