@@ -741,19 +741,15 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             call_with_super_check(self.on_killed)
 
         if self._coordinator and isinstance(self.state, enum.Enum):
-            # FIXME: this part should be tested first
-            # FIXME: move all to `coordinator.broadcast()` call and in rmq implement coordinator
-            from plumpy.rmq.exceptions import CommunicatorChannelInvalidStateError, CommunicatorConnectionClosed
-
             from_label = cast(enum.Enum, from_state.LABEL).value if from_state is not None else None
             subject = f'state_changed.{from_label}.{self.state.value}'
             self.logger.info('Process<%s>: Broadcasting state change: %s', self.pid, subject)
             try:
                 self._coordinator.broadcast_send(body=None, sender=self.pid, subject=subject)
-            except (CommunicatorConnectionClosed, CommunicatorChannelInvalidStateError):
+            except exceptions.CoordinatorConnectionError:
                 message = 'Process<%s>: no connection available to broadcast state change from %s to %s'
                 self.logger.warning(message, self.pid, from_label, self.state.value)
-            except concurrent.futures.TimeoutError:
+            except exceptions.CoordinatorTimeoutError:
                 message = 'Process<%s>: sending broadcast of state change from %s to %s timed out'
                 self.logger.warning(message, self.pid, from_label, self.state.value)
 

@@ -7,6 +7,8 @@ __all__ = [
     'KilledError',
     'PersistenceError',
     'UnsuccessfulResult',
+    'CoordinatorConnectionError',
+    'CoordinatorTimeoutError',
 ]
 
 
@@ -42,3 +44,11 @@ class ClosedError(Exception):
 
 class TaskRejectedError(Exception):
     """A task was rejected by the coordinacor"""
+
+
+class CoordinatorConnectionError(ConnectionError):
+    """Raised when coordinator cannot be connected"""
+
+
+class CoordinatorTimeoutError(TimeoutError):
+    """Raised when communicate with coordinator timeout"""

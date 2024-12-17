@@ -1,5 +1,8 @@
-
+# -*- coding: utf-8 -*-
 import kiwipy
+import concurrent.futures
+
+from plumpy.exceptions import CoordinatorConnectionError, CoordinatorTimeoutError
 
 
 class RmqCoordinator:
@@ -40,11 +43,19 @@ class RmqCoordinator:
         subject=None,
         correlation_id=None,
     ):
-        return self._comm.broadcast_send(body, sender, subject, correlation_id)
+        from aio_pika.exceptions import ChannelInvalidStateError, ConnectionClosed
+
+        try:
+            rsp = self._comm.broadcast_send(body, sender, subject, correlation_id)
+        except (ChannelInvalidStateError, ConnectionClosed) as exc:
+            raise CoordinatorConnectionError from exc
+        except concurrent.futures.TimeoutError as exc:
+            raise CoordinatorTimeoutError from exc
+        else:
+            return rsp
 
     def task_send(self, task, no_reply=False):
         return self._comm.task_send(task, no_reply)
 
     def close(self):
         self._comm.close()
-
