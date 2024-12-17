@@ -3,6 +3,8 @@ from typing import Optional
 
 __all__ = [
     'ClosedError',
+    'CoordinatorConnectionError',
+    'CoordinatorTimeoutError',
     'InvalidStateError',
     'KilledError',
     'PersistenceError',
@@ -42,3 +44,15 @@ class ClosedError(Exception):
 
 class TaskRejectedError(Exception):
     """A task was rejected by the coordinacor"""
+
+
+class CoordinatorCommunicationError(Exception):
+    """Generic coordinator communication error"""
+
+
+class CoordinatorConnectionError(ConnectionError):
+    """Raised when coordinator cannot be connected"""
+
+
+class CoordinatorTimeoutError(TimeoutError):
+    """Raised when communicate with coordinator timeout"""

@@ -4,6 +4,9 @@ __version__ = '0.24.0'
 
 import logging
 
+# interfaces
+from .controller import ProcessController
+from .coordinator import Coordinator
 from .events import *
 from .exceptions import *
 from .futures import *
@@ -18,10 +21,6 @@ from .processes import *
 from .utils import *
 from .workchains import *
 from .rmq import *
-
-# interfaces
-from .controller import ProcessController
-from .coordinator import Coordinator
 
 __all__ = (
     events.__all__
