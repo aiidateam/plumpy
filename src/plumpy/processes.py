@@ -741,6 +741,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             call_with_super_check(self.on_killed)
 
         if self._coordinator and isinstance(self.state, enum.Enum):
+            # FIXME: this part should be tested first
             # FIXME: move all to `coordinator.broadcast()` call and in rmq implement coordinator
             from plumpy.rmq.exceptions import CommunicatorChannelInvalidStateError, CommunicatorConnectionClosed
 

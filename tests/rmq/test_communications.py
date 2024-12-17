@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Tests for the :mod:`plumpy.rmq.communications` module."""
 
+import kiwipy
 import pytest
-from kiwipy import CommunicatorHelper
 
 from plumpy.rmq.communications import LoopCommunicator
 
@@ -14,21 +14,69 @@ class Subscriber:
         pass
 
 
-class Communicator(CommunicatorHelper):
-    def task_send(self, task, no_reply=False):
-        pass
+class CoordinatorWithLoopCommunicatorHelper:
+    def __init__(self):
+        class _Communicator(kiwipy.CommunicatorHelper):
+            def task_send(self, task, no_reply=False):
+                pass
+
+            def rpc_send(self, recipient_id, msg):
+                pass
+
+            def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
+                pass
+
+        self._comm = LoopCommunicator(_Communicator())
+
+    def add_rpc_subscriber(self, subscriber, identifier=None):
+        return self._comm.add_rpc_subscriber(subscriber, identifier)
+
+    def add_broadcast_subscriber(
+        self,
+        subscriber,
+        subject_filter=None,
+        identifier=None,
+    ):
+        subscriber = kiwipy.BroadcastFilter(subscriber, subject=subject_filter)
+        return self._comm.add_broadcast_subscriber(subscriber, identifier)
+
+    def add_task_subscriber(self, subscriber, identifier=None):
+        return self._comm.add_task_subscriber(subscriber, identifier)
+
+    def remove_rpc_subscriber(self, identifier):
+        return self._comm.remove_rpc_subscriber(identifier)
+
+    def remove_broadcast_subscriber(self, identifier):
+        return self._comm.remove_broadcast_subscriber(identifier)
+
+    def remove_task_subscriber(self, identifier):
+        return self._comm.remove_task_subscriber(identifier)
 
     def rpc_send(self, recipient_id, msg):
-        pass
+        return self._comm.rpc_send(recipient_id, msg)
 
-    def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
-        pass
+    def broadcast_send(
+        self,
+        body,
+        sender=None,
+        subject=None,
+        correlation_id=None,
+    ):
+        return self._comm.broadcast_send(body, sender, subject, correlation_id)
+
+    def task_send(self, task, no_reply=False):
+        return self._comm.task_send(task, no_reply)
+
+    def close(self):
+        self._comm.close()
 
 
 @pytest.fixture
-def loop_communicator():
+def _coordinator():
     """Return an instance of `LoopCommunicator`."""
-    return LoopCommunicator(Communicator())
+    coordinator = CoordinatorWithLoopCommunicatorHelper()
+    yield coordinator
+    coordinator.close()
 
 
 @pytest.fixture
@@ -37,40 +85,40 @@ def subscriber():
     return Subscriber()
 
 
-def test_add_rpc_subscriber(loop_communicator, subscriber):
+def test_add_rpc_subscriber(_coordinator, subscriber):
     """Test the `LoopCommunicator.add_rpc_subscriber` method."""
-    assert loop_communicator.add_rpc_subscriber(subscriber) is not None
+    assert _coordinator.add_rpc_subscriber(subscriber) is not None
 
     identifier = 'identifier'
-    assert loop_communicator.add_rpc_subscriber(subscriber, identifier) == identifier
+    assert _coordinator.add_rpc_subscriber(subscriber, identifier) == identifier
 
 
-def test_remove_rpc_subscriber(loop_communicator, subscriber):
+def test_remove_rpc_subscriber(_coordinator, subscriber):
     """Test the `LoopCommunicator.remove_rpc_subscriber` method."""
-    identifier = loop_communicator.add_rpc_subscriber(subscriber)
-    loop_communicator.remove_rpc_subscriber(identifier)
+    identifier = _coordinator.add_rpc_subscriber(subscriber)
+    _coordinator.remove_rpc_subscriber(identifier)
 
 
-def test_add_broadcast_subscriber(loop_communicator, subscriber):
+def test_add_broadcast_subscriber(_coordinator, subscriber):
     """Test the `LoopCommunicator.add_broadcast_subscriber` method."""
-    assert loop_communicator.add_broadcast_subscriber(subscriber) is not None
+    assert _coordinator.add_broadcast_subscriber(subscriber) is not None
 
     identifier = 'identifier'
-    assert loop_communicator.add_broadcast_subscriber(subscriber, identifier=identifier) == identifier
+    assert _coordinator.add_broadcast_subscriber(subscriber, identifier=identifier) == identifier
 
 
-def test_remove_broadcast_subscriber(loop_communicator, subscriber):
+def test_remove_broadcast_subscriber(_coordinator, subscriber):
     """Test the `LoopCommunicator.remove_broadcast_subscriber` method."""
-    identifier = loop_communicator.add_broadcast_subscriber(subscriber)
-    loop_communicator.remove_broadcast_subscriber(identifier)
+    identifier = _coordinator.add_broadcast_subscriber(subscriber)
+    _coordinator.remove_broadcast_subscriber(identifier)
 
 
-def test_add_task_subscriber(loop_communicator, subscriber):
+def test_add_task_subscriber(_coordinator, subscriber):
     """Test the `LoopCommunicator.add_task_subscriber` method."""
-    assert loop_communicator.add_task_subscriber(subscriber) is not None
+    assert _coordinator.add_task_subscriber(subscriber) is not None
 
 
-def test_remove_task_subscriber(loop_communicator, subscriber):
+def test_remove_task_subscriber(_coordinator, subscriber):
     """Test the `LoopCommunicator.remove_task_subscriber` method."""
-    identifier = loop_communicator.add_task_subscriber(subscriber)
-    loop_communicator.remove_task_subscriber(identifier)
+    identifier = _coordinator.add_task_subscriber(subscriber)
+    _coordinator.remove_task_subscriber(identifier)
