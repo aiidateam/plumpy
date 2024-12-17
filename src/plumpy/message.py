@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Module for process level communication functions and classes"""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast

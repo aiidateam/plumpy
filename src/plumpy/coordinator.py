@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-import concurrent.futures
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Pattern, Protocol
+from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Pattern, Protocol
 
 if TYPE_CHECKING:
     # identifiers for subscribers
@@ -15,22 +15,8 @@ if TYPE_CHECKING:
     BroadcastSubscriber = Callable[['Coordinator', Any, Any, Any, ID_TYPE], Any]
 
 
-class Communicator(Protocol):
-    def add_rpc_subscriber(self, subscriber: 'RpcSubscriber', identifier: 'ID_TYPE | None' = None) -> Any: ...
-
-    def add_broadcast_subscriber(
-        self, subscriber: 'BroadcastSubscriber', subject_filter: str | Pattern[str] | None = None, identifier=None
-    ) -> Any: ...
-
-    def remove_rpc_subscriber(self, identifier): ...
-
-    def remove_broadcast_subscriber(self, identifier): ...
-
-    def broadcast_send(self, body, sender=None, subject=None, correlation_id=None) -> bool: ...
-
-
 class Coordinator(Protocol):
-    def add_rpc_subscriber(self, subscriber: 'RpcSubscriber', identifier=None) -> Any: ...
+    def add_rpc_subscriber(self, subscriber: 'RpcSubscriber', identifier: 'ID_TYPE | None' = None) -> Any: ...
 
     def add_broadcast_subscriber(
         self,
@@ -41,9 +27,9 @@ class Coordinator(Protocol):
 
     def add_task_subscriber(self, subscriber: 'TaskSubscriber', identifier: 'ID_TYPE | None' = None) -> 'ID_TYPE': ...
 
-    def remove_rpc_subscriber(self, identifier): ...
+    def remove_rpc_subscriber(self, identifier: 'ID_TYPE | None') -> None: ...
 
-    def remove_broadcast_subscriber(self, identifier): ...
+    def remove_broadcast_subscriber(self, identifier: 'ID_TYPE | None') -> None: ...
 
     def remove_task_subscriber(self, identifier: 'ID_TYPE') -> None: ...
 
@@ -52,7 +38,7 @@ class Coordinator(Protocol):
     def broadcast_send(
         self,
         body: Any | None,
-        sender: str | None = None,
+        sender: 'ID_TYPE | None' = None,
         subject: str | None = None,
         correlation_id: 'ID_TYPE | None' = None,
     ) -> Any: ...
