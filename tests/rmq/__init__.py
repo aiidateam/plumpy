@@ -1,0 +1,50 @@
+
+import kiwipy
+
+
+class RmqCoordinator:
+    def __init__(self, comm: kiwipy.Communicator):
+        self._comm = comm
+
+    def add_rpc_subscriber(self, subscriber, identifier=None):
+        return self._comm.add_rpc_subscriber(subscriber, identifier)
+
+    def add_broadcast_subscriber(
+        self,
+        subscriber,
+        subject_filter=None,
+        identifier=None,
+    ):
+        subscriber = kiwipy.BroadcastFilter(subscriber, subject=subject_filter)
+        return self._comm.add_broadcast_subscriber(subscriber, identifier)
+
+    def add_task_subscriber(self, subscriber, identifier=None):
+        return self._comm.add_task_subscriber(subscriber, identifier)
+
+    def remove_rpc_subscriber(self, identifier):
+        return self._comm.remove_rpc_subscriber(identifier)
+
+    def remove_broadcast_subscriber(self, identifier):
+        return self._comm.remove_broadcast_subscriber(identifier)
+
+    def remove_task_subscriber(self, identifier):
+        return self._comm.remove_task_subscriber(identifier)
+
+    def rpc_send(self, recipient_id, msg):
+        return self._comm.rpc_send(recipient_id, msg)
+
+    def broadcast_send(
+        self,
+        body,
+        sender=None,
+        subject=None,
+        correlation_id=None,
+    ):
+        return self._comm.broadcast_send(body, sender, subject, correlation_id)
+
+    def task_send(self, task, no_reply=False):
+        return self._comm.task_send(task, no_reply)
+
+    def close(self):
+        self._comm.close()
+

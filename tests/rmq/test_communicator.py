@@ -10,13 +10,13 @@ import pytest
 import shortuuid
 import yaml
 
-import kiwipy
 from kiwipy.rmq import RmqThreadCommunicator
 
 import plumpy
 from plumpy.coordinator import Coordinator
 from plumpy.rmq import communications, process_control
 
+from . import RmqCoordinator
 from .. import utils
 
 
@@ -30,71 +30,27 @@ def persister():
     shutil.rmtree(_tmppath)
 
 
-class CoordinatorWithLoopRmqThreadCommunicator:
-    def __init__(self):
-        message_exchange = f'{__file__}.{shortuuid.uuid()}'
-        task_exchange = f'{__file__}.{shortuuid.uuid()}'
-        task_queue = f'{__file__}.{shortuuid.uuid()}'
-
-        thread_comm = RmqThreadCommunicator.connect(
-            connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-            message_exchange=message_exchange,
-            task_exchange=task_exchange,
-            task_queue=task_queue,
-            decoder=functools.partial(yaml.load, Loader=yaml.Loader),
-        )
-
-        loop = asyncio.get_event_loop()
-        loop.set_debug(True)
-        self._comm = communications.LoopCommunicator(thread_comm, loop=loop)
-
-    def add_rpc_subscriber(self, subscriber, identifier=None):
-        return self._comm.add_rpc_subscriber(subscriber, identifier)
-
-    def add_broadcast_subscriber(
-        self,
-        subscriber,
-        subject_filter=None,
-        identifier=None,
-    ):
-        subscriber = kiwipy.BroadcastFilter(subscriber, subject=subject_filter)
-        return self._comm.add_broadcast_subscriber(subscriber, identifier)
-
-    def add_task_subscriber(self, subscriber, identifier=None):
-        return self._comm.add_task_subscriber(subscriber, identifier)
-
-    def remove_rpc_subscriber(self, identifier):
-        return self._comm.remove_rpc_subscriber(identifier)
-
-    def remove_broadcast_subscriber(self, identifier):
-        return self._comm.remove_broadcast_subscriber(identifier)
-
-    def remove_task_subscriber(self, identifier):
-        return self._comm.remove_task_subscriber(identifier)
-
-    def rpc_send(self, recipient_id, msg):
-        return self._comm.rpc_send(recipient_id, msg)
-
-    def broadcast_send(
-        self,
-        body,
-        sender=None,
-        subject=None,
-        correlation_id=None,
-    ):
-        return self._comm.broadcast_send(body, sender, subject, correlation_id)
-
-    def task_send(self, task, no_reply=False):
-        return self._comm.task_send(task, no_reply)
-
-    def close(self):
-        self._comm.close()
-
-
 @pytest.fixture
 def _coordinator():
-    coordinator = CoordinatorWithLoopRmqThreadCommunicator()
+    message_exchange = f'{__file__}.{shortuuid.uuid()}'
+    task_exchange = f'{__file__}.{shortuuid.uuid()}'
+    task_queue = f'{__file__}.{shortuuid.uuid()}'
+
+    thread_comm = RmqThreadCommunicator.connect(
+        connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
+        message_exchange=message_exchange,
+        task_exchange=task_exchange,
+        task_queue=task_queue,
+        decoder=functools.partial(yaml.load, Loader=yaml.Loader),
+    )
+
+    loop = asyncio.get_event_loop()
+    loop.set_debug(True)
+    comm = communications.LoopCommunicator(thread_comm, loop=loop)
+    coordinator = RmqCoordinator(comm)
+
     yield coordinator
+
     coordinator.close()
 
 
