@@ -1075,7 +1075,7 @@ class TestProcessEvents(unittest.TestCase):
             messages.append({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
         communicator.add_broadcast_subscriber(on_broadcast_receive)
-        proc = utils.DummyProcess(communicator=communicator)
+        proc = utils.DummyProcess(coordinator=communicator)
         proc.execute()
 
         expected_subjects = []
