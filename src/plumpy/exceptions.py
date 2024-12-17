@@ -3,12 +3,12 @@ from typing import Optional
 
 __all__ = [
     'ClosedError',
+    'CoordinatorConnectionError',
+    'CoordinatorTimeoutError',
     'InvalidStateError',
     'KilledError',
     'PersistenceError',
     'UnsuccessfulResult',
-    'CoordinatorConnectionError',
-    'CoordinatorTimeoutError',
 ]
 
 

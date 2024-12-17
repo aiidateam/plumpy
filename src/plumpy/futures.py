@@ -3,6 +3,8 @@
 Module containing future related methods and classes
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 from typing import Any, Awaitable, Callable, Generator, Optional
@@ -18,7 +20,7 @@ Future = asyncio.Future
 
 
 @contextlib.contextmanager
-def capture_exceptions(future: Future[Any], ignore: tuple[type[BaseException], ...] = ()) -> Generator[None, Any, None]:
+def capture_exceptions(future, ignore: tuple[type[BaseException], ...] = ()) -> Generator[None, Any, None]:  # type: ignore[no-untyped-def]
     """
     Capture any exceptions in the context and set them as the result of the given future
 

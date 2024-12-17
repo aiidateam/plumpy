@@ -1017,7 +1017,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: a kiwi future that resolves to the outcome of the callback
 
         """
-        kiwi_future = concurrent.futures.Future()
+        kiwi_future = concurrent.futures.Future()  # type: ignore[var-annotated]
 
         async def run_callback() -> None:
             with capture_exceptions(kiwi_future):
