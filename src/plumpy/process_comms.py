@@ -401,7 +401,7 @@ class RemoteProcessThreadController:
         """
         self._communicator.broadcast_send(None, subject=Intent.PLAY)
 
-    def kill_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None, force_kill: bool = False) -> kiwipy.Future:
+    def kill_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None) -> kiwipy.Future:
         """
         Kill the process
 
@@ -409,7 +409,7 @@ class RemoteProcessThreadController:
         :param msg: optional kill message
         :return: a response future from the process to be killed
         """
-        msg = MessageBuilder.kill(text=msg_text, force_kill=force_kill)
+        msg = MessageBuilder.kill(text=msg_text)
         return self._communicator.rpc_send(pid, msg)
 
     def kill_all(self, msg_text: Optional[str]) -> None:
