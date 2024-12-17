@@ -32,7 +32,7 @@ from typing import (
     cast,
 )
 
-from plumpy.coordinator import Communicator
+from plumpy.coordinator import Coordinator
 
 try:
     from aiocontextvars import ContextVar
@@ -266,7 +266,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         pid: Optional[PID_TYPE] = None,
         logger: Optional[logging.Logger] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
-        communicator: Optional[Communicator] = None,
+        coordinator: Optional[Coordinator] = None,
     ) -> None:
         """
         The signature of the constructor should not be changed by subclassing processes.
@@ -305,7 +305,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._future = persistence.SavableFuture(loop=self._loop)
         self._event_helper = EventHelper(ProcessListener)
         self._logger = logger
-        self._communicator = communicator
+        self._coordinator = coordinator
 
     @super_check
     def init(self) -> None:
@@ -315,19 +315,19 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         self._cleanups = []  # a list of functions to be ran on terminated
 
-        if self._communicator is not None:
+        if self._coordinator is not None:
             try:
-                identifier = self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
-                self.add_cleanup(functools.partial(self._communicator.remove_rpc_subscriber, identifier))
+                identifier = self._coordinator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
+                self.add_cleanup(functools.partial(self._coordinator.remove_rpc_subscriber, identifier))
             except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as an RPC subscriber', self.pid)
 
             try:
                 # filter out state change broadcasts
-                identifier = self._communicator.add_broadcast_subscriber(
+                identifier = self._coordinator.add_broadcast_subscriber(
                     self.broadcast_receive, subject_filter=re.compile(r'^(?!state_changed).*'), identifier=str(self.pid)
                 )
-                self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
+                self.add_cleanup(functools.partial(self._coordinator.remove_broadcast_subscriber, identifier))
             except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
 
@@ -448,7 +448,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             pid=pid,
             logger=logger,
             loop=self.loop,
-            communicator=self._communicator,
+            coordinator=self._coordinator,
         )
         self.loop.create_task(process.step_until_terminated())
         return process
@@ -644,7 +644,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._future = persistence.SavableFuture()
         self._event_helper = EventHelper(ProcessListener)
         self._logger = None
-        self._communicator = None
+        self._coordinator = None
 
         if 'loop' in load_context:
             self._loop = load_context.loop
@@ -653,8 +653,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         self._state: process_states.State = self.recreate_state(saved_state['_state'])
 
-        if 'communicator' in load_context:
-            self._communicator = load_context.communicator
+        if 'coordinator' in load_context:
+            self._coordinator = load_context.coordinator
 
         if 'logger' in load_context:
             self._logger = load_context.logger
@@ -739,7 +739,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         elif state_label == process_states.ProcessState.KILLED:
             call_with_super_check(self.on_killed)
 
-        if self._communicator and isinstance(self.state, enum.Enum):
+        if self._coordinator and isinstance(self.state, enum.Enum):
             # FIXME: move all to `coordinator.broadcast()` call and in rmq implement coordinator
             from plumpy.rmq.exceptions import CommunicatorChannelInvalidStateError, CommunicatorConnectionClosed
 
@@ -747,7 +747,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             subject = f'state_changed.{from_label}.{self.state.value}'
             self.logger.info('Process<%s>: Broadcasting state change: %s', self.pid, subject)
             try:
-                self._communicator.broadcast_send(body=None, sender=self.pid, subject=subject)
+                self._coordinator.broadcast_send(body=None, sender=self.pid, subject=subject)
             except (CommunicatorConnectionClosed, CommunicatorChannelInvalidStateError):
                 message = 'Process<%s>: no connection available to broadcast state change from %s to %s'
                 self.logger.warning(message, self.pid, from_label, self.state.value)
@@ -937,7 +937,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region Communication
 
-    def message_receive(self, _comm: Communicator, msg: MessageType) -> Any:
+    def message_receive(self, _comm: Coordinator, msg: MessageType) -> Any:
         """
         Coroutine called when the process receives a message from the communicator
 
@@ -969,7 +969,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         raise RuntimeError('Unknown intent')
 
     def broadcast_receive(
-        self, _comm: kiwipy.Communicator, msg: MessageType, sender: Any, subject: Any, correlation_id: Any
+        self, _comm: Coordinator, msg: MessageType, sender: Any, subject: Any, correlation_id: Any
     ) -> Optional[concurrent.futures.Future]:
         """
         Coroutine called when the process receives a message from the communicator
