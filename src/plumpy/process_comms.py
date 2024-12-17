@@ -28,7 +28,7 @@ ProcessResult = Any
 ProcessStatus = Any
 
 INTENT_KEY = 'intent'
-MESSAGE_KEY = 'message'
+MESSAGE_TEXT_KEY = 'message'
 FORCE_KILL_KEY = 'force_kill'
 
 
@@ -52,7 +52,7 @@ class MessageBuilder:
         """The play message send over communicator."""
         return {
             INTENT_KEY: Intent.PLAY,
-            MESSAGE_KEY: text,
+            MESSAGE_TEXT_KEY: text,
         }
 
     @classmethod
@@ -60,7 +60,7 @@ class MessageBuilder:
         """The pause message send over communicator."""
         return {
             INTENT_KEY: Intent.PAUSE,
-            MESSAGE_KEY: text,
+            MESSAGE_TEXT_KEY: text,
         }
 
     @classmethod
@@ -68,7 +68,7 @@ class MessageBuilder:
         """The kill message send over communicator."""
         return {
             INTENT_KEY: Intent.KILL,
-            MESSAGE_KEY: text,
+            MESSAGE_TEXT_KEY: text,
             FORCE_KILL_KEY: force_kill,
         }
 
@@ -77,7 +77,7 @@ class MessageBuilder:
         """The status message send over communicator."""
         return {
             INTENT_KEY: Intent.STATUS,
-            MESSAGE_KEY: text,
+            MESSAGE_TEXT_KEY: text,
         }
 
 

@@ -54,7 +54,7 @@ from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .process_comms import MESSAGE_KEY, MessageBuilder, MessageType
+from .process_comms import MESSAGE_TEXT_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
@@ -902,7 +902,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if msg is None:
             msg_txt = ''
         else:
-            msg_txt = msg[MESSAGE_KEY] or ''
+            msg_txt = msg[MESSAGE_TEXT_KEY] or ''
 
         self.set_status(msg_txt)
         self.future().set_exception(exceptions.KilledError(msg_txt))
@@ -963,9 +963,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == process_comms.Intent.PLAY:
             return self._schedule_rpc(self.play)
         if intent == process_comms.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         if intent == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         if intent == process_comms.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
@@ -996,9 +996,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if subject == process_comms.Intent.PLAY:
             return self._schedule_rpc(self.play)
         if subject == process_comms.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         if subject == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         return None
 
     def _schedule_rpc(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> kiwipy.Future:
@@ -1113,7 +1113,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             if state_msg is None:
                 msg_text = ''
             else:
-                msg_text = state_msg[MESSAGE_KEY]
+                msg_text = state_msg[MESSAGE_TEXT_KEY]
 
             call_with_super_check(self.on_pausing, msg_text)
             call_with_super_check(self.on_paused, msg_text)

@@ -10,7 +10,7 @@ import pytest
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
-from plumpy.process_comms import MESSAGE_KEY, MessageBuilder
+from plumpy.process_comms import MESSAGE_TEXT_KEY, MessageBuilder
 from plumpy.utils import AttributesFrozendict
 from tests import utils
 
@@ -325,7 +325,7 @@ class TestProcess(unittest.TestCase):
         msg_text = 'Farewell!'
         proc.kill(msg_text=msg_text)
         self.assertTrue(proc.killed())
-        self.assertEqual(proc.killed_msg()[MESSAGE_KEY], msg_text)
+        self.assertEqual(proc.killed_msg()[MESSAGE_TEXT_KEY], msg_text)
         self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_wait_continue(self):
