@@ -325,7 +325,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             try:
                 # filter out state change broadcasts
                 identifier = self._coordinator.add_broadcast_subscriber(
-                    self.broadcast_receive, subject_filter=re.compile(r'^(?!state_changed).*'), identifier=str(self.pid)
+                    self.broadcast_receive, subject_filters=[re.compile(r'^(?!state_changed).*')], identifier=str(self.pid)
                 )
                 self.add_cleanup(functools.partial(self._coordinator.remove_broadcast_subscriber, identifier))
             except concurrent.futures.TimeoutError:
