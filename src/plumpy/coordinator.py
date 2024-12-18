@@ -21,7 +21,8 @@ class Coordinator(Protocol):
     def add_broadcast_subscriber(
         self,
         subscriber: 'BroadcastSubscriber',
-        subject_filter: str | Pattern[str] | None = None,
+        subject_filters: list[Hashable | Pattern[str]] | None = None,
+        sender_filters: list[Hashable | Pattern[str]] | None = None,
         identifier: 'ID_TYPE | None' = None,
     ) -> Any: ...
 
