@@ -46,6 +46,10 @@ class TaskRejectedError(Exception):
     """A task was rejected by the coordinacor"""
 
 
+class CoordinatorCommunicationError(Exception):
+    """Generic coordinator communication error"""
+
+
 class CoordinatorConnectionError(ConnectionError):
     """Raised when coordinator cannot be connected"""
 

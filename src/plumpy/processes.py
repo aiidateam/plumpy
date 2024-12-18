@@ -746,12 +746,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self.logger.info('Process<%s>: Broadcasting state change: %s', self.pid, subject)
             try:
                 self._coordinator.broadcast_send(body=None, sender=self.pid, subject=subject)
-            except exceptions.CoordinatorConnectionError:
-                message = 'Process<%s>: no connection available to broadcast state change from %s to %s'
-                self.logger.warning(message, self.pid, from_label, self.state.value)
-            except exceptions.CoordinatorTimeoutError:
-                message = 'Process<%s>: sending broadcast of state change from %s to %s timed out'
-                self.logger.warning(message, self.pid, from_label, self.state.value)
+            except exceptions.CoordinatorCommunicationError:
+                message = f'Process<{self.pid}>: cannot broadcast state change from {from_label} to {self.state.value}'
+                self.logger.warning(message)
+                self.logger.debug(message, exc_info=True)
+            except Exception:
+                # bubble up for unknown exception
+                raise
 
     def on_exiting(self) -> None:
         state = self.state

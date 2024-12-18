@@ -38,7 +38,7 @@ class Coordinator(Protocol):
     def broadcast_send(
         self,
         body: Any | None,
-        sender: Hashable | str | None = None,
+        sender: 'ID_TYPE | None' = None,
         subject: str | None = None,
         correlation_id: 'ID_TYPE | None' = None,
     ) -> Any: ...
