@@ -5,7 +5,7 @@ import pytest
 
 import kiwipy
 from plumpy.rmq.communications import LoopCommunicator
-from . import RmqCoordinator
+from plumpy.rmq import RmqCoordinator
 
 
 @pytest.fixture

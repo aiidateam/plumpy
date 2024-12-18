@@ -14,9 +14,8 @@ from kiwipy.rmq import RmqThreadCommunicator
 
 import plumpy
 from plumpy.coordinator import Coordinator
-from plumpy.rmq import communications, process_control
+from plumpy.rmq import communications, process_control, RmqCoordinator
 
-from . import RmqCoordinator
 from .. import utils
 
 

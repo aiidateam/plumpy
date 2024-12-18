@@ -7,9 +7,8 @@ import shortuuid
 from kiwipy import rmq
 
 import plumpy
-from plumpy.rmq import process_control
+from plumpy.rmq import process_control, RmqCoordinator
 
-from . import RmqCoordinator
 from .. import utils
 
 
