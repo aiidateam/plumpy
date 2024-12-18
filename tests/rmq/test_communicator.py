@@ -92,7 +92,7 @@ class TestLoopCommunicator:
         def get_broadcast(_comm, body, sender, subject, correlation_id):
             broadcast_future.set_result(True)
 
-        _coordinator.add_broadcast_subscriber(ignore_broadcast, subject_filter='other')
+        _coordinator.add_broadcast_subscriber(ignore_broadcast, subject_filters=['other'])
         _coordinator.add_broadcast_subscriber(get_broadcast)
         _coordinator.broadcast_send(**{'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420})
 
