@@ -79,7 +79,7 @@ class MockCoordinator:
         except KeyError as exception:
             raise ValueError(f"Unknown subscriber: '{identifier}'") from exception
 
-    def add_broadcast_subscriber(self, subscriber, subject_filter=None, identifier=None) -> Any:
+    def add_broadcast_subscriber(self, subscriber, subject_filters=None, sender_filters=None, identifier=None) -> Any:
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
         if identifier in self._broadcast_subscribers:

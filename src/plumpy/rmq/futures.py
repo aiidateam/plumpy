@@ -10,7 +10,7 @@ from typing import Any
 
 import kiwipy
 
-__all__ = ['wrap_to_concurrent_future']
+__all__ = ['wrap_to_concurrent_future', 'unwrap_kiwi_future']
 
 
 def _convert_future_exc(exc):
@@ -111,3 +111,32 @@ def wrap_to_concurrent_future(future: asyncio.Future[Any]) -> kiwipy.Future:
     new_future = kiwipy.Future()
     _chain_future(future, new_future)
     return new_future
+
+# XXX: this required in aiida-core, see if really need this unwrap.
+def unwrap_kiwi_future(future: kiwipy.Future) -> kiwipy.Future:
+    """
+    Create a kiwi future that represents the final results of a nested series of futures,
+    meaning that if the futures provided itself resolves to a future the returned
+    future will not resolve to a value until the final chain of futures is not a future
+    but a concrete value.  If at any point in the chain a future resolves to an exception
+    then the returned future will also resolve to that exception.
+
+    :param future: the future to unwrap
+    :return: the unwrapping future
+
+    """
+    unwrapping = kiwipy.Future()
+
+    def unwrap(fut: kiwipy.Future) -> None:
+        if fut.cancelled():
+            unwrapping.cancel()
+        else:
+            with kiwipy.capture_exceptions(unwrapping):
+                result = fut.result()
+                if isinstance(result, kiwipy.Future):
+                    result.add_done_callback(unwrap)
+                else:
+                    unwrapping.set_result(result)
+
+    future.add_done_callback(unwrap)
+    return unwrapping
