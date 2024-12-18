@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Module for process level communication functions and classes"""
+"""Module for process level coordination functions and classes"""
 
 from __future__ import annotations
 
@@ -67,11 +67,11 @@ MessageType = Dict[str, Any]
 
 
 class MessageBuilder:
-    """MessageBuilder will construct different messages that can passing over communicator."""
+    """MessageBuilder will construct different messages that can passing over coordinator."""
 
     @classmethod
     def play(cls, text: str | None = None) -> MessageType:
-        """The play message send over communicator."""
+        """The play message send over coordinator."""
         return {
             INTENT_KEY: Intent.PLAY,
             MESSAGE_KEY: text,
@@ -79,7 +79,7 @@ class MessageBuilder:
 
     @classmethod
     def pause(cls, text: str | None = None) -> MessageType:
-        """The pause message send over communicator."""
+        """The pause message send over coordinator."""
         return {
             INTENT_KEY: Intent.PAUSE,
             MESSAGE_KEY: text,
@@ -87,7 +87,7 @@ class MessageBuilder:
 
     @classmethod
     def kill(cls, text: str | None = None, force_kill: bool = False) -> MessageType:
-        """The kill message send over communicator."""
+        """The kill message send over coordinator."""
         return {
             INTENT_KEY: Intent.KILL,
             MESSAGE_KEY: text,
@@ -96,7 +96,7 @@ class MessageBuilder:
 
     @classmethod
     def status(cls, text: str | None = None) -> MessageType:
-        """The status message send over communicator."""
+        """The status message send over coordinator."""
         return {
             INTENT_KEY: Intent.STATUS,
             MESSAGE_KEY: text,
@@ -252,7 +252,6 @@ class ProcessLauncher:
         """
         Launch the process
 
-        :param _communicator: the communicator
         :param process_class: the process class to launch
         :param persist: should the process be persisted
         :param nowait: if True only return when the process finishes
@@ -286,7 +285,6 @@ class ProcessLauncher:
         """
         Continue the process
 
-        :param _communicator: the communicator
         :param pid: the pid of the process to continue
         :param nowait: if True don't wait for the process to complete
         :param tag: the checkpoint tag to continue from
@@ -318,7 +316,6 @@ class ProcessLauncher:
         """
         Create the process
 
-        :param _communicator: the communicator
         :param process_class: the process class to create
         :param persist: should the process be persisted
         :param init_args: positional arguments to the process constructor
