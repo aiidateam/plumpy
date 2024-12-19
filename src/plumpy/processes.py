@@ -32,6 +32,8 @@ from typing import (
     cast,
 )
 
+import kiwipy
+
 from plumpy.coordinator import Coordinator
 
 try:
@@ -321,12 +323,15 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 self.add_cleanup(functools.partial(self._coordinator.remove_rpc_subscriber, identifier))
             except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as an RPC subscriber', self.pid)
+            # XXX: handle duplicate subscribing here: see aiida-core test_duplicate_subscriber_identifier.
 
             try:
                 # filter out state change broadcasts
-                identifier = self._coordinator.add_broadcast_subscriber(
-                    self.broadcast_receive, subject_filters=[re.compile(r'^(?!state_changed).*')], identifier=str(self.pid)
-                )
+                subscriber = kiwipy.BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
+                identifier = self._coordinator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
+                # identifier = self._coordinator.add_broadcast_subscriber(
+                #     subscriber, subject_filters=[re.compile(r'^(?!state_changed).*')], identifier=str(self.pid)
+                # )
                 self.add_cleanup(functools.partial(self._coordinator.remove_broadcast_subscriber, identifier))
             except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
@@ -787,6 +792,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._uuid = uuid.uuid4()
         if self._pid is None:
             self._pid = self._uuid
+        # __import__('ipdb').set_trace()
+        # print("!!!!! ")
 
     @super_check
     def on_exit_running(self) -> None:
@@ -955,9 +962,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == message.Intent.PLAY:
             return self._schedule_rpc(self.play)
         if intent == message.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(message.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.pause, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
         if intent == message.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(message.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.kill, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
         if intent == message.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
@@ -988,9 +995,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if subject == message.Intent.PLAY:
             fn = self._schedule_rpc(self.play)
         elif subject == message.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
+            fn = self._schedule_rpc(self.pause, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
         elif subject == message.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
+            fn = self._schedule_rpc(self.kill, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
 
         if fn is None:
             self.logger.warning(
@@ -1097,7 +1104,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
         self.transition_to(new_state)
 
-    def pause(self, msg_text: Optional[str] = None) -> Union[bool, CancellableAction]:
+    def pause(self, msg_text: str | None = None) -> Union[bool, CancellableAction]:
         """Pause the process.
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
