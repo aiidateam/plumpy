@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.23.0 - 2024-12-13
+
+### Breaking changes
+  - All the `run()` methods across the interface are now asynchronous (async def).
+  - Changes from `Coroutine` to `Awaitable` in function signatures.
+
+### Bug fixes
+- Make `Waiting.resume()` idempotent (#285) [[20e5898]](https://github.com/aiidateam/plumpy/commit/20e5898e0c9037624988fe321e784f4fe38a2e8d)
+
+### Devops
+- Make `Process.run` async (#272) [[4611154]](https://github.com/aiidateam/plumpy/commit/4611154c76ac0991bcf7371b21488f4390648c28)
+- Switch to ruff and other devops improvements (#289) [[55e05e9]](https://github.com/aiidateam/plumpy/commit/55e05e956c9715fb69785d83d0194b65811b4720)
+
+
 ## v0.22.3 - 2024-02-02
 
 ### Bug fixes
