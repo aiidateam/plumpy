@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from typing import Generic, TypeVar, final
 import kiwipy
 import concurrent.futures
 
@@ -6,9 +7,17 @@ from plumpy.exceptions import CoordinatorConnectionError
 
 __all__ = ['RmqCoordinator']
 
-class RmqCoordinator:
-    def __init__(self, comm: kiwipy.Communicator):
+U = TypeVar("U", bound=kiwipy.Communicator)
+
+@final
+class RmqCoordinator(Generic[U]):
+    def __init__(self, comm: U):
         self._comm = comm
+
+    @property
+    def communicator(self) -> U:
+        """The inner communicator."""
+        return self._comm
 
     # XXX: naming - `add_receiver_rpc`
     def add_rpc_subscriber(self, subscriber, identifier=None):
