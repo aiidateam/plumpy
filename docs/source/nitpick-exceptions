@@ -23,7 +23,7 @@ py:class plumpy.base.state_machine.State
 py:class State
 py:class Process
 py:class plumpy.futures.CancellableAction
-py:class plumpy.communications.LoopCommunicator
+py:class plumpy.rmq.communications.LoopCommunicator
 py:class plumpy.persistence.PersistedPickle
 py:class plumpy.utils.AttributesFrozendict
 py:class plumpy.workchains._FunctionCall
