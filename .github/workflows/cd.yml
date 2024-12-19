@@ -16,10 +16,10 @@ jobs:
         -   name: Checkout source
             uses: actions/checkout@v2
 
-        -   name: Set up Python 3.8
+        -   name: Set up Python 3.12
             uses: actions/setup-python@v2
             with:
-                python-version: '3.8'
+                python-version: '3.12'
 
         -   name: Validate the tag version against the package version
             run: python .github/workflows/validate_release_tag.py $GITHUB_REF
@@ -43,7 +43,7 @@ jobs:
         -   name: Set up Python
             uses: actions/setup-python@v2
             with:
-                python-version: '3.8'
+                python-version: '3.12'
 
         -   name: Install Python dependencies
             run: pip install -e .[pre-commit]
@@ -109,10 +109,10 @@ jobs:
         -   name: Checkout source
             uses: actions/checkout@v2
 
-        -   name: Set up Python 3.8
+        -   name: Set up Python 3.12
             uses: actions/setup-python@v2
             with:
-                python-version: '3.8'
+                python-version: '3.12'
 
         -   name: Install flit
             run: pip install flit~=3.4
