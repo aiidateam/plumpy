@@ -29,6 +29,7 @@ ProcessResult = Any
 ProcessStatus = Any
 
 
+# FIXME: the class not fit typing of ProcessController protocol
 class RemoteProcessController:
     """
     Control remote processes using coroutines that will send messages and wait
@@ -189,6 +190,7 @@ class RemoteProcessController:
         return result
 
 
+# FIXME: the class not fit typing of ProcessController protocol
 class RemoteProcessThreadController:
     """
     A class that can be used to control and launch remote processes
@@ -270,15 +272,12 @@ class RemoteProcessThreadController:
 
         self._coordinator.broadcast_send(msg, subject=Intent.KILL)
 
-    def notify_all(self, msg: MessageType | None, sender: Hashable | None = None, subject: str | None = None) -> None:
+    def notify_msg(self, msg: MessageType, sender: Hashable | None = None, subject: str | None = None) -> None:
         """
-        Notify all processes by broadcasting
+        Notify all processes by broadcasting of a msg
 
         :param msg: an optional pause message
         """
-        if msg is None:
-            msg = MessageBuilder.kill()
-
         self._coordinator.broadcast_send(msg, sender=sender, subject=subject)
 
     def continue_process(

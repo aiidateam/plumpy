@@ -323,6 +323,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 self.add_cleanup(functools.partial(self._coordinator.remove_rpc_subscriber, identifier))
             except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as an RPC subscriber', self.pid)
+            # XXX: handle duplicate subscribing here: see aiida-core test_duplicate_subscriber_identifier.
 
             try:
                 # filter out state change broadcasts
@@ -961,9 +962,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == message.Intent.PLAY:
             return self._schedule_rpc(self.play)
         if intent == message.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(message.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.pause, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
         if intent == message.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(message.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.kill, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
         if intent == message.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
@@ -994,9 +995,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if subject == message.Intent.PLAY:
             fn = self._schedule_rpc(self.play)
         elif subject == message.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
+            fn = self._schedule_rpc(self.pause, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
         elif subject == message.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
+            fn = self._schedule_rpc(self.kill, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
 
         if fn is None:
             self.logger.warning(
@@ -1103,7 +1104,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
         self.transition_to(new_state)
 
-    def pause(self, msg_text: Optional[str] = None) -> Union[bool, CancellableAction]:
+    def pause(self, msg_text: str | None = None) -> Union[bool, CancellableAction]:
         """Pause the process.
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
