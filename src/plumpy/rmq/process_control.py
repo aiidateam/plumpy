@@ -48,7 +48,7 @@ class RemoteProcessController:
         result = await asyncio.wrap_future(future)
         return result
 
-    async def pause_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> 'ProcessResult':
+    async def pause_process(self, pid: 'PID_TYPE', msg: Optional[str] = None) -> 'ProcessResult':
         """
         Pause the process
 
@@ -77,7 +77,7 @@ class RemoteProcessController:
         result = await asyncio.wrap_future(future)
         return result
 
-    async def kill_process(self, pid: 'PID_TYPE', msg: Optional[MessageType] = None) -> 'ProcessResult':
+    async def kill_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None) -> 'ProcessResult':
         """
         Kill the process
 
@@ -85,8 +85,7 @@ class RemoteProcessController:
         :param msg: optional kill message
         :return: True if killed, False otherwise
         """
-        if msg is None:
-            msg = MessageBuilder.kill()
+        msg = MessageBuilder.kill(msg_text)
 
         # Wait for the communication to go through
         kill_future = self._coordinator.rpc_send(pid, msg)
@@ -212,7 +211,7 @@ class RemoteProcessThreadController:
         """
         return self._coordinator.rpc_send(pid, MessageBuilder.status())
 
-    def pause_process(self, pid: 'PID_TYPE', msg: Optional[Any] = None) -> kiwipy.Future:
+    def pause_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None) -> kiwipy.Future:
         """
         Pause the process
 
@@ -221,16 +220,18 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be paused
 
         """
-        msg = MessageBuilder.pause(text=msg)
+        msg = MessageBuilder.pause(text=msg_text)
 
         return self._coordinator.rpc_send(pid, msg)
 
-    def pause_all(self, msg: Any) -> None:
+    def pause_all(self, msg_text: Optional[str]) -> None:
         """
         Pause all processes that are subscribed to the same coordinator
 
         :param msg: an optional pause message
         """
+        msg = MessageBuilder.pause(text=msg_text)
+
         self._coordinator.broadcast_send(msg, subject=Intent.PAUSE)
 
     def play_process(self, pid: 'PID_TYPE') -> kiwipy.Future:
@@ -249,7 +250,7 @@ class RemoteProcessThreadController:
         """
         self._coordinator.broadcast_send(None, subject=Intent.PLAY)
 
-    def kill_process(self, pid: 'PID_TYPE', msg: Optional[MessageType] = None) -> kiwipy.Future:
+    def kill_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None) -> kiwipy.Future:
         """
         Kill the process
 
@@ -258,31 +259,26 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be killed
 
         """
-        if msg is None:
-            msg = MessageBuilder.kill()
+        msg = MessageBuilder.kill(text=msg_text)
 
         return self._coordinator.rpc_send(pid, msg)
 
-    def kill_all(self, msg: Optional[MessageType]) -> None:
+    def kill_all(self, msg_text: Optional[str]) -> None:
         """
         Kill all processes that are subscribed to the same coordinator
 
         :param msg: an optional pause message
         """
-        if msg is None:
-            msg = MessageBuilder.kill()
+        msg = MessageBuilder.kill(msg_text)
 
         self._coordinator.broadcast_send(msg, subject=Intent.KILL)
 
-    def notify_all(self, msg: MessageType | None, sender: Hashable | None = None, subject: str | None = None) -> None:
+    def notify_msg(self, msg: MessageType, sender: Hashable | None = None, subject: str | None = None) -> None:
         """
-        Notify all processes by broadcasting
+        Notify all processes by broadcasting of a msg
 
         :param msg: an optional pause message
         """
-        if msg is None:
-            msg = MessageBuilder.kill()
-
         self._coordinator.broadcast_send(msg, sender=sender, subject=subject)
 
     def continue_process(

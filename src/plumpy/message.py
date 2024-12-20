@@ -14,10 +14,7 @@ from . import loaders, persistence
 from .utils import PID_TYPE
 
 __all__ = [
-    'KILL_MSG',
-    'PAUSE_MSG',
-    'PLAY_MSG',
-    'STATUS_MSG',
+    'MessageBuilder',
     'ProcessLauncher',
     'create_continue_body',
     'create_launch_body',
@@ -27,7 +24,7 @@ if TYPE_CHECKING:
     from .processes import Process
 
 INTENT_KEY = 'intent'
-MESSAGE_KEY = 'message'
+MESSAGE_TEXT_KEY = 'message'
 FORCE_KILL_KEY = 'force_kill'
 
 
@@ -39,11 +36,6 @@ class Intent:
     KILL: str = 'kill'
     STATUS: str = 'status'
 
-
-PAUSE_MSG = {INTENT_KEY: Intent.PAUSE}
-PLAY_MSG = {INTENT_KEY: Intent.PLAY}
-KILL_MSG = {INTENT_KEY: Intent.KILL}
-STATUS_MSG = {INTENT_KEY: Intent.STATUS}
 
 TASK_KEY = 'task'
 TASK_ARGS = 'args'
@@ -74,7 +66,7 @@ class MessageBuilder:
         """The play message send over coordinator."""
         return {
             INTENT_KEY: Intent.PLAY,
-            MESSAGE_KEY: text,
+            MESSAGE_TEXT_KEY: text,
         }
 
     @classmethod
@@ -82,7 +74,7 @@ class MessageBuilder:
         """The pause message send over coordinator."""
         return {
             INTENT_KEY: Intent.PAUSE,
-            MESSAGE_KEY: text,
+            MESSAGE_TEXT_KEY: text,
         }
 
     @classmethod
@@ -90,7 +82,7 @@ class MessageBuilder:
         """The kill message send over coordinator."""
         return {
             INTENT_KEY: Intent.KILL,
-            MESSAGE_KEY: text,
+            MESSAGE_TEXT_KEY: text,
             FORCE_KILL_KEY: force_kill,
         }
 
@@ -99,7 +91,7 @@ class MessageBuilder:
         """The status message send over coordinator."""
         return {
             INTENT_KEY: Intent.STATUS,
-            MESSAGE_KEY: text,
+            MESSAGE_TEXT_KEY: text,
         }
 
 
