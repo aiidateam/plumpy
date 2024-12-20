@@ -10,7 +10,7 @@ from plumpy.futures import CancellableAction
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
-from plumpy.message import MessageBuilder
+from plumpy.message import MESSAGE_TEXT_KEY, MessageBuilder
 from plumpy.utils import AttributesFrozendict
 from . import utils
 
