@@ -29,6 +29,7 @@ ProcessResult = Any
 ProcessStatus = Any
 
 
+# FIXME: the class not fit typing of ProcessController protocol
 class RemoteProcessController:
     """
     Control remote processes using coroutines that will send messages and wait
@@ -189,6 +190,7 @@ class RemoteProcessController:
         return result
 
 
+# FIXME: the class not fit typing of ProcessController protocol
 class RemoteProcessThreadController:
     """
     A class that can be used to control and launch remote processes
