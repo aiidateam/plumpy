@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Tuple, Typ
 import yaml
 from yaml.loader import Loader
 
-from plumpy.process_comms import MessageBuilder, MessageType
+from plumpy.message import MessageBuilder, MessageType
 
 try:
     import tblib
@@ -52,16 +52,19 @@ class Interruption(Exception):  # noqa: N818
 
 
 class KillInterruption(Interruption):
-    def __init__(self, msg: MessageType | None):
+    def __init__(self, msg_text: str | None):
         super().__init__()
-        if msg is None:
-            msg = MessageBuilder.kill()
+        msg = MessageBuilder.kill(msg_text)
 
         self.msg: MessageType = msg
 
 
 class PauseInterruption(Interruption):
-    pass
+    def __init__(self, msg_text: str | None):
+        super().__init__()
+        msg = MessageBuilder.pause(text=msg_text)
+
+        self.msg: MessageType = msg
 
 
 # region Commands
