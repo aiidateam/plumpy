@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, Hashable, Optional, Ty
 
 import kiwipy
 
-from plumpy import futures
+from plumpy.futures import create_task
+from plumpy.rmq.futures import wrap_to_concurrent_future
 from plumpy.utils import ensure_coroutine
 
 __all__ = [
@@ -72,7 +73,7 @@ def convert_to_comm(
             return kiwi_future
 
         msg_fn = functools.partial(coro, communicator, *args, **kwargs)
-        task_future = futures.create_task(msg_fn, loop)
+        task_future = create_task(msg_fn, loop)
         return wrap_to_concurrent_future(task_future)
 
     return converted

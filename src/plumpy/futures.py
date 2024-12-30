@@ -78,12 +78,16 @@ def create_task(coro: Callable[[], Awaitable[Any]], loop: Optional[asyncio.Abstr
     """
     loop = loop or asyncio.get_event_loop()
 
-    future = loop.create_future()
+    # future = loop.create_future()
+    #
+    # async def run_task() -> None:
+    #     with capture_exceptions(future):
+    #         res = await coro()
+    #         future.set_result(res)
+    #
+    # asyncio.run_coroutine_threadsafe(run_task(), loop)
+    # return future
 
-    async def run_task() -> None:
-        with capture_exceptions(future):
-            res = await coro()
-            future.set_result(res)
-
-    asyncio.run_coroutine_threadsafe(run_task(), loop)
-    return future
+    return asyncio.wrap_future(
+        asyncio.run_coroutine_threadsafe(coro(), loop)
+    )

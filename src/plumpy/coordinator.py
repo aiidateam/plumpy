@@ -16,8 +16,10 @@ if TYPE_CHECKING:
 
 
 class Coordinator(Protocol):
+    # XXX: naming - 'add_message_handler'
     def add_rpc_subscriber(self, subscriber: 'RpcSubscriber', identifier: 'ID_TYPE | None' = None) -> Any: ...
 
+    # XXX: naming - 'add_broadcast_handler'
     def add_broadcast_subscriber(
         self,
         subscriber: 'BroadcastSubscriber',
@@ -26,6 +28,7 @@ class Coordinator(Protocol):
         identifier: 'ID_TYPE | None' = None,
     ) -> Any: ...
 
+    # XXX: naming - absorbed into 'add_message_handler'
     def add_task_subscriber(self, subscriber: 'TaskSubscriber', identifier: 'ID_TYPE | None' = None) -> 'ID_TYPE': ...
 
     def remove_rpc_subscriber(self, identifier: 'ID_TYPE | None') -> None: ...

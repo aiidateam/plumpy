@@ -17,10 +17,10 @@ class RmqCoordinator:
     def add_broadcast_subscriber(
         self,
         subscriber,
-        subject_filter=None,
+        subject_filters=None,
         identifier=None,
     ):
-        subscriber = kiwipy.BroadcastFilter(subscriber, subject=subject_filter)
+        subscriber = kiwipy.BroadcastFilter(subscriber, subject=subject_filters)
         return self._comm.add_broadcast_subscriber(subscriber, identifier)
 
     # XXX: naming - `add_reciver_task` (can be combined with two above maybe??)
