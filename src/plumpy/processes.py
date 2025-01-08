@@ -1023,8 +1023,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 try:
                     result = callback(*args, **kwargs)
                 except Exception as exc:
-                    import traceback
                     import inspect
+                    import traceback
 
                     # Get traceback as a string
                     tb_str = ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
