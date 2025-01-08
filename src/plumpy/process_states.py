@@ -61,7 +61,11 @@ class KillInterruption(Interruption):
 
 
 class ForceKillInterruption(Interruption):
-    pass
+    def __init__(self, msg_text: str | None):
+        super().__init__()
+        msg = MessageBuilder.kill(text=msg_text)
+
+        self.msg: MessageType = msg
 
 
 class PauseInterruption(Interruption):

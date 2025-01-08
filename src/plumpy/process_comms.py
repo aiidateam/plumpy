@@ -229,7 +229,9 @@ class RemoteProcessController:
         result = await asyncio.wrap_future(future)
         return result
 
-    async def kill_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None) -> 'ProcessResult':
+    async def kill_process(
+        self, pid: 'PID_TYPE', msg_text: Optional[str] = None, force_kill: bool = False
+    ) -> 'ProcessResult':
         """
         Kill the process
 
@@ -237,7 +239,7 @@ class RemoteProcessController:
         :param msg: optional kill message
         :return: True if killed, False otherwise
         """
-        msg = MessageBuilder.kill(text=msg_text)
+        msg = MessageBuilder.kill(text=msg_text, force_kill=force_kill)
 
         # Wait for the communication to go through
         kill_future = self._communicator.rpc_send(pid, msg)
@@ -401,7 +403,7 @@ class RemoteProcessThreadController:
         """
         self._communicator.broadcast_send(None, subject=Intent.PLAY)
 
-    def kill_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None) -> kiwipy.Future:
+    def kill_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None, force_kill: bool = False) -> kiwipy.Future:
         """
         Kill the process
 
@@ -409,7 +411,7 @@ class RemoteProcessThreadController:
         :param msg: optional kill message
         :return: a response future from the process to be killed
         """
-        msg = MessageBuilder.kill(text=msg_text)
+        msg = MessageBuilder.kill(text=msg_text, force_kill=force_kill)
         return self._communicator.rpc_send(pid, msg)
 
     def kill_all(self, msg_text: Optional[str]) -> None:

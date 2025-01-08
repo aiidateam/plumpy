@@ -965,7 +965,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == process_comms.Intent.PAUSE:
             return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         if intent == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
+            return self._schedule_rpc(
+                self.kill,
+                msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None),
+                force_kill=msg.get(process_comms.FORCE_KILL_KEY),
+            )
         if intent == process_comms.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
@@ -998,7 +1002,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if subject == process_comms.Intent.PAUSE:
             return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         if subject == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
+            return self._schedule_rpc(
+                self.kill,
+                msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None),
+                force_kill=msg.get(process_comms.FORCE_KILL_KEY),
+            )
         return None
 
     def _schedule_rpc(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> kiwipy.Future:
@@ -1222,12 +1230,12 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
         self.transition_to(new_state)
 
-    def kill(self, msg_text: Optional[str] = None) -> Union[bool, asyncio.Future]:
+    def kill(self, msg_text: Optional[str] = None, force_kill: bool = False) -> Union[bool, asyncio.Future]:
         """
         Kill the process
         :param msg: An optional kill message
+        :param force_kill: An optional whether force kill the process
         """
-        force_kill = isinstance(msg, str) and '-F' in msg
 
         if self.state == process_states.ProcessState.KILLED:
             # Already killed
@@ -1243,20 +1251,32 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if force_kill:
             # Skip interrupting the state and go straight to killed
-            interrupt_exception = process_states.ForceKillInterruption(msg)
+            interrupt_exception = process_states.ForceKillInterruption(msg_text)
+            # XXX: this line was not in ali's PR but to make the change align with _stepping,
+            # it seems it is needed to set the _interrupt_action to be used line after.
+            # Requires more check to test with aiida-core's PR.
+            #
+            # self._set_interrupt_action_from_exception(interrupt_exception)
+            #
             self._killing = self._interrupt_action
             self._state.interrupt(interrupt_exception)
 
-        elif self._stepping:
+            msg = MessageBuilder.kill(msg_text, force_kill=True)
+            new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)
+            self.transition_to(new_state)
+            return True
+
+        if self._stepping:
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
             interrupt_exception = process_states.KillInterruption(msg_text)
             self._set_interrupt_action_from_exception(interrupt_exception)
             self._killing = self._interrupt_action
             self._state.interrupt(interrupt_exception)
+
             return cast(futures.CancellableAction, self._interrupt_action)
 
-        msg = MessageBuilder.kill(msg_text)
+        msg = MessageBuilder.kill(msg_text, force_kill=False)
         new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)
         self.transition_to(new_state)
         return True
