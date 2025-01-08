@@ -54,7 +54,7 @@ from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .process_comms import MESSAGE_KEY, MessageBuilder, MessageType
+from .process_comms import MESSAGE_TEXT_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
@@ -344,8 +344,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             def try_killing(future: futures.Future) -> None:
                 if future.cancelled():
-                    msg = MessageBuilder.kill(text='Killed by future being cancelled')
-                    if not self.kill(msg):
+                    if not self.kill('Killed by future being cancelled'):
                         self.logger.warning(
                             'Process<%s>: Failed to kill process on future cancel',
                             self.pid,
@@ -903,7 +902,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if msg is None:
             msg_txt = ''
         else:
-            msg_txt = msg[MESSAGE_KEY] or ''
+            msg_txt = msg[MESSAGE_TEXT_KEY] or ''
 
         self.set_status(msg_txt)
         self.future().set_exception(exceptions.KilledError(msg_txt))
@@ -944,7 +943,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region Communication
 
-    def message_receive(self, _comm: kiwipy.Communicator, msg: Dict[str, Any]) -> Any:
+    def message_receive(self, _comm: kiwipy.Communicator, msg: MessageType) -> Any:
         """
         Coroutine called when the process receives a message from the communicator
 
@@ -964,9 +963,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == process_comms.Intent.PLAY:
             return self._schedule_rpc(self.play)
         if intent == process_comms.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg=msg.get(process_comms.MESSAGE_KEY, None))
+            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         if intent == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg=msg)
+            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         if intent == process_comms.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
@@ -976,7 +975,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         raise RuntimeError('Unknown intent')
 
     def broadcast_receive(
-        self, _comm: kiwipy.Communicator, body: Any, sender: Any, subject: Any, correlation_id: Any
+        self, _comm: kiwipy.Communicator, msg: MessageType, sender: Any, subject: Any, correlation_id: Any
     ) -> Optional[kiwipy.Future]:
         """
         Coroutine called when the process receives a message from the communicator
@@ -990,16 +989,16 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self.pid,
             subject,
             _comm,
-            body,
+            msg,
         )
 
         # If we get a message we recognise then action it, otherwise ignore
         if subject == process_comms.Intent.PLAY:
             return self._schedule_rpc(self.play)
         if subject == process_comms.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg=body)
+            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         if subject == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg=body)
+            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         return None
 
     def _schedule_rpc(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> kiwipy.Future:
@@ -1021,11 +1020,37 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         async def run_callback() -> None:
             with kiwipy.capture_exceptions(kiwi_future):
-                result = callback(*args, **kwargs)
-                while asyncio.isfuture(result):
-                    result = await result
+                try:
+                    result = callback(*args, **kwargs)
+                except Exception as exc:
+                    import inspect
+                    import traceback
 
-                kiwi_future.set_result(result)
+                    # Get traceback as a string
+                    tb_str = ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+
+                    # Attempt to get file and line number where the callback is defined
+                    # Note: This might fail for certain built-in or dynamically generated functions.
+                    # If it fails, just skip that part.
+                    try:
+                        source_file = inspect.getfile(callback)
+                        # getsourcelines returns a tuple (list_of_source_lines, starting_line_number)
+                        _, start_line = inspect.getsourcelines(callback)
+                        callback_location = f'{source_file}:{start_line}'
+                    except Exception:
+                        callback_location = '<unknown location>'
+
+                    # Include the callback name, file/line info, and the full traceback in the message
+                    raise RuntimeError(
+                        f"Error invoking callback '{callback.__name__}' at {callback_location}.\n"
+                        f'Exception: {type(exc).__name__}: {exc}\n\n'
+                        f'Full Traceback:\n{tb_str}'
+                    ) from exc
+                else:
+                    while asyncio.isfuture(result):
+                        result = await result
+
+                    kiwi_future.set_result(result)
 
         # Schedule the task and give back a kiwi future
         asyncio.run_coroutine_threadsafe(run_callback(), self.loop)
@@ -1071,7 +1096,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
         self.transition_to(new_state)
 
-    def pause(self, msg: Union[str, None] = None) -> Union[bool, futures.CancellableAction]:
+    def pause(self, msg_text: Optional[str] = None) -> Union[bool, futures.CancellableAction]:
         """Pause the process.
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
@@ -1095,22 +1120,29 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if self._stepping:
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
-            interrupt_exception = process_states.PauseInterruption(msg)
+            interrupt_exception = process_states.PauseInterruption(msg_text)
             self._set_interrupt_action_from_exception(interrupt_exception)
             self._pausing = self._interrupt_action
             # Try to interrupt the state
             self._state.interrupt(interrupt_exception)
             return cast(futures.CancellableAction, self._interrupt_action)
 
-        return self._do_pause(msg)
+        msg = MessageBuilder.pause(msg_text)
+        return self._do_pause(state_msg=msg)
 
-    def _do_pause(self, state_msg: Optional[str], next_state: Optional[process_states.State] = None) -> bool:
+    def _do_pause(self, state_msg: Optional[MessageType], next_state: Optional[process_states.State] = None) -> bool:
         """Carry out the pause procedure, optionally transitioning to the next state first"""
         try:
             if next_state is not None:
                 self.transition_to(next_state)
-            call_with_super_check(self.on_pausing, state_msg)
-            call_with_super_check(self.on_paused, state_msg)
+
+            if state_msg is None:
+                msg_text = ''
+            else:
+                msg_text = state_msg[MESSAGE_TEXT_KEY]
+
+            call_with_super_check(self.on_pausing, msg_text)
+            call_with_super_check(self.on_paused, msg_text)
         finally:
             self._pausing = None
 
@@ -1125,7 +1157,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         """
         if isinstance(exception, process_states.PauseInterruption):
-            do_pause = functools.partial(self._do_pause, str(exception))
+            do_pause = functools.partial(self._do_pause, exception.msg)
             return futures.CancellableAction(do_pause, cookie=exception)
 
         if isinstance(exception, (process_states.KillInterruption, process_states.ForceKillInterruption)):
@@ -1190,7 +1222,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
         self.transition_to(new_state)
 
-    def kill(self, msg: Optional[MessageType] = None) -> Union[bool, asyncio.Future]:
+    def kill(self, msg_text: Optional[str] = None) -> Union[bool, asyncio.Future]:
         """
         Kill the process
         :param msg: An optional kill message
@@ -1218,12 +1250,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         elif self._stepping:
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
-            interrupt_exception = process_states.KillInterruption(msg)  # type: ignore
+            interrupt_exception = process_states.KillInterruption(msg_text)
             self._set_interrupt_action_from_exception(interrupt_exception)
             self._killing = self._interrupt_action
             self._state.interrupt(interrupt_exception)
             return cast(futures.CancellableAction, self._interrupt_action)
 
+        msg = MessageBuilder.kill(msg_text)
         new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)
         self.transition_to(new_state)
         return True
