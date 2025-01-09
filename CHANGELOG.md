@@ -12,6 +12,7 @@
 ### Devops
 - Make rpc callback exception more explicit and wind up to show more infos (#305) [[ecef9b9]](https://github.com/aiidateam/plumpy/commit/ecef9b9a4ebbeafacd3b6a84952ad770972f2814)
 
+
 ## v0.23.0 - 2024-12-13
 
 ### Breaking changes
@@ -24,6 +25,7 @@
 ### Devops
 - Make `Process.run` async (#272) [[4611154]](https://github.com/aiidateam/plumpy/commit/4611154c76ac0991bcf7371b21488f4390648c28)
 - Switch to ruff and other devops improvements (#289) [[55e05e9]](https://github.com/aiidateam/plumpy/commit/55e05e956c9715fb69785d83d0194b65811b4720)
+- Bump Python version in CI: 3.8 to 3.12 (Increase python version used in continuous deployment git-workflow from 3.8 to 3.12 (#304) [[bb32edb]](https://github.com/aiidateam/plumpy/pull/304)
 
 
 ## v0.22.3 - 2024-02-02
