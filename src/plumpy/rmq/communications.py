@@ -78,11 +78,11 @@ def convert_to_comm(
 
     return converted
 
+
 T = TypeVar('T', bound=kiwipy.Communicator)
 
-def wrap_communicator(
-    communicator: T, loop: Optional[asyncio.AbstractEventLoop] = None
-) -> 'LoopCommunicator[T]':
+
+def wrap_communicator(communicator: T, loop: Optional[asyncio.AbstractEventLoop] = None) -> 'LoopCommunicator[T]':
     """
     Wrap a communicator such that all callbacks made to any subscribers are scheduled on the
     given event loop.

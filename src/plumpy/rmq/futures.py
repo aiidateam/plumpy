@@ -10,7 +10,7 @@ from typing import Any
 
 import kiwipy
 
-__all__ = ['wrap_to_concurrent_future', 'unwrap_kiwi_future']
+__all__ = ['unwrap_kiwi_future', 'wrap_to_concurrent_future']
 
 
 def _convert_future_exc(exc):
@@ -111,6 +111,7 @@ def wrap_to_concurrent_future(future: asyncio.Future[Any]) -> kiwipy.Future:
     new_future = kiwipy.Future()
     _chain_future(future, new_future)
     return new_future
+
 
 # XXX: this required in aiida-core, see if really need this unwrap.
 def unwrap_kiwi_future(future: kiwipy.Future) -> kiwipy.Future:
