@@ -88,6 +88,4 @@ def create_task(coro: Callable[[], Awaitable[Any]], loop: Optional[asyncio.Abstr
     # asyncio.run_coroutine_threadsafe(run_task(), loop)
     # return future
 
-    return asyncio.wrap_future(
-        asyncio.run_coroutine_threadsafe(coro(), loop)
-    )
+    return asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coro(), loop))
