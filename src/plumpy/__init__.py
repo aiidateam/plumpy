@@ -18,9 +18,9 @@ from .ports import *
 from .process_listener import *
 from .process_states import *
 from .processes import *
+from .rmq import *
 from .utils import *
 from .workchains import *
-from .rmq import *
 
 __all__ = (
     events.__all__

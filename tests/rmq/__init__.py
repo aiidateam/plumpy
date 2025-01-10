@@ -1,13 +1,22 @@
 # -*- coding: utf-8 -*-
+from typing import Generic, TypeVar, final
 import kiwipy
 import concurrent.futures
 
 from plumpy.exceptions import CoordinatorConnectionError
 
 
-class RmqCoordinator:
-    def __init__(self, comm: kiwipy.Communicator):
+U = TypeVar('U', bound=kiwipy.Communicator)
+
+@final
+class RmqCoordinator(Generic[U]):
+    def __init__(self, comm: U):
         self._comm = comm
+
+    @property
+    def communicator(self) -> U:
+        """The inner communicator."""
+        return self._comm
 
     # XXX: naming - `add_receiver_rpc`
     def add_rpc_subscriber(self, subscriber, identifier=None):
@@ -18,9 +27,19 @@ class RmqCoordinator:
         self,
         subscriber,
         subject_filters=None,
+        sender_filters=None,
         identifier=None,
     ):
-        subscriber = kiwipy.BroadcastFilter(subscriber, subject=subject_filters)
+        subscriber = kiwipy.BroadcastFilter(subscriber)
+
+        subject_filters = subject_filters or []
+        sender_filters = sender_filters or []
+
+        for filter in subject_filters:
+            subscriber.add_subject_filter(filter)
+        for filter in sender_filters:
+            subscriber.add_sender_filter(filter)
+
         return self._comm.add_broadcast_subscriber(subscriber, identifier)
 
     # XXX: naming - `add_reciver_task` (can be combined with two above maybe??)
