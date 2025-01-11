@@ -329,6 +329,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
             try:
                 # filter out state change broadcasts
+                # XXX: remove dep on kiwipy
                 subscriber = kiwipy.BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
                 identifier = self._coordinator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
                 # identifier = self._coordinator.add_broadcast_subscriber(
@@ -1332,6 +1333,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._stepping = True
             next_state = None
             try:
+                # XXX: debug log when need to step to next state
                 next_state = await self._run_task(self._state.execute)
             except process_states.Interruption as exception:
                 # If the interruption was caused by a call to a Process method then there should
