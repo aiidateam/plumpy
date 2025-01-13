@@ -21,6 +21,13 @@ if TYPE_CHECKING:
 get_event_loop = asyncio.get_event_loop
 
 
+def create_running_loop() -> asyncio.AbstractEventLoop:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    return loop
+
+
 def set_event_loop(*args: Any, **kwargs: Any) -> None:
     raise NotImplementedError('this method is not implemented because `plumpy` uses a single reentrant loop')
 
@@ -34,15 +41,17 @@ class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
 
     _loop: Optional[asyncio.AbstractEventLoop] = None
 
-    def get_event_loop(self) -> asyncio.AbstractEventLoop:
-        """Return the patched event loop."""
+    def new_event_loop(self) -> asyncio.AbstractEventLoop:
         import nest_asyncio
 
-        if self._loop is None:
-            self._loop = super().get_event_loop()
-            nest_asyncio.apply(self._loop)
+        self._loop = super().new_event_loop()
+        nest_asyncio.apply(self._loop)
 
         return self._loop
+
+    def get_event_loop(self) -> asyncio.AbstractEventLoop:
+        """Return the patched event loop."""
+        return self._loop or self.new_event_loop()
 
 
 def set_event_loop_policy() -> None:
@@ -55,7 +64,8 @@ def set_event_loop_policy() -> None:
 
 def reset_event_loop_policy() -> None:
     """Reset the event loop policy to the default."""
-    loop = get_event_loop()
+
+    loop = asyncio.get_event_loop()
 
     cls = loop.__class__
 
@@ -66,7 +76,7 @@ def reset_event_loop_policy() -> None:
 
 
 def run_until_complete(future: asyncio.Future, loop: Optional[asyncio.AbstractEventLoop] = None) -> Any:
-    loop = loop or get_event_loop()
+    loop = loop or asyncio.get_event_loop()
     return loop.run_until_complete(future)
 
 
