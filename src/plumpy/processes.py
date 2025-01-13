@@ -290,7 +290,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
+        self._loop = loop or asyncio.get_event_loop()
 
         self._setup_event_hooks()
 
