@@ -23,8 +23,6 @@ new_event_loop = asyncio.new_event_loop
 
 
 def create_running_loop():
-    poly = asyncio.get_event_loop_policy()
-    # print(poly)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
@@ -67,7 +65,8 @@ def set_event_loop_policy() -> None:
 
 def reset_event_loop_policy() -> None:
     """Reset the event loop policy to the default."""
-    loop = get_event_loop()
+    
+    loop = asyncio.get_event_loop()
 
     cls = loop.__class__
 
