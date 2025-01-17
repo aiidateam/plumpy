@@ -5,14 +5,14 @@ import asyncio
 import enum
 import unittest
 
-import kiwipy
 import pytest
+from plumpy.futures import CancellableAction
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
-from plumpy.process_comms import MESSAGE_TEXT_KEY, MessageBuilder
+from plumpy.message import MESSAGE_TEXT_KEY, MessageBuilder
 from plumpy.utils import AttributesFrozendict
-from tests import utils
+from . import utils
 
 
 class ForgetToCallParent(plumpy.Process):
@@ -537,7 +537,7 @@ class TestProcess(unittest.TestCase):
         class TestPausePlay(plumpy.Process):
             def run(self):
                 fut = self.pause()
-                test_case.assertIsInstance(fut, plumpy.Future)
+                assert isinstance(fut, CancellableAction)
 
         loop = asyncio.get_event_loop()
 
@@ -561,7 +561,7 @@ class TestProcess(unittest.TestCase):
         class TestPausePlay(plumpy.Process):
             def run(self):
                 fut = self.pause()
-                test_case.assertIsInstance(fut, plumpy.Future)
+                test_case.assertIsInstance(fut, CancellableAction)
                 result = self.play()
                 test_case.assertTrue(result)
 
@@ -1064,15 +1064,15 @@ class TestProcessEvents(unittest.TestCase):
         self.assertSetEqual(events_tester.called, events_tester.expected_events)
 
     def test_broadcast(self):
-        communicator = kiwipy.LocalCommunicator()
+        coordinator = utils.MockCoordinator()
 
         messages = []
 
         def on_broadcast_receive(_comm, body, sender, subject, correlation_id):
             messages.append({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
-        communicator.add_broadcast_subscriber(on_broadcast_receive)
-        proc = utils.DummyProcess(communicator=communicator)
+        coordinator.add_broadcast_subscriber(on_broadcast_receive)
+        proc = utils.DummyProcess(coordinator=coordinator)
         proc.execute()
 
         expected_subjects = []
@@ -1080,8 +1080,7 @@ class TestProcessEvents(unittest.TestCase):
             from_state = utils.DummyProcess.EXPECTED_STATE_SEQUENCE[i - 1].value if i != 0 else None
             expected_subjects.append(f'state_changed.{from_state}.{state.value}')
 
-        for i, message in enumerate(messages):
-            self.assertEqual(message['subject'], expected_subjects[i])
+        assert [msg['subject'] for msg in messages] == expected_subjects
 
 
 class _RestartProcess(utils.WaitForSignalProcess):
