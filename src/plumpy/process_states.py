@@ -42,9 +42,8 @@ from .persistence import (
     auto_load,
     auto_persist,
     auto_save,
-    ensure_object_loader,
 )
-from .utils import SAVED_STATE_TYPE
+from .utils import SAVED_STATE_TYPE, ensure_coroutine
 
 __all__ = [
     'Continue',
@@ -312,7 +311,7 @@ class Running:
         obj = auto_load(cls, saved_state, load_context)
         obj.process = load_context.process
 
-        obj.run_fn = ensure_coroutine(getattr(self.process, saved_state[self.RUN_FN]))
+        obj.run_fn = ensure_coroutine(getattr(obj.process, saved_state[obj.RUN_FN]))
         if obj.COMMAND in saved_state:
             obj._command = persistence.load(saved_state[obj.COMMAND], load_context)  # type: ignore
 
