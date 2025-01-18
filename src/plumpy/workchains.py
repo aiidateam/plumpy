@@ -23,20 +23,17 @@ from typing import (
     cast,
 )
 
-import kiwipy
-
 from plumpy import utils
 from plumpy.base import state_machine
-from plumpy.coordinator import Coordinator
 from plumpy.base.utils import call_with_super_check
+from plumpy.coordinator import Coordinator
 from plumpy.event_helper import EventHelper
 from plumpy.exceptions import InvalidStateError
 from plumpy.persistence import LoadSaveContext, Savable, auto_persist, auto_save, ensure_object_loader
 from plumpy.process_listener import ProcessListener
 
-from . import lang, mixins, persistence, process_spec, process_states, processes
+from . import lang, persistence, process_spec, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE, AttributesDict
-
 
 ToContext = dict
 
@@ -215,7 +212,7 @@ class WorkChain(processes.Process):
         proc._future = persistence.SavableFuture()
         proc._event_helper = EventHelper(ProcessListener)
         proc._logger = None
-        proc._communicator = None
+        proc._coordinator = None
 
         if 'loop' in load_context:
             proc._loop = load_context.loop
@@ -224,8 +221,8 @@ class WorkChain(processes.Process):
 
         proc._state = proc.recreate_state(saved_state['_state'])
 
-        if 'communicator' in load_context:
-            proc._communicator = load_context.communicator
+        if 'coordinator' in load_context:
+            proc._coordinator = load_context.coordinator
 
         if 'logger' in load_context:
             proc._logger = load_context.logger

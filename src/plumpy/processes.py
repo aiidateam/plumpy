@@ -280,7 +280,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         proc._future = persistence.SavableFuture()
         proc._event_helper = EventHelper(ProcessListener)
         proc._logger = None
-        proc._communicator = None
+        proc._coordinator = None
 
         if 'loop' in load_context:
             proc._loop = load_context.loop
@@ -290,7 +290,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         proc._state = proc.recreate_state(saved_state['_state'])
 
         if 'communicator' in load_context:
-            proc._communicator = load_context.communicator
+            proc._coordinator = load_context.coordinator
 
         if 'logger' in load_context:
             proc._logger = load_context.logger

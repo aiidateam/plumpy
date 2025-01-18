@@ -29,7 +29,6 @@ from .exceptions import (
 from .futures import CancellableAction, Future, capture_exceptions, create_task
 from .loaders import DefaultObjectLoader, ObjectLoader, get_object_loader, set_object_loader
 from .message import MessageBuilder, ProcessLauncher, create_continue_body, create_launch_body
-from .mixins import ContextMixin
 from .persistence import (
     Bundle,
     InMemoryPersister,
@@ -77,8 +76,6 @@ __all__ = (
     'CancellableAction',
     # exceptions
     'ClosedError',
-    # mixins
-    'ContextMixin',
     # process_states/States
     'Continue',
     # coordinator
