@@ -11,7 +11,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Hashable,
     List,
     Mapping,
     MutableSequence,
@@ -23,7 +22,9 @@ from typing import (
     cast,
 )
 
+from plumpy.base import state_machine
 from plumpy.coordinator import Coordinator
+from plumpy.exceptions import InvalidStateError
 
 from . import lang, mixins, persistence, process_spec, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
@@ -66,6 +67,7 @@ class WorkChainSpec(process_spec.ProcessSpec):
         return self._outline
 
 
+# FIXME:  better use composition here
 @persistence.auto_persist('_awaiting')
 class Waiting(process_states.Waiting):
     """Overwrite the waiting state"""
@@ -75,23 +77,13 @@ class Waiting(process_states.Waiting):
         process: 'WorkChain',
         done_callback: Optional[Callable[..., Any]],
         msg: Optional[str] = None,
-        awaiting: Optional[Dict[Union[asyncio.Future, processes.Process], str]] = None,
+        data: Optional[Dict[Union[asyncio.Future, processes.Process], str]] = None,
     ) -> None:
-        super().__init__(process, done_callback, msg, awaiting)
+        super().__init__(process, done_callback, msg, data)
         self._awaiting: Dict[asyncio.Future, str] = {}
-        for awaitable, key in (awaiting or {}).items():
+        for awaitable, key in (data or {}).items():
             resolved_awaitable = awaitable.future() if isinstance(awaitable, processes.Process) else awaitable
             self._awaiting[resolved_awaitable] = key
-
-    def enter(self) -> None:
-        super().enter()
-        for awaitable in self._awaiting:
-            awaitable.add_done_callback(self._awaitable_done)
-
-    def exit(self) -> None:
-        super().exit()
-        for awaitable in self._awaiting:
-            awaitable.remove_done_callback(self._awaitable_done)
 
     def _awaitable_done(self, awaitable: asyncio.Future) -> None:
         key = self._awaiting.pop(awaitable)
@@ -102,6 +94,20 @@ class Waiting(process_states.Waiting):
         else:
             if not self._awaiting:
                 self._waiting_future.set_result(lang.NULL)
+
+    def enter(self) -> None:
+        for awaitable in self._awaiting:
+            awaitable.add_done_callback(self._awaitable_done)
+
+        self.in_state = True
+
+    def exit(self) -> None:
+        if self.is_terminal:
+            raise InvalidStateError(f'Cannot exit a terminal state {self.LABEL}')
+        self.in_state = False
+
+        for awaitable in self._awaiting:
+            awaitable.remove_done_callback(self._awaitable_done)
 
 
 class WorkChain(mixins.ContextMixin, processes.Process):
@@ -115,7 +121,7 @@ class WorkChain(mixins.ContextMixin, processes.Process):
     _CONTEXT = 'CONTEXT'
 
     @classmethod
-    def get_state_classes(cls) -> Dict[Hashable, Type[process_states.State]]:
+    def get_state_classes(cls) -> Dict[process_states.ProcessState, Type[state_machine.State]]:
         states_map = super().get_state_classes()
         states_map[process_states.ProcessState.WAITING] = Waiting
         return states_map

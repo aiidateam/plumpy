@@ -47,7 +47,15 @@ import yaml
 
 from . import events, exceptions, message, persistence, ports, process_states, utils
 from .base import state_machine
-from .base.state_machine import StateEntryFailed, StateMachine, event
+from .base.state_machine import (
+    Interruptable,
+    Proceedable,
+    StateEntryFailed,
+    StateMachine,
+    StateMachineError,
+    create_state,
+    event,
+)
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
 from .futures import CancellableAction, capture_exceptions
@@ -172,7 +180,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         return None
 
     @classmethod
-    def get_states(cls) -> Sequence[Type[process_states.State]]:
+    def get_states(cls) -> Sequence[Type[state_machine.State]]:
         """Return all allowed states of the process."""
         state_classes = cls.get_state_classes()
         return (
@@ -181,7 +189,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
 
     @classmethod
-    def get_state_classes(cls) -> Dict[Hashable, Type[process_states.State]]:
+    def get_state_classes(cls) -> dict[process_states.ProcessState, Type[state_machine.State]]:
         # A mapping of the State constants to the corresponding state class
         return {
             process_states.ProcessState.CREATED: process_states.Created,
@@ -353,10 +361,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """Set the event hooks to process, when it is created or loaded(recreated)."""
         event_hooks = {
             state_machine.StateEventHook.ENTERING_STATE: lambda _s, _h, state: self.on_entering(
-                cast(process_states.State, state)
+                cast(state_machine.State, state)
             ),
             state_machine.StateEventHook.ENTERED_STATE: lambda _s, _h, from_state: self.on_entered(
-                cast(Optional[process_states.State], from_state)
+                cast(Optional[state_machine.State], from_state)
             ),
             state_machine.StateEventHook.EXITING_STATE: lambda _s, _h, _state: self.on_exiting(),
         }
@@ -463,7 +471,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def has_terminated(self) -> bool:
         """Return whether the process was terminated."""
-        return self._state.is_terminal()
+        return self._state.is_terminal
 
     def result(self) -> Any:
         """
@@ -536,7 +544,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             Use the `has_terminated` method instead
         """
         warnings.warn('method is deprecated, use `has_terminated` instead', DeprecationWarning)
-        return self._state.is_terminal()
+        return self._state.is_terminal
 
     # endregion
 
@@ -621,7 +629,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         super().save_instance_state(out_state, save_context)
 
-        out_state['_state'] = self._state.save()
+        # FIXME: the combined ProcessState protocol should cover the case
+        if isinstance(self._state, process_states.Savable):
+            out_state['_state'] = self._state.save()
 
         # Inputs/outputs
         if self.raw_inputs is not None:
@@ -657,7 +667,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         else:
             self._loop = asyncio.get_event_loop()
 
-        self._state: process_states.State = self.recreate_state(saved_state['_state'])
+        self._state: state_machine.State = self.recreate_state(saved_state['_state'])
 
         if 'coordinator' in load_context:
             self._coordinator = load_context.coordinator
@@ -715,7 +725,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region Events
 
-    def on_entering(self, state: process_states.State) -> None:
+    def on_entering(self, state: state_machine.State) -> None:
         # Map these onto direct functions that the subclass can implement
         state_label = state.LABEL
         if state_label == process_states.ProcessState.CREATED:
@@ -731,7 +741,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         elif state_label == process_states.ProcessState.EXCEPTED:
             call_with_super_check(self.on_except, state.get_exc_info())  # type: ignore
 
-    def on_entered(self, from_state: Optional[process_states.State]) -> None:
+    def on_entered(self, from_state: Optional[state_machine.State]) -> None:
         # Map these onto direct functions that the subclass can implement
         state_label = self._state.LABEL
         if state_label == process_states.ProcessState.RUNNING:
@@ -867,7 +877,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             validation_error = self.spec().outputs.validate(self.outputs)
             if validation_error:
                 state_cls = self.get_states_map()[process_states.ProcessState.FINISHED]
-                finished_state = state_cls(self, result=result, successful=False)
+                finished_state = state_cls(result=result, successful=False)
                 raise StateEntryFailed(finished_state)
 
         self.future().set_result(self.outputs)
@@ -1100,9 +1110,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if final_state == process_states.ProcessState.CREATED:
             raise exception.with_traceback(trace)
 
-        new_state = self._create_state_instance(
-            process_states.ProcessState.EXCEPTED, exception=exception, trace_back=trace
-        )
+        # state_class = self.get_states_map()[process_states.ProcessState.EXCEPTED]
+        new_state = create_state(self, process_states.ProcessState.EXCEPTED, exception=exception, traceback=trace)
         self.transition_to(new_state)
 
     def pause(self, msg_text: str | None = None) -> Union[bool, CancellableAction]:
@@ -1127,6 +1136,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             return self._pausing
 
         if self._stepping:
+            if not isinstance(self._state, Interruptable):
+                raise exceptions.InvalidStateError(
+                    f'cannot interrupt {self._state.__class__}, method `interrupt` not implement'
+                )
+
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
             interrupt_exception = process_states.PauseInterruption(msg_text)
@@ -1139,7 +1153,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         msg = MessageBuilder.pause(msg_text)
         return self._do_pause(state_msg=msg)
 
-    def _do_pause(self, state_msg: Optional[MessageType], next_state: Optional[process_states.State] = None) -> bool:
+    @staticmethod
+    def _interrupt(state: Interruptable, reason: Exception) -> None:
+        state.interrupt(reason)
+
+    def _do_pause(self, state_msg: Optional[MessageType], next_state: Optional[state_machine.State] = None) -> bool:
         """Carry out the pause procedure, optionally transitioning to the next state first"""
         try:
             if next_state is not None:
@@ -1171,11 +1189,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if isinstance(exception, process_states.KillInterruption):
 
-            def do_kill(_next_state: process_states.State) -> Any:
+            def do_kill(_next_state: state_machine.State) -> Any:
                 try:
-                    new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=exception.msg)
+                    new_state = create_state(self, process_states.ProcessState.KILLED, msg=exception.msg)
                     self.transition_to(new_state)
                     return True
+                    # FIXME: if try block except, will hit deadlock in event loop
+                    # need to know how to debug it, and where to set a timeout.
                 finally:
                     self._killing = None
 
@@ -1220,15 +1240,14 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         return self._state.resume(*args)  # type: ignore
 
     @event(to_states=process_states.Excepted)
-    def fail(self, exception: Optional[BaseException], trace_back: Optional[TracebackType]) -> None:
+    def fail(self, exception: Optional[BaseException], traceback: Optional[TracebackType]) -> None:
         """
         Fail the process in response to an exception
         :param exception: The exception that caused the failure
-        :param trace_back: Optional exception traceback
+        :param traceback: Optional exception traceback
         """
-        new_state = self._create_state_instance(
-            process_states.ProcessState.EXCEPTED, exception=exception, trace_back=trace_back
-        )
+        # state_class = self.get_states_map()[process_states.ProcessState.EXCEPTED]
+        new_state = create_state(self, process_states.ProcessState.EXCEPTED, exception=exception, traceback=traceback)
         self.transition_to(new_state)
 
     def kill(self, msg_text: Optional[str] = None) -> Union[bool, asyncio.Future]:
@@ -1248,7 +1267,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             # Already killing
             return self._killing
 
-        if self._stepping:
+        if self._stepping and isinstance(self._state, Interruptable):
             # Ask the step function to pause by setting this flag and giving the
             # caller back a future
             interrupt_exception = process_states.KillInterruption(msg_text)
@@ -1258,7 +1277,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             return cast(CancellableAction, self._interrupt_action)
 
         msg = MessageBuilder.kill(msg_text)
-        new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)
+        new_state = create_state(self, process_states.ProcessState.KILLED, msg=msg)
         self.transition_to(new_state)
         return True
 
@@ -1269,19 +1288,16 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # endregion
 
-    def create_initial_state(self) -> process_states.State:
+    def create_initial_state(self) -> state_machine.State:
         """This method is here to override its superclass.
 
         Automatically enter the CREATED state when the process is created.
 
         :return: A Created state
         """
-        return cast(
-            process_states.State,
-            self.get_state_class(process_states.ProcessState.CREATED)(self, self.run),
-        )
+        return self.get_state_class(process_states.ProcessState.CREATED)(self, self.run)
 
-    def recreate_state(self, saved_state: persistence.Bundle) -> process_states.State:
+    def recreate_state(self, saved_state: persistence.Bundle) -> state_machine.State:
         """
         Create a state object from a saved state
 
@@ -1289,7 +1305,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: An instance of the object with its state loaded from the save state.
         """
         load_context = persistence.LoadSaveContext(process=self)
-        return cast(process_states.State, persistence.Savable.load(saved_state, load_context))
+        return cast(state_machine.State, persistence.Savable.load(saved_state, load_context))
 
     # endregion
 
@@ -1327,6 +1343,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if self.paused and self._paused is not None:
             await self._paused
 
+        if not isinstance(self._state, Proceedable):
+            raise StateMachineError(f'cannot step from {self._state.__class__}, async method `execute` not implemented')
+
         try:
             self._stepping = True
             next_state = None
@@ -1348,7 +1367,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 raise
             except Exception:
                 # Overwrite the next state to go to excepted directly
-                next_state = self.create_state(process_states.ProcessState.EXCEPTED, *sys.exc_info()[1:])
+                next_state = create_state(
+                    self, process_states.ProcessState.EXCEPTED, exception=sys.exc_info()[1], traceback=sys.exc_info()[2]
+                )
                 self._set_interrupt_action(None)
 
             if self._interrupt_action:
