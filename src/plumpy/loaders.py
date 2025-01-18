@@ -3,8 +3,6 @@ import abc
 import importlib
 from typing import Any, Optional
 
-__all__ = ['DefaultObjectLoader', 'ObjectLoader', 'get_object_loader', 'set_object_loader']
-
 
 class ObjectLoader(metaclass=abc.ABCMeta):
     """
