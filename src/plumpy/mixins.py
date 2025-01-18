@@ -4,8 +4,6 @@ from typing import Any, Optional
 from . import persistence
 from .utils import SAVED_STATE_TYPE, AttributesDict
 
-__all__ = ['ContextMixin']
-
 
 class ContextMixin(persistence.Savable):
     """

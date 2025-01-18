@@ -23,8 +23,6 @@ from typing import (
 from . import lang
 from .settings import check_override, check_protected
 
-__all__ = ['AttributesDict']
-
 protected = lang.protected(check=check_protected)
 override = lang.override(check=check_override)
 
