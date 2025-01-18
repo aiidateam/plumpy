@@ -748,7 +748,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         elif state_label == process_states.ProcessState.KILLED:
             call_with_super_check(self.on_killed)
 
-        if self._coordinator and isinstance(self.state, enum.Enum):
+        if self._coordinator and isinstance(self.state_label, enum.Enum):
             from_label = cast(enum.Enum, from_state.LABEL).value if from_state is not None else None
             subject = f'state_changed.{from_label}.{self.state_label.value}'
             self.logger.info('Process<%s>: Broadcasting state change: %s', self.pid, subject)
@@ -1342,7 +1342,6 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
             self._stepping = True
             next_state = None
             try:
-                # XXX: debug log when need to step to next state
                 next_state = await self._run_task(self._state.execute)
             except process_states.Interruption as exception:
                 # If the interruption was caused by a call to a Process method then there should
@@ -1368,6 +1367,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
                 self._interrupt_action.run(next_state)
             else:
                 # Everything nominal so transition to the next state
+                self.logger.debug(f'Process<{self.pid}>: transfer from {self._state.LABEL} to {next_state.LABEL}')
                 self.transition_to(next_state)
 
         finally:

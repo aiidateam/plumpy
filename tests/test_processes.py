@@ -331,7 +331,7 @@ class TestProcess(unittest.TestCase):
         proc.kill(msg_text=msg_text)
         self.assertTrue(proc.killed())
         self.assertEqual(proc.killed_msg()[MESSAGE_TEXT_KEY], msg_text)
-        self.assertEqual(proc.state, ProcessState.KILLED)
+        self.assertEqual(proc.state_label, ProcessState.KILLED)
 
     def test_wait_continue(self):
         proc = utils.WaitForSignalProcess()

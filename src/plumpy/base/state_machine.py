@@ -312,7 +312,6 @@ class StateMachine(metaclass=StateMachineMeta):
         The arguments are passed to the state class to create state instance.
         (process arg does not need to pass since it will always call with 'self' as process)
         """
-        print(f'try: {self._state} -> {new_state}')
         assert not self._transitioning, 'Cannot call transition_to when already transitioning state'
 
         if new_state is None:
