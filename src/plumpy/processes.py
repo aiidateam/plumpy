@@ -285,15 +285,20 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         if 'loop' in load_context:
             proc._loop = load_context.loop
         else:
+            _LOGGER.warning(f'cannot find `loop` store in load_context, use default event loop')
             proc._loop = asyncio.get_event_loop()
 
         proc._state = proc.recreate_state(saved_state['_state'])
 
-        if 'communicator' in load_context:
+        if 'coordinator' in load_context:
             proc._coordinator = load_context.coordinator
+        else:
+            _LOGGER.warning(f'cannot find `coordinator` store in load_context')
 
         if 'logger' in load_context:
             proc._logger = load_context.logger
+        else:
+            _LOGGER.warning(f'cannot find `logger` store in load_context')
 
         # Need to call this here as things downstream may rely on us having the runtime variable above
         persistence.load_auto_persist_params(proc, saved_state, load_context)
