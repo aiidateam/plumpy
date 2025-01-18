@@ -5,8 +5,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 from . import persistence
 from .utils import SAVED_STATE_TYPE, protected
 
-__all__ = ['ProcessListener']
-
 if TYPE_CHECKING:
     from .processes import Process
 

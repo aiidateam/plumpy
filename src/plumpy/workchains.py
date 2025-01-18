@@ -25,10 +25,8 @@ from typing import (
 
 from plumpy.coordinator import Coordinator
 
-from . import lang, mixins, persistence, process_states, processes
+from . import lang, mixins, persistence, process_spec, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
-
-__all__ = ['ToContext', 'WorkChain', 'WorkChainSpec', 'if_', 'return_', 'while_']
 
 ToContext = dict
 
@@ -37,7 +35,7 @@ WC_COMMAND_TYPE = Callable[['WorkChain'], Any]
 EXIT_CODE_TYPE = int
 
 
-class WorkChainSpec(processes.ProcessSpec):
+class WorkChainSpec(process_spec.ProcessSpec):
     def __init__(self) -> None:
         super().__init__()
         self._outline: Optional[Union['_Instruction', '_FunctionCall']] = None
