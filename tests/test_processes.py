@@ -15,7 +15,6 @@ from plumpy.persistence import Savable
 from plumpy.utils import AttributesFrozendict
 from . import utils
 
-# FIXME: any process listener is savable
 
 class ForgetToCallParent(plumpy.Process):
     def __init__(self, forget_on):
@@ -42,9 +41,11 @@ class ForgetToCallParent(plumpy.Process):
         if self.forget_on != 'kill':
             super().on_kill(msg)
 
+
 def test_process_is_savable():
     proc = utils.DummyProcess()
     assert isinstance(proc, Savable)
+
 
 @pytest.mark.asyncio
 async def test_process_scope():

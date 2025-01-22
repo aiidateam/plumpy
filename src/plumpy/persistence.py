@@ -517,7 +517,7 @@ def auto_save(obj: Savable, loader: loaders.ObjectLoader | None = None) -> SAVED
     # Save object class name
     SaveUtil.set_class_name(out_state, loader.identify_object(obj.__class__))
 
-    # FIXME: it should be an iter call to save until all resolved
+    # TODO: it should be an regression call to save until all resolved
     if isinstance(obj, SavableWithAutoPersist):
         for member in obj._auto_persist:
             value = getattr(obj, member)

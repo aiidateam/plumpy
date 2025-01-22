@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional, Self
+from typing import TYPE_CHECKING, Any, Callable, Optional, Self, final
 
 from plumpy.loaders import ObjectLoader
 from plumpy.persistence import LoadSaveContext, auto_load, auto_save, ensure_object_loader
@@ -9,20 +9,20 @@ from plumpy.utils import SAVED_STATE_TYPE
 from . import persistence
 
 if TYPE_CHECKING:
-    from typing import Set, Type
-
     from .process_listener import ProcessListener
 
 _LOGGER = logging.getLogger(__name__)
 
+# FIXME: test me
 
+@final
 @persistence.auto_persist('_listeners', '_listener_type')
 class EventHelper:
-    def __init__(self, listener_type: 'Type[ProcessListener]'):
+    def __init__(self, listener_type: 'type[ProcessListener]'):
         assert listener_type is not None, 'Must provide valid listener type'
 
         self._listener_type = listener_type
-        self._listeners: 'Set[ProcessListener]' = set()
+        self._listeners: 'set[ProcessListener]' = set()
 
     def add_listener(self, listener: 'ProcessListener') -> None:
         assert isinstance(listener, self._listener_type), 'Listener is not of right type'
@@ -55,7 +55,7 @@ class EventHelper:
         return out_state
 
     @property
-    def listeners(self) -> 'Set[ProcessListener]':
+    def listeners(self) -> 'set[ProcessListener]':
         return self._listeners
 
     def fire_event(self, event_function: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
