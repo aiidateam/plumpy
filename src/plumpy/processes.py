@@ -285,7 +285,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         if 'loop' in load_context:
             proc._loop = load_context.loop
         else:
-            _LOGGER.warning(f'cannot find `loop` store in load_context, use default event loop')
+            _LOGGER.warning('cannot find `loop` store in load_context, use default event loop')
             proc._loop = asyncio.get_event_loop()
 
         proc._state = proc.recreate_state(saved_state['_state'])
@@ -293,12 +293,12 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         if 'coordinator' in load_context:
             proc._coordinator = load_context.coordinator
         else:
-            _LOGGER.warning(f'cannot find `coordinator` store in load_context')
+            _LOGGER.warning('cannot find `coordinator` store in load_context')
 
         if 'logger' in load_context:
             proc._logger = load_context.logger
         else:
-            _LOGGER.warning(f'cannot find `logger` store in load_context')
+            _LOGGER.warning('cannot find `logger` store in load_context')
 
         # Need to call this here as things downstream may rely on us having the runtime variable above
         persistence.load_auto_persist_params(proc, saved_state, load_context)
@@ -760,7 +760,9 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
             try:
                 self._coordinator.broadcast_send(body=None, sender=self.pid, subject=subject)
             except exceptions.CoordinatorCommunicationError:
-                message = f'Process<{self.pid}>: cannot broadcast state change from {from_label} to {self.state.value}'
+                message = (
+                    f'Process<{self.pid}>: cannot broadcast state change from {from_label} to {self.state_label.value}'
+                )
                 self.logger.warning(message)
                 self.logger.debug(message, exc_info=True)
             except Exception:

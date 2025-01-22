@@ -17,10 +17,10 @@ from typing import (
     Union,
     cast,
     final,
-    override,
 )
 
 import yaml
+from typing_extensions import override
 from yaml.loader import Loader
 
 from plumpy.message import MessageBuilder, MessageType

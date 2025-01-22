@@ -275,6 +275,8 @@ class StateMachine(metaclass=StateMachineMeta):
     def state_label(self) -> Any:
         if self._state is None:
             return None
+        # XXX: should not use `.value` to access the printable output from LABEL
+        # LABEL as the ClassVar should have __str__
         return self._state.LABEL
 
     def add_state_event_callback(self, hook: Hashable, callback: EVENT_CALLBACK_TYPE) -> None:
