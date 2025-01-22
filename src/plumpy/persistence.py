@@ -22,6 +22,7 @@ from typing import (
     List,
     Optional,
     Protocol,
+    Type,
     TypeVar,
     cast,
     runtime_checkable,
@@ -474,10 +475,13 @@ class SaveUtil:
             pass
 
 
+T = TypeVar('T', bound='Savable')
+
+
 @runtime_checkable
 class Savable(Protocol):
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> 'Savable':
+    def recreate_from(cls: type[T], saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> T:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -544,9 +548,6 @@ def load_auto_persist_params(
         setattr(obj, member, _get_value(obj, saved_state, member, load_context))
 
 
-T = TypeVar('T', bound=Savable)
-
-
 def auto_load(cls: type[T], saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None) -> T:
     obj = cls.__new__(cls)
 
@@ -570,21 +571,20 @@ def _get_value(
     return value
 
 
-def auto_persist(*members: str) -> Callable[..., Savable]:
-    def wrapped(savable_cls: type) -> Savable:
-        if not hasattr(savable_cls, '_auto_persist') or savable_cls._auto_persist is None:
-            savable_cls._auto_persist = set()  # type: ignore[attr-defined]
+def auto_persist(*members: str) -> Callable[[type[T]], type[T]]:
+    def wrapped(cls: type[T]) -> type[T]:
+        if not hasattr(cls, '_auto_persist') or cls._auto_persist is None:
+            cls._auto_persist = set()  # type: ignore[attr-defined]
         else:
-            savable_cls._auto_persist = set(savable_cls._auto_persist)
+            cls._auto_persist = set(cls._auto_persist)
 
-        savable_cls._auto_persist.update(members)  # type: ignore[attr-defined]
+        cls._auto_persist.update(members)  # type: ignore[attr-defined]
         # XXX: validate on `save` and `recreate_from` method??
-        return cast(Savable, savable_cls)
+        return cls
 
     return wrapped
 
 
-# FIXME: move me to another module? savablefuture.py?
 @auto_persist('_state', '_result')
 class SavableFuture(futures.Future):
     """
