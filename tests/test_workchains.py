@@ -11,8 +11,7 @@ from plumpy.workchains import *
 
 from . import utils
 
-# FIXME: after deabstract on savable into a protocol, test that all stepper are savable
-# FIXME: workchani itself is savable
+# FIXME: test steppers are savable and round trip persistence
 
 class Wf(WorkChain):
     # Keep track of which steps were completed by the workflow
@@ -85,6 +84,11 @@ class Wf(WorkChain):
 
     def _set_finished(self, function_name):
         self.finished_steps[function_name] = True
+
+
+def test_workchain_is_savable():
+    w = Wf(inputs=dict(value='A', n=3))
+    assert isinstance(w, Savable)
 
 
 class IfTest(WorkChain):
