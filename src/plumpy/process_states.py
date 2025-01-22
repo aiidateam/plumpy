@@ -268,7 +268,7 @@ class Running:
     COMMAND = 'command'  # The key used to store an upcoming command
 
     # Class level defaults
-    _command: Union[None, Kill, Stop, Wait, Continue] = None
+    _command: Kill | Stop | Wait | Continue | None = None
     _running: bool = False
     _run_handle = None
 
@@ -310,7 +310,13 @@ class Running:
 
         obj.run_fn = ensure_coroutine(getattr(obj.process, saved_state[obj.RUN_FN]))
         if obj.COMMAND in saved_state:
-            obj._command = persistence.load(saved_state[obj.COMMAND], load_context)  # type: ignore
+            loaded_cmd = persistence.load(saved_state[obj.COMMAND], load_context)  
+            if isinstance(loaded_cmd, Command):
+                # runtime check for loading from persistence
+                obj._command = loaded_cmd
+            else:
+                # XXX: debug log
+                raise RuntimeError(f'command `{obj.COMMAND}` loaded from Running state not a valid `Command` type')
 
         return obj
 
