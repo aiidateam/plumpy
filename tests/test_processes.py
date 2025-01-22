@@ -11,13 +11,11 @@ from plumpy.futures import CancellableAction
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
 from plumpy.message import MESSAGE_TEXT_KEY, MessageBuilder
+from plumpy.persistence import Savable
 from plumpy.utils import AttributesFrozendict
 from . import utils
 
-# FIXME: also that any process is savable
 # FIXME: any process listener is savable
-# FIXME: any process control commands are savable
-
 
 class ForgetToCallParent(plumpy.Process):
     def __init__(self, forget_on):
@@ -44,6 +42,9 @@ class ForgetToCallParent(plumpy.Process):
         if self.forget_on != 'kill':
             super().on_kill(msg)
 
+def test_process_is_savable():
+    proc = utils.DummyProcess()
+    assert isinstance(proc, Savable)
 
 @pytest.mark.asyncio
 async def test_process_scope():
