@@ -47,8 +47,8 @@ class LoadSaveContext:
     def __getattr__(self, item: str) -> Any:
         try:
             return self._values[item]
-        except KeyError:
-            raise AttributeError(f"item '{item}' not found")
+        except KeyError as exc:
+            raise AttributeError(f"item '{item}' not found in the runtime context when load") from exc
 
     def __iter__(self) -> Iterable[Any]:
         return self._value.__iter__()
@@ -556,7 +556,7 @@ def load_auto_persist_params(
         setattr(obj, member, value)
 
 
-def auto_load(cls: type[T], saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None) -> T:
+def auto_load(cls: type[T], saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> T:
     obj = cls.__new__(cls)
 
     if isinstance(obj, SavableWithAutoPersist):

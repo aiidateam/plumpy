@@ -218,25 +218,25 @@ class Created:
         self.args = args
         self.kwargs = kwargs
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+    def save(self, save_context: LoadSaveContext | None = None) -> SAVED_STATE_TYPE:
         out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
         out_state[self.RUN_FN] = self.run_fn.__name__
 
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> Self:
         """
-        Recreate a :class:`Savable` from a saved state using an optional load context.
+        Recreate a :class:`Created` from a saved state using an optional load context.
 
         :param saved_state: The saved state
-        :param load_context: An optional load context
+        :param load_context: An optional load context for runtime attributes
 
         :return: The recreated instance
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = auto_load(cls, saved_state, load_context)
+        obj = auto_load(cls, saved_state)
         obj.process = load_context.process
         obj.run_fn = getattr(obj.process, saved_state[obj.RUN_FN])
 
@@ -310,12 +310,12 @@ class Running:
 
         obj.run_fn = ensure_coroutine(getattr(obj.process, saved_state[obj.RUN_FN]))
         if obj.COMMAND in saved_state:
-            loaded_cmd = persistence.load(saved_state[obj.COMMAND], load_context)  
+            loaded_cmd = persistence.load(saved_state[obj.COMMAND], load_context)
             if isinstance(loaded_cmd, Command):
                 # runtime check for loading from persistence
                 obj._command = loaded_cmd
             else:
-                # XXX: debug log
+                # XXX: debug log in principle unreachable
                 raise RuntimeError(f'command `{obj.COMMAND}` loaded from Running state not a valid `Command` type')
 
         return obj

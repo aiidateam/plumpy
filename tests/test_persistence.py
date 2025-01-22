@@ -10,6 +10,7 @@ from plumpy.utils import SAVED_STATE_TYPE
 
 from . import utils
 
+# FIXME: test auto_load can precisely load auto_persist with nested items
 
 @auto_persist()
 class SaveEmpty:
