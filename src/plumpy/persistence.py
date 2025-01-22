@@ -10,7 +10,6 @@ import fnmatch
 import inspect
 import os
 import pickle
-from types import MethodType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -20,19 +19,16 @@ from typing import (
     Generator,
     Iterable,
     List,
-    MutableMapping,
     Optional,
     Protocol,
     Self,
-    Type,
     TypeVar,
-    cast,
     runtime_checkable,
 )
 
 import yaml
 
-from . import futures, loaders, utils
+from . import futures, loaders
 from .utils import PID_TYPE, SAVED_STATE_TYPE
 
 PersistedCheckpoint = collections.namedtuple('PersistedCheckpoint', ['pid', 'tag'])
@@ -95,6 +91,7 @@ class Bundle(dict):
         return load(self, load_context)
 
 
+# FIXME: saved_state -> saved to not confuse with process state
 def load(saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> 'Savable':
     """
     Load a `Savable` from a saved instance state.  The load context is a way of passing

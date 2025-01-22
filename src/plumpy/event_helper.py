@@ -3,7 +3,7 @@ import logging
 from typing import TYPE_CHECKING, Any, Callable, Optional, Self
 
 from plumpy.loaders import ObjectLoader
-from plumpy.persistence import LoadSaveContext, Savable, auto_load, auto_save, ensure_object_loader
+from plumpy.persistence import LoadSaveContext, auto_load, auto_save, ensure_object_loader
 from plumpy.utils import SAVED_STATE_TYPE
 
 from . import persistence

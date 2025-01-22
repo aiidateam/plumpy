@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from typing import Any
 import unittest
 
 import yaml
 
 import plumpy
+from plumpy.loaders import DefaultObjectLoader, ObjectLoader
 from plumpy.persistence import auto_load, auto_persist, auto_save, ensure_object_loader
 from plumpy.utils import SAVED_STATE_TYPE
 
@@ -92,6 +94,14 @@ class Save:
         return out_state
 
 
+class CustomObjectLoader(DefaultObjectLoader):
+    def load_object(self, identifier: str) -> Any:
+        return super().load_object(identifier)
+
+    def identify_object(self, obj: Any) -> str:
+        return super().identify_object(obj)
+
+
 class TestSavable(unittest.TestCase):
     def test_empty_savable(self):
         self._save_round_trip(SaveEmpty())
@@ -121,7 +131,7 @@ class TestSavable(unittest.TestCase):
 
     def _save_round_trip_with_loader(self, savable):
         """
-        Do a round trip:
+        Do a round trip, use a custom loader:
         1) Save `savables` state
         2) Recreate from the saved state
         3) Save the state of the recreated `Savable`
@@ -129,7 +139,7 @@ class TestSavable(unittest.TestCase):
 
         :type savable: :class:`plumpy.Savable`
         """
-        object_loader = plumpy.get_object_loader()
+        object_loader = CustomObjectLoader()
         saved_state1 = savable.save(object_loader)
         loaded = savable.recreate_from(saved_state1)
         saved_state2 = loaded.save(object_loader)
