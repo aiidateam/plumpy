@@ -545,7 +545,15 @@ def load_auto_persist_params(
     obj: SavableWithAutoPersist, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None
 ) -> None:
     for member in obj._auto_persist:
-        setattr(obj, member, _get_value(obj, saved_state, member, load_context))
+        value = saved_state[member]
+
+        typ = SaveUtil.get_meta_type(saved_state, member)
+        if typ == META__TYPE__METHOD:
+            value = getattr(obj, value)
+        elif typ == META__TYPE__SAVABLE:
+            value = load(value, load_context)
+
+        setattr(obj, member, value)
 
 
 def auto_load(cls: type[T], saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None) -> T:
@@ -555,20 +563,6 @@ def auto_load(cls: type[T], saved_state: SAVED_STATE_TYPE, load_context: LoadSav
         load_auto_persist_params(obj, saved_state, load_context)
 
     return obj
-
-
-def _get_value(
-    obj: Any, saved_state: SAVED_STATE_TYPE, name: str, load_context: LoadSaveContext | None
-) -> MethodType | Savable:
-    value = saved_state[name]
-
-    typ = SaveUtil.get_meta_type(saved_state, name)
-    if typ == META__TYPE__METHOD:
-        value = getattr(obj, value)
-    elif typ == META__TYPE__SAVABLE:
-        value = load(value, load_context)
-
-    return value
 
 
 def auto_persist(*members: str) -> Callable[[type[T]], type[T]]:
