@@ -63,9 +63,6 @@ __all__ = [
     'Waiting',
 ]
 
-if TYPE_CHECKING:
-    from .processes import Process
-
 
 class Interruption(Exception):  # noqa: N818
     pass
