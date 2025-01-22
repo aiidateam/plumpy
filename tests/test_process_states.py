@@ -109,7 +109,7 @@ def test_subclass_command_savable():
     assert saved == saved2
 
 
-# FIXME: using pickle loader this should be able to be solved
+# TODO: using pickle loader this should be able to be solved
 @pytest.mark.xfail(reason='the default loader can only load obj from python path')
 def test_subclass_command_savable_xfail():
     class DummyCmdXfail(Command):

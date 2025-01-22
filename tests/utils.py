@@ -338,6 +338,7 @@ class ThreeStepsThenException(ThreeSteps):
 
 class ProcessListenerTester(plumpy.ProcessListener):
     def __init__(self, process, expected_events):
+        super().__init__()
         process.add_process_listener(self)
         self.expected_events = set(expected_events)
         self.called = set()
