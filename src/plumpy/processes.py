@@ -27,6 +27,7 @@ from typing import (
     Hashable,
     List,
     Optional,
+    Self,
     Sequence,
     Tuple,
     Type,
@@ -38,6 +39,7 @@ from typing import (
 import kiwipy
 
 from plumpy.coordinator import Coordinator
+from plumpy.loaders import ObjectLoader
 from plumpy.persistence import ensure_object_loader
 
 try:
@@ -259,7 +261,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         cls,
         saved_state: SAVED_STATE_TYPE,
         load_context: Optional[persistence.LoadSaveContext] = None,
-    ) -> Process:
+    ) -> Self:
         """Recreate a process from a saved state, passing any positional
 
         :param saved_state: The saved state to load from
@@ -673,14 +675,14 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
     # region Persistence
 
-    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
         """
         Ask the process to save its current instance state.
 
         :param out_state: A bundle to save the state to
         :param save_context: The save context
         """
-        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, loader)
 
         if isinstance(self.state, persistence.Savable):
             out_state['_state'] = self.state.save()

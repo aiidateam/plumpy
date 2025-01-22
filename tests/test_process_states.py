@@ -71,10 +71,11 @@ def test_subclass_command_savable():
 def test_create_save_load(proc: DummyProcess):
     state = Created(proc, run_fn=proc.run)
     ctx = LoadSaveContext(process=proc)
-    saved_state = state.save(ctx)
+    saved_state = state.save()
     loaded_state = load(saved_state=saved_state, load_context=ctx)
+    saved_state2 = loaded_state.save()
 
-    # __import__('ipdb').set_trace()
+    assert saved_state == saved_state2
 
 
 def test_running_save_load(proc: StateMachine):

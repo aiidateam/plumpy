@@ -12,9 +12,9 @@ from . import utils
 
 # FIXME: test auto_load can precisely load auto_persist with nested items
 
+
 @auto_persist()
 class SaveEmpty:
-
     @classmethod
     def recreate_from(cls, saved_state, load_context=None):
         """
@@ -30,8 +30,8 @@ class SaveEmpty:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context=None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self)
 
         return out_state
 
@@ -60,8 +60,8 @@ class Save1:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context=None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
@@ -86,8 +86,8 @@ class Save:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context=None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
@@ -130,9 +130,9 @@ class TestSavable(unittest.TestCase):
         :type savable: :class:`plumpy.Savable`
         """
         object_loader = plumpy.get_object_loader()
-        saved_state1 = savable.save(plumpy.LoadSaveContext(object_loader))
+        saved_state1 = savable.save(object_loader)
         loaded = savable.recreate_from(saved_state1)
-        saved_state2 = loaded.save(plumpy.LoadSaveContext(object_loader))
+        saved_state2 = loaded.save(object_loader)
         saved_state3 = loaded.save()
         self.assertDictEqual(saved_state1, saved_state2)
         self.assertNotEqual(saved_state1, saved_state3)

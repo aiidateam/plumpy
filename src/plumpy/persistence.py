@@ -20,8 +20,10 @@ from typing import (
     Generator,
     Iterable,
     List,
+    MutableMapping,
     Optional,
     Protocol,
+    Self,
     Type,
     TypeVar,
     cast,
@@ -65,21 +67,21 @@ class LoadSaveContext:
 
 
 class Bundle(dict):
-    def __init__(self, savable: 'Savable', save_context: LoadSaveContext | None = None, dereference: bool = False):
+    def __init__(self, savable: 'Savable', loader: loaders.ObjectLoader | None = None, dereference: bool = False):
         """
         Create a bundle from a savable.  Optionally keep information about the
         class loader that can be used to load the classes in the bundle.
 
         :param savable: The savable object to bundle
-        :param save_context: The optional save context to use
+        :param loader: The optional object loader to use
         :param dereference: Remove refrences from the data, by deep copying
 
         """
         super().__init__()
         if dereference:
-            self.update(copy.deepcopy(savable.save(save_context)))
+            self.update(copy.deepcopy(savable.save(loader)))
         else:
-            self.update(savable.save(save_context))
+            self.update(savable.save(loader))
 
     def unbundle(self, load_context: LoadSaveContext | None = None) -> 'Savable':
         """
@@ -365,7 +367,9 @@ class InMemoryPersister(Persister):
         self._save_context = LoadSaveContext(loader=loader)
 
     def save_checkpoint(self, process: 'Process', tag: Optional[str] = None) -> None:
-        self._checkpoints.setdefault(process.pid, {})[tag] = Bundle(process, self._save_context, dereference=True)
+        self._checkpoints.setdefault(process.pid, {})[tag] = Bundle(
+            process, self._save_context.loader, dereference=True
+        )
 
     def load_checkpoint(self, pid: PID_TYPE, tag: Optional[str] = None) -> Bundle:
         return self._checkpoints[pid][tag]
@@ -493,7 +497,7 @@ class Savable(Protocol):
         """
         ...
 
-    def save(self, save_context: LoadSaveContext | None = None) -> SAVED_STATE_TYPE: ...
+    def save(self, loader: loaders.ObjectLoader | None = None) -> SAVED_STATE_TYPE: ...
 
 
 @runtime_checkable
@@ -501,23 +505,18 @@ class SavableWithAutoPersist(Savable, Protocol):
     _auto_persist: ClassVar[set[str]] = set()
 
 
-def auto_save(obj: Savable, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+def auto_save(obj: Savable, loader: loaders.ObjectLoader | None = None) -> SAVED_STATE_TYPE:
     out_state: SAVED_STATE_TYPE = {}
 
-    if save_context is None:
-        save_context = LoadSaveContext()
-
-    utils.type_check(save_context, LoadSaveContext)
-
     default_loader = loaders.get_object_loader()
-    # If the user has specified a class loader, then save it in the saved state
-    if save_context.loader is not None:
-        loader_class = default_loader.identify_object(save_context.loader.__class__)
-        SaveUtil.set_custom_meta(out_state, META__OBJECT_LOADER, loader_class)
-        loader = save_context.loader
-    else:
+    if loader is None:
         loader = default_loader
 
+    # If the user has specified a class loader saver the loader in the saved state, or save the default loader
+    loader_class = default_loader.identify_object(loader.__class__)
+    SaveUtil.set_custom_meta(out_state, META__OBJECT_LOADER, loader_class)
+
+    # Save object class name
     SaveUtil.set_class_name(out_state, loader.identify_object(obj.__class__))
 
     if isinstance(obj, SavableWithAutoPersist):
@@ -587,15 +586,15 @@ class SavableFuture(futures.Future):
     .. note: This does not save any assigned done callbacks.
     """
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: loaders.ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
         if self.done() and self.exception() is not None:
             out_state['exception'] = self.exception()
 
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 

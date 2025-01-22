@@ -16,6 +16,7 @@ from typing import (
     MutableSequence,
     Optional,
     Protocol,
+    Self,
     Sequence,
     Tuple,
     Type,
@@ -29,6 +30,7 @@ from plumpy.base.utils import call_with_super_check
 from plumpy.coordinator import Coordinator
 from plumpy.event_helper import EventHelper
 from plumpy.exceptions import InvalidStateError
+from plumpy.loaders import ObjectLoader
 from plumpy.persistence import LoadSaveContext, Savable, auto_persist, auto_save, ensure_object_loader
 from plumpy.process_listener import ProcessListener
 
@@ -154,14 +156,14 @@ class WorkChain(processes.Process):
         super().on_create()
         self._stepper = self.spec().get_outline().create_stepper(self)
 
-    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
         """
         Ask the process to save its current instance state.
 
         :param out_state: A bundle to save the state to
         :param save_context: The save context
         """
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         if isinstance(self._state, persistence.Savable):
             out_state['_state'] = self._state.save()
@@ -190,7 +192,7 @@ class WorkChain(processes.Process):
         cls,
         saved_state: SAVED_STATE_TYPE,
         load_context: Optional[persistence.LoadSaveContext] = None,
-    ) -> WorkChain:
+    ) -> Self:
         """Recreate a workchain from a saved state, passing any positional
 
         :param saved_state: The saved state to load from
@@ -348,8 +350,8 @@ class _FunctionStepper:
         self._workchain = workchain
         self._fn = fn
 
-    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, loader)
         out_state['_fn'] = self._fn.__name__
 
         return out_state
@@ -357,7 +359,7 @@ class _FunctionStepper:
     @classmethod
     def recreate_from(
         cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext] = None
-    ) -> 'Savable':
+    ) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -439,15 +441,15 @@ class _BlockStepper:
     def finished(self) -> bool:
         return self._pos == len(self._block)
 
-    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, loader)
         if self._child_stepper is not None and isinstance(self._child_stepper, Savable):
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -593,15 +595,15 @@ class _IfStepper:
     def finished(self) -> bool:
         return self._pos == len(self._if_instruction)
 
-    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, loader)
         if self._child_stepper is not None and isinstance(self._child_stepper, Savable):
             out_state[STEPPER_STATE] = self._child_stepper.save()
 
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -702,8 +704,8 @@ class _WhileStepper:
 
         return False, result
 
-    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, loader)
 
         if self._child_stepper is not None:
             out_state[STEPPER_STATE] = self._child_stepper.save()
@@ -713,7 +715,7 @@ class _WhileStepper:
     @classmethod
     def recreate_from(
         cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext] = None
-    ) -> 'Savable':
+    ) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 

@@ -24,6 +24,7 @@ import yaml
 from typing_extensions import override
 from yaml.loader import Loader
 
+from plumpy.loaders import ObjectLoader
 from plumpy.message import MessageBuilder, MessageType
 from plumpy.persistence import ensure_object_loader
 
@@ -103,8 +104,8 @@ class Command:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
@@ -153,8 +154,8 @@ class Continue(Command):
         self.kwargs = kwargs
 
     @override
-    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, loader)
         out_state[self.CONTINUE_FN] = self.continue_fn.__name__
 
         return out_state
@@ -218,8 +219,8 @@ class Created:
         self.args = args
         self.kwargs = kwargs
 
-    def save(self, save_context: LoadSaveContext | None = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
         out_state[self.RUN_FN] = self.run_fn.__name__
 
         return out_state
@@ -284,8 +285,8 @@ class Running:
         self.kwargs = kwargs
         self._run_handle = None
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         out_state[self.RUN_FN] = self.run_fn.__name__
         if self._command is not None:
@@ -427,8 +428,8 @@ class Waiting:
         self.data = data
         self._waiting_future: futures.Future = futures.Future()
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         if self.done_callback is not None:
             out_state[self.DONE_CALLBACK] = self.done_callback.__name__
@@ -530,8 +531,8 @@ class Excepted:
         exception = traceback.format_exception_only(type(self.exception) if self.exception else None, self.exception)[0]
         return super().__str__() + f'({exception})'
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         out_state[self.EXC_VALUE] = yaml.dump(self.exception)
         if self.traceback is not None:
@@ -613,8 +614,8 @@ class Finished:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
@@ -661,8 +662,8 @@ class Killed:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
