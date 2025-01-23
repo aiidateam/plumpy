@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional
+
+from plumpy.persistence import LoadSaveContext, Savable, auto_load, auto_save, ensure_object_loader
+from plumpy.utils import SAVED_STATE_TYPE
 
 from . import persistence
 
@@ -13,7 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @persistence.auto_persist('_listeners', '_listener_type')
-class EventHelper(persistence.Savable):
+class EventHelper:
     def __init__(self, listener_type: 'Type[ProcessListener]'):
         assert listener_type is not None, 'Must provide valid listener type'
 
@@ -29,6 +32,26 @@ class EventHelper(persistence.Savable):
 
     def remove_all_listeners(self) -> None:
         self._listeners.clear()
+
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Savable:
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = ensure_object_loader(load_context, saved_state)
+        obj = auto_load(cls, saved_state, load_context)
+        return obj
+
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
     @property
     def listeners(self) -> 'Set[ProcessListener]':

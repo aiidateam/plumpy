@@ -266,9 +266,17 @@ class StateMachine(metaclass=StateMachineMeta):
         return self.get_state_class(self.initial_state_label())(self, *args, **kwargs)
 
     @property
-    def state(self) -> Any:
+    def state(self) -> State | None:
         if self._state is None:
             return None
+        return self._state
+
+    @property
+    def state_label(self) -> Any:
+        if self._state is None:
+            return None
+        # XXX: should not use `.value` to access the printable output from LABEL
+        # LABEL as the ClassVar should have __str__
         return self._state.LABEL
 
     def add_state_event_callback(self, hook: Hashable, callback: EVENT_CALLBACK_TYPE) -> None:
@@ -306,7 +314,6 @@ class StateMachine(metaclass=StateMachineMeta):
         The arguments are passed to the state class to create state instance.
         (process arg does not need to pass since it will always call with 'self' as process)
         """
-        print(f'try: {self._state} -> {new_state}')
         assert not self._transitioning, 'Cannot call transition_to when already transitioning state'
 
         if new_state is None:
@@ -314,7 +321,7 @@ class StateMachine(metaclass=StateMachineMeta):
             # it can happened when transit from terminal state
             return None
 
-        initial_state_label = self._state.LABEL if self._state is not None else None
+        initial_state_label = self.state_label
         label = None
         try:
             self._transitioning = True

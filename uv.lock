@@ -1862,6 +1862,7 @@ dependencies = [
     { name = "kiwipy", extra = ["rmq"] },
     { name = "nest-asyncio" },
     { name = "pyyaml" },
+    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -1913,6 +1914,7 @@ requires-dist = [
     { name = "sphinx", marker = "extra == 'docs'", specifier = "~=3.2.0" },
     { name = "sphinx-book-theme", marker = "extra == 'docs'", specifier = "~=0.0.39" },
     { name = "types-pyyaml", marker = "extra == 'pre-commit'" },
+    { name = "typing-extensions", specifier = "~=4.12" },
 ]
 
 [[package]]

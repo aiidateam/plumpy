@@ -5,16 +5,38 @@ import unittest
 import yaml
 
 import plumpy
+from plumpy.persistence import auto_load, auto_persist, auto_save, ensure_object_loader
+from plumpy.utils import SAVED_STATE_TYPE
 
 from . import utils
 
 
-class SaveEmpty(plumpy.Savable):
-    pass
+@auto_persist()
+class SaveEmpty:
+
+    @classmethod
+    def recreate_from(cls, saved_state, load_context=None):
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = ensure_object_loader(load_context, saved_state)
+        obj = auto_load(cls, saved_state, load_context)
+        return obj
+
+    def save(self, save_context=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
 
 @plumpy.auto_persist('test', 'test_method')
-class Save1(plumpy.Savable):
+class Save1:
     def __init__(self):
         self.test = 'sup yp'
         self.test_method = self.m
@@ -22,11 +44,51 @@ class Save1(plumpy.Savable):
     def m():
         pass
 
+    @classmethod
+    def recreate_from(cls, saved_state, load_context=None):
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = ensure_object_loader(load_context, saved_state)
+        obj = auto_load(cls, saved_state, load_context)
+        return obj
+
+    def save(self, save_context=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
+
 
 @plumpy.auto_persist('test')
-class Save(plumpy.Savable):
+class Save:
     def __init__(self):
         self.test = Save1()
+
+    @classmethod
+    def recreate_from(cls, saved_state, load_context=None):
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = ensure_object_loader(load_context, saved_state)
+        obj = auto_load(cls, saved_state, load_context)
+        return obj
+
+    def save(self, save_context=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
 
 class TestSavable(unittest.TestCase):

@@ -2,15 +2,21 @@
 import abc
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
+from plumpy.persistence import LoadSaveContext, auto_save, ensure_object_loader
+
 from . import persistence
-from .utils import SAVED_STATE_TYPE, protected
+from .utils import SAVED_STATE_TYPE
 
 if TYPE_CHECKING:
+    from plumpy.persistence import Savable
+
     from .processes import Process
+
+# FIXME: test any process listener is a savable
 
 
 @persistence.auto_persist('_params')
-class ProcessListener(persistence.Savable, metaclass=abc.ABCMeta):
+class ProcessListener(metaclass=abc.ABCMeta):
     # region Persistence methods
 
     def __init__(self) -> None:
@@ -20,12 +26,26 @@ class ProcessListener(persistence.Savable, metaclass=abc.ABCMeta):
     def init(self, **kwargs: Any) -> None:
         self._params = kwargs
 
-    @protected
-    def load_instance_state(
-        self, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext]
-    ) -> None:
-        super().load_instance_state(saved_state, load_context)
-        self.init(**saved_state['_params'])
+    @classmethod
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+        """
+        Recreate a :class:`Savable` from a saved state using an optional load context.
+
+        :param saved_state: The saved state
+        :param load_context: An optional load context
+
+        :return: The recreated instance
+
+        """
+        load_context = ensure_object_loader(load_context, saved_state)
+        obj = cls.__new__(cls)
+        obj.init(**saved_state['_params'])
+        return obj
+
+    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+
+        return out_state
 
     # endregion
 
