@@ -3,7 +3,7 @@
 
 import asyncio
 import sys
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Dict, Sequence
 
 if TYPE_CHECKING:
     from .processes import Process
@@ -22,7 +22,7 @@ def new_event_loop(*args: Any, **kwargs: Any) -> asyncio.AbstractEventLoop:
 class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
     """Custom event policy that always returns the same event loop that is made reentrant by ``nest_asyncio``."""
 
-    _loop: Optional[asyncio.AbstractEventLoop] = None
+    _loop: asyncio.AbstractEventLoop | None = None
 
     def get_event_loop(self) -> asyncio.AbstractEventLoop:
         """Return the patched event loop."""
@@ -55,7 +55,7 @@ def reset_event_loop_policy() -> None:
     asyncio.set_event_loop_policy(None)
 
 
-def run_until_complete(future: asyncio.Future, loop: Optional[asyncio.AbstractEventLoop] = None) -> Any:
+def run_until_complete(future: asyncio.Future, loop: asyncio.AbstractEventLoop | None = None) -> Any:
     loop = loop or get_event_loop()
     return loop.run_until_complete(future)
 

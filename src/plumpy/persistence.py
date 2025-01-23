@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
 
 import abc
 import asyncio
@@ -10,16 +9,12 @@ import fnmatch
 import inspect
 import os
 import pickle
+from collections.abc import Generator, Iterable
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
     ClassVar,
-    Dict,
-    Generator,
-    Iterable,
-    List,
-    Optional,
     Protocol,
     TypeVar,
     runtime_checkable,
@@ -38,7 +33,7 @@ if TYPE_CHECKING:
 
 
 class LoadSaveContext:
-    def __init__(self, loader: Optional[loaders.ObjectLoader] = None, **kwargs: Any) -> None:
+    def __init__(self, loader: loaders.ObjectLoader | None = None, **kwargs: Any) -> None:
         self._values = dict(**kwargs)
         self.loader = loader
 
@@ -134,7 +129,7 @@ yaml.add_constructor(_BUNDLE_TAG, _bundle_constructor)  # type: ignore[arg-type]
 
 class Persister(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def save_checkpoint(self, process: 'Process', tag: Optional[str] = None) -> None:
+    def save_checkpoint(self, process: 'Process', tag: str | None = None) -> None:
         """
         Persist a Process instance
 
@@ -145,7 +140,7 @@ class Persister(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def load_checkpoint(self, pid: PID_TYPE, tag: Optional[str] = None) -> Bundle:
+    def load_checkpoint(self, pid: PID_TYPE, tag: str | None = None) -> Bundle:
         """
         Load a process from a persisted checkpoint by its process id
 
@@ -158,7 +153,7 @@ class Persister(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def get_checkpoints(self) -> List[PersistedCheckpoint]:
+    def get_checkpoints(self) -> list[PersistedCheckpoint]:
         """
         Return a list of all the current persisted process checkpoints
         with each element containing the process id and optional checkpoint tag
@@ -167,7 +162,7 @@ class Persister(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def get_process_checkpoints(self, pid: PID_TYPE) -> List[PersistedCheckpoint]:
+    def get_process_checkpoints(self, pid: PID_TYPE) -> list[PersistedCheckpoint]:
         """
         Return a list of all the current persisted process checkpoints for the
         specified process with each element containing the process id and
@@ -178,7 +173,7 @@ class Persister(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def delete_checkpoint(self, pid: PID_TYPE, tag: Optional[str] = None) -> None:
+    def delete_checkpoint(self, pid: PID_TYPE, tag: str | None = None) -> None:
         """
         Delete a persisted process checkpoint. No error will be raised if
         the checkpoint does not exist
@@ -251,7 +246,7 @@ class PicklePersister(Persister):
         return persisted_pickle
 
     @staticmethod
-    def pickle_filename(pid: PID_TYPE, tag: Optional[str] = None) -> str:
+    def pickle_filename(pid: PID_TYPE, tag: str | None = None) -> str:
         """
         Returns the relative filepath of the pickle for the given process id
         and optional checkpoint tag
@@ -263,14 +258,14 @@ class PicklePersister(Persister):
 
         return filename
 
-    def _pickle_filepath(self, pid: PID_TYPE, tag: Optional[str] = None) -> str:
+    def _pickle_filepath(self, pid: PID_TYPE, tag: str | None = None) -> str:
         """
         Returns the full filepath of the pickle for the given process id
         and optional checkpoint tag
         """
         return os.path.join(self._pickle_directory, PicklePersister.pickle_filename(pid, tag))
 
-    def save_checkpoint(self, process: 'Process', tag: Optional[str] = None) -> None:
+    def save_checkpoint(self, process: 'Process', tag: str | None = None) -> None:
         """
         Persist a process to a pickle on disk
 
@@ -285,7 +280,7 @@ class PicklePersister(Persister):
         with open(self._pickle_filepath(process.pid, tag), 'w+b') as handle:
             pickle.dump(persisted_pickle, handle)
 
-    def load_checkpoint(self, pid: PID_TYPE, tag: Optional[str] = None) -> Bundle:
+    def load_checkpoint(self, pid: PID_TYPE, tag: str | None = None) -> Bundle:
         """
         Load a process from a persisted checkpoint by its process id
 
@@ -300,7 +295,7 @@ class PicklePersister(Persister):
 
         return checkpoint.bundle
 
-    def get_checkpoints(self) -> List[PersistedCheckpoint]:
+    def get_checkpoints(self) -> list[PersistedCheckpoint]:
         """
         Return a list of all the current persisted process checkpoints
         with each element containing the process id and optional checkpoint tag
@@ -318,7 +313,7 @@ class PicklePersister(Persister):
 
         return checkpoints
 
-    def get_process_checkpoints(self, pid: PID_TYPE) -> List[PersistedCheckpoint]:
+    def get_process_checkpoints(self, pid: PID_TYPE) -> list[PersistedCheckpoint]:
         """
         Return a list of all the current persisted process checkpoints for the
         specified process with each element containing the process id and
@@ -329,7 +324,7 @@ class PicklePersister(Persister):
         """
         return [c for c in self.get_checkpoints() if c.pid == pid]
 
-    def delete_checkpoint(self, pid: PID_TYPE, tag: Optional[str] = None) -> None:
+    def delete_checkpoint(self, pid: PID_TYPE, tag: str | None = None) -> None:
         """
         Delete a persisted process checkpoint. No error will be raised if
         the checkpoint does not exist
@@ -358,26 +353,26 @@ class PicklePersister(Persister):
 class InMemoryPersister(Persister):
     """Mainly to be used in testing/debugging"""
 
-    def __init__(self, loader: Optional[loaders.ObjectLoader] = None) -> None:
+    def __init__(self, loader: loaders.ObjectLoader | None = None) -> None:
         super().__init__()
-        self._checkpoints: Dict[PID_TYPE, Dict[Optional[str], Bundle]] = {}
+        self._checkpoints: dict[PID_TYPE, dict[str | None, Bundle]] = {}
         self._save_context = LoadSaveContext(loader=loader)
 
-    def save_checkpoint(self, process: 'Process', tag: Optional[str] = None) -> None:
+    def save_checkpoint(self, process: 'Process', tag: str | None = None) -> None:
         self._checkpoints.setdefault(process.pid, {})[tag] = Bundle(
             process, self._save_context.loader, dereference=True
         )
 
-    def load_checkpoint(self, pid: PID_TYPE, tag: Optional[str] = None) -> Bundle:
+    def load_checkpoint(self, pid: PID_TYPE, tag: str | None = None) -> Bundle:
         return self._checkpoints[pid][tag]
 
-    def get_checkpoints(self) -> List[PersistedCheckpoint]:
+    def get_checkpoints(self) -> list[PersistedCheckpoint]:
         cps = []
         for pid in self._checkpoints:
             cps.extend(self.get_process_checkpoints(pid))
         return cps
 
-    def get_process_checkpoints(self, pid: PID_TYPE) -> List[PersistedCheckpoint]:
+    def get_process_checkpoints(self, pid: PID_TYPE) -> list[PersistedCheckpoint]:
         cps = []
         try:
             for tag, _ in self._checkpoints[pid].items():
@@ -386,7 +381,7 @@ class InMemoryPersister(Persister):
             pass
         return cps
 
-    def delete_checkpoint(self, pid: PID_TYPE, tag: Optional[str] = None) -> None:
+    def delete_checkpoint(self, pid: PID_TYPE, tag: str | None = None) -> None:
         try:
             del self._checkpoints[pid][tag]
         except KeyError:
@@ -397,7 +392,7 @@ class InMemoryPersister(Persister):
             del self._checkpoints[pid]
 
 
-def ensure_object_loader(context: Optional['LoadSaveContext'], saved_state: SAVED_STATE_TYPE) -> 'LoadSaveContext':
+def ensure_object_loader(context: LoadSaveContext | None, saved_state: SAVED_STATE_TYPE) -> 'LoadSaveContext':
     """
     Given a LoadSaveContext this method will ensure that it has a valid class loader
     using the following priorities:
@@ -453,7 +448,7 @@ class SaveUtil:
             raise ValueError(f"Unknown meta key '{name}'")
 
     @staticmethod
-    def get_create_meta(out_state: SAVED_STATE_TYPE) -> Dict[str, Any]:
+    def get_create_meta(out_state: SAVED_STATE_TYPE) -> dict[str, Any]:
         return out_state.setdefault(META, {})
 
     @staticmethod
@@ -605,7 +600,7 @@ class SavableFuture(futures.Future):
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 

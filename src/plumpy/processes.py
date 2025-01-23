@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
 
-from __future__ import annotations
-
 import abc
 import asyncio
 import concurrent.futures
@@ -16,22 +14,14 @@ import sys
 import time
 import uuid
 import warnings
+from collections.abc import Awaitable, Generator, Sequence
 from types import TracebackType
 from typing import (
     Any,
-    Awaitable,
     Callable,
     ClassVar,
-    Dict,
-    Generator,
     Hashable,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
     cast,
 )
 
@@ -161,18 +151,18 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
     _spec_class = ProcessSpec
     # Default placeholders, will be populated in init()
     _stepping = False
-    _pausing: Optional[CancellableAction] = None
-    _paused: Optional[persistence.SavableFuture] = None
-    _killing: Optional[CancellableAction] = None
-    _interrupt_action: Optional[CancellableAction] = None
+    _pausing: CancellableAction | None = None
+    _paused: persistence.SavableFuture | None = None
+    _killing: CancellableAction | None = None
+    _interrupt_action: CancellableAction | None = None
     _closed = False
-    _cleanups: Optional[List[Callable[[], None]]] = None
+    _cleanups: list[Callable[[], None]] | None = None
 
     __called: bool = False
     _auto_persist: ClassVar[set[str]]
 
     @classmethod
-    def current(cls) -> Optional['Process']:
+    def current(cls) -> 'Process | None':
         """
         Get the currently running process i.e. the one at the top of the stack
 
@@ -185,7 +175,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         return None
 
     @classmethod
-    def get_states(cls) -> Sequence[Type[state_machine.State]]:
+    def get_states(cls) -> Sequence[type[state_machine.State]]:
         """Return all allowed states of the process."""
         state_classes = cls.get_state_classes()
         return (
@@ -194,7 +184,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         )
 
     @classmethod
-    def get_state_classes(cls) -> dict[process_states.ProcessState, Type[state_machine.State]]:
+    def get_state_classes(cls) -> dict[process_states.ProcessState, type[state_machine.State]]:
         # A mapping of the State constants to the corresponding state class
         return {
             process_states.ProcessState.CREATED: process_states.Created,
@@ -238,14 +228,14 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         cls.__called = True
 
     @classmethod
-    def get_description(cls) -> Dict[str, Any]:
+    def get_description(cls) -> dict[str, Any]:
         """
         Get a human readable description of what this :class:`Process` does.
 
         :return: The description.
 
         """
-        description: Dict[str, Any] = {}
+        description: dict[str, Any] = {}
 
         if cls.__doc__:
             description['description'] = cls.__doc__.strip()
@@ -260,7 +250,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
     def recreate_from(
         cls,
         saved_state: SAVED_STATE_TYPE,
-        load_context: Optional[persistence.LoadSaveContext] = None,
+        load_context: persistence.LoadSaveContext | None = None,
     ) -> Self:
         """Recreate a process from a saved state, passing any positional
 
@@ -329,11 +319,11 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
     def __init__(
         self,
-        inputs: Optional[dict] = None,
-        pid: Optional[PID_TYPE] = None,
-        logger: Optional[logging.Logger] = None,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
-        coordinator: Optional[Coordinator] = None,
+        inputs: dict | None = None,
+        pid: PID_TYPE | None = None,
+        logger: logging.Logger | None = None,
+        loop: asyncio.AbstractEventLoop | None = None,
+        coordinator: Coordinator | None = None,
     ) -> None:
         """
         The signature of the constructor should not be changed by subclassing processes.
@@ -354,8 +344,8 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
         self._setup_event_hooks()
 
-        self._status: Optional[str] = None  # May hold a current status message
-        self._pre_paused_status: Optional[str] = (
+        self._status: str | None = None  # May hold a current status message
+        self._pre_paused_status: str | None = (
             None  # Save status when a pause message replaces it, such that it can be restored
         )
         self._paused = None
@@ -363,10 +353,10 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         # Input/output
         self._raw_inputs = None if inputs is None else utils.AttributesFrozendict(inputs)
         self._pid = pid
-        self._parsed_inputs: Optional[utils.AttributesFrozendict] = None
-        self._outputs: Dict[str, Any] = {}
-        self._uuid: Optional[uuid.UUID] = None
-        self._creation_time: Optional[float] = None
+        self._parsed_inputs: utils.AttributesFrozendict | None = None
+        self._outputs: dict[str, Any] = {}
+        self._uuid: uuid.UUID | None = None
+        self._creation_time: float | None = None
 
         # Runtime variables
         self._future = persistence.SavableFuture(loop=self._loop)
@@ -421,7 +411,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
                 cast(state_machine.State, state)
             ),
             state_machine.StateEventHook.ENTERED_STATE: lambda _s, _h, from_state: self.on_entered(
-                cast(Optional[state_machine.State], from_state)
+                cast(state_machine.State | None, from_state)
             ),
             state_machine.StateEventHook.EXITING_STATE: lambda _s, _h, _state: self.on_exiting(),
         }
@@ -429,7 +419,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
             self.add_state_event_callback(hook, callback)
 
     @property
-    def creation_time(self) -> Optional[float]:
+    def creation_time(self) -> float | None:
         """
         The creation time of this Process as returned by time.time() when instantiated
         :return: The creation time
@@ -437,27 +427,27 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         return self._creation_time
 
     @property
-    def pid(self) -> Optional[PID_TYPE]:
+    def pid(self) -> PID_TYPE | None:
         """Return the pid of the process."""
         return self._pid
 
     @property
-    def uuid(self) -> Optional[uuid.UUID]:
+    def uuid(self) -> uuid.UUID | None:
         """Return the UUID of the process"""
         return self._uuid
 
     @property
-    def raw_inputs(self) -> Optional[utils.AttributesFrozendict]:
+    def raw_inputs(self) -> utils.AttributesFrozendict | None:
         """The `AttributesFrozendict` of inputs (if not None)."""
         return self._raw_inputs
 
     @property
-    def inputs(self) -> Optional[utils.AttributesFrozendict]:
+    def inputs(self) -> utils.AttributesFrozendict | None:
         """Return the parsed inputs."""
         return self._parsed_inputs
 
     @property
-    def outputs(self) -> Dict[str, Any]:
+    def outputs(self) -> dict[str, Any]:
         """
         Get the current outputs emitted by the Process.  These may grow over
         time as the process runs.
@@ -482,11 +472,11 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         return _LOGGER
 
     @property
-    def status(self) -> Optional[str]:
+    def status(self) -> str | None:
         """Return the status massage of the process."""
         return self._status
 
-    def set_status(self, status: Optional[str]) -> None:
+    def set_status(self, status: str | None) -> None:
         """Set the status message of the process."""
         self._status = status
 
@@ -505,10 +495,10 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
     @ensure_not_closed
     def launch(
         self,
-        process_class: Type['Process'],
-        inputs: Optional[dict] = None,
-        pid: Optional[PID_TYPE] = None,
-        logger: Optional[logging.Logger] = None,
+        process_class: type['Process'],
+        inputs: dict | None = None,
+        pid: PID_TYPE | None = None,
+        logger: logging.Logger | None = None,
     ) -> 'Process':
         """Start running the nested process.
 
@@ -574,14 +564,14 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         """Return whether the process is killed."""
         return self.state_label == process_states.ProcessState.KILLED
 
-    def killed_msg(self) -> Optional[MessageType]:
+    def killed_msg(self) -> MessageType | None:
         """Return the killed message."""
         if isinstance(self.state, process_states.Killed):
             return self.state.msg
 
         raise exceptions.InvalidStateError('Has not been killed')
 
-    def exception(self) -> Optional[BaseException]:
+    def exception(self) -> BaseException | None:
         """Return exception, if the process is terminated in excepted state."""
         if isinstance(self.state, process_states.Excepted):
             return self.state.exception
@@ -628,8 +618,8 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
     def callback_excepted(
         self,
         _callback: Callable[..., Any],
-        exception: Optional[BaseException],
-        trace: Optional[TracebackType],
+        exception: BaseException | None,
+        trace: TracebackType | None,
     ) -> None:
         if self.state_label != process_states.ProcessState.EXCEPTED:
             self.fail(exception, trace)
@@ -741,7 +731,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         elif state_label == process_states.ProcessState.EXCEPTED:
             call_with_super_check(self.on_except, state.get_exc_info())  # type: ignore
 
-    def on_entered(self, from_state: Optional[state_machine.State]) -> None:
+    def on_entered(self, from_state: state_machine.State | None) -> None:
         # Map these onto direct functions that the subclass can implement
         state_label = self.state_label
         if state_label == process_states.ProcessState.RUNNING:
@@ -841,11 +831,11 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         self._fire_event(ProcessListener.on_process_waiting)
 
     @super_check
-    def on_pausing(self, msg: Optional[str] = None) -> None:
+    def on_pausing(self, msg: str | None = None) -> None:
         """The process is being paused."""
 
     @super_check
-    def on_paused(self, msg: Optional[str] = None) -> None:
+    def on_paused(self, msg: str | None = None) -> None:
         """The process was paused."""
         self._pausing = None
 
@@ -890,7 +880,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         self._fire_event(ProcessListener.on_process_finished, self.future().result())
 
     @super_check
-    def on_except(self, exc_info: Tuple[Any, Exception, TracebackType]) -> None:
+    def on_except(self, exc_info: tuple[Any, Exception, TracebackType]) -> None:
         """Entering the EXCEPTED state."""
         exception = exc_info[1]
         exception.__traceback__ = exc_info[2]
@@ -909,7 +899,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         self._fire_event(ProcessListener.on_process_excepted, str(self.future().exception()))
 
     @super_check
-    def on_kill(self, msg: Optional[MessageType]) -> None:
+    def on_kill(self, msg: MessageType | None) -> None:
         """Entering the KILLED state."""
         if msg is None:
             msg_txt = ''
@@ -979,7 +969,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         if intent == message.Intent.KILL:
             return self._schedule_rpc(self.kill, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
         if intent == message.Intent.STATUS:
-            status_info: Dict[str, Any] = {}
+            status_info: dict[str, Any] = {}
             self.get_status_info(status_info)
             return status_info
 
@@ -988,7 +978,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
     def broadcast_receive(
         self, _comm: Coordinator, msg: MessageType, sender: Any, subject: Any, correlation_id: Any
-    ) -> Optional[concurrent.futures.Future]:
+    ) -> concurrent.futures.Future | None:
         """
         Coroutine called when the process receives a message from the communicator
 
@@ -1115,7 +1105,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         new_state = create_state(self, process_states.ProcessState.EXCEPTED, exception=exception, traceback=trace)
         self.transition_to(new_state)
 
-    def pause(self, msg_text: str | None = None) -> Union[bool, CancellableAction]:
+    def pause(self, msg_text: str | None = None) -> bool | CancellableAction:
         """Pause the process.
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
@@ -1158,7 +1148,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
     def _interrupt(state: Interruptable, reason: Exception) -> None:
         state.interrupt(reason)
 
-    def _do_pause(self, state_msg: Optional[MessageType], next_state: Optional[state_machine.State] = None) -> bool:
+    def _do_pause(self, state_msg: MessageType | None, next_state: state_machine.State | None = None) -> bool:
         """Carry out the pause procedure, optionally transitioning to the next state first"""
         try:
             if next_state is not None:
@@ -1204,7 +1194,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
         raise ValueError(f"Got unknown interruption type '{type(exception)}'")
 
-    def _set_interrupt_action(self, new_action: Optional[CancellableAction]) -> None:
+    def _set_interrupt_action(self, new_action: CancellableAction | None) -> None:
         """
         Set the interrupt action cancelling the current one if it exists
         :param new_action: The new interrupt action to set
@@ -1241,7 +1231,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         return self.state.resume(*args)  # type: ignore
 
     @event(to_states=process_states.Excepted)
-    def fail(self, exception: Optional[BaseException], traceback: Optional[TracebackType]) -> None:
+    def fail(self, exception: BaseException | None, traceback: TracebackType | None) -> None:
         """
         Fail the process in response to an exception
         :param exception: The exception that caused the failure
@@ -1251,7 +1241,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         new_state = create_state(self, process_states.ProcessState.EXCEPTED, exception=exception, traceback=traceback)
         self.transition_to(new_state)
 
-    def kill(self, msg_text: Optional[str] = None) -> Union[bool, asyncio.Future]:
+    def kill(self, msg_text: str | None = None) -> bool | asyncio.Future:
         """
         Kill the process
         :param msg: An optional kill message
@@ -1318,7 +1308,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         """
 
     @ensure_not_closed
-    def execute(self) -> Optional[Dict[str, Any]]:
+    def execute(self) -> dict[str, Any] | None:
         """
         Execute the process.  This will return if the process terminates or is paused.
 

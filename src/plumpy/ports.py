@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """Module for process ports"""
 
-import collections
 import copy
 import inspect
 import json
 import logging
 import warnings
-from typing import Any, Callable, Dict, Iterator, List, Mapping, MutableMapping, Optional, Sequence, Type, Union, cast
+from collections.abc import Iterator, Mapping, MutableMapping, Sequence
+from typing import Any, Callable, cast
 
 from plumpy.utils import AttributesFrozendict, is_mutable_property, type_check
 
@@ -18,7 +18,7 @@ VALIDATOR_SIGNATURE_DEPRECATION_WARNING = """the validator `{}` has a signature 
     This has been deprecated and the new signature is `validator(value, port)` where the `port` argument will be the
     port instance to which the validator has been assigned."""
 
-VALIDATOR_TYPE = Callable[[Any, 'Port'], Optional[str]]
+VALIDATOR_TYPE = Callable[[Any, 'Port'], str | None]
 
 
 class PortValidationError(Exception):
@@ -64,10 +64,10 @@ class Port:
     def __init__(
         self,
         name: str,
-        valid_type: Optional[Type[Any]] = None,
-        help: Optional[str] = None,
+        valid_type: type[Any] | None = None,
+        help: str | None = None,
         required: bool = True,
-        validator: Optional[VALIDATOR_TYPE] = None,
+        validator: VALIDATOR_TYPE | None = None,
     ) -> None:
         self._name = name
         self._valid_type = valid_type
@@ -83,7 +83,7 @@ class Port:
         """
         return json.dumps(self.get_description())
 
-    def get_description(self) -> Dict[str, Any]:
+    def get_description(self) -> dict[str, Any]:
         """Return a description of the Port, which will be a dictionary of its attributes
 
         :returns: a dictionary of the stringified Port attributes
@@ -106,7 +106,7 @@ class Port:
         return self._name
 
     @property
-    def valid_type(self) -> Optional[Type[Any]]:
+    def valid_type(self) -> type[Any] | None:
         """Get the valid value type for this port if one is specified
 
         :return: the value value type
@@ -115,7 +115,7 @@ class Port:
         return self._valid_type
 
     @valid_type.setter
-    def valid_type(self, valid_type: Optional[Type[Any]]) -> None:
+    def valid_type(self, valid_type: type[Any] | None) -> None:
         """Set the valid value type for this port
 
         :param valid_type: the value valid type
@@ -124,7 +124,7 @@ class Port:
         self._valid_type = valid_type
 
     @property
-    def help(self) -> Optional[str]:
+    def help(self) -> str | None:
         """Get the help string for this port
 
         :return: the help string
@@ -133,7 +133,7 @@ class Port:
         return self._help
 
     @help.setter
-    def help(self, help: Optional[str]) -> None:
+    def help(self, help: str | None) -> None:
         """Set the help string for this port
 
         :param help: the help string
@@ -160,16 +160,15 @@ class Port:
         self._required = required
 
     @property
-    def validator(self) -> Optional[VALIDATOR_TYPE]:
+    def validator(self) -> VALIDATOR_TYPE | None:
         """Get the validator for this port
 
         :return: the validator
-        :rtype: typing.Callable[[typing.Any], typing.Tuple[bool, typing.Optional[str]]]
         """
         return self._validator
 
     @validator.setter
-    def validator(self, validator: Optional[VALIDATOR_TYPE]) -> None:
+    def validator(self, validator: VALIDATOR_TYPE | None) -> None:
         """Set the validator for this port
 
         :param validator: a validator function
@@ -177,7 +176,7 @@ class Port:
         """
         self._validator = validator
 
-    def validate(self, value: Any, breadcrumbs: Sequence[str] = ()) -> Optional[PortValidationError]:
+    def validate(self, value: Any, breadcrumbs: Sequence[str] = ()) -> PortValidationError | None:
         """Validate a value to see if it is valid for this port
 
         :param value: the value to check
@@ -231,11 +230,11 @@ class InputPort(Port):
     def __init__(
         self,
         name: str,
-        valid_type: Optional[Type[Any]] = None,
-        help: Optional[str] = None,
+        valid_type: type[Any] | None = None,
+        help: str | None = None,
         default: Any = UNSPECIFIED,
         required: bool = True,
-        validator: Optional[VALIDATOR_TYPE] = None,
+        validator: VALIDATOR_TYPE | None = None,
     ) -> None:
         super().__init__(
             name,
@@ -273,7 +272,7 @@ class InputPort(Port):
     def default(self, default: Any) -> None:
         self._default = default
 
-    def get_description(self) -> Dict[str, str]:
+    def get_description(self) -> dict[str, str]:
         """
         Return a description of the InputPort, which will be a dictionary of its attributes
 
@@ -291,7 +290,7 @@ class OutputPort(Port):
     pass
 
 
-class PortNamespace(collections.abc.MutableMapping, Port):
+class PortNamespace(MutableMapping, Port):
     """
     A container for Ports. Effectively it maintains a dictionary whose members are
     either a Port or yet another PortNamespace. This allows for the nesting of ports
@@ -302,10 +301,10 @@ class PortNamespace(collections.abc.MutableMapping, Port):
     def __init__(
         self,
         name: str = '',  # Note this was set to None, but that would fail if you tried to compute breadcrumbs
-        help: Optional[str] = None,
+        help: str | None = None,
         required: bool = True,
-        validator: Optional[VALIDATOR_TYPE] = None,
-        valid_type: Optional[Type[Any]] = None,
+        validator: VALIDATOR_TYPE | None = None,
+        valid_type: type[Any] | None = None,
         default: Any = UNSPECIFIED,
         dynamic: bool = False,
         populate_defaults: bool = True,
@@ -326,7 +325,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
             property is ignored and the population of defaults is always performed.
         """
         super().__init__(name=name, help=help, required=required, validator=validator, valid_type=valid_type)
-        self._ports: Dict[str, Union[Port, 'PortNamespace']] = {}
+        self._ports: dict[str, 'Port | PortNamespace'] = {}
         self.default = default
         self.populate_defaults = populate_defaults
         self.valid_type = valid_type
@@ -347,16 +346,16 @@ class PortNamespace(collections.abc.MutableMapping, Port):
     def __delitem__(self, key: str) -> None:
         del self._ports[key]
 
-    def __getitem__(self, key: str) -> Union[Port, 'PortNamespace']:
+    def __getitem__(self, key: str) -> 'Port | PortNamespace':
         return self._ports[key]
 
-    def __setitem__(self, key: str, port: Union[Port, 'PortNamespace']) -> None:
+    def __setitem__(self, key: str, port: 'Port | PortNamespace') -> None:
         if not isinstance(port, Port):
             raise TypeError('port needs to be an instance of Port')
         self._ports[key] = port
 
     @property
-    def ports(self) -> Dict[str, Union[Port, 'PortNamespace']]:
+    def ports(self) -> dict[str, 'Port | PortNamespace']:
         return self._ports
 
     def has_default(self) -> bool:
@@ -379,11 +378,11 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         self._dynamic = dynamic
 
     @property
-    def valid_type(self) -> Optional[Type[Any]]:
+    def valid_type(self) -> type[Any] | None:
         return super().valid_type
 
     @valid_type.setter
-    def valid_type(self, valid_type: Optional[Type[Any]]) -> None:
+    def valid_type(self, valid_type: type[Any] | None) -> None:
         """Set the `valid_type` for the `PortNamespace`.
 
         If the `valid_type` is None, the `dynamic` property will be set to `False`, in all other cases `dynamic` will be
@@ -404,7 +403,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
     def populate_defaults(self, populate_defaults: bool) -> None:
         self._populate_defaults = populate_defaults
 
-    def get_description(self) -> Dict[str, Dict[str, Any]]:
+    def get_description(self) -> dict[str, dict[str, Any]]:
         """
         Return a dictionary with a description of the ports this namespace contains
         Nested PortNamespaces will be properly recursed and Ports will print their properties in a list
@@ -426,7 +425,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
         return description
 
-    def get_port(self, name: str, create_dynamically: bool = False) -> Union[Port, 'PortNamespace']:
+    def get_port(self, name: str, create_dynamically: bool = False) -> 'Port | PortNamespace':
         """
         Retrieve a (namespaced) port from this PortNamespace. If any of the sub namespaces of the terminal
         port itself cannot be found, a ValueError will be raised
@@ -510,10 +509,10 @@ class PortNamespace(collections.abc.MutableMapping, Port):
     def absorb(
         self,
         port_namespace: 'PortNamespace',
-        exclude: Optional[Sequence[str]] = None,
-        include: Optional[Sequence[str]] = None,
-        namespace_options: Optional[Dict[str, Any]] = None,
-    ) -> List[str]:
+        exclude: Sequence[str] | None = None,
+        include: Sequence[str] | None = None,
+        namespace_options: dict[str, Any] | None = None,
+    ) -> list[str]:
         """Absorb another PortNamespace instance into oneself, including all its mutable properties and ports.
 
         Mutable properties of self will be overwritten with those of the port namespace that is to be absorbed.
@@ -611,8 +610,8 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         return result
 
     def validate(
-        self, port_values: Optional[Mapping[str, Any]] = None, breadcrumbs: Sequence[str] = ()
-    ) -> Optional[PortValidationError]:
+        self, port_values: Mapping[str, Any] | None = None, breadcrumbs: Sequence[str] = ()
+    ) -> PortValidationError | None:
         """
         Validate the namespace port itself and subsequently all the port_values it contains
 
@@ -622,12 +621,12 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         """
 
         breadcrumbs_local = (*breadcrumbs, self.name)
-        message: Optional[str]
+        message: str | None
 
         if not port_values:
             port_values = {}
 
-        if not isinstance(port_values, collections.abc.Mapping):
+        if not isinstance(port_values, Mapping):
             message = f'specified value is of type {type(port_values)} which is not sub class of `Mapping`'
             return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
 
@@ -706,7 +705,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
     def validate_ports(
         self, port_values: MutableMapping[str, Any], breadcrumbs: Sequence[str]
-    ) -> Optional[PortValidationError]:
+    ) -> PortValidationError | None:
         """
         Validate port values with respect to the explicitly defined ports of the port namespace.
         Ports values that are matched to an actual Port will be popped from the dictionary
@@ -725,7 +724,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
 
     def validate_dynamic_ports(
         self, port_values: MutableMapping[str, Any], breadcrumbs: Sequence[str] = ()
-    ) -> Optional[PortValidationError]:
+    ) -> PortValidationError | None:
         """
         Validate port values with respect to the dynamic properties of the port namespace. It will
         check if the namespace is actually dynamic and if all values adhere to the valid types of
@@ -736,7 +735,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         :param breadcrumbs: a tuple of the path to having reached this point in validation
         :type breadcrumbs: typing.Tuple[str]
         :return: if invalid returns a string with the reason for the validation failure, otherwise None
-        :rtype: typing.Optional[str]
+        :rtype: str | None
         """
         if port_values and not self.dynamic:
             msg = f'Unexpected ports {port_values}, for a non dynamic namespace'
@@ -757,7 +756,7 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         return None
 
     @staticmethod
-    def strip_namespace(namespace: str, separator: str, rules: Optional[Sequence[str]] = None) -> Optional[List[str]]:
+    def strip_namespace(namespace: str, separator: str, rules: Sequence[str] | None = None) -> list[str] | None:
         """Filter given exclude/include rules staring with namespace and strip the first level.
 
         For example if the namespace is `base` and the rules are::

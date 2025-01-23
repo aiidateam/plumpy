@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import abc
 import importlib
-from typing import Any, Optional
+from typing import Any
 
 
 class ObjectLoader(metaclass=abc.ABCMeta):
@@ -62,7 +62,7 @@ class DefaultObjectLoader(ObjectLoader):
         return identifier
 
 
-OBJECT_LOADER: Optional[ObjectLoader] = None
+OBJECT_LOADER: ObjectLoader | None = None
 
 
 def get_object_loader() -> ObjectLoader:
@@ -78,7 +78,7 @@ def get_object_loader() -> ObjectLoader:
     return OBJECT_LOADER
 
 
-def set_object_loader(loader: Optional[ObjectLoader]) -> None:
+def set_object_loader(loader: ObjectLoader | None) -> None:
     """
     Set the plumpy global object loader
 

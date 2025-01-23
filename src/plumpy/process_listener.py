@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 from typing_extensions import Self
 
@@ -22,13 +21,13 @@ class ProcessListener(metaclass=abc.ABCMeta):
 
     def __init__(self) -> None:
         super().__init__()
-        self._params: Dict[str, Any] = {}
+        self._params: dict[str, Any] = {}
 
     def init(self, **kwargs: Any) -> None:
         self._params = kwargs
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 

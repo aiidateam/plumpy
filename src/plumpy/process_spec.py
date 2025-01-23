@@ -2,14 +2,15 @@
 import collections
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Type, Union, cast
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, cast
 
 from .ports import InputPort, OutputPort, Port, PortNamespace
 
 if TYPE_CHECKING:
     from .processes import Process
 
-EXPOSED_TYPE = Dict[Optional[str], Dict[Type['Process'], Sequence[str]]]
+EXPOSED_TYPE = dict[str | None, dict[type['Process'], Sequence[str]]]
 
 
 class ProcessSpec:
@@ -68,7 +69,7 @@ class ProcessSpec:
         """
         return self._sealed
 
-    def get_description(self) -> Dict[str, Any]:
+    def get_description(self) -> dict[str, Any]:
         """
         Get a description of this process specification
 
@@ -101,7 +102,7 @@ class ProcessSpec:
         return cast(PortNamespace, self._ports[self.NAME_OUTPUTS_PORT_NAMESPACE])
 
     def _create_port(
-        self, port_namespace: PortNamespace, port_class: Type[Union[Port, PortNamespace]], name: str, **kwargs: Any
+        self, port_namespace: PortNamespace, port_class: type[Port | PortNamespace], name: str, **kwargs: Any
     ) -> None:
         """
         Create a new Port of a given class and name in a given PortNamespace
@@ -181,11 +182,11 @@ class ProcessSpec:
 
     def expose_inputs(
         self,
-        process_class: Type['Process'],
-        namespace: Optional[str] = None,
-        exclude: Optional[Sequence[str]] = None,
-        include: Optional[Sequence[str]] = None,
-        namespace_options: Optional[dict] = None,
+        process_class: type['Process'],
+        namespace: str | None = None,
+        exclude: Sequence[str] | None = None,
+        include: Sequence[str] | None = None,
+        namespace_options: dict | None = None,
     ) -> None:
         """
         This method allows one to automatically add the inputs from another Process to this ProcessSpec.
@@ -212,11 +213,11 @@ class ProcessSpec:
 
     def expose_outputs(
         self,
-        process_class: Type['Process'],
-        namespace: Optional[str] = None,
-        exclude: Optional[Sequence[str]] = None,
-        include: Optional[Sequence[str]] = None,
-        namespace_options: Optional[dict] = None,
+        process_class: type['Process'],
+        namespace: str | None = None,
+        exclude: Sequence[str] | None = None,
+        include: Sequence[str] | None = None,
+        namespace_options: dict | None = None,
     ) -> None:
         """
         This method allows one to automatically add the ouputs from another Process to this ProcessSpec.
@@ -243,14 +244,14 @@ class ProcessSpec:
 
     @staticmethod
     def _expose_ports(
-        process_class: Type['Process'],
+        process_class: type['Process'],
         source: PortNamespace,
         destination: PortNamespace,
         expose_memory: EXPOSED_TYPE,
-        namespace: Optional[str],
-        exclude: Optional[Sequence[str]],
-        include: Optional[Sequence[str]],
-        namespace_options: Optional[dict] = None,
+        namespace: str | None,
+        exclude: Sequence[str] | None,
+        include: Sequence[str] | None,
+        namespace_options: dict | None = None,
     ) -> None:
         """
         Expose ports from a source PortNamespace of the ProcessSpec of a Process class into the destination

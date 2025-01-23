@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 """Module for process level coordination functions and classes"""
 
-from __future__ import annotations
-
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, cast
 
 from plumpy.coordinator import Coordinator
 from plumpy.exceptions import PersistenceError, TaskRejectedError
@@ -48,7 +47,7 @@ CREATE_TASK = 'create'
 
 LOGGER = logging.getLogger(__name__)
 
-MessageType = Dict[str, Any]
+MessageType = dict[str, Any]
 
 
 class MessageBuilder:
@@ -90,12 +89,12 @@ class MessageBuilder:
 
 def create_launch_body(
     process_class: str,
-    init_args: Optional[Sequence[Any]] = None,
-    init_kwargs: Optional[Dict[str, Any]] = None,
+    init_args: Sequence[Any] | None = None,
+    init_kwargs: dict[str, Any] | None = None,
     persist: bool = False,
-    loader: Optional[loaders.ObjectLoader] = None,
+    loader: loaders.ObjectLoader | None = None,
     nowait: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a message body for the launch action
 
@@ -124,7 +123,7 @@ def create_launch_body(
     return msg_body
 
 
-def create_continue_body(pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False) -> Dict[str, Any]:
+def create_continue_body(pid: 'PID_TYPE', tag: str | None = None, nowait: bool = False) -> dict[str, Any]:
     """
     Create a message body to continue an existing process
     :param pid: the pid of the existing process
@@ -139,11 +138,11 @@ def create_continue_body(pid: 'PID_TYPE', tag: Optional[str] = None, nowait: boo
 
 def create_create_body(
     process_class: str,
-    init_args: Optional[Sequence[Any]] = None,
-    init_kwargs: Optional[Dict[str, Any]] = None,
+    init_args: Sequence[Any] | None = None,
+    init_kwargs: dict[str, Any] | None = None,
     persist: bool = False,
-    loader: Optional[loaders.ObjectLoader] = None,
-) -> Dict[str, Any]:
+    loader: loaders.ObjectLoader | None = None,
+) -> dict[str, Any]:
     """
     Create a message body to create a new process
     :param process_class: the class of the process to launch
@@ -196,10 +195,10 @@ class ProcessLauncher:
 
     def __init__(
         self,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
-        persister: Optional[persistence.Persister] = None,
-        load_context: Optional[persistence.LoadSaveContext] = None,
-        loader: Optional[loaders.ObjectLoader] = None,
+        loop: asyncio.AbstractEventLoop | None = None,
+        persister: persistence.Persister | None = None,
+        load_context: persistence.LoadSaveContext | None = None,
+        loader: loaders.ObjectLoader | None = None,
     ) -> None:
         self._loop = loop
         self._persister = persister
@@ -211,7 +210,7 @@ class ProcessLauncher:
         else:
             self._loader = loaders.get_object_loader()
 
-    async def __call__(self, coordinator: Coordinator, task: Dict[str, Any]) -> Union[PID_TYPE, Any]:
+    async def __call__(self, coordinator: Coordinator, task: dict[str, Any]) -> PID_TYPE | Any:
         """
         Receive a task.
         :param task: The task message
@@ -231,9 +230,9 @@ class ProcessLauncher:
         process_class: str,
         persist: bool,
         nowait: bool,
-        init_args: Optional[Sequence[Any]] = None,
-        init_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Union[PID_TYPE, Any]:
+        init_args: Sequence[Any] | None = None,
+        init_kwargs: dict[str, Any] | None = None,
+    ) -> PID_TYPE | Any:
         """
         Launch the process
 
@@ -266,7 +265,7 @@ class ProcessLauncher:
 
         return proc.future().result()
 
-    async def _continue(self, pid: 'PID_TYPE', nowait: bool, tag: Optional[str] = None) -> Union[PID_TYPE, Any]:
+    async def _continue(self, pid: 'PID_TYPE', nowait: bool, tag: str | None = None) -> PID_TYPE | Any:
         """
         Continue the process
 
@@ -295,8 +294,8 @@ class ProcessLauncher:
         self,
         process_class: str,
         persist: bool,
-        init_args: Optional[Sequence[Any]] = None,
-        init_kwargs: Optional[Dict[str, Any]] = None,
+        init_args: Sequence[Any] | None = None,
+        init_kwargs: dict[str, Any] | None = None,
     ) -> 'PID_TYPE':
         """
         Create the process
