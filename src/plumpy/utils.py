@@ -28,6 +28,7 @@ override = lang.override(check=check_override)
 
 _LOGGER = logging.getLogger(__name__)
 
+# FIXME: should be rename to SAVED_TYPE
 SAVED_STATE_TYPE = MutableMapping[str, Any]
 PID_TYPE = Hashable
 

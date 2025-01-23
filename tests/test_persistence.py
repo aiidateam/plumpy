@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from typing import Any
 import unittest
 
 import yaml
 
 import plumpy
+from plumpy.loaders import DefaultObjectLoader, ObjectLoader
 from plumpy.persistence import auto_load, auto_persist, auto_save, ensure_object_loader
 from plumpy.utils import SAVED_STATE_TYPE
 
 from . import utils
 
+# FIXME: test auto_load can precisely load auto_persist with nested items
+
 
 @auto_persist()
 class SaveEmpty:
-
     @classmethod
     def recreate_from(cls, saved_state, load_context=None):
         """
@@ -29,8 +32,8 @@ class SaveEmpty:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context=None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self)
 
         return out_state
 
@@ -59,8 +62,8 @@ class Save1:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context=None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
@@ -85,10 +88,18 @@ class Save:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context=None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader=None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
+
+
+class CustomObjectLoader(DefaultObjectLoader):
+    def load_object(self, identifier: str) -> Any:
+        return super().load_object(identifier)
+
+    def identify_object(self, obj: Any) -> str:
+        return super().identify_object(obj)
 
 
 class TestSavable(unittest.TestCase):
@@ -120,7 +131,7 @@ class TestSavable(unittest.TestCase):
 
     def _save_round_trip_with_loader(self, savable):
         """
-        Do a round trip:
+        Do a round trip, use a custom loader:
         1) Save `savables` state
         2) Recreate from the saved state
         3) Save the state of the recreated `Savable`
@@ -128,10 +139,10 @@ class TestSavable(unittest.TestCase):
 
         :type savable: :class:`plumpy.Savable`
         """
-        object_loader = plumpy.get_object_loader()
-        saved_state1 = savable.save(plumpy.LoadSaveContext(object_loader))
+        object_loader = CustomObjectLoader()
+        saved_state1 = savable.save(object_loader)
         loaded = savable.recreate_from(saved_state1)
-        saved_state2 = loaded.save(plumpy.LoadSaveContext(object_loader))
+        saved_state2 = loaded.save(object_loader)
         saved_state3 = loaded.save()
         self.assertDictEqual(saved_state1, saved_state2)
         self.assertNotEqual(saved_state1, saved_state3)

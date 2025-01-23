@@ -1,27 +1,31 @@
 # -*- coding: utf-8 -*-
-import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from __future__ import annotations
 
-from plumpy.persistence import LoadSaveContext, Savable, auto_load, auto_save, ensure_object_loader
+import logging
+from typing import TYPE_CHECKING, Any, Callable, Optional, final
+
+from typing_extensions import Self
+
+from plumpy.loaders import ObjectLoader
+from plumpy.persistence import LoadSaveContext, auto_load, auto_save, ensure_object_loader
 from plumpy.utils import SAVED_STATE_TYPE
 
 from . import persistence
 
 if TYPE_CHECKING:
-    from typing import Set, Type
-
     from .process_listener import ProcessListener
 
 _LOGGER = logging.getLogger(__name__)
 
 
+@final
 @persistence.auto_persist('_listeners', '_listener_type')
 class EventHelper:
-    def __init__(self, listener_type: 'Type[ProcessListener]'):
+    def __init__(self, listener_type: 'type[ProcessListener]'):
         assert listener_type is not None, 'Must provide valid listener type'
 
         self._listener_type = listener_type
-        self._listeners: 'Set[ProcessListener]' = set()
+        self._listeners: 'set[ProcessListener]' = set()
 
     def add_listener(self, listener: 'ProcessListener') -> None:
         assert isinstance(listener, self._listener_type), 'Listener is not of right type'
@@ -34,7 +38,7 @@ class EventHelper:
         self._listeners.clear()
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Savable:
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -48,13 +52,13 @@ class EventHelper:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
     @property
-    def listeners(self) -> 'Set[ProcessListener]':
+    def listeners(self) -> 'set[ProcessListener]':
         return self._listeners
 
     def fire_event(self, event_function: Callable[..., Any], *args: Any, **kwargs: Any) -> None:

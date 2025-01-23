@@ -6,7 +6,6 @@ import traceback
 from enum import Enum
 from types import TracebackType
 from typing import (
-    TYPE_CHECKING,
     Any,
     Awaitable,
     Callable,
@@ -20,9 +19,10 @@ from typing import (
 )
 
 import yaml
-from typing_extensions import override
+from typing_extensions import Self, override
 from yaml.loader import Loader
 
+from plumpy.loaders import ObjectLoader
 from plumpy.message import MessageBuilder, MessageType
 from plumpy.persistence import ensure_object_loader
 
@@ -38,7 +38,6 @@ from .base import state_machine as st
 from .lang import NULL
 from .persistence import (
     LoadSaveContext,
-    Savable,
     auto_load,
     auto_persist,
     auto_save,
@@ -62,9 +61,6 @@ __all__ = [
     'Wait',
     'Waiting',
 ]
-
-if TYPE_CHECKING:
-    from .processes import Process
 
 
 class Interruption(Exception):  # noqa: N818
@@ -92,7 +88,7 @@ class PauseInterruption(Interruption):
 
 class Command:
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -106,8 +102,8 @@ class Command:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
@@ -156,15 +152,15 @@ class Continue(Command):
         self.kwargs = kwargs
 
     @override
-    def save(self, save_context: Optional[persistence.LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = persistence.auto_save(self, loader)
         out_state[self.CONTINUE_FN] = self.continue_fn.__name__
 
         return out_state
 
     @override
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -214,32 +210,32 @@ class Created:
     RUN_FN = 'run_fn'
     is_terminal: ClassVar[bool] = False
 
-    def __init__(self, process: 'Process', run_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+    def __init__(self, process: 'st.StateMachine', run_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
         assert run_fn is not None
         self.process = process
         self.run_fn = run_fn
         self.args = args
         self.kwargs = kwargs
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
         out_state[self.RUN_FN] = self.run_fn.__name__
 
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> Self:
         """
-        Recreate a :class:`Savable` from a saved state using an optional load context.
+        Recreate a :class:`Created` from a saved state using an optional load context.
 
         :param saved_state: The saved state
-        :param load_context: An optional load context
+        :param load_context: An optional load context for runtime attributes
 
         :return: The recreated instance
 
         """
         load_context = ensure_object_loader(load_context, saved_state)
-        obj = auto_load(cls, saved_state, load_context)
+        obj = auto_load(cls, saved_state)
         obj.process = load_context.process
         obj.run_fn = getattr(obj.process, saved_state[obj.RUN_FN])
 
@@ -271,14 +267,14 @@ class Running:
     COMMAND = 'command'  # The key used to store an upcoming command
 
     # Class level defaults
-    _command: Union[None, Kill, Stop, Wait, Continue] = None
+    _command: Command | None = None
     _running: bool = False
     _run_handle = None
 
     is_terminal: ClassVar[bool] = False
 
     def __init__(
-        self, process: 'Process', run_fn: Callable[..., Union[Awaitable[Any], Any]], *args: Any, **kwargs: Any
+        self, process: 'st.StateMachine', run_fn: Callable[..., Union[Awaitable[Any], Any]], *args: Any, **kwargs: Any
     ) -> None:
         assert run_fn is not None
         self.process = process
@@ -287,8 +283,8 @@ class Running:
         self.kwargs = kwargs
         self._run_handle = None
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         out_state[self.RUN_FN] = self.run_fn.__name__
         if self._command is not None:
@@ -297,7 +293,7 @@ class Running:
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -313,7 +309,13 @@ class Running:
 
         obj.run_fn = ensure_coroutine(getattr(obj.process, saved_state[obj.RUN_FN]))
         if obj.COMMAND in saved_state:
-            obj._command = persistence.load(saved_state[obj.COMMAND], load_context)  # type: ignore
+            loaded_cmd = persistence.load(saved_state[obj.COMMAND], load_context)
+            if not isinstance(loaded_cmd, Command):
+                # runtime check for loading from persistence
+                # XXX: debug log in principle unreachable
+                raise RuntimeError(f'command `{obj.COMMAND}` loaded from Running state not a valid `Command` type')
+
+            obj._command = loaded_cmd
 
         return obj
 
@@ -351,7 +353,7 @@ class Running:
         next_state = self._action_command(command)
         return next_state
 
-    def _action_command(self, command: Union[Kill, Stop, Wait, Continue]) -> st.State:
+    def _action_command(self, command: Command) -> st.State:
         if isinstance(command, Kill):
             state = st.create_state(self.process, ProcessState.KILLED, msg=command.msg)
         # elif isinstance(command, Pause):
@@ -413,7 +415,7 @@ class Waiting:
 
     def __init__(
         self,
-        process: 'Process',
+        process: 'st.StateMachine',
         done_callback: Optional[Callable[..., Any]],
         msg: Optional[str] = None,
         data: Optional[Any] = None,
@@ -424,8 +426,8 @@ class Waiting:
         self.data = data
         self._waiting_future: futures.Future = futures.Future()
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         if self.done_callback is not None:
             out_state[self.DONE_CALLBACK] = self.done_callback.__name__
@@ -433,7 +435,7 @@ class Waiting:
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -527,8 +529,8 @@ class Excepted:
         exception = traceback.format_exception_only(type(self.exception) if self.exception else None, self.exception)[0]
         return super().__str__() + f'({exception})'
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         out_state[self.EXC_VALUE] = yaml.dump(self.exception)
         if self.traceback is not None:
@@ -537,7 +539,7 @@ class Excepted:
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -596,7 +598,7 @@ class Finished:
         self.successful = successful
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -610,8 +612,8 @@ class Finished:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
@@ -644,7 +646,7 @@ class Killed:
         self.msg = msg
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> 'Savable':
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -658,8 +660,8 @@ class Killed:
         obj = auto_load(cls, saved_state, load_context)
         return obj
 
-    def save(self, save_context: Optional[LoadSaveContext] = None) -> SAVED_STATE_TYPE:
-        out_state: SAVED_STATE_TYPE = auto_save(self, save_context)
+    def save(self, loader: ObjectLoader | None = None) -> SAVED_STATE_TYPE:
+        out_state: SAVED_STATE_TYPE = auto_save(self, loader)
 
         return out_state
 
