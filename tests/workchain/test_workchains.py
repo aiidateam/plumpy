@@ -9,9 +9,8 @@ import plumpy
 from plumpy.process_listener import ProcessListener
 from plumpy.workchains import *
 
-from . import utils
+from .. import utils
 
-# FIXME: test steppers are savable and round trip persistence
 
 class Wf(WorkChain):
     # Keep track of which steps were completed by the workflow
@@ -89,6 +88,8 @@ class Wf(WorkChain):
 def test_workchain_is_savable():
     w = Wf(inputs=dict(value='A', n=3))
     assert isinstance(w, Savable)
+
+    # TODO: direct regression save load round trip
 
 
 class IfTest(WorkChain):

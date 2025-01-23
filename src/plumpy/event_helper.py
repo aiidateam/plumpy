@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional, Self, final
+from typing import TYPE_CHECKING, Any, Callable, Optional, final
+
+from typing_extensions import Self
 
 from plumpy.loaders import ObjectLoader
 from plumpy.persistence import LoadSaveContext, auto_load, auto_save, ensure_object_loader
@@ -13,7 +17,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# FIXME: test me
 
 @final
 @persistence.auto_persist('_listeners', '_listener_type')

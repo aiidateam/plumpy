@@ -46,6 +46,8 @@ def test_process_is_savable():
     proc = utils.DummyProcess()
     assert isinstance(proc, Savable)
 
+    # TODO: direct save load round trip regression
+
 
 @pytest.mark.asyncio
 async def test_process_scope():

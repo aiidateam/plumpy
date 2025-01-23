@@ -11,7 +11,6 @@ from typing import (
     Callable,
     ClassVar,
     Optional,
-    Self,
     Tuple,
     Type,
     Union,
@@ -20,7 +19,7 @@ from typing import (
 )
 
 import yaml
-from typing_extensions import override
+from typing_extensions import Self, override
 from yaml.loader import Loader
 
 from plumpy.loaders import ObjectLoader
@@ -268,7 +267,7 @@ class Running:
     COMMAND = 'command'  # The key used to store an upcoming command
 
     # Class level defaults
-    _command: Kill | Stop | Wait | Continue | None = None
+    _command: Command | None = None
     _running: bool = False
     _run_handle = None
 
@@ -311,12 +310,12 @@ class Running:
         obj.run_fn = ensure_coroutine(getattr(obj.process, saved_state[obj.RUN_FN]))
         if obj.COMMAND in saved_state:
             loaded_cmd = persistence.load(saved_state[obj.COMMAND], load_context)
-            if isinstance(loaded_cmd, Command):
+            if not isinstance(loaded_cmd, Command):
                 # runtime check for loading from persistence
-                obj._command = loaded_cmd
-            else:
                 # XXX: debug log in principle unreachable
                 raise RuntimeError(f'command `{obj.COMMAND}` loaded from Running state not a valid `Command` type')
+
+            obj._command = loaded_cmd
 
         return obj
 
@@ -354,7 +353,7 @@ class Running:
         next_state = self._action_command(command)
         return next_state
 
-    def _action_command(self, command: Union[Kill, Stop, Wait, Continue]) -> st.State:
+    def _action_command(self, command: Command) -> st.State:
         if isinstance(command, Kill):
             state = st.create_state(self.process, ProcessState.KILLED, msg=command.msg)
         # elif isinstance(command, Pause):

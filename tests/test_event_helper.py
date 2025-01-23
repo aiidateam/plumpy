@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from plumpy.event_helper import EventHelper
 from plumpy.persistence import Savable, load
 from tests.utils import DummyProcess, ProcessListenerTester

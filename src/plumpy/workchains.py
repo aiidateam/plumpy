@@ -16,13 +16,14 @@ from typing import (
     MutableSequence,
     Optional,
     Protocol,
-    Self,
     Sequence,
     Tuple,
     Type,
     Union,
     cast,
 )
+
+from typing_extensions import Self
 
 from plumpy import utils
 from plumpy.base import state_machine
@@ -399,7 +400,7 @@ class _FunctionCall(_Instruction):
 
     def recreate_stepper(self, saved_state: SAVED_STATE_TYPE, workchain: 'WorkChain') -> _FunctionStepper:
         load_context = persistence.LoadSaveContext(workchain=workchain, func_spec=self)
-        return cast(_FunctionStepper, _FunctionStepper.recreate_from(saved_state, load_context))
+        return _FunctionStepper.recreate_from(saved_state, load_context)
 
     def get_description(self) -> str:
         desc = self._fn.__name__
@@ -479,6 +480,7 @@ class _Block(_Instruction, collections.abc.Sequence):
     Represents a block of instructions i.e. a sequential list of instructions.
     """
 
+    # XXX: swap workchain and instructions
     def __init__(self, instructions: Sequence[Union[_Instruction, WC_COMMAND_TYPE]]) -> None:
         # Build up the list of commands
         comms: MutableSequence[_Instruction | _FunctionCall] = []
@@ -502,7 +504,7 @@ class _Block(_Instruction, collections.abc.Sequence):
 
     def recreate_stepper(self, saved_state: SAVED_STATE_TYPE, workchain: 'WorkChain') -> _BlockStepper:
         load_context = persistence.LoadSaveContext(workchain=workchain, block_instruction=self)
-        return cast(_BlockStepper, _BlockStepper.recreate_from(saved_state, load_context))
+        return _BlockStepper.recreate_from(saved_state, load_context)
 
     def get_description(self) -> List[str]:
         return [instruction.get_description() for instruction in self._instruction]
@@ -551,7 +553,7 @@ class _Conditional:
 
         return result
 
-    def __call__(self, *instructions: Union[_Instruction, WC_COMMAND_TYPE]) -> _Instruction:
+    def __call__(self, *instructions: _Instruction | WC_COMMAND_TYPE) -> _Instruction:
         assert self._body is None, 'Instructions have already been set'
         self._body = _Block(instructions)
         return self._parent
@@ -562,6 +564,7 @@ class _Conditional:
 
 @persistence.auto_persist('_pos')
 class _IfStepper:
+    # XXX: swap workchain and if_instruction
     def __init__(self, if_instruction: '_If', workchain: 'WorkChain') -> None:
         self._workchain = workchain
         self._if_instruction = if_instruction
@@ -671,7 +674,7 @@ class _If(_Instruction, collections.abc.Sequence):
 
     def recreate_stepper(self, saved_state: SAVED_STATE_TYPE, workchain: 'WorkChain') -> _IfStepper:
         load_context = persistence.LoadSaveContext(workchain=workchain, if_instruction=self)
-        return cast(_IfStepper, _IfStepper.recreate_from(saved_state, load_context))
+        return _IfStepper.recreate_from(saved_state, load_context)
 
     def get_description(self) -> Mapping[str, Any]:
         description = collections.OrderedDict()
@@ -759,7 +762,7 @@ class _While(_Conditional, _Instruction, collections.abc.Sequence):
 
     def recreate_stepper(self, saved_state: SAVED_STATE_TYPE, workchain: 'WorkChain') -> _WhileStepper:
         load_context = persistence.LoadSaveContext(workchain=workchain, while_instruction=self)
-        return cast(_WhileStepper, _WhileStepper.recreate_from(saved_state, load_context))
+        return _WhileStepper.recreate_from(saved_state, load_context)
 
     def get_description(self) -> Dict[str, Any]:
         return {f'while({self.predicate.__name__})': self.body.get_description()}
@@ -771,7 +774,6 @@ class _PropagateReturn(BaseException):
         self.exit_code = exit_code
 
 
-@persistence.auto_persist()
 class _ReturnStepper:
     def __init__(self, return_instruction: '_Return', workchain: 'WorkChain') -> None:
         self._workchain = workchain

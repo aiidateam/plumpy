@@ -27,7 +27,6 @@ from typing import (
     Hashable,
     List,
     Optional,
-    Self,
     Sequence,
     Tuple,
     Type,
@@ -37,6 +36,7 @@ from typing import (
 )
 
 import kiwipy
+from typing_extensions import Self
 
 from plumpy.coordinator import Coordinator
 from plumpy.loaders import ObjectLoader

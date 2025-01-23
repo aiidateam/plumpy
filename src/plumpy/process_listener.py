@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import abc
-from typing import TYPE_CHECKING, Any, Dict, Optional, Self
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+from typing_extensions import Self
 
 from plumpy.loaders import ObjectLoader
 from plumpy.persistence import LoadSaveContext, auto_save, ensure_object_loader

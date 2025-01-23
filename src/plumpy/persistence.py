@@ -21,12 +21,12 @@ from typing import (
     List,
     Optional,
     Protocol,
-    Self,
     TypeVar,
     runtime_checkable,
 )
 
 import yaml
+from typing_extensions import Self
 
 from . import futures, loaders
 from .utils import PID_TYPE, SAVED_STATE_TYPE
@@ -577,18 +577,18 @@ def auto_load(cls: type[T], saved_state: SAVED_STATE_TYPE, load_context: LoadSav
 
 def auto_persist(*members: str) -> Callable[[type[T]], type[T]]:
     def wrapped(cls: type[T]) -> type[T]:
-        if not hasattr(cls, '_auto_persist') or cls._auto_persist is None:
+        if not hasattr(cls, '_auto_persist') or cls._auto_persist is None:  # type: ignore[attr-defined]
             cls._auto_persist = set()  # type: ignore[attr-defined]
         else:
-            cls._auto_persist = set(cls._auto_persist)
+            cls._auto_persist = set(cls._auto_persist)  # type: ignore[attr-defined]
 
         cls._auto_persist.update(members)  # type: ignore[attr-defined]
-        # XXX: validate on `save` and `recreate_from` method??
         return cls
 
     return wrapped
 
 
+# FIXME: test me after clear event loop management
 @auto_persist('_state', '_result')
 class SavableFuture(futures.Future):
     """
