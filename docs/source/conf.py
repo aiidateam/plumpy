@@ -47,7 +47,7 @@ exclude_patterns = []
 pygments_style = None
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3.8', None),
+    'python': ('https://docs.python.org/3.10', None),
     'kiwipy': ('https://kiwipy.readthedocs.io/en/latest/', None),
 }
 
