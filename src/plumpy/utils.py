@@ -6,18 +6,11 @@ import inspect
 import logging
 import types
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Awaitable, Iterator, Mapping, MutableMapping
 from typing import (
     Any,
-    Awaitable,
     Callable,
     Hashable,
-    Iterator,
-    List,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Type,
 )
 
 from . import lang
@@ -43,7 +36,7 @@ class Frozendict(Mapping):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._dict = dict(*args, **kwargs)
-        self._hash: Optional[int] = None
+        self._hash: int | None = None
 
     def __getitem__(self, key: str) -> Any:
         return self._dict[key]
@@ -93,7 +86,7 @@ class AttributesFrozendict(Frozendict):
             errmsg = f"'{self.__class__.__name__}' object has no attribute '{attr}'"
             raise AttributeError(errmsg)
 
-    def __dir__(self) -> List[str]:
+    def __dir__(self) -> list[str]:
         """
         So we get tab completion.
         :return: The keys of the dict
@@ -131,7 +124,7 @@ class AttributesDict(types.SimpleNamespace):
         return self.__dict__.get(*args, **kwargs)
 
 
-def load_function(name: str, instance: Optional[Any] = None) -> Callable[..., Any]:
+def load_function(name: str, instance: Any | None = None) -> Callable[..., Any]:
     obj = load_object(name)
     if inspect.ismethod(obj):
         if instance is not None:
@@ -161,7 +154,7 @@ def load_object(fullname: str) -> Any:
     return obj
 
 
-def load_module(fullname: str) -> Tuple[types.ModuleType, deque]:
+def load_module(fullname: str) -> tuple[types.ModuleType, deque]:
     parts = fullname.split('.')
 
     # Try to find the module, working our way from the back
@@ -180,7 +173,7 @@ def load_module(fullname: str) -> Tuple[types.ModuleType, deque]:
     return mod, remainder
 
 
-def type_check(obj: Any, expected_type: Type) -> None:
+def type_check(obj: Any, expected_type: type[Any]) -> None:
     if not isinstance(obj, expected_type):
         raise TypeError(f"Got object of type '{type(obj)}' when expecting '{expected_type}'")
 

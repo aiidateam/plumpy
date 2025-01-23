@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from typing import Optional
+
+
+from typing import final
 
 
 class KilledError(Exception):
@@ -12,10 +14,11 @@ class InvalidStateError(Exception):
     """
 
 
+@final
 class UnsuccessfulResult:
     """The result of the process was unsuccessful"""
 
-    def __init__(self, result: Optional[int] = None):
+    def __init__(self, result: int | None = None):
         """Initialise.
 
         :param result: the exit code of the process

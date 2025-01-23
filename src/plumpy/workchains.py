@@ -7,19 +7,11 @@ import collections
 import inspect
 import logging
 import re
+from collections.abc import Mapping, MutableSequence, Sequence
 from typing import (
     Any,
     Callable,
-    Dict,
-    List,
-    Mapping,
-    MutableSequence,
-    Optional,
     Protocol,
-    Sequence,
-    Tuple,
-    Type,
-    Union,
     cast,
 )
 
@@ -48,9 +40,9 @@ EXIT_CODE_TYPE = int
 class WorkChainSpec(process_spec.ProcessSpec):
     def __init__(self) -> None:
         super().__init__()
-        self._outline: Optional[Union['_Instruction', '_FunctionCall']] = None
+        self._outline: _Instruction | _FunctionCall | None = None
 
-    def get_description(self) -> Dict[str, str]:
+    def get_description(self) -> dict[str, str]:
         description = super().get_description()
 
         if self._outline:
@@ -58,7 +50,7 @@ class WorkChainSpec(process_spec.ProcessSpec):
 
         return description
 
-    def outline(self, *commands: Union['_Instruction', WC_COMMAND_TYPE]) -> None:
+    def outline(self, *commands: '_Instruction | WC_COMMAND_TYPE') -> None:
         """
         Define the outline that describes this work chain.
 
@@ -71,7 +63,7 @@ class WorkChainSpec(process_spec.ProcessSpec):
             # There are multiple instructions
             self._outline = _Block(commands)
 
-    def get_outline(self) -> Union['_Instruction', '_FunctionCall']:
+    def get_outline(self) -> '_Instruction | _FunctionCall':
         assert self._outline is not None, 'outline not yet loaded'
         return self._outline
 
@@ -84,12 +76,12 @@ class Waiting(process_states.Waiting):
     def __init__(
         self,
         process: 'WorkChain',
-        done_callback: Optional[Callable[..., Any]],
-        msg: Optional[str] = None,
-        data: Optional[Dict[Union[asyncio.Future, processes.Process], str]] = None,
+        done_callback: Callable[..., Any] | None,
+        msg: str | None = None,
+        data: dict[asyncio.Future | processes.Process, str] | None = None,
     ) -> None:
         super().__init__(process, done_callback, msg, data)
-        self._awaiting: Dict[asyncio.Future, str] = {}
+        self._awaiting: dict[asyncio.Future, str] = {}
         for awaitable, key in (data or {}).items():
             resolved_awaitable = awaitable.future() if isinstance(awaitable, processes.Process) else awaitable
             self._awaiting[resolved_awaitable] = key
@@ -127,26 +119,26 @@ class WorkChain(processes.Process):
     CONTEXT = 'CONTEXT'
 
     @classmethod
-    def get_state_classes(cls) -> Dict[process_states.ProcessState, Type[state_machine.State]]:
+    def get_state_classes(cls) -> dict[process_states.ProcessState, type[state_machine.State]]:
         states_map = super().get_state_classes()
         states_map[process_states.ProcessState.WAITING] = Waiting
         return states_map
 
     def __init__(
         self,
-        inputs: Optional[dict] = None,
-        pid: Optional[PID_TYPE] = None,
-        logger: Optional[logging.Logger] = None,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
-        coordinator: Optional[Coordinator] = None,
+        inputs: dict | None = None,
+        pid: PID_TYPE | None = None,
+        logger: logging.Logger | None = None,
+        loop: asyncio.AbstractEventLoop | None = None,
+        coordinator: Coordinator | None = None,
     ) -> None:
         super().__init__(inputs=inputs, pid=pid, logger=logger, loop=loop, coordinator=coordinator)
-        self._context: Optional[AttributesDict] = AttributesDict()
-        self._stepper: Optional[Stepper] = None
-        self._awaitables: Dict[Union[asyncio.Future, processes.Process], str] = {}
+        self._context: AttributesDict | None = AttributesDict()
+        self._stepper: Stepper | None = None
+        self._awaitables: dict[asyncio.Future | processes.Process, str] = {}
 
     @property
-    def ctx(self) -> Optional[AttributesDict]:
+    def ctx(self) -> AttributesDict | None:
         return self._context
 
     @classmethod
@@ -192,7 +184,7 @@ class WorkChain(processes.Process):
     def recreate_from(
         cls,
         saved_state: SAVED_STATE_TYPE,
-        load_context: Optional[persistence.LoadSaveContext] = None,
+        load_context: persistence.LoadSaveContext | None = None,
     ) -> Self:
         """Recreate a workchain from a saved state, passing any positional
 
@@ -270,7 +262,7 @@ class WorkChain(processes.Process):
         call_with_super_check(proc.init)
         return proc
 
-    def to_context(self, **kwargs: Union[asyncio.Future, processes.Process]) -> None:
+    def to_context(self, **kwargs: asyncio.Future | processes.Process) -> None:
         """
         This is a convenience method that provides syntactic sugar, for
         a user to add multiple intersteps that will assign a certain value
@@ -307,7 +299,7 @@ class WorkChain(processes.Process):
 
 # XXX: Stepper is also a Saver with `save` method.
 class Stepper(Protocol):
-    def step(self) -> Tuple[bool, Any]:
+    def step(self) -> tuple[bool, Any]:
         """
         Execute on step of the instructions.
         :return: A 2-tuple with entries:
@@ -359,7 +351,7 @@ class _FunctionStepper:
 
     @classmethod
     def recreate_from(
-        cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext] = None
+        cls, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext | None = None
     ) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
@@ -377,7 +369,7 @@ class _FunctionStepper:
 
         return obj
 
-    def step(self) -> Tuple[bool, Any]:
+    def step(self) -> tuple[bool, Any]:
         return True, self._fn(self._workchain)
 
     def __str__(self) -> str:
@@ -420,9 +412,9 @@ class _BlockStepper:
         self._workchain = workchain
         self._block = block
         self._pos: int = 0
-        self._child_stepper: Optional[Stepper] = self._block[0].create_stepper(self._workchain)
+        self._child_stepper: Stepper | None = self._block[0].create_stepper(self._workchain)
 
-    def step(self) -> Tuple[bool, Any]:
+    def step(self) -> tuple[bool, Any]:
         assert not self.finished() and self._child_stepper is not None, "Can't call step after the block is finished"
 
         finished, result = self._child_stepper.step()
@@ -450,7 +442,7 @@ class _BlockStepper:
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -481,7 +473,7 @@ class _Block(_Instruction, collections.abc.Sequence):
     """
 
     # XXX: swap workchain and instructions
-    def __init__(self, instructions: Sequence[Union[_Instruction, WC_COMMAND_TYPE]]) -> None:
+    def __init__(self, instructions: Sequence[_Instruction | WC_COMMAND_TYPE]) -> None:
         # Build up the list of commands
         comms: MutableSequence[_Instruction | _FunctionCall] = []
         for instruction in instructions:
@@ -493,7 +485,7 @@ class _Block(_Instruction, collections.abc.Sequence):
 
         self._instruction: MutableSequence[_Instruction | _FunctionCall] = comms
 
-    def __getitem__(self, index: int) -> Union[_Instruction, _FunctionCall]:  # type: ignore
+    def __getitem__(self, index: int) -> _Instruction | _FunctionCall:  # type: ignore
         return self._instruction[index]
 
     def __len__(self) -> int:
@@ -506,7 +498,7 @@ class _Block(_Instruction, collections.abc.Sequence):
         load_context = persistence.LoadSaveContext(workchain=workchain, block_instruction=self)
         return _BlockStepper.recreate_from(saved_state, load_context)
 
-    def get_description(self) -> List[str]:
+    def get_description(self) -> list[str]:
         return [instruction.get_description() for instruction in self._instruction]
 
 
@@ -526,7 +518,7 @@ class _Conditional:
     def __init__(self, parent: _Instruction, predicate: PREDICATE_TYPE, label: str) -> None:
         self._parent = parent
         self._predicate = predicate
-        self._body: Optional[_Block] = None
+        self._body: _Block | None = None
         self._label = label
 
     @property
@@ -569,9 +561,9 @@ class _IfStepper:
         self._workchain = workchain
         self._if_instruction = if_instruction
         self._pos = 0
-        self._child_stepper: Optional[Stepper] = None
+        self._child_stepper: Stepper | None = None
 
-    def step(self) -> Tuple[bool, Any]:
+    def step(self) -> tuple[bool, Any]:
         if self.finished():
             return True, None
 
@@ -606,7 +598,7 @@ class _IfStepper:
         return out_state
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 
@@ -637,7 +629,7 @@ class _IfStepper:
 class _If(_Instruction, collections.abc.Sequence):
     def __init__(self, condition: PREDICATE_TYPE) -> None:
         super().__init__()
-        self._ifs: List[_Conditional] = [_Conditional(self, condition, label=if_.__name__)]
+        self._ifs: list[_Conditional] = [_Conditional(self, condition, label=if_.__name__)]
         self._sealed = False
 
     def __getitem__(self, idx: int) -> _Conditional:  # type: ignore
@@ -646,7 +638,7 @@ class _If(_Instruction, collections.abc.Sequence):
     def __len__(self) -> int:
         return len(self._ifs)
 
-    def __call__(self, *commands: Union[_Instruction, WC_COMMAND_TYPE]) -> '_If':
+    def __call__(self, *commands: _Instruction | WC_COMMAND_TYPE) -> '_If':
         """
         This is how the commands for the if(...) body are set
         :param commands: The commands to run on the original if.
@@ -659,7 +651,7 @@ class _If(_Instruction, collections.abc.Sequence):
         self._ifs.append(_Conditional(self, condition, label=self.elif_.__name__))
         return self._ifs[-1]
 
-    def else_(self, *commands: Union[_Instruction, WC_COMMAND_TYPE]) -> '_If':
+    def else_(self, *commands: _Instruction | WC_COMMAND_TYPE) -> '_If':
         assert not self._sealed
         # Create a dummy conditional that always returns True
         cond = _Conditional(self, lambda wf: True, label=self.else_.__name__)
@@ -690,9 +682,9 @@ class _WhileStepper:
     def __init__(self, while_instruction: '_While', workchain: 'WorkChain') -> None:
         self._workchain = workchain
         self._while_instruction = while_instruction
-        self._child_stepper: Optional[_BlockStepper] = None
+        self._child_stepper: _BlockStepper | None = None
 
-    def step(self) -> Tuple[bool, Any]:
+    def step(self) -> tuple[bool, Any]:
         # Do we need to check the condition?
         if self._child_stepper is None:
             # Should we go into the loop body?
@@ -717,7 +709,7 @@ class _WhileStepper:
 
     @classmethod
     def recreate_from(
-        cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[persistence.LoadSaveContext] = None
+        cls, saved_state: SAVED_STATE_TYPE, load_context: persistence.LoadSaveContext | None = None
     ) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
@@ -764,12 +756,12 @@ class _While(_Conditional, _Instruction, collections.abc.Sequence):
         load_context = persistence.LoadSaveContext(workchain=workchain, while_instruction=self)
         return _WhileStepper.recreate_from(saved_state, load_context)
 
-    def get_description(self) -> Dict[str, Any]:
+    def get_description(self) -> dict[str, Any]:
         return {f'while({self.predicate.__name__})': self.body.get_description()}
 
 
 class _PropagateReturn(BaseException):
-    def __init__(self, exit_code: Optional[EXIT_CODE_TYPE]) -> None:
+    def __init__(self, exit_code: EXIT_CODE_TYPE | None) -> None:
         super().__init__()
         self.exit_code = exit_code
 
@@ -779,7 +771,7 @@ class _ReturnStepper:
         self._workchain = workchain
         self._return_instruction = return_instruction
 
-    def step(self) -> Tuple[bool, Any]:
+    def step(self) -> tuple[bool, Any]:
         """
         Raise a _PropagateReturn exception where the value is the exit code set
         in the _Return instruction upon instantiation
@@ -793,7 +785,7 @@ class _Return(_Instruction):
     outline and cease execution immediately.
     """
 
-    def __init__(self, exit_code: Optional[EXIT_CODE_TYPE] = None) -> None:
+    def __init__(self, exit_code: EXIT_CODE_TYPE | None = None) -> None:
         super().__init__()
         self._exit_code = exit_code
 
@@ -873,7 +865,7 @@ or::
 """
 
 
-def _ensure_instruction(command: Any) -> Union[_Instruction, _FunctionCall]:
+def _ensure_instruction(command: Any) -> _Instruction | _FunctionCall:
     # There is only a single instruction
     if isinstance(command, _Instruction):
         return command

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Pattern, Protocol
+import re
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Protocol
 
 if TYPE_CHECKING:
     # identifiers for subscribers
@@ -23,8 +24,8 @@ class Coordinator(Protocol):
     def add_broadcast_subscriber(
         self,
         subscriber: 'BroadcastSubscriber',
-        subject_filters: list[Hashable | Pattern[str]] | None = None,
-        sender_filters: list[Hashable | Pattern[str]] | None = None,
+        subject_filters: list[Hashable | re.Pattern[str]] | None = None,
+        sender_filters: list[Hashable | re.Pattern[str]] | None = None,
         identifier: 'ID_TYPE | None' = None,
     ) -> Any: ...
 

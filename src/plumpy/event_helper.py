@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional, final
+from typing import TYPE_CHECKING, Any, Callable, final
 
 from typing_extensions import Self
 
@@ -38,7 +38,7 @@ class EventHelper:
         self._listeners.clear()
 
     @classmethod
-    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: Optional[LoadSaveContext] = None) -> Self:
+    def recreate_from(cls, saved_state: SAVED_STATE_TYPE, load_context: LoadSaveContext | None = None) -> Self:
         """
         Recreate a :class:`Savable` from a saved state using an optional load context.
 

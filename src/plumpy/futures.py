@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import Any, Awaitable, Callable, Generator, Optional
+from collections.abc import Awaitable, Generator
+from typing import Any, Callable, final
 
 
 class InvalidFutureError(Exception):
@@ -33,6 +34,7 @@ def capture_exceptions(future, ignore: tuple[type[BaseException], ...] = ()) -> 
         future.set_exception(exception)
 
 
+@final
 class CancellableAction(Future):
     """
     An action that can be launched and potentially cancelled
@@ -64,7 +66,7 @@ class CancellableAction(Future):
             self._action = None  # type: ignore
 
 
-def create_task(coro: Callable[[], Awaitable[Any]], loop: Optional[asyncio.AbstractEventLoop] = None) -> Future:
+def create_task(coro: Callable[[], Awaitable[Any]], loop: asyncio.AbstractEventLoop | None = None) -> Future:
     """
     Schedule a call to a coro in the event loop and wrap the outcome
     in a future.
