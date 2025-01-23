@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Module for process level coordination functions and classes"""
 
-from __future__ import annotations
-
 import asyncio
 import logging
 from collections.abc import Sequence

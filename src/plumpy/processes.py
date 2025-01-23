@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
 
-from __future__ import annotations
-
 import abc
 import asyncio
 import concurrent.futures

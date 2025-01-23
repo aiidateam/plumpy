@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
 
 import abc
 import asyncio
@@ -393,7 +392,7 @@ class InMemoryPersister(Persister):
             del self._checkpoints[pid]
 
 
-def ensure_object_loader(context: 'LoadSaveContext' | None, saved_state: SAVED_STATE_TYPE) -> 'LoadSaveContext':
+def ensure_object_loader(context: LoadSaveContext | None, saved_state: SAVED_STATE_TYPE) -> 'LoadSaveContext':
     """
     Given a LoadSaveContext this method will ensure that it has a valid class loader
     using the following priorities:

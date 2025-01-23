@@ -3,8 +3,6 @@
 Module containing future related methods and classes
 """
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
 from collections.abc import Awaitable, Generator

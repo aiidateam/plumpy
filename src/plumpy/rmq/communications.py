@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Module for general kiwipy communication methods"""
 
-from __future__ import annotations
-
 import asyncio
 import functools
 from typing import TYPE_CHECKING, Any, Callable, Generic, Hashable, Optional, TypeVar, final
