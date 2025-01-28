@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import tempfile
-import unittest
 
 if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
@@ -10,7 +9,7 @@ import plumpy
 from ..utils import ProcessWithCheckpoint
 
 
-class TestPicklePersister(unittest.TestCase):
+class TestPicklePersister:
     def test_save_load_roundtrip(self):
         """
         Test the plumpy.PicklePersister by taking a dummpy process, saving a checkpoint
@@ -39,7 +38,7 @@ class TestPicklePersister(unittest.TestCase):
 
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
+            assert set(retrieved_checkpoints) == set(checkpoints)
 
     def test_get_checkpoints_with_tags(self):
         """ """
@@ -60,7 +59,7 @@ class TestPicklePersister(unittest.TestCase):
 
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
+            assert set(retrieved_checkpoints) == set(checkpoints)
 
     def test_get_process_checkpoints(self):
         """ """
@@ -81,7 +80,7 @@ class TestPicklePersister(unittest.TestCase):
 
             retrieved_checkpoints = persister.get_process_checkpoints(process_a.pid)
 
-            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
+            assert set(retrieved_checkpoints) == set(checkpoints)
 
     def test_delete_process_checkpoints(self):
         """ """
@@ -101,14 +100,14 @@ class TestPicklePersister(unittest.TestCase):
             checkpoints = [checkpoint_a1, checkpoint_a2]
             retrieved_checkpoints = persister.get_process_checkpoints(process_a.pid)
 
-            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
+            assert set(retrieved_checkpoints) == set(checkpoints)
 
             persister.delete_process_checkpoints(process_a.pid)
 
             checkpoints = []
             retrieved_checkpoints = persister.get_process_checkpoints(process_a.pid)
 
-            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
+            assert set(retrieved_checkpoints) == set(checkpoints)
 
     def test_delete_checkpoint(self):
         """ """
@@ -132,18 +131,18 @@ class TestPicklePersister(unittest.TestCase):
             checkpoints = [checkpoint_a1, checkpoint_a2, checkpoint_b1, checkpoint_b2]
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
+            assert set(retrieved_checkpoints) == set(checkpoints)
 
             persister.delete_checkpoint(process_a.pid, tag='2')
 
             checkpoints = [checkpoint_a1, checkpoint_b1, checkpoint_b2]
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
+            assert set(retrieved_checkpoints) == set(checkpoints)
 
             persister.delete_checkpoint(process_b.pid, tag='1')
 
             checkpoints = [checkpoint_a1, checkpoint_b2]
             retrieved_checkpoints = persister.get_checkpoints()
 
-            self.assertSetEqual(set(retrieved_checkpoints), set(checkpoints))
+            assert set(retrieved_checkpoints) == set(checkpoints)

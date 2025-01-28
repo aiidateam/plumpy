@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from plumpy.lang import override, protected
 
-from .utils import TestCase
+import pytest
 
 
 class A:
@@ -38,9 +38,9 @@ class C(B):
         self.protected_property
 
 
-class TestProtected(TestCase):
+class TestProtected:
     def test_free_function(self):
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
 
             @protected(check=False)
             def some_func():
@@ -55,24 +55,24 @@ class TestProtected(TestCase):
     def test_incorrect_usage(self):
         # I shouldn't be able to call the protected function from any of them
         a = A()
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             a.protected_fn()
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             a.protected_property
 
         b = B()
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             b.protected_fn()
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             b.protected_property
 
         c = C()
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             c.protected_fn()
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             c.protected_property
 
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
 
             class TestWrongDecoratorOrder:
                 @protected(check=True)
@@ -86,9 +86,9 @@ class Superclass:
         pass
 
 
-class TestOverride(TestCase):
+class TestOverride:
     def test_free_function(self):
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
 
             @override(check=False)
             def some_func():
@@ -100,7 +100,7 @@ class TestOverride(TestCase):
             def test(self):
                 return True
 
-        self.assertTrue(Derived().test())
+        assert Derived().test()
 
         class Middle(Superclass):
             pass
@@ -110,7 +110,7 @@ class TestOverride(TestCase):
             def test(self):
                 return True
 
-        self.assertTrue(Next().test())
+        assert Next().test()
 
     def test_incorrect_usage(self):
         class Derived:
@@ -118,10 +118,10 @@ class TestOverride(TestCase):
             def test(self):
                 pass
 
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             Derived().test()
 
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
 
             class TestWrongDecoratorOrder(Superclass):
                 @override(check=True)
@@ -176,7 +176,7 @@ class TestOverride(TestCase):
 #     def test(self):
 #         self._c_prime_called = True
 
-#  class TestCallSuper(TestCase):
+#  class TestCallSuper:
 #     def test_one_up(self):
 #         b = B()
 #         b.test()

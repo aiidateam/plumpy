@@ -118,7 +118,7 @@ class TestRemoteProcessController:
             expected_subjects.append(f'state_changed.{from_state}.{state.value}')
 
         for i, message in enumerate(messages):
-            self.assertEqual(message['subject'], expected_subjects[i])
+            assert message['subject'] == expected_subjects[i]
 
 
 class TestRemoteProcessThreadController:

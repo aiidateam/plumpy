@@ -5,7 +5,6 @@ import asyncio
 import collections
 import sys
 from typing import Any
-import unittest
 from collections.abc import Mapping
 import concurrent.futures
 
@@ -139,10 +138,6 @@ class MockCoordinator:
     def _ensure_open(self):
         if self.is_closed():
             raise CoordinatorConnectionError
-
-
-class TestCase(unittest.TestCase):
-    pass
 
 
 class DummyProcess(processes.Process):

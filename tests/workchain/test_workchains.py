@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import inspect
-import unittest
 
 import pytest
 
@@ -124,27 +123,27 @@ class DummyWc(WorkChain):
         pass
 
 
-class TestContext(unittest.TestCase):
+class TestContext:
     def test_attributes(self):
         wc = DummyWc()
         wc.ctx.new_attr = 5
-        self.assertEqual(wc.ctx.new_attr, 5)
+        assert wc.ctx.new_attr == 5
 
         del wc.ctx.new_attr
-        with self.assertRaises(AttributeError):
+        with pytest.raises(AttributeError):
             wc.ctx.new_attr
 
     def test_dict(self):
         wc = DummyWc()
         wc.ctx['new_attr'] = 5
-        self.assertEqual(wc.ctx['new_attr'], 5)
+        assert wc.ctx['new_attr'] == 5
 
         del wc.ctx['new_attr']
-        with self.assertRaises(KeyError):
+        with pytest.raises(KeyError):
             wc.ctx['new_attr']
 
 
-class TestWorkchain(unittest.TestCase):
+class TestWorkchain:
     maxDiff = None
 
     def test_run(self):
@@ -158,21 +157,21 @@ class TestWorkchain(unittest.TestCase):
         # Check the steps that should have been run
         for step, finished in Wf.finished_steps.items():
             if step not in ['s3', 's4', 'isB']:
-                self.assertTrue(finished, f'Step {step} was not called by workflow')
+                assert finished, f'Step {step} was not called by workflow'
 
         # Try the elif(..) part
         finished_steps = Wf(inputs=dict(value=B, n=three)).execute()
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 's4']:
-                self.assertTrue(finished, f'Step {step} was not called by workflow')
+                assert finished, f'Step {step} was not called by workflow'
 
         # Try the else... part
         finished_steps = Wf(inputs=dict(value=C, n=three)).execute()
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 'isB', 's3']:
-                self.assertTrue(finished, f'Step {step} was not called by workflow')
+                assert finished, f'Step {step} was not called by workflow'
 
     def test_incorrect_outline(self):
         class Wf(WorkChain):
@@ -182,7 +181,7 @@ class TestWorkchain(unittest.TestCase):
                 # Try defining an invalid outline
                 spec.outline(5)
 
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             Wf.spec()
 
     def test_same_input_node(self):
@@ -247,7 +246,7 @@ class TestWorkchain(unittest.TestCase):
         Wf().execute()
 
     def test_str(self):
-        self.assertIsInstance(str(Wf.spec()), str)
+        assert isinstance(str(Wf.spec()), str)
 
     def test_malformed_outline(self):
         """
@@ -255,10 +254,10 @@ class TestWorkchain(unittest.TestCase):
         """
         spec = WorkChainSpec()
 
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             spec.outline(5)
 
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             spec.outline(lambda x, y: 5)
 
     def test_checkpointing(self):
@@ -272,21 +271,21 @@ class TestWorkchain(unittest.TestCase):
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['s3', 's4', 'isB']:
-                self.assertTrue(finished, f'Step {step} was not called by workflow')
+                assert finished, f'Step {step} was not called by workflow'
 
         # Try the elif(..) part
         finished_steps = self._run_with_checkpoints(Wf, inputs={'value': B, 'n': three})
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 's4']:
-                self.assertTrue(finished, f'Step {step} was not called by workflow')
+                assert finished, f'Step {step} was not called by workflow'
 
         # Try the else... part
         finished_steps = self._run_with_checkpoints(Wf, inputs={'value': C, 'n': three})
         # Check the steps that should have been run
         for step, finished in finished_steps.items():
             if step not in ['isA', 's2', 'isB', 's3']:
-                self.assertTrue(finished, f'Step {step} was not called by workflow')
+                assert finished, f'Step {step} was not called by workflow'
 
     def test_listener_persistence(self):
         persister = plumpy.InMemoryPersister()
@@ -321,11 +320,11 @@ class TestWorkchain(unittest.TestCase):
 
         workchain.execute()
 
-        self.assertEqual(process_finished_count, 1)
+        assert process_finished_count == 1
 
         workchain_checkpoint = persister.load_checkpoint(workchain.pid, 'step1').unbundle()
         workchain_checkpoint.execute()
-        self.assertEqual(process_finished_count, 2)
+        assert process_finished_count == 2
 
     def test_return_in_outline(self):
         class WcWithReturn(WorkChain):
@@ -358,7 +357,7 @@ class TestWorkchain(unittest.TestCase):
         workchain = WcWithReturn(inputs=dict(success=False))
         workchain.execute()
 
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             workchain = WcWithReturn()
             workchain.execute()
 
@@ -389,7 +388,7 @@ class TestWorkchain(unittest.TestCase):
         workchain = WcWithReturn(inputs=dict(success=False))
         workchain.execute()
 
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             workchain = WcWithReturn()
             workchain.execute()
 
@@ -424,24 +423,24 @@ class TestWorkchain(unittest.TestCase):
 
         async def async_test():
             await utils.run_until_paused(workchain)
-            self.assertTrue(workchain.ctx.s1)
-            self.assertFalse(workchain.ctx.s2)
+            assert workchain.ctx.s1
+            assert not workchain.ctx.s2
 
             # Now bundle the thing
             bundle = plumpy.Bundle(workchain)
 
             # Load from saved state
             workchain2 = bundle.unbundle()
-            self.assertTrue(workchain2.ctx.s1)
-            self.assertFalse(workchain2.ctx.s2)
+            assert workchain2.ctx.s1
+            assert not workchain2.ctx.s2
 
             bundle2 = plumpy.Bundle(workchain2)
-            self.assertDictEqual(bundle, bundle2)
+            assert bundle == bundle2
 
             workchain.play()
             await workchain.future()
-            self.assertTrue(workchain.ctx.s1)
-            self.assertTrue(workchain.ctx.s2)
+            assert workchain.ctx.s1
+            assert workchain.ctx.s2
 
         loop = asyncio.get_event_loop()
         loop.create_task(workchain.step_until_terminated())  # noqa: RUF006
@@ -508,9 +507,9 @@ class TestWorkchain(unittest.TestCase):
                 raise my_exception
 
         workchain = Workchain()
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             workchain.execute()
-        self.assertNotEqual(workchain.exception(), my_exception)
+        assert workchain.exception() != my_exception
 
     def _run_with_checkpoints(self, wf_class, inputs=None):
         # TODO: Actually save at each point!
@@ -582,10 +581,10 @@ class TestWorkchain(unittest.TestCase):
             '1:while_(do_step)',
             '2:if_(do_step)',
         ]
-        self.assertListEqual(collector.stepper_strings, stepper_strings)
+        assert collector.stepper_strings == stepper_strings
 
 
-class TestImmutableInputWorkchain(unittest.TestCase):
+class TestImmutableInputWorkchain:
     """
     Test that inputs cannot be modified
     """
@@ -594,7 +593,6 @@ class TestImmutableInputWorkchain(unittest.TestCase):
         """
         Check that from within the WorkChain self.inputs returns an AttributesFrozendict which should be immutable
         """
-        test_class = self
 
         class Wf(WorkChain):
             @classmethod
@@ -609,19 +607,19 @@ class TestImmutableInputWorkchain(unittest.TestCase):
 
             def step_one(self):
                 # Attempt to manipulate the inputs dictionary which since it is a AttributesFrozendict should raise
-                with test_class.assertRaises(TypeError):
+                with pytest.raises(TypeError):
                     self.inputs['a'] = 3
-                with test_class.assertRaises(AttributeError):
+                with pytest.raises(AttributeError):
                     self.inputs.pop('b')
-                with test_class.assertRaises(TypeError):
+                with pytest.raises(TypeError):
                     self.inputs['c'] = 4
 
             def step_two(self):
                 # Verify that original inputs are still there with same value and no inputs were added
-                test_class.assertIn('a', self.inputs)
-                test_class.assertIn('b', self.inputs)
-                test_class.assertNotIn('c', self.inputs)
-                test_class.assertEqual(self.inputs['a'], 1)
+                assert 'a' in self.inputs
+                assert 'b' in self.inputs
+                assert 'c' not in self.inputs
+                assert self.inputs['a'] == 1
 
         workchain = Wf(inputs=dict(a=1, b=2))
         workchain.execute()
@@ -630,7 +628,6 @@ class TestImmutableInputWorkchain(unittest.TestCase):
         """
         Check that namespaced inputs also return AttributeFrozendicts and are hence immutable
         """
-        test_class = self
 
         class Wf(WorkChain):
             @classmethod
@@ -644,19 +641,19 @@ class TestImmutableInputWorkchain(unittest.TestCase):
 
             def step_one(self):
                 # Attempt to manipulate the namespaced inputs dictionary which should raise
-                with test_class.assertRaises(TypeError):
+                with pytest.raises(TypeError):
                     self.inputs.subspace['one'] = 3
-                with test_class.assertRaises(AttributeError):
+                with pytest.raises(AttributeError):
                     self.inputs.subspace.pop('two')
-                with test_class.assertRaises(TypeError):
+                with pytest.raises(TypeError):
                     self.inputs.subspace['four'] = 4
 
             def step_two(self):
                 # Verify that original inputs are still there with same value and no inputs were added
-                test_class.assertIn('one', self.inputs.subspace)
-                test_class.assertIn('two', self.inputs.subspace)
-                test_class.assertNotIn('four', self.inputs.subspace)
-                test_class.assertEqual(self.inputs.subspace['one'], 1)
+                assert 'one' in self.inputs.subspace
+                assert 'two' in self.inputs.subspace
+                assert 'four' not in self.inputs.subspace
+                assert self.inputs.subspace['one'] == 1
 
         workchain = Wf(inputs=dict(subspace={'one': 1, 'two': 2}))
         workchain.execute()
