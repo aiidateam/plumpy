@@ -2,9 +2,13 @@
 """Module for process level communication functions and classes"""
 
 import asyncio
+import functools
+import uuid
 from typing import Any, Dict, Hashable, Optional, Sequence, Union
 
 import kiwipy
+import msgpack
+import yaml
 
 from plumpy import loaders
 from plumpy.coordinator import Coordinator
@@ -25,6 +29,46 @@ __all__ = [
 
 ProcessResult = Any
 ProcessStatus = Any
+
+
+# Define yaml type represender and constructor for UUID type handling in message passing
+# NOTE: it is recommend to use msgpack for sending message, the yaml is only here for reference.
+def uuid_representer(dumper, data):  # type: ignore
+    return dumper.represent_scalar('!uuid', str(data))
+
+
+def uuid_constructor(loader, node):  # type: ignore
+    value = loader.construct_scalar(node)
+    return uuid.UUID(value)
+
+
+yaml.add_representer(uuid.UUID, uuid_representer)
+yaml.add_constructor('!uuid', uuid_constructor)
+
+YAML_ENCODER = functools.partial(yaml.dump, encoding='utf-8')
+YAML_DECODER = functools.partial(yaml.load, Loader=yaml.FullLoader)
+
+# Define ext hook for msgpack to handle UUID type in message passing
+
+UUID_EXT_CODE = 42  # Just pick any integer < 128
+
+
+def default_uuid_ext(obj: Any) -> msgpack.ExtType:
+    """Convert UUID objects into a custom msgpack.ExtType."""
+    if isinstance(obj, uuid.UUID):
+        return msgpack.ExtType(UUID_EXT_CODE, obj.bytes)
+    raise TypeError(f'Cannot serialize type {type(obj)}')
+
+
+def ext_hook(code: Any, data: bytes | None) -> Any:
+    """Recreate the object from the custom msgpack.ExtType."""
+    if code == UUID_EXT_CODE:
+        return uuid.UUID(bytes=data)
+    return msgpack.ExtType(code, data)
+
+
+MSGPACK_ENCODER = functools.partial(msgpack.packb, default=default_uuid_ext)
+MSGPACK_DECODER = functools.partial(msgpack.unpackb, ext_hook=ext_hook)
 
 
 # FIXME: the class not fit typing of ProcessController protocol

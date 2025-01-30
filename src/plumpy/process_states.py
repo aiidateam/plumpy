@@ -15,7 +15,6 @@ from typing import (
 
 import yaml
 from typing_extensions import Self, override
-from yaml.loader import Loader
 
 from plumpy.loaders import ObjectLoader
 from plumpy.message import MessageBuilder, MessageType
@@ -547,7 +546,7 @@ class Excepted:
         load_context = ensure_object_loader(load_context, saved_state)
         obj = auto_load(cls, saved_state, load_context)
 
-        obj.exception = yaml.load(saved_state[obj.EXC_VALUE], Loader=Loader)
+        obj.exception = yaml.load(saved_state[obj.EXC_VALUE], Loader=yaml.UnsafeLoader)
         if _HAS_TBLIB:
             try:
                 obj.traceback = tblib.Traceback.from_string(saved_state[obj.TRACEBACK], strict=False)

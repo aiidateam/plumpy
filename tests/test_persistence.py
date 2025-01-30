@@ -162,6 +162,6 @@ class TestBundle:
         bundle = plumpy.Bundle(Save1())
         represent = yaml.dump({'bundle': bundle})
 
-        bundle_loaded = yaml.load(represent, Loader=yaml.Loader)['bundle']
+        bundle_loaded = yaml.load(represent, Loader=yaml.UnsafeLoader)['bundle']
         assert isinstance(bundle_loaded, plumpy.Bundle)
         assert bundle_loaded == Save1().save()
