@@ -39,7 +39,6 @@ def loop_communicator():
         message_exchange=message_exchange,
         task_exchange=task_exchange,
         task_queue=task_queue,
-        decoder=functools.partial(yaml.load, Loader=yaml.Loader),
     )
 
     loop = asyncio.get_event_loop()
