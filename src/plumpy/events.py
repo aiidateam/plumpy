@@ -48,15 +48,23 @@ def set_event_loop_policy() -> None:
 
 def reset_event_loop_policy() -> None:
     """Reset the event loop policy to the asyncio default."""
-    # purge weakref to prevent memory leak
-    loop = asyncio.get_event_loop()
+    # 1. Close the existing event loop (if it isn't already closed):
+    old_loop = asyncio.get_event_loop()
+    if not old_loop.is_closed():
+        # purge weakref to prevent memory leak
+        cls = old_loop.__class__
 
-    cls = loop.__class__
+        del cls._check_running  # type: ignore
+        del cls._nest_patched  # type: ignore
 
-    del cls._check_running  # type: ignore
-    del cls._nest_patched  # type: ignore
+        old_loop.close()
 
+    # 2. Reset the policy to the default (i.e. None):
     asyncio.set_event_loop_policy(None)
+
+    # 3. Create a brand-new event loop under this default policy:
+    new_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(new_loop)
 
 
 def run_until_complete(future: asyncio.Future, loop: asyncio.AbstractEventLoop | None = None) -> Any:
