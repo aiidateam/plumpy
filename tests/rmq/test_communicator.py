@@ -27,31 +27,6 @@ def persister():
     shutil.rmtree(_tmppath)
 
 
-@pytest.fixture
-def _coordinator():
-    message_exchange = f'{__file__}.{shortuuid.uuid()}'
-    task_exchange = f'{__file__}.{shortuuid.uuid()}'
-    task_queue = f'{__file__}.{shortuuid.uuid()}'
-
-    thread_comm = RmqThreadCommunicator.connect(
-        connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
-        message_exchange=message_exchange,
-        task_exchange=task_exchange,
-        task_queue=task_queue,
-        encoder=process_control.MSGPACK_ENCODER,
-        decoder=process_control.MSGPACK_DECODER,
-    )
-
-    loop = asyncio.get_event_loop()
-    loop.set_debug(True)
-    comm = communications.LoopCommunicator(thread_comm, loop=loop)
-    coordinator = RmqCoordinator(comm)
-
-    yield coordinator
-
-    coordinator.close()
-
-
 @pytest.fixture(scope='function')
 def make_coordinator():
     def _coordinator(loop=None):

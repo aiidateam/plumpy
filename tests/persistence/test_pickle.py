@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import tempfile
 
+import pytest
+
 if getattr(tempfile, 'TemporaryDirectory', None) is None:
     from backports import tempfile
 
@@ -10,6 +12,7 @@ from ..utils import ProcessWithCheckpoint
 
 
 class TestPicklePersister:
+    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_save_load_roundtrip(self):
         """
         Test the plumpy.PicklePersister by taking a dummpy process, saving a checkpoint
@@ -21,6 +24,7 @@ class TestPicklePersister:
             persister = plumpy.PicklePersister(directory)
             persister.save_checkpoint(process)
 
+    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_get_checkpoints_without_tags(self):
         """ """
         process_a = ProcessWithCheckpoint()
@@ -40,6 +44,7 @@ class TestPicklePersister:
 
             assert set(retrieved_checkpoints) == set(checkpoints)
 
+    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_get_checkpoints_with_tags(self):
         """ """
         process_a = ProcessWithCheckpoint()
@@ -61,6 +66,7 @@ class TestPicklePersister:
 
             assert set(retrieved_checkpoints) == set(checkpoints)
 
+    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_get_process_checkpoints(self):
         """ """
         process_a = ProcessWithCheckpoint()
@@ -82,6 +88,7 @@ class TestPicklePersister:
 
             assert set(retrieved_checkpoints) == set(checkpoints)
 
+    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_delete_process_checkpoints(self):
         """ """
         process_a = ProcessWithCheckpoint()
@@ -109,6 +116,7 @@ class TestPicklePersister:
 
             assert set(retrieved_checkpoints) == set(checkpoints)
 
+    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_delete_checkpoint(self):
         """ """
         process_a = ProcessWithCheckpoint()

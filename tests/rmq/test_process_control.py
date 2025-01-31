@@ -7,10 +7,16 @@ import shortuuid
 from kiwipy import rmq
 
 import plumpy
+from plumpy.events import PlumpyEventLoopPolicy
 from plumpy.rmq import process_control
 
 from . import RmqCoordinator
 from .. import utils
+
+
+@pytest.fixture(scope='module')
+def event_loop_policy(request):
+    return PlumpyEventLoopPolicy()
 
 
 @pytest.fixture
