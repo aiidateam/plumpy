@@ -84,6 +84,10 @@ class RemoteProcessController:
     def __init__(self, coordinator: Coordinator) -> None:
         self._coordinator = coordinator
 
+    @property
+    def coordinator(self) -> Coordinator:
+        return self._coordinator
+
     async def get_status(self, pid: 'PID_TYPE') -> 'ProcessStatus':
         """
         Get the status of a process with the given PID
@@ -249,6 +253,10 @@ class RemoteProcessThreadController:
 
         """
         self._coordinator = coordinator
+
+    @property
+    def coordinator(self) -> Coordinator:
+        return self._coordinator
 
     def get_status(self, pid: 'PID_TYPE') -> kiwipy.Future:
         """Get the status of a process with the given PID.
