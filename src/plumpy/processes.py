@@ -53,7 +53,7 @@ from .base.state_machine import (
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
 from .futures import CancellableAction, capture_exceptions
-from .message import MESSAGE_TEXT_KEY, MessageBuilder, MessageType
+from .message import MESSAGE_TEXT_KEY, Message, MsgKill, MsgPause
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
@@ -564,7 +564,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         """Return whether the process is killed."""
         return self.state_label == process_states.ProcessState.KILLED
 
-    def killed_msg(self) -> MessageType | None:
+    def killed_msg(self) -> Message | None:
         """Return the killed message."""
         if isinstance(self.state, process_states.Killed):
             return self.state.msg
@@ -899,7 +899,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         self._fire_event(ProcessListener.on_process_excepted, str(self.future().exception()))
 
     @super_check
-    def on_kill(self, msg: MessageType | None) -> None:
+    def on_kill(self, msg: Message | None) -> None:
         """Entering the KILLED state."""
         if msg is None:
             msg_txt = ''
@@ -945,7 +945,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
     # region Communication
 
-    def message_receive(self, _comm: Coordinator, msg: MessageType) -> Any:
+    def message_receive(self, _comm: Coordinator, msg: Message) -> Any:
         """
         Coroutine called when the process receives a message from the communicator
 
@@ -977,7 +977,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         raise RuntimeError('Unknown intent')
 
     def broadcast_receive(
-        self, _comm: Coordinator, msg: MessageType, sender: Any, subject: Any, correlation_id: Any
+        self, _comm: Coordinator, msg: Message, sender: Any, subject: Any, correlation_id: Any
     ) -> concurrent.futures.Future | None:
         """
         Coroutine called when the process receives a message from the communicator
@@ -1141,14 +1141,14 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
             self._state.interrupt(interrupt_exception)
             return cast(CancellableAction, self._interrupt_action)
 
-        msg = MessageBuilder.pause(msg_text)
+        msg = MsgPause.new(msg_text)
         return self._do_pause(state_msg=msg)
 
     @staticmethod
     def _interrupt(state: Interruptable, reason: Exception) -> None:
         state.interrupt(reason)
 
-    def _do_pause(self, state_msg: MessageType | None, next_state: state_machine.State | None = None) -> bool:
+    def _do_pause(self, state_msg: Message | None, next_state: state_machine.State | None = None) -> bool:
         """Carry out the pause procedure, optionally transitioning to the next state first"""
         try:
             if next_state is not None:
@@ -1267,7 +1267,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
             self._state.interrupt(interrupt_exception)
             return cast(CancellableAction, self._interrupt_action)
 
-        msg = MessageBuilder.kill(msg_text)
+        msg = MsgKill.new(msg_text)
         new_state = create_state(self, process_states.ProcessState.KILLED, msg=msg)
         self.transition_to(new_state)
         return True

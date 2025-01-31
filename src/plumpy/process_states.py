@@ -17,7 +17,7 @@ import yaml
 from typing_extensions import Self, override
 
 from plumpy.loaders import ObjectLoader
-from plumpy.message import MessageBuilder, MessageType
+from plumpy.message import Message, MsgKill, MsgPause
 from plumpy.persistence import ensure_object_loader
 
 try:
@@ -64,17 +64,17 @@ class Interruption(Exception):  # noqa: N818
 class KillInterruption(Interruption):
     def __init__(self, msg_text: str | None):
         super().__init__()
-        msg = MessageBuilder.kill(text=msg_text)
+        msg = MsgKill.new(text=msg_text)
 
-        self.msg: MessageType = msg
+        self.msg: Message = msg
 
 
 class PauseInterruption(Interruption):
     def __init__(self, msg_text: str | None):
         super().__init__()
-        msg = MessageBuilder.pause(text=msg_text)
+        msg = MsgPause.new(text=msg_text)
 
-        self.msg: MessageType = msg
+        self.msg: Message = msg
 
 
 # region Commands
@@ -104,7 +104,7 @@ class Command:
 
 @auto_persist('msg')
 class Kill(Command):
-    def __init__(self, msg: MessageType | None = None):
+    def __init__(self, msg: Message | None = None):
         super().__init__()
         self.msg = msg
 
@@ -633,7 +633,7 @@ class Killed:
 
     is_terminal: ClassVar[bool] = True
 
-    def __init__(self, msg: MessageType | None):
+    def __init__(self, msg: Message | None):
         """
         :param msg: Optional kill message
         """

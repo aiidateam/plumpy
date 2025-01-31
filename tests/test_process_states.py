@@ -4,7 +4,7 @@ import pytest
 
 from plumpy import process_states
 from plumpy.base.state_machine import StateMachine
-from plumpy.message import MessageBuilder
+from plumpy.message import MsgKill
 from plumpy.persistence import LoadSaveContext, Savable, load
 from plumpy.process_states import Command, Created, Excepted, Finished, Killed, Running, Waiting
 from plumpy.processes import Process
@@ -84,7 +84,7 @@ def test_finished_savable():
 
 
 def test_killed_savable():
-    state = Killed(msg=MessageBuilder.kill('kill it'))
+    state = Killed(msg=MsgKill.new('kill it'))
     assert isinstance(state, Savable)
 
     saved_state = state.save()

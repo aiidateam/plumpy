@@ -28,7 +28,7 @@ from .exceptions import (
 )
 from .futures import CancellableAction, Future, capture_exceptions, create_task
 from .loaders import DefaultObjectLoader, ObjectLoader, get_object_loader, set_object_loader
-from .message import MessageBuilder, ProcessLauncher, create_continue_body, create_launch_body
+from .message import Message, MsgContinue, MsgCreate, MsgKill, MsgLaunch, MsgPause, MsgPlay, MsgStatus, ProcessLauncher
 from .persistence import (
     Bundle,
     InMemoryPersister,
@@ -64,26 +64,17 @@ from .utils import AttributesDict
 from .workchains import ToContext, WorkChain, WorkChainSpec, if_, return_, while_
 
 __all__ = (
-    # ports
     'UNSPECIFIED',
-    # utils
     'AttributesDict',
-    # persistence
     'Bundle',
-    # processes
     'BundleKeys',
-    # futures
     'CancellableAction',
-    # exceptions
     'ClosedError',
-    # process_states/States
     'Continue',
-    # coordinator
     'Coordinator',
     'CoordinatorConnectionError',
     'CoordinatorTimeoutError',
     'Created',
-    # loaders
     'DefaultObjectLoader',
     'Excepted',
     'Finished',
@@ -92,14 +83,19 @@ __all__ = (
     'InputPort',
     'Interruption',
     'InvalidStateError',
-    # process_states/Commands
     'Kill',
     'KillInterruption',
     'Killed',
     'KilledError',
     'LoadSaveContext',
-    # message
-    'MessageBuilder',
+    'Message',
+    'MsgContinue',
+    'MsgCreate',
+    'MsgKill',
+    'MsgLaunch',
+    'MsgPause',
+    'MsgPlay',
+    'MsgStatus',
     'ObjectLoader',
     'OutputPort',
     'PauseInterruption',
@@ -107,16 +103,13 @@ __all__ = (
     'PersistenceError',
     'Persister',
     'PicklePersister',
-    # event
     'PlumpyEventLoopPolicy',
     'Port',
     'PortNamespace',
     'PortValidationError',
     'Process',
-    # controller
     'ProcessController',
     'ProcessLauncher',
-    # process_listener
     'ProcessListener',
     'ProcessSpec',
     'ProcessState',
@@ -124,7 +117,6 @@ __all__ = (
     'Savable',
     'SavableFuture',
     'Stop',
-    # workchain
     'ToContext',
     'TransitionFailed',
     'UnsuccessfulResult',
@@ -134,8 +126,6 @@ __all__ = (
     'WorkChainSpec',
     'auto_persist',
     'capture_exceptions',
-    'create_continue_body',
-    'create_launch_body',
     'create_task',
     'get_event_loop',
     'get_object_loader',
