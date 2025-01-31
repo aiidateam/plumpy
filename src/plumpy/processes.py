@@ -1315,7 +1315,7 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
         :return: None if not terminated, otherwise `self.outputs`
         """
         if not self.has_terminated():
-            self.loop.run_until_complete(self.step_until_terminated())
+            asyncio.run(self.step_until_terminated())
 
         return self.future().result()
 
