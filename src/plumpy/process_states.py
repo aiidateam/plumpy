@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Tuple, Typ
 import yaml
 from yaml.loader import Loader
 
-from plumpy.message import MessageBuilder, MessageType
+from plumpy.message import Message, MsgKill, MsgPause
 
 try:
     import tblib
@@ -54,17 +54,17 @@ class Interruption(Exception):  # noqa: N818
 class KillInterruption(Interruption):
     def __init__(self, msg_text: str | None):
         super().__init__()
-        msg = MessageBuilder.kill(text=msg_text)
+        msg = MsgKill.new(text=msg_text)
 
-        self.msg: MessageType = msg
+        self.msg: Message = msg
 
 
 class PauseInterruption(Interruption):
     def __init__(self, msg_text: str | None):
         super().__init__()
-        msg = MessageBuilder.pause(text=msg_text)
+        msg = MsgPause.new(text=msg_text)
 
-        self.msg: MessageType = msg
+        self.msg: Message = msg
 
 
 # region Commands
@@ -76,7 +76,7 @@ class Command(persistence.Savable):
 
 @auto_persist('msg')
 class Kill(Command):
-    def __init__(self, msg: Optional[MessageType] = None):
+    def __init__(self, msg: Optional[Message] = None):
         super().__init__()
         self.msg = msg
 
@@ -454,7 +454,7 @@ class Killed(State):
 
     LABEL = ProcessState.KILLED
 
-    def __init__(self, process: 'Process', msg: Optional[MessageType]):
+    def __init__(self, process: 'Process', msg: Optional[Message]):
         """
         :param process: The associated process
         :param msg: Optional kill message

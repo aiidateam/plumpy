@@ -10,7 +10,7 @@ from plumpy.futures import CancellableAction
 
 import plumpy
 from plumpy import BundleKeys, Process, ProcessState
-from plumpy.message import MESSAGE_TEXT_KEY, MessageBuilder
+from plumpy.message import MESSAGE_TEXT_KEY, MsgKill
 from plumpy.utils import AttributesFrozendict
 from . import utils
 
@@ -428,7 +428,7 @@ class TestProcess(unittest.TestCase):
             after_kill = False
 
             def run(self, **kwargs):
-                msg = MessageBuilder.kill(text='killed')
+                msg = MsgKill.new(text='killed')
                 self.kill(msg)
                 # The following line should be executed because kill will not
                 # interrupt execution of a method call in the RUNNING state

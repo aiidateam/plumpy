@@ -12,7 +12,7 @@ import concurrent.futures
 import plumpy
 from plumpy import persistence, process_states, processes, utils
 from plumpy.exceptions import CoordinatorConnectionError
-from plumpy.message import MessageBuilder
+from plumpy.message import MsgKill
 from plumpy.rmq import TaskRejected
 import shortuuid
 
@@ -213,7 +213,7 @@ class WaitForSignalProcess(processes.Process):
 class KillProcess(processes.Process):
     @utils.override
     def run(self):
-        msg = MessageBuilder.kill(text='killed')
+        msg = MsgKill.new(text='killed')
         return process_states.Kill(msg=msg)
 
 
