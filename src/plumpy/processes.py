@@ -35,9 +35,7 @@ from typing import (
     cast,
 )
 
-import kiwipy
-
-from plumpy.coordinator import Coordinator
+from plumpy.coordinator import BroadcastFilter, Coordinator
 from plumpy.persistence import ensure_object_loader
 
 try:
@@ -390,12 +388,12 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
             try:
                 # filter out state change broadcasts
-                # XXX: remove dep on kiwipy
-                subscriber = kiwipy.BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
+                subscriber = BroadcastFilter(  # type: ignore
+                    self.broadcast_receive,
+                    subject=re.compile(r'^(?!state_changed).*'),
+                )
                 identifier = self._coordinator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
-                # identifier = self._coordinator.add_broadcast_subscriber(
-                #     subscriber, subject_filters=[re.compile(r'^(?!state_changed).*')], identifier=str(self.pid)
-                # )
+
                 self.add_cleanup(functools.partial(self._coordinator.remove_broadcast_subscriber, identifier))
             except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
