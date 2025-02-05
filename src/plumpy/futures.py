@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import Any, Awaitable, Callable, Generator, Optional
+from typing import Any, Callable, Generator
 
-__all__ = ['CancellableAction', 'Future', 'capture_exceptions', 'create_task', 'create_task']
+__all__ = ['CancellableAction', 'Future', 'capture_exceptions']
 
 
 class InvalidFutureError(Exception):
@@ -64,18 +64,3 @@ class CancellableAction(Future):
                 self.set_result(self._action(*args, **kwargs))
         finally:
             self._action = None  # type: ignore
-
-
-def create_task(coro: Callable[[], Awaitable[Any]], loop: Optional[asyncio.AbstractEventLoop] = None) -> Future:
-    """
-    Schedule a call to a coro in the event loop and wrap the outcome
-    in a future.
-
-    :param coro: a function which creates the coroutine to schedule
-    :param loop: the event loop to schedule it in
-    :return: the future representing the outcome of the coroutine
-
-    """
-    loop = loop or asyncio.get_event_loop()
-
-    return asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coro(), loop))

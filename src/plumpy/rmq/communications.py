@@ -5,11 +5,10 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import TYPE_CHECKING, Any, Callable, Generic, Hashable, Optional, TypeVar, final
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generic, Hashable, Optional, TypeVar, final
 
 import kiwipy
 
-from plumpy.futures import create_task
 from plumpy.rmq.futures import wrap_to_concurrent_future
 from plumpy.utils import ensure_coroutine
 
@@ -36,6 +35,21 @@ if TYPE_CHECKING:
     TaskSubscriber = Callable[[kiwipy.Communicator, Any], Any]
     # Broadcast subscribers params: communicator, body, sender, subject, correlation id
     BroadcastSubscriber = Callable[[kiwipy.Communicator, Any, Any, Any, ID_TYPE], Any]
+
+
+def create_task(coro: Callable[[], Awaitable[Any]], loop: Optional[asyncio.AbstractEventLoop] = None) -> asyncio.Future:
+    """
+    Schedule a call to a coro in the event loop and wrap the outcome
+    in a future.
+
+    :param coro: a function which creates the coroutine to schedule
+    :param loop: the event loop to schedule it in
+    :return: the future representing the outcome of the coroutine
+
+    """
+    loop = loop or asyncio.get_event_loop()
+
+    return asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coro(), loop))
 
 
 def convert_to_comm(
