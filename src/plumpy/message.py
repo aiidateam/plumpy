@@ -5,13 +5,26 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, cast
 
 from plumpy.coordinator import Coordinator
 from plumpy.exceptions import PersistenceError, TaskRejectedError
 
 from . import loaders, persistence
 from .utils import PID_TYPE
+
+__all__ = [
+    'Message',
+    'MsgContinue',
+    'MsgCreate',
+    'MsgKill',
+    'MsgLaunch',
+    'MsgPause',
+    'MsgPlay',
+    'MsgStatus',
+    'ProcessLauncher',
+]
 
 if TYPE_CHECKING:
     from .processes import Process
@@ -48,125 +61,146 @@ CREATE_TASK = 'create'
 
 LOGGER = logging.getLogger(__name__)
 
-MessageType = Dict[str, Any]
+Message = dict[str, Any]
 
 
-class MessageBuilder:
-    """MessageBuilder will construct different messages that can passing over coordinator."""
-
+class MsgPlay:
     @classmethod
-    def play(cls, text: str | None = None) -> MessageType:
+    def new(cls, text: str | None = None) -> Message:
         """The play message send over coordinator."""
         return {
             INTENT_KEY: Intent.PLAY,
             MESSAGE_TEXT_KEY: text,
         }
 
+
+class MsgPause:
+    """
+    The 'pause' message sent over a coordinator.
+    """
+
     @classmethod
-    def pause(cls, text: str | None = None) -> MessageType:
-        """The pause message send over coordinator."""
+    def new(cls, text: str | None = None) -> Message:
         return {
             INTENT_KEY: Intent.PAUSE,
             MESSAGE_TEXT_KEY: text,
         }
 
+
+class MsgKill:
+    """
+    The 'kill' message sent over a coordinator.
+    """
+
     @classmethod
-    def kill(cls, text: str | None = None, force_kill: bool = False) -> MessageType:
-        """The kill message send over coordinator."""
+    def new(cls, text: str | None = None, force_kill: bool = False) -> Message:
         return {
             INTENT_KEY: Intent.KILL,
             MESSAGE_TEXT_KEY: text,
             FORCE_KILL_KEY: force_kill,
         }
 
+
+class MsgStatus:
+    """
+    The 'status' message sent over a coordinator.
+    """
+
     @classmethod
-    def status(cls, text: str | None = None) -> MessageType:
-        """The status message send over coordinator."""
+    def new(cls, text: str | None = None) -> Message:
         return {
             INTENT_KEY: Intent.STATUS,
             MESSAGE_TEXT_KEY: text,
         }
 
 
-def create_launch_body(
-    process_class: str,
-    init_args: Optional[Sequence[Any]] = None,
-    init_kwargs: Optional[Dict[str, Any]] = None,
-    persist: bool = False,
-    loader: Optional[loaders.ObjectLoader] = None,
-    nowait: bool = True,
-) -> Dict[str, Any]:
+class MsgLaunch:
     """
-    Create a message body for the launch action
-
-    :param process_class: the class of the process to launch
-    :param init_args: any initialisation positional arguments
-    :param init_kwargs: any initialisation keyword arguments
-    :param persist: persist this process if True, otherwise don't
-    :param loader: the loader to use to load the persisted process
-    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
-    :return: a dictionary with the body of the message to launch the process
-    :rtype: dict
+    Create the message payload for the launch action.
     """
-    if loader is None:
-        loader = loaders.get_object_loader()
 
-    msg_body = {
-        TASK_KEY: LAUNCH_TASK,
-        TASK_ARGS: {
-            PROCESS_CLASS_KEY: loader.identify_object(process_class),
-            PERSIST_KEY: persist,
-            NOWAIT_KEY: nowait,
-            ARGS_KEY: init_args,
-            KWARGS_KEY: init_kwargs,
-        },
-    }
-    return msg_body
+    @classmethod
+    def new(
+        cls,
+        process_class: str,
+        init_args: Sequence[Any] | None = None,
+        init_kwargs: dict[str, Any] | None = None,
+        persist: bool = False,
+        loader: 'loaders.ObjectLoader | None' = None,
+        nowait: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Create a message body for the launch action
+        """
+        if loader is None:
+            loader = loaders.get_object_loader()
+
+        return {
+            TASK_KEY: LAUNCH_TASK,
+            TASK_ARGS: {
+                PROCESS_CLASS_KEY: loader.identify_object(process_class),
+                PERSIST_KEY: persist,
+                NOWAIT_KEY: nowait,
+                ARGS_KEY: init_args,
+                KWARGS_KEY: init_kwargs,
+            },
+        }
 
 
-def create_continue_body(pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False) -> Dict[str, Any]:
+class MsgContinue:
     """
-    Create a message body to continue an existing process
-    :param pid: the pid of the existing process
-    :param tag: the optional persistence tag
-    :param nowait: wait for the process to finish before completing the task, otherwise just return the PID
-    :return: a dictionary with the body of the message to continue the process
-
+    Create the message payload to continue an existing process.
     """
-    msg_body = {TASK_KEY: CONTINUE_TASK, TASK_ARGS: {PID_KEY: pid, NOWAIT_KEY: nowait, TAG_KEY: tag}}
-    return msg_body
+
+    @classmethod
+    def new(
+        cls,
+        pid: 'PID_TYPE',
+        tag: str | None = None,
+        nowait: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Create a message body to continue an existing process.
+        """
+        return {
+            TASK_KEY: CONTINUE_TASK,
+            TASK_ARGS: {
+                PID_KEY: pid,
+                NOWAIT_KEY: nowait,
+                TAG_KEY: tag,
+            },
+        }
 
 
-def create_create_body(
-    process_class: str,
-    init_args: Optional[Sequence[Any]] = None,
-    init_kwargs: Optional[Dict[str, Any]] = None,
-    persist: bool = False,
-    loader: Optional[loaders.ObjectLoader] = None,
-) -> Dict[str, Any]:
+class MsgCreate:
     """
-    Create a message body to create a new process
-    :param process_class: the class of the process to launch
-    :param init_args: any initialisation positional arguments
-    :param init_kwargs: any initialisation keyword arguments
-    :param persist: persist this process if True, otherwise don't
-    :param loader: the loader to use to load the persisted process
-    :return: a dictionary with the body of the message to launch the process
-
+    Create the message payload to create a new process.
     """
-    if loader is None:
-        loader = loaders.get_object_loader()
 
-    msg_body = {
-        TASK_KEY: CREATE_TASK,
-        TASK_ARGS: {
-            PROCESS_CLASS_KEY: loader.identify_object(process_class),
-            PERSIST_KEY: persist,
-            ARGS_KEY: init_args,
-            KWARGS_KEY: init_kwargs,
-        },
-    }
-    return msg_body
+    @classmethod
+    def new(
+        cls,
+        process_class: str,
+        init_args: Sequence[Any] | None = None,
+        init_kwargs: dict[str, Any] | None = None,
+        persist: bool = False,
+        loader: 'loaders.ObjectLoader | None' = None,
+    ) -> dict[str, Any]:
+        """
+        Create a message body to create a new process.
+        """
+        if loader is None:
+            loader = loaders.get_object_loader()
+
+        return {
+            TASK_KEY: CREATE_TASK,
+            TASK_ARGS: {
+                PROCESS_CLASS_KEY: loader.identify_object(process_class),
+                PERSIST_KEY: persist,
+                ARGS_KEY: init_args,
+                KWARGS_KEY: init_kwargs,
+            },
+        }
 
 
 class ProcessLauncher:
@@ -196,10 +230,10 @@ class ProcessLauncher:
 
     def __init__(
         self,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
-        persister: Optional[persistence.Persister] = None,
-        load_context: Optional[persistence.LoadSaveContext] = None,
-        loader: Optional[loaders.ObjectLoader] = None,
+        loop: asyncio.AbstractEventLoop | None = None,
+        persister: persistence.Persister | None = None,
+        load_context: persistence.LoadSaveContext | None = None,
+        loader: loaders.ObjectLoader | None = None,
     ) -> None:
         self._loop = loop
         self._persister = persister
@@ -211,7 +245,7 @@ class ProcessLauncher:
         else:
             self._loader = loaders.get_object_loader()
 
-    async def __call__(self, coordinator: Coordinator, task: Dict[str, Any]) -> Union[PID_TYPE, Any]:
+    async def __call__(self, coordinator: Coordinator, task: dict[str, Any]) -> PID_TYPE | Any:
         """
         Receive a task.
         :param task: The task message
@@ -231,9 +265,9 @@ class ProcessLauncher:
         process_class: str,
         persist: bool,
         nowait: bool,
-        init_args: Optional[Sequence[Any]] = None,
-        init_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Union[PID_TYPE, Any]:
+        init_args: Sequence[Any] | None = None,
+        init_kwargs: dict[str, Any] | None = None,
+    ) -> PID_TYPE | Any:
         """
         Launch the process
 
@@ -266,7 +300,7 @@ class ProcessLauncher:
 
         return proc.future().result()
 
-    async def _continue(self, pid: 'PID_TYPE', nowait: bool, tag: Optional[str] = None) -> Union[PID_TYPE, Any]:
+    async def _continue(self, pid: 'PID_TYPE', nowait: bool, tag: str | None = None) -> PID_TYPE | Any:
         """
         Continue the process
 
@@ -295,8 +329,8 @@ class ProcessLauncher:
         self,
         process_class: str,
         persist: bool,
-        init_args: Optional[Sequence[Any]] = None,
-        init_kwargs: Optional[Dict[str, Any]] = None,
+        init_args: Sequence[Any] | None = None,
+        init_kwargs: dict[str, Any] | None = None,
     ) -> 'PID_TYPE':
         """
         Create the process

@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 
 from plumpy import loaders
-from plumpy.message import MessageType
+from plumpy.message import Message
 from plumpy.utils import PID_TYPE
 
 ProcessResult = Any
@@ -45,7 +45,7 @@ class ProcessController(Protocol):
         """
         ...
 
-    def kill_process(self, pid: 'PID_TYPE', msg: MessageType | None = None) -> ProcessResult:
+    def kill_process(self, pid: 'PID_TYPE', msg: Message | None = None) -> ProcessResult:
         """
         Kill the process
 

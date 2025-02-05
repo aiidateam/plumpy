@@ -12,11 +12,14 @@ from plumpy import loaders
 from plumpy.coordinator import Coordinator
 from plumpy.message import (
     Intent,
-    MessageBuilder,
-    MessageType,
-    create_continue_body,
-    create_create_body,
-    create_launch_body,
+    Message,
+    MsgContinue,
+    MsgCreate,
+    MsgKill,
+    MsgLaunch,
+    MsgPause,
+    MsgPlay,
+    MsgStatus,
 )
 from plumpy.utils import PID_TYPE
 
@@ -39,13 +42,17 @@ class RemoteProcessController:
     def __init__(self, coordinator: Coordinator) -> None:
         self._coordinator = coordinator
 
+    @property
+    def coordinator(self) -> Coordinator:
+        return self._coordinator
+
     async def get_status(self, pid: 'PID_TYPE') -> 'ProcessStatus':
         """
         Get the status of a process with the given PID
         :param pid: the process id
         :return: the status response from the process
         """
-        future = self._coordinator.rpc_send(pid, MessageBuilder.status())
+        future = self._coordinator.rpc_send(pid, MsgStatus.new())
         result = await asyncio.wrap_future(future)
         return result
 
@@ -57,7 +64,7 @@ class RemoteProcessController:
         :param msg: optional pause message
         :return: True if paused, False otherwise
         """
-        msg = MessageBuilder.pause(text=msg_text)
+        msg = MsgPause.new(text=msg_text)
 
         pause_future = self._coordinator.rpc_send(pid, msg)
         # rpc_send return a thread future from coordinator
@@ -73,7 +80,7 @@ class RemoteProcessController:
         :param pid: the pid of the process to play
         :return: True if played, False otherwise
         """
-        play_future = self._coordinator.rpc_send(pid, MessageBuilder.play())
+        play_future = self._coordinator.rpc_send(pid, MsgPlay.new())
         future = await asyncio.wrap_future(play_future)
         result = await asyncio.wrap_future(future)
         return result
@@ -86,7 +93,7 @@ class RemoteProcessController:
         :param msg: optional kill message
         :return: True if killed, False otherwise
         """
-        msg = MessageBuilder.kill(text=msg_text)
+        msg = MsgKill.new(text=msg_text)
 
         # Wait for the communication to go through
         kill_future = self._coordinator.rpc_send(pid, msg)
@@ -105,7 +112,7 @@ class RemoteProcessController:
         :param pid: the pid of the process to continue
         :param tag: the checkpoint tag to continue from
         """
-        message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
+        message = MsgContinue.new(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
         continue_future = self._coordinator.task_send(message, no_reply=no_reply)
         future = await asyncio.wrap_future(continue_future)
@@ -140,7 +147,7 @@ class RemoteProcessController:
         :return: the result of launching the process
         """
 
-        message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
+        message = MsgLaunch.new(process_class, init_args, init_kwargs, persist, loader, nowait)
         launch_future = self._coordinator.task_send(message, no_reply=no_reply)
         future = await asyncio.wrap_future(launch_future)
 
@@ -173,13 +180,13 @@ class RemoteProcessController:
         :return: the result of executing the process
         """
 
-        message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
+        message = MsgCreate.new(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         create_future = self._coordinator.task_send(message)
         future = await asyncio.wrap_future(create_future)
         pid: 'PID_TYPE' = await asyncio.wrap_future(future)
 
-        message = create_continue_body(pid, nowait=nowait)
+        message = MsgContinue.new(pid, nowait=nowait)
         continue_future = self._coordinator.task_send(message, no_reply=no_reply)
         future = await asyncio.wrap_future(continue_future)
 
@@ -205,13 +212,17 @@ class RemoteProcessThreadController:
         """
         self._coordinator = coordinator
 
+    @property
+    def coordinator(self) -> Coordinator:
+        return self._coordinator
+
     def get_status(self, pid: 'PID_TYPE') -> kiwipy.Future:
         """Get the status of a process with the given PID.
 
         :param pid: the process id
         :return: the status response from the process
         """
-        return self._coordinator.rpc_send(pid, MessageBuilder.status())
+        return self._coordinator.rpc_send(pid, MsgStatus.new())
 
     def pause_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None) -> kiwipy.Future:
         """
@@ -222,7 +233,7 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be paused
 
         """
-        msg = MessageBuilder.pause(text=msg_text)
+        msg = MsgPause.new(text=msg_text)
 
         return self._coordinator.rpc_send(pid, msg)
 
@@ -232,7 +243,7 @@ class RemoteProcessThreadController:
 
         :param msg: an optional pause message
         """
-        msg = MessageBuilder.pause(text=msg_text)
+        msg = MsgPause.new(text=msg_text)
         self._coordinator.broadcast_send(msg, subject=Intent.PAUSE)
 
     def play_process(self, pid: 'PID_TYPE') -> kiwipy.Future:
@@ -243,7 +254,7 @@ class RemoteProcessThreadController:
         :return: a response future from the process to be played
 
         """
-        return self._coordinator.rpc_send(pid, MessageBuilder.play())
+        return self._coordinator.rpc_send(pid, MsgPlay.new())
 
     def play_all(self) -> None:
         """
@@ -259,7 +270,7 @@ class RemoteProcessThreadController:
         :param msg: optional kill message
         :return: a response future from the process to be killed
         """
-        msg = MessageBuilder.kill(text=msg_text)
+        msg = MsgKill.new(text=msg_text)
         return self._coordinator.rpc_send(pid, msg)
 
     def kill_all(self, msg_text: Optional[str]) -> None:
@@ -268,11 +279,11 @@ class RemoteProcessThreadController:
 
         :param msg: an optional pause message
         """
-        msg = MessageBuilder.kill(msg_text)
+        msg = MsgKill.new(msg_text)
 
         self._coordinator.broadcast_send(msg, subject=Intent.KILL)
 
-    def notify_msg(self, msg: MessageType, sender: Hashable | None = None, subject: str | None = None) -> None:
+    def notify_msg(self, msg: Message, sender: Hashable | None = None, subject: str | None = None) -> None:
         """
         Notify all processes by broadcasting of a msg
 
@@ -283,7 +294,7 @@ class RemoteProcessThreadController:
     def continue_process(
         self, pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False, no_reply: bool = False
     ) -> Union[None, PID_TYPE, ProcessResult]:
-        message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
+        message = MsgContinue.new(pid=pid, tag=tag, nowait=nowait)
         return self._coordinator.task_send(message, no_reply=no_reply)
 
     def launch_process(
@@ -308,7 +319,7 @@ class RemoteProcessThreadController:
         :param no_reply: don't send a reply to the sender
         :return: the pid of the created process or the outputs (if nowait=False)
         """
-        message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
+        message = MsgLaunch.new(process_class, init_args, init_kwargs, persist, loader, nowait)
         return self._coordinator.task_send(message, no_reply=no_reply)
 
     def execute_process(
@@ -333,7 +344,7 @@ class RemoteProcessThreadController:
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
         :return: the result of executing the process
         """
-        message = create_create_body(process_class, init_args, init_kwargs, persist=True, loader=loader)
+        message = MsgCreate.new(process_class, init_args, init_kwargs, persist=True, loader=loader)
 
         execute_future = kiwipy.Future()
         create_future = self._coordinator.task_send(message)
