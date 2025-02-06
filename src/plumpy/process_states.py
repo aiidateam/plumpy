@@ -31,10 +31,11 @@ __all__ = [
     'Excepted',
     'Finished',
     'Interruption',
+    'Killed',
     # Commands
     'Kill',
     'KillInterruption',
-    'Killed',
+    'ForceKillInterruption',
     'PauseInterruption',
     'ProcessState',
     'Running',
@@ -52,6 +53,14 @@ class Interruption(Exception):  # noqa: N818
 
 
 class KillInterruption(Interruption):
+    def __init__(self, msg_text: str | None):
+        super().__init__()
+        msg = MessageBuilder.kill(text=msg_text)
+
+        self.msg: MessageType = msg
+
+
+class ForceKillInterruption(Interruption):
     def __init__(self, msg_text: str | None):
         super().__init__()
         msg = MessageBuilder.kill(text=msg_text)
