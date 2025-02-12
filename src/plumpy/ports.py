@@ -11,8 +11,6 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, MutableMapping,
 
 from plumpy.utils import AttributesFrozendict, is_mutable_property, type_check
 
-__all__ = ['UNSPECIFIED', 'InputPort', 'OutputPort', 'Port', 'PortNamespace', 'PortValidationError']
-
 _LOGGER = logging.getLogger(__name__)
 UNSPECIFIED = ()
 

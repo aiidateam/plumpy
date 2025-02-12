@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
 from typing import Optional
 
-__all__ = ['ClosedError', 'InvalidStateError', 'KilledError', 'PersistenceError', 'UnsuccessfulResult']
-
 
 class KilledError(Exception):
     """The process was killed."""
 
 
 class InvalidStateError(Exception):
-    """
-    Raised when an operation is attempted that requires the process to be in a state
+    """Raised when an operation is attempted that requires the process to be in a state
     that is different from the current state
     """
 
@@ -33,3 +30,19 @@ class PersistenceError(Exception):
 
 class ClosedError(Exception):
     """Raised when an mutable operation is attempted on a closed process"""
+
+
+class TaskRejectedError(Exception):
+    """A task was rejected by the coordinacor"""
+
+
+class CoordinatorCommunicationError(Exception):
+    """Generic coordinator communication error"""
+
+
+class CoordinatorConnectionError(ConnectionError):
+    """Raised when coordinator cannot be connected"""
+
+
+class CoordinatorTimeoutError(TimeoutError):
+    """Raised when communicate with coordinator timeout"""

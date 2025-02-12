@@ -2,7 +2,7 @@
 import pytest
 
 import plumpy
-from plumpy import process_comms
+from plumpy import message
 from tests import utils
 
 
@@ -37,7 +37,7 @@ async def test_continue():
     del process
     process = None
 
-    result = await launcher._continue(None, **plumpy.create_continue_body(pid)[process_comms.TASK_ARGS])
+    result = await launcher._continue(**plumpy.MsgContinue.new(pid)[message.TASK_ARGS])
     assert result == utils.DummyProcess.EXPECTED_OUTPUTS
 
 
@@ -50,6 +50,6 @@ async def test_loader_is_used():
     persister.save_checkpoint(proc)
     launcher = plumpy.ProcessLauncher(persister=persister, loader=loader)
 
-    continue_task = plumpy.create_continue_body(proc.pid)
-    result = await launcher._continue(None, **continue_task[process_comms.TASK_ARGS])
+    continue_task = plumpy.MsgContinue.new(proc.pid)
+    result = await launcher._continue(**continue_task[message.TASK_ARGS])
     assert result == utils.DummyProcess.EXPECTED_OUTPUTS

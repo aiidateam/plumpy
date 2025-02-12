@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
 """Module for general kiwipy communication methods"""
 
+from __future__ import annotations
+
 import asyncio
 import functools
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generic, Hashable, Optional, TypeVar, final
 
 import kiwipy
 
-from . import futures
-from .utils import ensure_coroutine
+from plumpy.rmq.futures import wrap_to_concurrent_future
+from plumpy.utils import ensure_coroutine
 
 __all__ = [
     'Communicator',
     'DeliveryFailed',
     'RemoteException',
     'TaskRejected',
-    'plum_to_kiwi_future',
     'wrap_communicator',
 ]
 
@@ -36,29 +37,19 @@ if TYPE_CHECKING:
     BroadcastSubscriber = Callable[[kiwipy.Communicator, Any, Any, Any, ID_TYPE], Any]
 
 
-def plum_to_kiwi_future(plum_future: futures.Future) -> kiwipy.Future:
+def create_task(coro: Callable[[], Awaitable[Any]], loop: Optional[asyncio.AbstractEventLoop] = None) -> asyncio.Future:
     """
-    Return a kiwi future that resolves to the outcome of the plum future
+    Schedule a call to a coro in the event loop and wrap the outcome
+    in a future.
 
-    :param plum_future: the plum future
-    :return: the kiwipy future
+    :param coro: a function which creates the coroutine to schedule
+    :param loop: the event loop to schedule it in
+    :return: the future representing the outcome of the coroutine
 
     """
-    kiwi_future = kiwipy.Future()
+    loop = loop or asyncio.get_event_loop()
 
-    def on_done(_plum_future: futures.Future) -> None:
-        with kiwipy.capture_exceptions(kiwi_future):
-            if plum_future.cancelled():
-                kiwi_future.cancel()
-            else:
-                result = plum_future.result()
-                # Did we get another future?  In which case convert it too
-                if isinstance(result, futures.Future):
-                    result = plum_to_kiwi_future(result)
-                kiwi_future.set_result(result)
-
-    plum_future.add_done_callback(on_done)
-    return kiwi_future
+    return asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coro(), loop))
 
 
 def convert_to_comm(
@@ -96,15 +87,16 @@ def convert_to_comm(
             return kiwi_future
 
         msg_fn = functools.partial(coro, communicator, *args, **kwargs)
-        task_future = futures.create_task(msg_fn, loop)
-        return plum_to_kiwi_future(task_future)
+        task_future = create_task(msg_fn, loop)
+        return wrap_to_concurrent_future(task_future)
 
     return converted
 
 
-def wrap_communicator(
-    communicator: kiwipy.Communicator, loop: Optional[asyncio.AbstractEventLoop] = None
-) -> 'LoopCommunicator':
+T = TypeVar('T', bound=kiwipy.Communicator)
+
+
+def wrap_communicator(communicator: T, loop: Optional[asyncio.AbstractEventLoop] = None) -> 'LoopCommunicator[T]':
     """
     Wrap a communicator such that all callbacks made to any subscribers are scheduled on the
     given event loop.
@@ -124,10 +116,11 @@ def wrap_communicator(
     return LoopCommunicator(communicator, loop)
 
 
-class LoopCommunicator(kiwipy.Communicator):  # type: ignore
+@final
+class LoopCommunicator(Generic[T], kiwipy.Communicator):  # type: ignore
     """Wrapper around a `kiwipy.Communicator` that schedules any subscriber messages on a given event loop."""
 
-    def __init__(self, communicator: kiwipy.Communicator, loop: Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self, communicator: T, loop: Optional[asyncio.AbstractEventLoop] = None):
         """
         :param communicator: The kiwipy communicator
         :param loop: The event loop to schedule callbacks on
@@ -137,6 +130,10 @@ class LoopCommunicator(kiwipy.Communicator):  # type: ignore
 
         self._communicator = communicator
         self._loop: asyncio.AbstractEventLoop = loop or asyncio.get_event_loop()
+
+    @property
+    def inner(self) -> T:
+        return self._communicator
 
     def loop(self) -> asyncio.AbstractEventLoop:
         return self._loop
@@ -176,7 +173,7 @@ class LoopCommunicator(kiwipy.Communicator):  # type: ignore
         sender: Optional[str] = None,
         subject: Optional[str] = None,
         correlation_id: Optional['ID_TYPE'] = None,
-    ) -> futures.Future:
+    ) -> kiwipy.Future:
         return self._communicator.broadcast_send(body, sender, subject, correlation_id)
 
     def is_closed(self) -> bool:
