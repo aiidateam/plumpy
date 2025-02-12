@@ -23,8 +23,8 @@ import yaml
 from typing_extensions import override
 from yaml.loader import Loader
 
-from plumpy.persistence import ensure_object_loader
 from plumpy.message import Message, MsgKill, MsgPause
+from plumpy.persistence import ensure_object_loader
 
 try:
     import tblib
@@ -638,7 +638,6 @@ class Killed:
     is_terminal: ClassVar[bool] = True
 
     def __init__(self, msg: Optional[Message]):
-
         """
         :param msg: Optional kill message
         """

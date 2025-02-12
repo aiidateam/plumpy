@@ -1149,13 +1149,12 @@ class Process(StateMachine, metaclass=ProcessStateMachineMeta):
 
         msg = MsgPause.new(msg_text)
         return self._do_pause(state_msg=msg)
-   
+
     @staticmethod
     def _interrupt(state: Interruptable, reason: Exception) -> None:
         state.interrupt(reason)
 
     def _do_pause(self, state_msg: Optional[Message], next_state: Optional[state_machine.State] = None) -> bool:
-
         """Carry out the pause procedure, optionally transitioning to the next state first"""
         try:
             if next_state is not None:
