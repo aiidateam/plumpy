@@ -33,12 +33,16 @@ def loop_communicator():
     message_exchange = f'{__file__}.{shortuuid.uuid()}'
     task_exchange = f'{__file__}.{shortuuid.uuid()}'
     task_queue = f'{__file__}.{shortuuid.uuid()}'
+    encoder = functools.partial(yaml.dump, encoding='utf-8')
+    decoder = functools.partial(yaml.load, Loader=yaml.FullLoader)
 
     thread_communicator = rmq.RmqThreadCommunicator.connect(
         connection_params={'url': 'amqp://guest:guest@localhost:5672/'},
         message_exchange=message_exchange,
         task_exchange=task_exchange,
         task_queue=task_queue,
+        encoder=encoder,
+        decoder=decoder,
     )
 
     loop = asyncio.get_event_loop()
