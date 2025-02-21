@@ -31,7 +31,7 @@ def _coordinator():
 
 
 @pytest.fixture
-def subscriber():
+def receiver_fn():
     """Return an instance of mocked `Subscriber`."""
 
     class Subscriber:
@@ -43,40 +43,41 @@ def subscriber():
     return Subscriber()
 
 
-def test_add_rpc_subscriber(_coordinator, subscriber):
-    """Test the `LoopCommunicator.add_rpc_subscriber` method."""
-    assert _coordinator.add_rpc_subscriber(subscriber) is not None
+def test_hook_rpc_receiver(_coordinator, receiver_fn):
+    """Test the `LoopCommunicator.add_rpc_receiver` method."""
+    assert _coordinator.hook_rpc_receiver(receiver_fn) is not None
 
     identifier = 'identifier'
-    assert _coordinator.add_rpc_subscriber(subscriber, identifier) == identifier
+    assert _coordinator.hook_rpc_receiver(receiver_fn, identifier) == identifier
 
 
-def test_remove_rpc_subscriber(_coordinator, subscriber):
+def test_unhook_rpc_receiver(_coordinator, receiver_fn):
     """Test the `LoopCommunicator.remove_rpc_subscriber` method."""
-    identifier = _coordinator.add_rpc_subscriber(subscriber)
-    _coordinator.remove_rpc_subscriber(identifier)
+    identifier = _coordinator.hook_rpc_receiver(receiver_fn)
+    _coordinator.unhook_rpc_receiver(identifier)
 
 
-def test_add_broadcast_subscriber(_coordinator, subscriber):
-    """Test the `LoopCommunicator.add_broadcast_subscriber` method."""
-    assert _coordinator.add_broadcast_subscriber(subscriber) is not None
+def test_hook_broadcast_receiver(_coordinator, receiver_fn):
+    """Test the coordinator hook_broadcast_receiver which calls
+    `LoopCommunicator.add_broadcast_subscriber` method."""
+    assert _coordinator.hook_broadcast_receiver(receiver_fn) is not None
 
     identifier = 'identifier'
-    assert _coordinator.add_broadcast_subscriber(subscriber, identifier=identifier) == identifier
+    assert _coordinator.hook_broadcast_receiver(receiver_fn, identifier=identifier) == identifier
 
 
-def test_remove_broadcast_subscriber(_coordinator, subscriber):
+def test_unhook_broadcast_receiver(_coordinator, receiver_fn):
     """Test the `LoopCommunicator.remove_broadcast_subscriber` method."""
-    identifier = _coordinator.add_broadcast_subscriber(subscriber)
-    _coordinator.remove_broadcast_subscriber(identifier)
+    identifier = _coordinator.hook_broadcast_receiver(receiver_fn)
+    _coordinator.unhook_broadcast_receiver(identifier)
 
 
-def test_add_task_subscriber(_coordinator, subscriber):
-    """Test the `LoopCommunicator.add_task_subscriber` method."""
-    assert _coordinator.add_task_subscriber(subscriber) is not None
+def test_hook_task_receiver(_coordinator, receiver_fn):
+    """Test the hook_task_receiver calls `LoopCommunicator.add_task_subscriber` method."""
+    assert _coordinator.hook_task_receiver(receiver_fn) is not None
 
 
-def test_remove_task_subscriber(_coordinator, subscriber):
+def test_unhook_task_receiver(_coordinator, receiver_fn):
     """Test the `LoopCommunicator.remove_task_subscriber` method."""
-    identifier = _coordinator.add_task_subscriber(subscriber)
-    _coordinator.remove_task_subscriber(identifier)
+    identifier = _coordinator.hook_task_receiver(receiver_fn)
+    _coordinator.unhook_task_receiver(identifier)
