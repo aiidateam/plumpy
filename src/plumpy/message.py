@@ -218,7 +218,7 @@ class ProcessLauncher:
         else:
             self._loader = loaders.get_object_loader()
 
-    async def __call__(self, coordinator: Coordinator, task: Dict[str, Any]) -> Union[PID_TYPE, Any]:
+    async def call(self, task: Dict[str, Any]) -> Union[PID_TYPE, Any]:
         """
         Receive a task.
         :param task: The task message

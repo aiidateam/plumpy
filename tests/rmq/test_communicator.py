@@ -13,6 +13,7 @@ import yaml
 from kiwipy.rmq import RmqThreadCommunicator
 
 import plumpy
+from plumpy.broadcast_filter import BroadcastFilter
 from plumpy.coordinator import Coordinator
 from plumpy.rmq import communications, process_control
 
@@ -72,7 +73,7 @@ class TestLoopCommunicator:
 
         loop = asyncio.get_event_loop()
 
-        def get_broadcast(_comm, body, sender, subject, correlation_id):
+        def get_broadcast(body, sender, subject, correlation_id):
             assert loop is asyncio.get_event_loop()
 
             broadcast_future.set_result(
@@ -89,13 +90,13 @@ class TestLoopCommunicator:
     async def test_broadcast_filter(self, _coordinator: Coordinator):
         broadcast_future = asyncio.Future()
 
-        def ignore_broadcast(_comm, body, sender, subject, correlation_id):
+        def ignore_broadcast(body, sender, subject, correlation_id):
             broadcast_future.set_exception(AssertionError('broadcast received'))
 
-        def get_broadcast(_comm, body, sender, subject, correlation_id):
+        def get_broadcast(body, sender, subject, correlation_id):
             broadcast_future.set_result(True)
 
-        _coordinator.add_broadcast_subscriber(ignore_broadcast, subject_filters=['other'])
+        _coordinator.add_broadcast_subscriber(BroadcastFilter(ignore_broadcast, subject='other'))
         _coordinator.add_broadcast_subscriber(get_broadcast)
         _coordinator.broadcast_send(**{'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420})
 
@@ -109,7 +110,7 @@ class TestLoopCommunicator:
 
         loop = asyncio.get_event_loop()
 
-        def get_rpc(_comm, msg):
+        def get_rpc(msg):
             assert loop is asyncio.get_event_loop()
             rpc_future.set_result(msg)
 
@@ -126,13 +127,15 @@ class TestLoopCommunicator:
 
         loop = asyncio.get_event_loop()
 
-        def get_task(_comm, msg):
+        def get_task(msg):
             assert loop is asyncio.get_event_loop()
             task_future.set_result(msg)
 
         _coordinator.add_task_subscriber(get_task)
         _coordinator.task_send(TASK)
 
+        # TODO: Error in the event loop log although the test pass
+        # The issue exist before rmq-out refactoring.
         result = await task_future
         assert result == TASK
 
@@ -142,7 +145,8 @@ class TestTaskActions:
     async def test_launch(self, _coordinator, async_controller, persister):
         # Let the process run to the end
         loop = asyncio.get_event_loop()
-        _coordinator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
+        launcher = plumpy.ProcessLauncher(loop, persister=persister)
+        _coordinator.add_task_subscriber(launcher.call)
         result = await async_controller.launch_process(utils.DummyProcess)
         # Check that we got a result
         assert result == utils.DummyProcess.EXPECTED_OUTPUTS
@@ -151,7 +155,8 @@ class TestTaskActions:
     async def test_launch_nowait(self, _coordinator, async_controller, persister):
         """Testing launching but don't wait, just get the pid"""
         loop = asyncio.get_event_loop()
-        _coordinator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
+        launcher = plumpy.ProcessLauncher(loop, persister=persister)
+        _coordinator.add_task_subscriber(launcher.call)
         pid = await async_controller.launch_process(utils.DummyProcess, nowait=True)
         assert isinstance(pid, uuid.UUID)
 
@@ -159,7 +164,8 @@ class TestTaskActions:
     async def test_execute_action(self, _coordinator, async_controller, persister):
         """Test the process execute action"""
         loop = asyncio.get_event_loop()
-        _coordinator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
+        launcher = plumpy.ProcessLauncher(loop, persister=persister)
+        _coordinator.add_task_subscriber(launcher.call)
         result = await async_controller.execute_process(utils.DummyProcessWithOutput)
         assert utils.DummyProcessWithOutput.EXPECTED_OUTPUTS == result
 
@@ -167,7 +173,8 @@ class TestTaskActions:
     async def test_execute_action_nowait(self, _coordinator, async_controller, persister):
         """Test the process execute action"""
         loop = asyncio.get_event_loop()
-        _coordinator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
+        launcher = plumpy.ProcessLauncher(loop, persister=persister)
+        _coordinator.add_task_subscriber(launcher.call)
         pid = await async_controller.execute_process(utils.DummyProcessWithOutput, nowait=True)
         assert isinstance(pid, uuid.UUID)
 
@@ -175,7 +182,8 @@ class TestTaskActions:
     async def test_launch_many(self, _coordinator, async_controller, persister):
         """Test launching multiple processes"""
         loop = asyncio.get_event_loop()
-        _coordinator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
+        launcher = plumpy.ProcessLauncher(loop, persister=persister)
+        _coordinator.add_task_subscriber(launcher.call)
         num_to_launch = 10
 
         launch_futures = []
@@ -191,7 +199,8 @@ class TestTaskActions:
     async def test_continue(self, _coordinator, async_controller, persister):
         """Test continuing a saved process"""
         loop = asyncio.get_event_loop()
-        _coordinator.add_task_subscriber(plumpy.ProcessLauncher(loop, persister=persister))
+        launcher = plumpy.ProcessLauncher(loop, persister=persister)
+        _coordinator.add_task_subscriber(launcher.call)
         process = utils.DummyProcessWithOutput()
         persister.save_checkpoint(process)
         pid = process.pid

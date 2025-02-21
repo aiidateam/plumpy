@@ -1068,7 +1068,7 @@ class TestProcessEvents(unittest.TestCase):
 
         messages = []
 
-        def on_broadcast_receive(_comm, body, sender, subject, correlation_id):
+        def on_broadcast_receive(body, sender, subject, correlation_id):
             messages.append({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
         coordinator.add_broadcast_subscriber(on_broadcast_receive)

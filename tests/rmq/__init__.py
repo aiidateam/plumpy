@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
-from typing import Generic, TypeVar, final
+from __future__ import annotations
+from re import Pattern
+from typing import TYPE_CHECKING, Generic, Hashable, TypeVar, final
 import kiwipy
 import concurrent.futures
 
 from plumpy.exceptions import CoordinatorConnectionError
 
+if TYPE_CHECKING:
+    ID_TYPE = Hashable
+    BroadcastSubscriber = Callable[[Any, Any, Any, ID_TYPE], Any]
 
 U = TypeVar('U', bound=kiwipy.Communicator)
+
 
 @final
 class RmqCoordinator(Generic[U]):
@@ -20,31 +26,30 @@ class RmqCoordinator(Generic[U]):
 
     # XXX: naming - `add_receiver_rpc`
     def add_rpc_subscriber(self, subscriber, identifier=None):
-        return self._comm.add_rpc_subscriber(subscriber, identifier)
+        def _subscriber(_, *args, **kwargs):
+            return subscriber(*args, **kwargs)
+
+        return self._comm.add_rpc_subscriber(_subscriber, identifier)
 
     # XXX: naming - `add_receiver_broadcast`
     def add_broadcast_subscriber(
         self,
-        subscriber,
-        subject_filters=None,
-        sender_filters=None,
-        identifier=None,
+        subscriber: 'BroadcastSubscriber',
+        subject_filters: list[Hashable | Pattern[str]] | None = None,
+        sender_filters: list[Hashable | Pattern[str]] | None = None,
+        identifier: 'ID_TYPE | None' = None,
     ):
-        subscriber = kiwipy.BroadcastFilter(subscriber)
+        def _subscriber(_, *args, **kwargs):
+            return subscriber(*args, **kwargs)
 
-        subject_filters = subject_filters or []
-        sender_filters = sender_filters or []
-
-        for filter in subject_filters:
-            subscriber.add_subject_filter(filter)
-        for filter in sender_filters:
-            subscriber.add_sender_filter(filter)
-
-        return self._comm.add_broadcast_subscriber(subscriber, identifier)
+        return self._comm.add_broadcast_subscriber(_subscriber, identifier)
 
     # XXX: naming - `add_reciver_task` (can be combined with two above maybe??)
     def add_task_subscriber(self, subscriber, identifier=None):
-        return self._comm.add_task_subscriber(subscriber, identifier)
+        async def _subscriber(_comm, *args, **kwargs):
+            return await subscriber(*args, **kwargs)
+
+        return self._comm.add_task_subscriber(_subscriber, identifier)
 
     def remove_rpc_subscriber(self, identifier):
         return self._comm.remove_rpc_subscriber(identifier)
