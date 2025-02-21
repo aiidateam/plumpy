@@ -8,11 +8,11 @@ if TYPE_CHECKING:
     ID_TYPE = Hashable
     Subscriber = Callable[..., Any]
     # RPC subscriber params: communicator, msg
-    RpcSubscriber = Callable[['Coordinator', Any], Any]
+    RpcSubscriber = Callable[[Any], Any]
     # Task subscriber params: communicator, task
-    TaskSubscriber = Callable[['Coordinator', Any], Any]
+    TaskSubscriber = Callable[[Any], Any]
     # Broadcast subscribers params: communicator, body, sender, subject, correlation id
-    BroadcastSubscriber = Callable[['Coordinator', Any, Any, Any, ID_TYPE], Any]
+    BroadcastSubscriber = Callable[[Any, Any, Any, ID_TYPE], Any]
 
 
 class Coordinator(Protocol):

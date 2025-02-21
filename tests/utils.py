@@ -133,7 +133,7 @@ class MockCoordinator:
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         self._ensure_open()
         for subscriber in self._broadcast_subscribers.values():
-            subscriber(self, body=body, sender=sender, subject=subject, correlation_id=correlation_id)
+            subscriber(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
         return True
 
     def _ensure_open(self):
