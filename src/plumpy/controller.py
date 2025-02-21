@@ -52,8 +52,7 @@ class ProcessController(Protocol):
         ...
 
     def play_all(self) -> None:
-        """Play all processes that are subscribed to the same coordinator
-        """
+        """Play all processes that are subscribed to the same coordinator"""
 
     def kill_process(self, pid: 'PID_TYPE', msg_text: str | None = None) -> Any:
         """Kill the process

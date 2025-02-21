@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Utilities for tests"""
+from __future__ import annotations
 
 import asyncio
 import collections
@@ -105,7 +106,7 @@ class MockCoordinator:
         self._broadcast_receivers[identifier] = receiver
         return identifier
 
-    def unhook_broadcast_receiver(self, identifier: 'ID_TYPE | None') -> None: 
+    def unhook_broadcast_receiver(self, identifier: 'ID_TYPE | None') -> None:
         self._ensure_open()
         try:
             del self._broadcast_receivers[identifier]

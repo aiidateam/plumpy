@@ -29,7 +29,8 @@ ProcessResult = Any
 ProcessStatus = Any
 
 
-# FIXME: the class not fit typing of ProcessController protocol
+# This class not conform with typing of ProcessController protocol.
+# Does't matter too much, since this controller is not directly used as the controller by downstream.
 class RemoteProcessController:
     """
     Control remote processes using coroutines that will send messages and wait
