@@ -34,9 +34,7 @@ from typing import (
     cast,
 )
 
-import kiwipy
-
-from plumpy.broadcast_filter import BroadcastFilter
+from plumpy.broadcast_filter import BroadcastFilter  # type: ignore
 from plumpy.coordinator import Coordinator
 
 try:
@@ -944,19 +942,16 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     # region Communication
 
     def message_receive(self, msg: MessageType) -> Any:
-        """
-        Coroutine called when the process receives a message from the communicator
+        """Coroutine called when the process receives a message from the communicator
 
-        :param _comm: the communicator that sent the message
         :param msg: the message
         :return: the outcome of processing the message, the return value will be sent back as a response to the sender
         """
-        # self.logger.debug(
-        #     "Process<%s>: received RPC message with communicator '%s': %r",
-        #     self.pid,
-        #     _comm,
-        #     msg,
-        # )
+        self.logger.debug(
+            'Process<%s>: received RPC message: %r',
+            self.pid,
+            msg,
+        )
 
         intent = msg[message.INTENT_KEY]
 
@@ -977,19 +972,17 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     def broadcast_receive(
         self, msg: MessageType, sender: Any, subject: Any, correlation_id: Any
     ) -> Optional[concurrent.futures.Future]:
-        """
-        Coroutine called when the process receives a message from the communicator
+        """Coroutine called when the process receives a message from the communicator
 
         :param msg: the message
         """
+        self.logger.debug(
+            "Process<%s>: received broadcast message '%s': %r",
+            self.pid,
+            subject,
+            msg,
+        )
 
-        # self.logger.debug(
-        #     "Process<%s>: received broadcast message '%s' with communicator '%s': %r",
-        #     self.pid,
-        #     subject,
-        #     _comm,
-        #     msg,
-        # )
         # If we get a message we recognise then action it, otherwise ignore
         fn = None
         if subject == message.Intent.PLAY:

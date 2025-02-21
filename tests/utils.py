@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Utilities for tests"""
+from __future__ import annotations
 
 import asyncio
 import collections
@@ -12,6 +13,7 @@ import concurrent.futures
 
 import plumpy
 from plumpy import persistence, process_states, processes, utils
+from plumpy.coordinator import Coordinator
 from plumpy.exceptions import CoordinatorConnectionError
 from plumpy.message import MessageBuilder
 from plumpy.rmq import TaskRejected
@@ -24,7 +26,7 @@ if TYPE_CHECKING:
 Snapshot = collections.namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
 
-class MockCoordinator:
+class MockCoordinator(Coordinator):
     def __init__(self):
         self._task_receivers = {}
         self._broadcast_receivers = {}
@@ -105,7 +107,7 @@ class MockCoordinator:
         self._broadcast_receivers[identifier] = receiver
         return identifier
 
-    def unhook_broadcast_receiver(self, identifier: 'ID_TYPE | None') -> None: 
+    def unhook_broadcast_receiver(self, identifier: 'ID_TYPE | None') -> None:
         self._ensure_open()
         try:
             del self._broadcast_receivers[identifier]

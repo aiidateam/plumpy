@@ -7,7 +7,6 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
 
-from plumpy.coordinator import Coordinator
 from plumpy.exceptions import PersistenceError, TaskRejectedError
 
 from . import loaders, persistence

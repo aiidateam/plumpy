@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Hashable, Optional, Protocol, Union
+from typing import Any, Hashable, Optional, Protocol, Union, runtime_checkable
 
 from plumpy import loaders
 from plumpy.message import MessageType
@@ -12,6 +12,7 @@ ProcessResult = Any
 ProcessStatus = Any
 
 
+@runtime_checkable
 class ProcessController(Protocol):
     """
     Control processes using coroutines that will send messages and wait
@@ -26,7 +27,7 @@ class ProcessController(Protocol):
         """
         ...
 
-    def pause_process(self, pid: 'PID_TYPE', msg: str | None = None) -> ProcessResult:
+    def pause_process(self, pid: 'PID_TYPE', msg_text: str | None = None) -> Any:
         """
         Pause the process
 
@@ -52,8 +53,7 @@ class ProcessController(Protocol):
         ...
 
     def play_all(self) -> None:
-        """Play all processes that are subscribed to the same coordinator
-        """
+        """Play all processes that are subscribed to the same coordinator"""
 
     def kill_process(self, pid: 'PID_TYPE', msg_text: str | None = None) -> Any:
         """Kill the process

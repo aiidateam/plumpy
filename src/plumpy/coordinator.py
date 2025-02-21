@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Protocol
 from re import Pattern
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     ID_TYPE = Hashable
     Receiver = Callable[..., Any]
 
 
+@runtime_checkable
 class Coordinator(Protocol):
     def hook_rpc_receiver(
         self,
@@ -36,7 +37,11 @@ class Coordinator(Protocol):
 
     def unhook_task_receiver(self, identifier: 'ID_TYPE') -> None: ...
 
-    def rpc_send(self, recipient_id: Hashable, msg: Any,) -> Any: ...
+    def rpc_send(
+        self,
+        recipient_id: Hashable,
+        msg: Any,
+    ) -> Any: ...
 
     def broadcast_send(
         self,

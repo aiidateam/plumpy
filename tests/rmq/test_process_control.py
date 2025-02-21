@@ -7,6 +7,7 @@ import shortuuid
 from kiwipy import rmq
 
 import plumpy
+from plumpy.controller import ProcessController
 from plumpy.rmq import process_control
 
 from . import RmqCoordinator
@@ -41,6 +42,10 @@ def async_controller(_coordinator):
 @pytest.fixture
 def sync_controller(_coordinator):
     yield process_control.RemoteProcessThreadController(_coordinator)
+
+def test_remote_process_controller(sync_controller, async_controller):
+    assert isinstance(sync_controller, ProcessController)
+    assert isinstance(async_controller, ProcessController)
 
 
 class TestRemoteProcessController:

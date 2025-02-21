@@ -9,6 +9,7 @@ from typing import Any, Dict, Hashable, Optional, Sequence, Union
 import kiwipy
 
 from plumpy import loaders
+from plumpy.controller import ProcessController
 from plumpy.coordinator import Coordinator
 from plumpy.message import (
     Intent,
@@ -29,8 +30,7 @@ ProcessResult = Any
 ProcessStatus = Any
 
 
-# FIXME: the class not fit typing of ProcessController protocol
-class RemoteProcessController:
+class RemoteProcessController(ProcessController):
     """
     Control remote processes using coroutines that will send messages and wait
     (in a non-blocking way) for their response
@@ -190,7 +190,7 @@ class RemoteProcessController:
         return result
 
 
-class RemoteProcessThreadController:
+class RemoteProcessThreadController(ProcessController):
     """
     A class that can be used to control and launch remote processes
     """
@@ -212,7 +212,7 @@ class RemoteProcessThreadController:
         """
         return self._coordinator.rpc_send(pid, MessageBuilder.status())
 
-    def pause_process(self, pid: 'PID_TYPE', msg_text: str | None = None) -> kiwipy.Future:
+    def pause_process(self, pid: 'PID_TYPE', msg_text: str | None = None) -> Any:
         """Pause the process
 
         :param pid: the pid of the process to pause

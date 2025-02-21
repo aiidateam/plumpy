@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, Hashable, TypeVar, fin
 import kiwipy
 import concurrent.futures
 
+from plumpy.coordinator import Coordinator
 from plumpy.exceptions import CoordinatorConnectionError
 
 if TYPE_CHECKING:
@@ -15,7 +16,7 @@ U = TypeVar('U', bound=kiwipy.Communicator)
 
 
 @final
-class RmqCoordinator(Generic[U]):
+class RmqCoordinator(Coordinator, Generic[U]):
     def __init__(self, comm: U):
         self._comm = comm
 
