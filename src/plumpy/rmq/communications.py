@@ -79,10 +79,10 @@ def convert_to_comm(
     return converted
 
 
-T = TypeVar('T', bound=kiwipy.Communicator)
+CommT = TypeVar('CommT', bound=kiwipy.Communicator)
 
 
-def wrap_communicator(communicator: T, loop: Optional[asyncio.AbstractEventLoop] = None) -> 'LoopCommunicator[T]':
+def wrap_communicator(communicator: CommT, loop: Optional[asyncio.AbstractEventLoop] = None) -> 'LoopCommunicator[CommT]':
     """
     Wrap a communicator such that all callbacks made to any subscribers are scheduled on the
     given event loop.
@@ -103,10 +103,10 @@ def wrap_communicator(communicator: T, loop: Optional[asyncio.AbstractEventLoop]
 
 
 @final
-class LoopCommunicator(Generic[T], kiwipy.Communicator):  # type: ignore
+class LoopCommunicator(Generic[CommT], kiwipy.Communicator):  # type: ignore
     """Wrapper around a `kiwipy.Communicator` that schedules any subscriber messages on a given event loop."""
 
-    def __init__(self, communicator: T, loop: Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self, communicator: CommT, loop: Optional[asyncio.AbstractEventLoop] = None):
         """
         :param communicator: The kiwipy communicator
         :param loop: The event loop to schedule callbacks on
@@ -118,7 +118,7 @@ class LoopCommunicator(Generic[T], kiwipy.Communicator):  # type: ignore
         self._loop: asyncio.AbstractEventLoop = loop or asyncio.get_event_loop()
 
     @property
-    def inner(self) -> T:
+    def inner(self) -> CommT:
         return self._communicator
 
     def loop(self) -> asyncio.AbstractEventLoop:
