@@ -90,6 +90,6 @@ class TestBundle(unittest.TestCase):
         bundle = plumpy.Bundle(Save1())
         represent = yaml.dump({'bundle': bundle})
 
-        bundle_loaded = yaml.load(represent, Loader=yaml.Loader)['bundle']
+        bundle_loaded = yaml.load(represent, Loader=yaml.UnsafeLoader)['bundle']
         self.assertIsInstance(bundle_loaded, plumpy.Bundle)
         self.assertDictEqual(bundle_loaded, Save1().save())
