@@ -322,18 +322,18 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if self._coordinator is not None:
             try:
-                identifier = self._coordinator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
-                self.add_cleanup(functools.partial(self._coordinator.remove_rpc_subscriber, identifier))
+                identifier = self._coordinator.hook_rpc_receiver(self.message_receive, identifier=str(self.pid))
+                self.add_cleanup(functools.partial(self._coordinator.unhook_rpc_receiver, identifier))
             except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as an RPC subscriber', self.pid)
-            # XXX: handle duplicate subscribing here: see aiida-core test_duplicate_subscriber_identifier.
 
+            # XXX: handle duplicate subscribing here: see aiida-core test_duplicate_subscriber_identifier.
             try:
                 # filter out state change broadcasts
                 subscriber = BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
-                identifier = self._coordinator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
+                identifier = self._coordinator.hook_broadcast_receiver(subscriber, identifier=str(self.pid))
 
-                self.add_cleanup(functools.partial(self._coordinator.remove_broadcast_subscriber, identifier))
+                self.add_cleanup(functools.partial(self._coordinator.unhook_broadcast_receiver, identifier))
             except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
 

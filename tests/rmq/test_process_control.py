@@ -107,7 +107,7 @@ class TestRemoteProcessController:
         def on_broadcast_receive(**msg):
             messages.append(msg)
 
-        _coordinator.add_broadcast_subscriber(on_broadcast_receive)
+        _coordinator.hook_broadcast_receiver(on_broadcast_receive)
 
         proc = utils.DummyProcess(coordinator=_coordinator)
         proc.execute()

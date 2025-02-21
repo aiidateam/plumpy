@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 from re import Pattern
-from typing import TYPE_CHECKING, Generic, Hashable, TypeVar, final
+from typing import TYPE_CHECKING, Any, Callable, Generic, Hashable, TypeVar, final
 import kiwipy
 import concurrent.futures
 
@@ -9,7 +9,7 @@ from plumpy.exceptions import CoordinatorConnectionError
 
 if TYPE_CHECKING:
     ID_TYPE = Hashable
-    BroadcastSubscriber = Callable[[Any, Any, Any, ID_TYPE], Any]
+    Receiver = Callable[..., Any]
 
 U = TypeVar('U', bound=kiwipy.Communicator)
 
@@ -24,54 +24,61 @@ class RmqCoordinator(Generic[U]):
         """The inner communicator."""
         return self._comm
 
-    # XXX: naming - `add_receiver_rpc`
-    def add_rpc_subscriber(self, subscriber, identifier=None):
+    def hook_rpc_receiver(
+        self,
+        receiver: 'Receiver',
+        identifier: 'ID_TYPE | None' = None,
+    ) -> Any:
         def _subscriber(_, *args, **kwargs):
-            return subscriber(*args, **kwargs)
+            return receiver(*args, **kwargs)
 
         return self._comm.add_rpc_subscriber(_subscriber, identifier)
 
-    # XXX: naming - `add_receiver_broadcast`
-    def add_broadcast_subscriber(
+    def hook_broadcast_receiver(
         self,
-        subscriber: 'BroadcastSubscriber',
+        receiver: 'Receiver',
         subject_filters: list[Hashable | Pattern[str]] | None = None,
         sender_filters: list[Hashable | Pattern[str]] | None = None,
         identifier: 'ID_TYPE | None' = None,
-    ):
+    ) -> Any:
         def _subscriber(_, *args, **kwargs):
-            return subscriber(*args, **kwargs)
+            return receiver(*args, **kwargs)
 
         return self._comm.add_broadcast_subscriber(_subscriber, identifier)
 
-    # XXX: naming - `add_reciver_task` (can be combined with two above maybe??)
-    def add_task_subscriber(self, subscriber, identifier=None):
+    def hook_task_receiver(
+        self,
+        receiver: 'Receiver',
+        identifier: 'ID_TYPE | None' = None,
+    ) -> 'ID_TYPE':
         async def _subscriber(_comm, *args, **kwargs):
-            return await subscriber(*args, **kwargs)
+            return await receiver(*args, **kwargs)
 
         return self._comm.add_task_subscriber(_subscriber, identifier)
 
-    def remove_rpc_subscriber(self, identifier):
+    def unhook_rpc_receiver(self, identifier: 'ID_TYPE | None') -> None:
         return self._comm.remove_rpc_subscriber(identifier)
 
-    def remove_broadcast_subscriber(self, identifier):
+    def unhook_broadcast_receiver(self, identifier: 'ID_TYPE | None') -> None:
         return self._comm.remove_broadcast_subscriber(identifier)
 
-    def remove_task_subscriber(self, identifier):
+    def unhook_task_receiver(self, identifier: 'ID_TYPE') -> None:
         return self._comm.remove_task_subscriber(identifier)
 
-    # XXX: naming - `send_to`
-    def rpc_send(self, recipient_id, msg):
+    def rpc_send(
+        self,
+        recipient_id: Hashable,
+        msg: Any,
+    ) -> Any:
         return self._comm.rpc_send(recipient_id, msg)
 
-    # XXX: naming - `broadcast`
     def broadcast_send(
         self,
-        body,
-        sender=None,
-        subject=None,
-        correlation_id=None,
-    ):
+        body: Any | None,
+        sender: 'ID_TYPE | None' = None,
+        subject: str | None = None,
+        correlation_id: 'ID_TYPE | None' = None,
+    ) -> Any:
         from aio_pika.exceptions import ChannelInvalidStateError, AMQPConnectionError
 
         try:
@@ -81,9 +88,8 @@ class RmqCoordinator(Generic[U]):
         else:
             return rsp
 
-    # XXX: naming - `assign_task` (this may able to be combined with send_to)
-    def task_send(self, task, no_reply=False):
+    def task_send(self, task: Any, no_reply: bool = False) -> Any:
         return self._comm.task_send(task, no_reply)
 
-    def close(self):
+    def close(self) -> None:
         self._comm.close()

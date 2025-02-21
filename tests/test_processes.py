@@ -1071,7 +1071,7 @@ class TestProcessEvents(unittest.TestCase):
         def on_broadcast_receive(body, sender, subject, correlation_id):
             messages.append({'body': body, 'subject': subject, 'sender': sender, 'correlation_id': correlation_id})
 
-        coordinator.add_broadcast_subscriber(on_broadcast_receive)
+        coordinator.hook_broadcast_receiver(on_broadcast_receive)
         proc = utils.DummyProcess(coordinator=coordinator)
         proc.execute()
 

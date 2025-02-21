@@ -1,43 +1,42 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Hashable, Pattern, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Hashable, Protocol
+from re import Pattern
 
 if TYPE_CHECKING:
-    # identifiers for subscribers
     ID_TYPE = Hashable
-    Subscriber = Callable[..., Any]
-    # RPC subscriber params: communicator, msg
-    RpcSubscriber = Callable[[Any], Any]
-    # Task subscriber params: communicator, task
-    TaskSubscriber = Callable[[Any], Any]
-    # Broadcast subscribers params: communicator, body, sender, subject, correlation id
-    BroadcastSubscriber = Callable[[Any, Any, Any, ID_TYPE], Any]
+    Receiver = Callable[..., Any]
 
 
 class Coordinator(Protocol):
-    # XXX: naming - 'add_message_handler'
-    def add_rpc_subscriber(self, subscriber: 'RpcSubscriber', identifier: 'ID_TYPE | None' = None) -> Any: ...
-
-    # XXX: naming - 'add_broadcast_handler'
-    def add_broadcast_subscriber(
+    def hook_rpc_receiver(
         self,
-        subscriber: 'BroadcastSubscriber',
+        receiver: 'Receiver',
+        identifier: 'ID_TYPE | None' = None,
+    ) -> Any: ...
+
+    def hook_broadcast_receiver(
+        self,
+        receiver: 'Receiver',
         subject_filters: list[Hashable | Pattern[str]] | None = None,
         sender_filters: list[Hashable | Pattern[str]] | None = None,
         identifier: 'ID_TYPE | None' = None,
     ) -> Any: ...
 
-    # XXX: naming - absorbed into 'add_message_handler'
-    def add_task_subscriber(self, subscriber: 'TaskSubscriber', identifier: 'ID_TYPE | None' = None) -> 'ID_TYPE': ...
+    def hook_task_receiver(
+        self,
+        receiver: 'Receiver',
+        identifier: 'ID_TYPE | None' = None,
+    ) -> 'ID_TYPE': ...
 
-    def remove_rpc_subscriber(self, identifier: 'ID_TYPE | None') -> None: ...
+    def unhook_rpc_receiver(self, identifier: 'ID_TYPE | None') -> None: ...
 
-    def remove_broadcast_subscriber(self, identifier: 'ID_TYPE | None') -> None: ...
+    def unhook_broadcast_receiver(self, identifier: 'ID_TYPE | None') -> None: ...
 
-    def remove_task_subscriber(self, identifier: 'ID_TYPE') -> None: ...
+    def unhook_task_receiver(self, identifier: 'ID_TYPE') -> None: ...
 
-    def rpc_send(self, recipient_id: Hashable, msg: Any) -> Any: ...
+    def rpc_send(self, recipient_id: Hashable, msg: Any,) -> Any: ...
 
     def broadcast_send(
         self,

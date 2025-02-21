@@ -3,8 +3,9 @@
 
 import asyncio
 import collections
+from re import Pattern
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable, Hashable
 import unittest
 from collections.abc import Mapping
 import concurrent.futures
@@ -16,14 +17,18 @@ from plumpy.message import MessageBuilder
 from plumpy.rmq import TaskRejected
 import shortuuid
 
+if TYPE_CHECKING:
+    ID_TYPE = Hashable
+    Receiver = Callable[..., Any]
+
 Snapshot = collections.namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
 
 
 class MockCoordinator:
     def __init__(self):
-        self._task_subscribers = {}
-        self._broadcast_subscribers = {}
-        self._rpc_subscribers = {}
+        self._task_receivers = {}
+        self._broadcast_receivers = {}
+        self._rpc_receivers = {}
         self._closed = False
 
     def is_closed(self) -> bool:
@@ -33,75 +38,87 @@ class MockCoordinator:
         if self._closed:
             return
         self._closed = True
-        del self._task_subscribers
-        del self._broadcast_subscribers
-        del self._rpc_subscribers
+        del self._task_receivers
+        del self._broadcast_receivers
+        del self._rpc_receivers
 
-    def add_rpc_subscriber(self, subscriber, identifier=None) -> Any:
+    def hook_rpc_receiver(
+        self,
+        receiver: 'Receiver',
+        identifier: 'ID_TYPE | None' = None,
+    ) -> Any:
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
-        if identifier in self._rpc_subscribers:
-            raise RuntimeError(f"Duplicate RPC subscriber with identifier '{identifier}'")
-        self._rpc_subscribers[identifier] = subscriber
+        if identifier in self._rpc_receivers:
+            raise RuntimeError(f"Duplicate RPC receiver with identifier '{identifier}'")
+        self._rpc_receivers[identifier] = receiver
         return identifier
 
-    def remove_rpc_subscriber(self, identifier):
+    def unhook_rpc_receiver(self, identifier: 'ID_TYPE | None') -> None:
         self._ensure_open()
         try:
-            self._rpc_subscribers.pop(identifier)
+            self._rpc_receivers.pop(identifier)
         except KeyError as exc:
-            raise ValueError(f"Unknown subscriber '{identifier}'") from exc
+            raise ValueError(f"Unknown receiver '{identifier}'") from exc
 
-    def add_task_subscriber(self, subscriber, identifier=None):
-        """
-        Register a task subscriber
+    def hook_task_receiver(
+        self,
+        receiver: 'Receiver',
+        identifier: 'ID_TYPE | None' = None,
+    ) -> 'ID_TYPE':
+        """Register a task receiver
 
-        :param subscriber: The task callback function
-        :param identifier: the subscriber identifier
+        :param receiver: The task callback function
+        :param identifier: the receiver identifier
         """
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
-        if identifier in self._rpc_subscribers:
-            raise RuntimeError(f"Duplicate RPC subscriber with identifier '{identifier}'")
-        self._task_subscribers[identifier] = subscriber
+        if identifier in self._rpc_receivers:
+            raise RuntimeError(f"Duplicate RPC receiver with identifier '{identifier}'")
+        self._task_receivers[identifier] = receiver
         return identifier
 
-    def remove_task_subscriber(self, identifier):
-        """
-        Remove a task subscriber
+    def unhook_task_receiver(self, identifier: 'ID_TYPE') -> None:
+        """Remove a task receiver
 
-        :param identifier: the subscriber to remove
-        :raises: ValueError if identifier does not correspond to a known subscriber
+        :param identifier: the receiver to remove
+        :raises: ValueError if identifier does not correspond to a known receiver
         """
         self._ensure_open()
         try:
-            self._task_subscribers.pop(identifier)
+            self._task_receivers.pop(identifier)
         except KeyError as exception:
-            raise ValueError(f"Unknown subscriber: '{identifier}'") from exception
+            raise ValueError(f"Unknown receiver: '{identifier}'") from exception
 
-    def add_broadcast_subscriber(self, subscriber, subject_filters=None, sender_filters=None, identifier=None) -> Any:
+    def hook_broadcast_receiver(
+        self,
+        receiver: 'Receiver',
+        subject_filters: list[Hashable | Pattern[str]] | None = None,
+        sender_filters: list[Hashable | Pattern[str]] | None = None,
+        identifier: 'ID_TYPE | None' = None,
+    ) -> Any:
         self._ensure_open()
         identifier = identifier or shortuuid.uuid()
-        if identifier in self._broadcast_subscribers:
-            raise RuntimeError(f"Duplicate RPC subscriber with identifier '{identifier}'")
+        if identifier in self._broadcast_receivers:
+            raise RuntimeError(f"Duplicate RPC receiver with identifier '{identifier}'")
 
-        self._broadcast_subscribers[identifier] = subscriber
+        self._broadcast_receivers[identifier] = receiver
         return identifier
 
-    def remove_broadcast_subscriber(self, identifier):
+    def unhook_broadcast_receiver(self, identifier: 'ID_TYPE | None') -> None: 
         self._ensure_open()
         try:
-            del self._broadcast_subscribers[identifier]
+            del self._broadcast_receivers[identifier]
         except KeyError as exception:
-            raise ValueError(f"Broadcast subscriber '{identifier}' unknown") from exception
+            raise ValueError(f"Broadcast receiver '{identifier}' unknown") from exception
 
     def task_send(self, msg, no_reply=False):
         self._ensure_open()
         future = concurrent.futures.Future()
 
-        for subscriber in self._task_subscribers.values():
+        for receiver in self._task_receivers.values():
             try:
-                result = subscriber(self, msg)
+                result = receiver(self, msg)
                 future.set_result(result)
                 break
             except TaskRejected:
@@ -118,13 +135,13 @@ class MockCoordinator:
     def rpc_send(self, recipient_id, msg):
         self._ensure_open()
         try:
-            subscriber = self._rpc_subscribers[recipient_id]
+            receiver = self._rpc_receivers[recipient_id]
         except KeyError as exception:
             raise RuntimeError(f"Unknown rpc recipient '{recipient_id}'") from exception
         else:
             future = concurrent.futures.Future()
             try:
-                future.set_result(subscriber(self, msg))
+                future.set_result(receiver(self, msg))
             except Exception:
                 future.set_exception(RuntimeError(sys.exc_info()))
 
@@ -132,8 +149,8 @@ class MockCoordinator:
 
     def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
         self._ensure_open()
-        for subscriber in self._broadcast_subscribers.values():
-            subscriber(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
+        for receiver in self._broadcast_receivers.values():
+            receiver(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
         return True
 
     def _ensure_open(self):

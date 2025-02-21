@@ -80,7 +80,7 @@ class TestLoopCommunicator:
                 {'body': body, 'sender': sender, 'subject': subject, 'correlation_id': correlation_id}
             )
 
-        _coordinator.add_broadcast_subscriber(get_broadcast)
+        _coordinator.hook_broadcast_receiver(get_broadcast)
         _coordinator.broadcast_send(**BROADCAST)
 
         result = await broadcast_future
@@ -96,8 +96,8 @@ class TestLoopCommunicator:
         def get_broadcast(body, sender, subject, correlation_id):
             broadcast_future.set_result(True)
 
-        _coordinator.add_broadcast_subscriber(BroadcastFilter(ignore_broadcast, subject='other'))
-        _coordinator.add_broadcast_subscriber(get_broadcast)
+        _coordinator.hook_broadcast_receiver(BroadcastFilter(ignore_broadcast, subject='other'))
+        _coordinator.hook_broadcast_receiver(get_broadcast)
         _coordinator.broadcast_send(**{'body': 'present', 'sender': 'Martin', 'subject': 'sup', 'correlation_id': 420})
 
         result = await broadcast_future
@@ -114,7 +114,7 @@ class TestLoopCommunicator:
             assert loop is asyncio.get_event_loop()
             rpc_future.set_result(msg)
 
-        _coordinator.add_rpc_subscriber(get_rpc, 'rpc')
+        _coordinator.hook_rpc_receiver(get_rpc, 'rpc')
         _coordinator.rpc_send('rpc', MSG)
 
         result = await rpc_future
@@ -131,7 +131,7 @@ class TestLoopCommunicator:
             assert loop is asyncio.get_event_loop()
             task_future.set_result(msg)
 
-        _coordinator.add_task_subscriber(get_task)
+        _coordinator.hook_task_receiver(get_task)
         _coordinator.task_send(TASK)
 
         # TODO: Error in the event loop log although the test pass
@@ -146,7 +146,7 @@ class TestTaskActions:
         # Let the process run to the end
         loop = asyncio.get_event_loop()
         launcher = plumpy.ProcessLauncher(loop, persister=persister)
-        _coordinator.add_task_subscriber(launcher.call)
+        _coordinator.hook_task_receiver(launcher.call)
         result = await async_controller.launch_process(utils.DummyProcess)
         # Check that we got a result
         assert result == utils.DummyProcess.EXPECTED_OUTPUTS
@@ -156,7 +156,7 @@ class TestTaskActions:
         """Testing launching but don't wait, just get the pid"""
         loop = asyncio.get_event_loop()
         launcher = plumpy.ProcessLauncher(loop, persister=persister)
-        _coordinator.add_task_subscriber(launcher.call)
+        _coordinator.hook_task_receiver(launcher.call)
         pid = await async_controller.launch_process(utils.DummyProcess, nowait=True)
         assert isinstance(pid, uuid.UUID)
 
@@ -165,7 +165,7 @@ class TestTaskActions:
         """Test the process execute action"""
         loop = asyncio.get_event_loop()
         launcher = plumpy.ProcessLauncher(loop, persister=persister)
-        _coordinator.add_task_subscriber(launcher.call)
+        _coordinator.hook_task_receiver(launcher.call)
         result = await async_controller.execute_process(utils.DummyProcessWithOutput)
         assert utils.DummyProcessWithOutput.EXPECTED_OUTPUTS == result
 
@@ -174,7 +174,7 @@ class TestTaskActions:
         """Test the process execute action"""
         loop = asyncio.get_event_loop()
         launcher = plumpy.ProcessLauncher(loop, persister=persister)
-        _coordinator.add_task_subscriber(launcher.call)
+        _coordinator.hook_task_receiver(launcher.call)
         pid = await async_controller.execute_process(utils.DummyProcessWithOutput, nowait=True)
         assert isinstance(pid, uuid.UUID)
 
@@ -183,7 +183,7 @@ class TestTaskActions:
         """Test launching multiple processes"""
         loop = asyncio.get_event_loop()
         launcher = plumpy.ProcessLauncher(loop, persister=persister)
-        _coordinator.add_task_subscriber(launcher.call)
+        _coordinator.hook_task_receiver(launcher.call)
         num_to_launch = 10
 
         launch_futures = []
@@ -200,7 +200,7 @@ class TestTaskActions:
         """Test continuing a saved process"""
         loop = asyncio.get_event_loop()
         launcher = plumpy.ProcessLauncher(loop, persister=persister)
-        _coordinator.add_task_subscriber(launcher.call)
+        _coordinator.hook_task_receiver(launcher.call)
         process = utils.DummyProcessWithOutput()
         persister.save_checkpoint(process)
         pid = process.pid
