@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Protocol
+from typing import Any, Hashable, Optional, Protocol, Union
 
 from plumpy import loaders
 from plumpy.message import MessageType
@@ -26,7 +26,7 @@ class ProcessController(Protocol):
         """
         ...
 
-    def pause_process(self, pid: 'PID_TYPE', msg: Any | None = None) -> ProcessResult:
+    def pause_process(self, pid: 'PID_TYPE', msg: str | None = None) -> ProcessResult:
         """
         Pause the process
 
@@ -36,18 +36,27 @@ class ProcessController(Protocol):
         """
         ...
 
-    def play_process(self, pid: 'PID_TYPE') -> ProcessResult:
+    def pause_all(self, msg_text: str | None) -> None:
+        """Pause all processes that are subscribed to the same coordinator
+
+        :param msg_text: an optional pause message text
         """
-        Play the process
+        ...
+
+    def play_process(self, pid: 'PID_TYPE') -> ProcessResult:
+        """Play the process
 
         :param pid: the pid of the process to play
         :return: True if played, False otherwise
         """
         ...
 
-    def kill_process(self, pid: 'PID_TYPE', msg: MessageType | None = None) -> ProcessResult:
+    def play_all(self) -> None:
+        """Play all processes that are subscribed to the same coordinator
         """
-        Kill the process
+
+    def kill_process(self, pid: 'PID_TYPE', msg_text: str | None = None) -> Any:
+        """Kill the process
 
         :param pid: the pid of the process to kill
         :param msg: optional kill message
@@ -55,11 +64,24 @@ class ProcessController(Protocol):
         """
         ...
 
-    def continue_process(
-        self, pid: 'PID_TYPE', tag: str | None = None, nowait: bool = False, no_reply: bool = False
-    ) -> ProcessResult | None:
+    def kill_all(self, msg_text: Optional[str]) -> None:
+        """Kill all processes that are subscribed to the same coordinator
+
+        :param msg: an optional pause message
         """
-        Continue the process
+        ...
+
+    def notify_msg(self, msg: MessageType, sender: Hashable | None = None, subject: str | None = None) -> None:
+        """
+        Notify all processes by broadcasting of a msg
+
+        :param msg: an optional pause message
+        """
+
+    def continue_process(
+        self, pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False, no_reply: bool = False
+    ) -> Union[None, PID_TYPE, ProcessResult]:
+        """Continue the process
 
         :param _communicator: the communicator
         :param pid: the pid of the process to continue
@@ -67,18 +89,17 @@ class ProcessController(Protocol):
         """
         ...
 
-    async def launch_process(
+    def launch_process(
         self,
         process_class: str,
-        init_args: Sequence[Any] | None = None,
-        init_kwargs: dict[str, Any] | None = None,
+        init_args: Optional[Sequence[Any]] = None,
+        init_kwargs: Optional[dict[str, Any]] = None,
         persist: bool = False,
-        loader: loaders.ObjectLoader | None = None,
+        loader: Optional[loaders.ObjectLoader] = None,
         nowait: bool = False,
         no_reply: bool = False,
-    ) -> ProcessResult:
-        """
-        Launch a process given the class and constructor arguments
+    ) -> Union[None, PID_TYPE, ProcessResult]:
+        """Launch a process given the class and constructor arguments
 
         :param process_class: the class of the process to launch
         :param init_args: the constructor positional arguments
@@ -91,17 +112,16 @@ class ProcessController(Protocol):
         """
         ...
 
-    async def execute_process(
+    def execute_process(
         self,
         process_class: str,
-        init_args: Sequence[Any] | None = None,
-        init_kwargs: dict[str, Any] | None = None,
-        loader: loaders.ObjectLoader | None = None,
+        init_args: Optional[Sequence[Any]] = None,
+        init_kwargs: Optional[dict[str, Any]] = None,
+        loader: Optional[loaders.ObjectLoader] = None,
         nowait: bool = False,
         no_reply: bool = False,
-    ) -> ProcessResult:
-        """
-        Execute a process.  This call will first send a create task and then a continue task over
+    ) -> Union[None, PID_TYPE, ProcessResult]:
+        """Execute a process.  This call will first send a create task and then a continue task over
         the communicator.  This means that if communicator messages are durable then the process
         will run until the end even if this interpreter instance ceases to exist.
 
