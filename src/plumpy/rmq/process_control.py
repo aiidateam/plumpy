@@ -190,7 +190,6 @@ class RemoteProcessController:
         return result
 
 
-# FIXME: the class not fit typing of ProcessController protocol
 class RemoteProcessThreadController:
     """
     A class that can be used to control and launch remote processes
@@ -213,9 +212,8 @@ class RemoteProcessThreadController:
         """
         return self._coordinator.rpc_send(pid, MessageBuilder.status())
 
-    def pause_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None) -> kiwipy.Future:
-        """
-        Pause the process
+    def pause_process(self, pid: 'PID_TYPE', msg_text: str | None = None) -> kiwipy.Future:
+        """Pause the process
 
         :param pid: the pid of the process to pause
         :param msg: optional pause message
@@ -226,11 +224,10 @@ class RemoteProcessThreadController:
 
         return self._coordinator.rpc_send(pid, msg)
 
-    def pause_all(self, msg_text: Optional[str]) -> None:
-        """
-        Pause all processes that are subscribed to the same coordinator
+    def pause_all(self, msg_text: str | None) -> None:
+        """Pause all processes that are subscribed to the same coordinator
 
-        :param msg: an optional pause message
+        :param msg_text: an optional pause message text
         """
         msg = MessageBuilder.pause(text=msg_text)
         self._coordinator.broadcast_send(msg, subject=Intent.PAUSE)
@@ -251,7 +248,7 @@ class RemoteProcessThreadController:
         """
         self._coordinator.broadcast_send(None, subject=Intent.PLAY)
 
-    def kill_process(self, pid: 'PID_TYPE', msg_text: Optional[str] = None) -> kiwipy.Future:
+    def kill_process(self, pid: 'PID_TYPE', msg_text: str | None = None) -> kiwipy.Future:
         """
         Kill the process
 
