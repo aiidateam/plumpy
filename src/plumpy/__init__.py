@@ -4,18 +4,21 @@ __version__ = '0.24.0'
 
 import logging
 
-from .communications import *
+# interfaces
+from .controller import ProcessController
+from .coordinator import Coordinator
 from .events import *
 from .exceptions import *
 from .futures import *
 from .loaders import *
+from .message import *
 from .mixins import *
 from .persistence import *
 from .ports import *
-from .process_comms import *
 from .process_listener import *
 from .process_states import *
 from .processes import *
+from .rmq import *
 from .utils import *
 from .workchains import *
 
@@ -27,14 +30,13 @@ __all__ = (
     + futures.__all__
     + mixins.__all__
     + persistence.__all__
-    + communications.__all__
-    + process_comms.__all__
+    + message.__all__
     + process_listener.__all__
     + workchains.__all__
     + loaders.__all__
     + ports.__all__
     + process_states.__all__
-)
+) + ['ProcessController', 'Coordinator']
 
 
 # Do this se we don't get the "No handlers could be found..." warnings that will be produced
