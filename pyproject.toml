@@ -42,12 +42,11 @@ Documentation = 'https://plumpy.readthedocs.io'
 [project.optional-dependencies]
 docs = [
     'ipython~=7.0',
-    'jinja2==2.11.3',
     'kiwipy[docs]~=0.8.3',
     'markupsafe==2.0.1',
-    'myst-nb~=0.11.0',
-    'sphinx~=3.2.0',
-    'sphinx-book-theme~=0.0.39',
+    'myst-nb~=1.2.0',
+    'sphinx~=7.2.0',
+    'sphinx-book-theme~=1.1.4',
     'importlib-metadata~=4.12.0',
 ]
 pre-commit = [
