@@ -1,16 +1,163 @@
 # -*- coding: utf-8 -*-
 """Utilities for tests"""
+from __future__ import annotations
 
 import asyncio
 import collections
+from re import Pattern
+import sys
+from typing import TYPE_CHECKING, Any, Callable, Hashable
 import unittest
 from collections.abc import Mapping
+import concurrent.futures
 
 import plumpy
 from plumpy import persistence, process_states, processes, utils
-from plumpy.process_comms import  MessageBuilder
+from plumpy.coordinator import Coordinator
+from plumpy.exceptions import CoordinatorConnectionError
+from plumpy.message import MessageBuilder
+from plumpy.rmq import TaskRejected
+import shortuuid
+
+if TYPE_CHECKING:
+    ID_TYPE = Hashable
+    Receiver = Callable[..., Any]
 
 Snapshot = collections.namedtuple('Snapshot', ['state', 'bundle', 'outputs'])
+
+
+class MockCoordinator(Coordinator):
+    def __init__(self):
+        self._task_receivers = {}
+        self._broadcast_receivers = {}
+        self._rpc_receivers = {}
+        self._closed = False
+
+    def is_closed(self) -> bool:
+        return self._closed
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        del self._task_receivers
+        del self._broadcast_receivers
+        del self._rpc_receivers
+
+    def hook_rpc_receiver(
+        self,
+        receiver: 'Receiver',
+        identifier: 'ID_TYPE | None' = None,
+    ) -> Any:
+        self._ensure_open()
+        identifier = identifier or shortuuid.uuid()
+        if identifier in self._rpc_receivers:
+            raise RuntimeError(f"Duplicate RPC receiver with identifier '{identifier}'")
+        self._rpc_receivers[identifier] = receiver
+        return identifier
+
+    def unhook_rpc_receiver(self, identifier: 'ID_TYPE | None') -> None:
+        self._ensure_open()
+        try:
+            self._rpc_receivers.pop(identifier)
+        except KeyError as exc:
+            raise ValueError(f"Unknown receiver '{identifier}'") from exc
+
+    def hook_task_receiver(
+        self,
+        receiver: 'Receiver',
+        identifier: 'ID_TYPE | None' = None,
+    ) -> 'ID_TYPE':
+        """Register a task receiver
+
+        :param receiver: The task callback function
+        :param identifier: the receiver identifier
+        """
+        self._ensure_open()
+        identifier = identifier or shortuuid.uuid()
+        if identifier in self._rpc_receivers:
+            raise RuntimeError(f"Duplicate RPC receiver with identifier '{identifier}'")
+        self._task_receivers[identifier] = receiver
+        return identifier
+
+    def unhook_task_receiver(self, identifier: 'ID_TYPE') -> None:
+        """Remove a task receiver
+
+        :param identifier: the receiver to remove
+        :raises: ValueError if identifier does not correspond to a known receiver
+        """
+        self._ensure_open()
+        try:
+            self._task_receivers.pop(identifier)
+        except KeyError as exception:
+            raise ValueError(f"Unknown receiver: '{identifier}'") from exception
+
+    def hook_broadcast_receiver(
+        self,
+        receiver: 'Receiver',
+        subject_filters: list[Hashable | Pattern[str]] | None = None,
+        sender_filters: list[Hashable | Pattern[str]] | None = None,
+        identifier: 'ID_TYPE | None' = None,
+    ) -> Any:
+        self._ensure_open()
+        identifier = identifier or shortuuid.uuid()
+        if identifier in self._broadcast_receivers:
+            raise RuntimeError(f"Duplicate RPC receiver with identifier '{identifier}'")
+
+        self._broadcast_receivers[identifier] = receiver
+        return identifier
+
+    def unhook_broadcast_receiver(self, identifier: 'ID_TYPE | None') -> None:
+        self._ensure_open()
+        try:
+            del self._broadcast_receivers[identifier]
+        except KeyError as exception:
+            raise ValueError(f"Broadcast receiver '{identifier}' unknown") from exception
+
+    def task_send(self, msg, no_reply=False):
+        self._ensure_open()
+        future = concurrent.futures.Future()
+
+        for receiver in self._task_receivers.values():
+            try:
+                result = receiver(self, msg)
+                future.set_result(result)
+                break
+            except TaskRejected:
+                pass
+            except Exception:
+                future.set_exception(RuntimeError(sys.exc_info()))
+                break
+
+        if no_reply:
+            return None
+
+        return future
+
+    def rpc_send(self, recipient_id, msg):
+        self._ensure_open()
+        try:
+            receiver = self._rpc_receivers[recipient_id]
+        except KeyError as exception:
+            raise RuntimeError(f"Unknown rpc recipient '{recipient_id}'") from exception
+        else:
+            future = concurrent.futures.Future()
+            try:
+                future.set_result(receiver(self, msg))
+            except Exception:
+                future.set_exception(RuntimeError(sys.exc_info()))
+
+            return future
+
+    def broadcast_send(self, body, sender=None, subject=None, correlation_id=None):
+        self._ensure_open()
+        for receiver in self._broadcast_receivers.values():
+            receiver(body=body, sender=sender, subject=subject, correlation_id=correlation_id)
+        return True
+
+    def _ensure_open(self):
+        if self.is_closed():
+            raise CoordinatorConnectionError
 
 
 class TestCase(unittest.TestCase):
@@ -466,7 +613,7 @@ def run_until_waiting(proc):
     from plumpy import ProcessState
 
     listener = plumpy.ProcessListener()
-    in_waiting = plumpy.Future()
+    in_waiting = asyncio.Future()
 
     if proc.state == ProcessState.WAITING:
         in_waiting.set_result(True)
@@ -486,7 +633,7 @@ def run_until_paused(proc):
     """Set up a future that will be resolved when the process is paused"""
 
     listener = plumpy.ProcessListener()
-    paused = plumpy.Future()
+    paused = asyncio.Future()
 
     if proc.paused:
         paused.set_result(True)
