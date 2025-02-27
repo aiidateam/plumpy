@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """The main Process module"""
 
+from __future__ import annotations
+
 import abc
 import asyncio
+import concurrent.futures
 import contextlib
 import copy
 import enum
@@ -31,30 +34,23 @@ from typing import (
     cast,
 )
 
+from plumpy.broadcast_filter import BroadcastFilter  # type: ignore
+from plumpy.coordinator import Coordinator
+
 try:
     from aiocontextvars import ContextVar
 except ModuleNotFoundError:
     from contextvars import ContextVar
 
-import kiwipy
 import yaml
-from aio_pika.exceptions import ChannelInvalidStateError, ConnectionClosed
 
-from . import (
-    events,
-    exceptions,
-    futures,
-    persistence,
-    ports,
-    process_comms,
-    process_states,
-    utils,
-)
+from . import events, exceptions, message, persistence, ports, process_states, utils
 from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .process_comms import MESSAGE_TEXT_KEY, MessageBuilder, MessageType
+from .futures import CancellableAction, capture_exceptions
+from .message import MESSAGE_TEXT_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
@@ -154,10 +150,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
     _spec_class = ProcessSpec
     # Default placeholders, will be populated in init()
     _stepping = False
-    _pausing: Optional[futures.CancellableAction] = None
+    _pausing: Optional[CancellableAction] = None
     _paused: Optional[persistence.SavableFuture] = None
-    _killing: Optional[futures.CancellableAction] = None
-    _interrupt_action: Optional[futures.CancellableAction] = None
+    _killing: Optional[CancellableAction] = None
+    _interrupt_action: Optional[CancellableAction] = None
     _closed = False
     _cleanups: Optional[List[Callable[[], None]]] = None
 
@@ -273,7 +269,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         pid: Optional[PID_TYPE] = None,
         logger: Optional[logging.Logger] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
-        communicator: Optional[kiwipy.Communicator] = None,
+        coordinator: Optional[Coordinator] = None,
     ) -> None:
         """
         The signature of the constructor should not be changed by subclassing processes.
@@ -312,7 +308,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._future = persistence.SavableFuture(loop=self._loop)
         self._event_helper = EventHelper(ProcessListener)
         self._logger = logger
-        self._communicator = communicator
+        self._coordinator = coordinator
 
     @super_check
     def init(self) -> None:
@@ -322,27 +318,26 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         self._cleanups = []  # a list of functions to be ran on terminated
 
-        if self._communicator is not None:
+        if self._coordinator is not None:
             try:
-                identifier = self._communicator.add_rpc_subscriber(self.message_receive, identifier=str(self.pid))
-                self.add_cleanup(functools.partial(self._communicator.remove_rpc_subscriber, identifier))
-            except kiwipy.TimeoutError:
+                identifier = self._coordinator.hook_rpc_receiver(self.message_receive, identifier=str(self.pid))
+                self.add_cleanup(functools.partial(self._coordinator.unhook_rpc_receiver, identifier))
+            except concurrent.futures.TimeoutError:
                 self.logger.exception('Process<%s>: failed to register as an RPC subscriber', self.pid)
 
+            # XXX: handle duplicate subscribing here: see aiida-core test_duplicate_subscriber_identifier.
             try:
                 # filter out state change broadcasts
-                subscriber = kiwipy.BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
-                identifier = self._communicator.add_broadcast_subscriber(subscriber, identifier=str(self.pid))
-                self.add_cleanup(functools.partial(self._communicator.remove_broadcast_subscriber, identifier))
-            except kiwipy.TimeoutError:
-                self.logger.exception(
-                    'Process<%s>: failed to register as a broadcast subscriber',
-                    self.pid,
-                )
+                subscriber = BroadcastFilter(self.broadcast_receive, subject=re.compile(r'^(?!state_changed).*'))
+                identifier = self._coordinator.hook_broadcast_receiver(subscriber, identifier=str(self.pid))
+
+                self.add_cleanup(functools.partial(self._coordinator.unhook_broadcast_receiver, identifier))
+            except concurrent.futures.TimeoutError:
+                self.logger.exception('Process<%s>: failed to register as a broadcast subscriber', self.pid)
 
         if not self._future.done():
 
-            def try_killing(future: futures.Future) -> None:
+            def try_killing(future: asyncio.Future) -> None:
                 if future.cancelled():
                     if not self.kill('Killed by future being cancelled'):
                         self.logger.warning(
@@ -457,7 +452,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             pid=pid,
             logger=logger,
             loop=self.loop,
-            communicator=self._communicator,
+            coordinator=self._coordinator,
         )
         self.loop.create_task(process.step_until_terminated())
         return process
@@ -653,7 +648,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._future = persistence.SavableFuture()
         self._event_helper = EventHelper(ProcessListener)
         self._logger = None
-        self._communicator = None
+        self._coordinator = None
 
         if 'loop' in load_context:
             self._loop = load_context.loop
@@ -662,8 +657,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         self._state: process_states.State = self.recreate_state(saved_state['_state'])
 
-        if 'communicator' in load_context:
-            self._communicator = load_context.communicator
+        if 'coordinator' in load_context:
+            self._coordinator = load_context.coordinator
 
         if 'logger' in load_context:
             self._logger = load_context.logger
@@ -748,18 +743,19 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         elif state_label == process_states.ProcessState.KILLED:
             call_with_super_check(self.on_killed)
 
-        if self._communicator and isinstance(self.state, enum.Enum):
+        if self._coordinator and isinstance(self.state, enum.Enum):
             from_label = cast(enum.Enum, from_state.LABEL).value if from_state is not None else None
             subject = f'state_changed.{from_label}.{self.state.value}'
             self.logger.info('Process<%s>: Broadcasting state change: %s', self.pid, subject)
             try:
-                self._communicator.broadcast_send(body=None, sender=self.pid, subject=subject)
-            except (ConnectionClosed, ChannelInvalidStateError):
-                message = 'Process<%s>: no connection available to broadcast state change from %s to %s'
-                self.logger.warning(message, self.pid, from_label, self.state.value)
-            except kiwipy.TimeoutError:
-                message = 'Process<%s>: sending broadcast of state change from %s to %s timed out'
-                self.logger.warning(message, self.pid, from_label, self.state.value)
+                self._coordinator.broadcast_send(body=None, sender=self.pid, subject=subject)
+            except exceptions.CoordinatorCommunicationError:
+                message = f'Process<{self.pid}>: cannot broadcast state change from {from_label} to {self.state.value}'
+                self.logger.warning(message)
+                self.logger.debug(message, exc_info=True)
+            except Exception:
+                # bubble up for unknown exception
+                raise
 
     def on_exiting(self) -> None:
         state = self.state
@@ -795,6 +791,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         self._uuid = uuid.uuid4()
         if self._pid is None:
             self._pid = self._uuid
+        # __import__('ipdb').set_trace()
+        # print("!!!!! ")
 
     @super_check
     def on_exit_running(self) -> None:
@@ -943,30 +941,27 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     # region Communication
 
-    def message_receive(self, _comm: kiwipy.Communicator, msg: MessageType) -> Any:
-        """
-        Coroutine called when the process receives a message from the communicator
+    def message_receive(self, msg: MessageType) -> Any:
+        """Coroutine called when the process receives a message from the communicator
 
-        :param _comm: the communicator that sent the message
         :param msg: the message
         :return: the outcome of processing the message, the return value will be sent back as a response to the sender
         """
         self.logger.debug(
-            "Process<%s>: received RPC message with communicator '%s': %r",
+            'Process<%s>: received RPC message: %r',
             self.pid,
-            _comm,
             msg,
         )
 
-        intent = msg[process_comms.INTENT_KEY]
+        intent = msg[message.INTENT_KEY]
 
-        if intent == process_comms.Intent.PLAY:
+        if intent == message.Intent.PLAY:
             return self._schedule_rpc(self.play)
-        if intent == process_comms.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
-        if intent == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
-        if intent == process_comms.Intent.STATUS:
+        if intent == message.Intent.PAUSE:
+            return self._schedule_rpc(self.pause, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
+        if intent == message.Intent.KILL:
+            return self._schedule_rpc(self.kill, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
+        if intent == message.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
             return status_info
@@ -975,33 +970,39 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         raise RuntimeError('Unknown intent')
 
     def broadcast_receive(
-        self, _comm: kiwipy.Communicator, msg: MessageType, sender: Any, subject: Any, correlation_id: Any
-    ) -> Optional[kiwipy.Future]:
-        """
-        Coroutine called when the process receives a message from the communicator
+        self, msg: MessageType, sender: Any, subject: Any, correlation_id: Any
+    ) -> Optional[concurrent.futures.Future]:
+        """Coroutine called when the process receives a message from the communicator
 
-        :param _comm: the communicator that sent the message
         :param msg: the message
         """
-
         self.logger.debug(
-            "Process<%s>: received broadcast message '%s' with communicator '%s': %r",
+            "Process<%s>: received broadcast message '%s': %r",
             self.pid,
             subject,
-            _comm,
             msg,
         )
 
         # If we get a message we recognise then action it, otherwise ignore
-        if subject == process_comms.Intent.PLAY:
-            return self._schedule_rpc(self.play)
-        if subject == process_comms.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
-        if subject == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
-        return None
+        fn = None
+        if subject == message.Intent.PLAY:
+            fn = self._schedule_rpc(self.play)
+        elif subject == message.Intent.PAUSE:
+            fn = self._schedule_rpc(self.pause, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
+        elif subject == message.Intent.KILL:
+            fn = self._schedule_rpc(self.kill, msg_text=msg.get(MESSAGE_TEXT_KEY, None))
 
-    def _schedule_rpc(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> kiwipy.Future:
+        if fn is None:
+            self.logger.warning(
+                "Process<%s>: received unsupported broadcast message '%s'.",
+                self.pid,
+                subject,
+            )
+            return None
+
+        return fn
+
+    def _schedule_rpc(self, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> concurrent.futures.Future:
         """
         Schedule a call to a callback as a result of an RPC communication call, this will return
         a future that resolves to the final result (even after one or more layer of futures being
@@ -1016,10 +1017,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         :return: a kiwi future that resolves to the outcome of the callback
 
         """
-        kiwi_future = kiwipy.Future()
+        kiwi_future = concurrent.futures.Future()  # type: ignore[var-annotated]
 
         async def run_callback() -> None:
-            with kiwipy.capture_exceptions(kiwi_future):
+            with capture_exceptions(kiwi_future):
                 try:
                     result = callback(*args, **kwargs)
                 except Exception as exc:
@@ -1096,7 +1097,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         )
         self.transition_to(new_state)
 
-    def pause(self, msg_text: Optional[str] = None) -> Union[bool, futures.CancellableAction]:
+    def pause(self, msg_text: str | None = None) -> Union[bool, CancellableAction]:
         """Pause the process.
 
         :param msg: an optional message to set as the status. The current status will be saved in the private
@@ -1125,7 +1126,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._pausing = self._interrupt_action
             # Try to interrupt the state
             self._state.interrupt(interrupt_exception)
-            return cast(futures.CancellableAction, self._interrupt_action)
+            return cast(CancellableAction, self._interrupt_action)
 
         msg = MessageBuilder.pause(msg_text)
         return self._do_pause(state_msg=msg)
@@ -1148,7 +1149,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         return True
 
-    def _create_interrupt_action(self, exception: process_states.Interruption) -> futures.CancellableAction:
+    def _create_interrupt_action(self, exception: process_states.Interruption) -> CancellableAction:
         """
         Create an interrupt action from the corresponding interrupt exception
 
@@ -1158,7 +1159,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """
         if isinstance(exception, process_states.PauseInterruption):
             do_pause = functools.partial(self._do_pause, exception.msg)
-            return futures.CancellableAction(do_pause, cookie=exception)
+            return CancellableAction(do_pause, cookie=exception)
 
         if isinstance(exception, process_states.KillInterruption):
 
@@ -1170,11 +1171,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 finally:
                     self._killing = None
 
-            return futures.CancellableAction(do_kill, cookie=exception)
+            return CancellableAction(do_kill, cookie=exception)
 
         raise ValueError(f"Got unknown interruption type '{type(exception)}'")
 
-    def _set_interrupt_action(self, new_action: Optional[futures.CancellableAction]) -> None:
+    def _set_interrupt_action(self, new_action: Optional[CancellableAction]) -> None:
         """
         Set the interrupt action cancelling the current one if it exists
         :param new_action: The new interrupt action to set
@@ -1246,7 +1247,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._set_interrupt_action_from_exception(interrupt_exception)
             self._killing = self._interrupt_action
             self._state.interrupt(interrupt_exception)
-            return cast(futures.CancellableAction, self._interrupt_action)
+            return cast(CancellableAction, self._interrupt_action)
 
         msg = MessageBuilder.kill(msg_text)
         new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)
@@ -1322,6 +1323,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             self._stepping = True
             next_state = None
             try:
+                # XXX: debug log when need to step to next state
                 next_state = await self._run_task(self._state.execute)
             except process_states.Interruption as exception:
                 # If the interruption was caused by a call to a Process method then there should
