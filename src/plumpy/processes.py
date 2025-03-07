@@ -512,7 +512,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def killed_msg(self) -> Optional[MessageType]:
         """Return the killed message."""
-        breakpoint()
         if isinstance(self._state, process_states.Killed):
             return self._state.msg
 
@@ -969,7 +968,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             default_message = MessageBuilder.kill()
             text = msg.get(process_comms.MESSAGE_TEXT_KEY, default_message.get(MESSAGE_TEXT_KEY))
             force_kill = msg.get(process_comms.FORCE_KILL_KEY, default_message.get(FORCE_KILL_KEY))
-            breakpoint()
             return self._schedule_rpc(self.kill, msg_text=text, force_kill=force_kill)
         if intent == process_comms.Intent.STATUS:
             status_info: Dict[str, Any] = {}
@@ -1245,7 +1243,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             return self._killing
 
         
-        breakpoint()
         if force_kill:
             # TODO(from alex) this code is just copied from last PR, need to check it
             #      It looks mergable with the code below but I dunnot fully understand yet
@@ -1263,7 +1260,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             msg = MessageBuilder.kill(msg_text, force_kill=force_kill)
             new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)
             self.transition_to(new_state)
-            breakpoint()
             return True
 
         if self._stepping:
