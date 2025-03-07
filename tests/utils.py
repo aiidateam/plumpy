@@ -83,9 +83,13 @@ class WaitForSignalProcess(processes.Process):
 
 
 class KillProcess(processes.Process):
+    def __init__(self, force_kill: bool):
+        super().__init__()
+        self.force_kill = force_kill
+
     @utils.override
     def run(self):
-        msg = MessageBuilder.kill(text='killed')
+        msg = MessageBuilder.kill(text='killed', force_kill=self.force_kill)
         return process_states.Kill(msg=msg)
 
 

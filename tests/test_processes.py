@@ -276,9 +276,11 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(proc.state, ProcessState.EXCEPTED)
 
     def test_run_kill(self):
-        proc = utils.KillProcess()
-        with pytest.raises(plumpy.KilledError, match='killed'):
-            proc.execute()
+        for force_kill in [False, True]:
+            with self.subTest(force_kill):
+                proc = utils.KillProcess(force_kill)
+                with pytest.raises(plumpy.KilledError, match='killed'):
+                    proc.execute()
 
     def test_get_description(self):
         class ProcWithoutSpec(Process):
@@ -424,22 +426,24 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(proc.state, ProcessState.FINISHED)
 
     def test_kill_in_run(self):
-        class KillProcess(Process):
-            after_kill = False
+        for force_kill in [False, True]:
+            with self.subTest(force_kill):
+                class KillProcess(Process):
+                    after_kill = False
 
-            def run(self, **kwargs):
-                msg = MessageBuilder.kill(text='killed')
-                self.kill(msg)
-                # The following line should be executed because kill will not
-                # interrupt execution of a method call in the RUNNING state
-                self.after_kill = True
+                    def run(self, **kwargs):
+                        msg = MessageBuilder.kill(text='killed', force_kill=force_kill)
+                        self.kill(msg)
+                        # The following line should be executed because kill will not
+                        # interrupt execution of a method call in the RUNNING state
+                        self.after_kill = True
 
-        proc = KillProcess()
-        with pytest.raises(plumpy.KilledError, match='killed'):
-            proc.execute()
+                proc = KillProcess()
+                with pytest.raises(plumpy.KilledError, match='killed'):
+                    proc.execute()
 
-        self.assertTrue(proc.after_kill)
-        self.assertEqual(proc.state, ProcessState.KILLED)
+                self.assertTrue(proc.after_kill)
+                self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_kill_when_paused_in_run(self):
         class PauseProcess(Process):
