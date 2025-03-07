@@ -409,6 +409,7 @@ class RemoteProcessThreadController:
         :param msg: optional kill message
         :return: a response future from the process to be killed
         """
+        breakpoint()
         msg = MessageBuilder.kill(text=msg_text, force_kill=force_kill)
         return self._communicator.rpc_send(pid, msg)
 

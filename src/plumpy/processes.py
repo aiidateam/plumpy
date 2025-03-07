@@ -54,7 +54,7 @@ from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .process_comms import MESSAGE_TEXT_KEY, MessageBuilder, MessageType
+from .process_comms import MESSAGE_TEXT_KEY, FORCE_KILL_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
 from .utils import PID_TYPE, SAVED_STATE_TYPE, protected
@@ -512,6 +512,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def killed_msg(self) -> Optional[MessageType]:
         """Return the killed message."""
+        breakpoint()
         if isinstance(self._state, process_states.Killed):
             return self._state.msg
 
@@ -963,9 +964,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == process_comms.Intent.PLAY:
             return self._schedule_rpc(self.play)
         if intent == process_comms.Intent.PAUSE:
-            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
+            return self._schedule_rpc(self.pause)
         if intent == process_comms.Intent.KILL:
-            return self._schedule_rpc(self.kill, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
+            default_message = MessageBuilder.kill()
+            text = msg.get(process_comms.MESSAGE_TEXT_KEY, default_message.get(MESSAGE_TEXT_KEY))
+            force_kill = msg.get(process_comms.FORCE_KILL_KEY, default_message.get(FORCE_KILL_KEY))
+            breakpoint()
+            return self._schedule_rpc(self.kill, msg_text=text, force_kill=force_kill)
         if intent == process_comms.Intent.STATUS:
             status_info: Dict[str, Any] = {}
             self.get_status_info(status_info)
@@ -1239,6 +1244,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             # Already killing
             return self._killing
 
+        
+        breakpoint()
         if force_kill:
             # TODO(from alex) this code is just copied from last PR, need to check it
             #      It looks mergable with the code below but I dunnot fully understand yet
@@ -1256,6 +1263,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             msg = MessageBuilder.kill(msg_text, force_kill=force_kill)
             new_state = self._create_state_instance(process_states.ProcessState.KILLED, msg=msg)
             self.transition_to(new_state)
+            breakpoint()
             return True
 
         if self._stepping:

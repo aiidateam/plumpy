@@ -270,6 +270,7 @@ class Running(State):
 
     def _action_command(self, command: Union[Kill, Stop, Wait, Continue]) -> State:
         if isinstance(command, Kill):
+            breakpoint()
             state = self.create_state(ProcessState.KILLED, command.msg)
         # elif isinstance(command, Pause):
         #     self.pause()
