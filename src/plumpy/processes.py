@@ -963,7 +963,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if intent == process_comms.Intent.PLAY:
             return self._schedule_rpc(self.play)
         if intent == process_comms.Intent.PAUSE:
-            return self._schedule_rpc(self.pause)
+            return self._schedule_rpc(self.pause, msg_text=msg.get(process_comms.MESSAGE_TEXT_KEY, None))
         if intent == process_comms.Intent.KILL:
             default_message = MessageBuilder.kill()
             text = msg.get(process_comms.MESSAGE_TEXT_KEY, default_message.get(MESSAGE_TEXT_KEY))
