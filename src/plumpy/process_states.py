@@ -52,16 +52,17 @@ class Interruption(Exception):  # noqa: N818
 
 
 class KillInterruption(Interruption):
-    def __init__(self, msg_text: str | None):
-        super().__init__()
-        msg = MessageBuilder.kill(text=msg_text)
+    def __init__(self, msg_text: str | None, force_kill: bool = False):
+        super().__init__(msg_text)
+        msg = MessageBuilder.kill(text=msg_text, force_kill=force_kill)
 
         self.msg: MessageType = msg
+        self.force_kill: bool = force_kill
 
 
 class PauseInterruption(Interruption):
     def __init__(self, msg_text: str | None):
-        super().__init__()
+        super().__init__(msg_text)
         msg = MessageBuilder.pause(text=msg_text)
 
         self.msg: MessageType = msg
