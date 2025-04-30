@@ -1,20 +1,5 @@
 # Changelog
 
-## v0.25.0 - 2025-04-29
-
-### Breaking changes
-- Drop support for Python 3.8 (#312) [[f008399]](https://github.com/aiidateam/plumpy/commit/f0083995ae9204eb35c32c006a944168dd1029b2)
-
-### Features
--  Add support of Python 3.13 (#312) [[f008399]](https://github.com/aiidateam/plumpy/commit/f0083995ae9204eb35c32c006a944168dd1029b2)
-- Add option to forcefully (not gracefully) killing a process [[8703d4b]](https://github.com/aiidateam/plumpy/commit/8703d4b4ce17afc7687335c19b348c3a3ce1657f)
-- Kill task are cancelled and requeued when a new kill message is received [[8703d4b]](https://github.com/aiidateam/plumpy/commit/8703d4b4ce17afc7687335c19b348c3a3ce1657f)
-- Handle Uuid FullLoader with yaml de/serializer in message passing (#310)[[98b3e93]](https://github.com/aiidateam/plumpy/commit/98b3e9380fd2fce437fe1cef906ef075832bf30f)
-
-### Devops
-- Update the the readthedocs yaml to v2 and py13 (#313) [[538c824]](538c8240d8fe46d9ea93a5ca3b6cc31dad20ad2f)
-
-
 ## v0.24.0 - 2025-01-08
 
 ### Breaking changes
