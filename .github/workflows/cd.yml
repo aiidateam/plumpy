@@ -16,34 +16,24 @@ jobs:
         -   name: Checkout source
             uses: actions/checkout@v2
 
-        -   name: Set up Python 3.12
+        -   name: Set up Python 3.13
             uses: actions/setup-python@v2
             with:
-                python-version: '3.12'
+                python-version: '3.13'
 
         -   name: Validate the tag version against the package version
             run: python .github/workflows/validate_release_tag.py $GITHUB_REF
 
     pre-commit:
-
-        needs: [validate-release-tag]
         runs-on: ubuntu-latest
 
         steps:
         -   uses: actions/checkout@v2
 
-        -   name: Cache Python dependencies
-            uses: actions/cache@v1
-            with:
-                path: ~/.cache/pip
-                key: pip-pre-commit-${{ hashFiles('**/setup.json') }}
-                restore-keys:
-                    pip-pre-commit-
-
-        -   name: Set up Python
+        -   name: Set up Python 3.13
             uses: actions/setup-python@v2
             with:
-                python-version: '3.12'
+                python-version: '3.13'
 
         -   name: Install Python dependencies
             run: pip install -e .[pre-commit]
@@ -58,7 +48,7 @@ jobs:
 
         strategy:
             matrix:
-                python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+                python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
 
         services:
             postgres:
@@ -71,21 +61,13 @@ jobs:
         steps:
         -   uses: actions/checkout@v2
 
-        -   name: Cache Python dependencies
-            uses: actions/cache@v1
-            with:
-                path: ~/.cache/pip
-                key: pip-${{ matrix.python-version }}-tests-${{ hashFiles('**/setup.json') }}
-                restore-keys:
-                    pip-${{ matrix.python-version }}-tests
-
         -   name: Set up Python ${{ matrix.python-version }}
             uses: actions/setup-python@v2
             with:
                 python-version: ${{ matrix.python-version }}
 
-        -   name: Install Python dependencies
-            run: pip install -e .[tests]
+        -   name: Install python dependencies
+            run: pip install .[tests]
 
         -   name: Run pytest
             run: pytest -s --cov=plumpy tests
@@ -109,10 +91,10 @@ jobs:
         -   name: Checkout source
             uses: actions/checkout@v2
 
-        -   name: Set up Python 3.12
+        -   name: Set up Python 3.13
             uses: actions/setup-python@v2
             with:
-                python-version: '3.12'
+                python-version: '3.13'
 
         -   name: Install flit
             run: pip install flit~=3.4
