@@ -13,6 +13,7 @@ import sys
 import time
 import uuid
 import warnings
+from contextvars import ContextVar
 from types import TracebackType
 from typing import (
     Any,
@@ -30,11 +31,6 @@ from typing import (
     Union,
     cast,
 )
-
-try:
-    from aiocontextvars import ContextVar
-except ModuleNotFoundError:
-    from contextvars import ContextVar
 
 import kiwipy
 import yaml
