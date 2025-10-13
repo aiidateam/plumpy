@@ -60,7 +60,7 @@ T = TypeVar('T')
 __all__ = ['BundleKeys', 'Process', 'ProcessSpec', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
-PROCESS_STACK = ContextVar('process stack', default=[])
+PROCESS_STACK: ContextVar[list['Process']] = ContextVar('process stack', default=[])
 
 
 class BundleKeys:
