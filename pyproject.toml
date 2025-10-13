@@ -39,6 +39,13 @@ Home = 'https://github.com/aiidateam/plumpy'
 Source = 'https://github.com/aiidateam/plumpy'
 Documentation = 'https://plumpy.readthedocs.io'
 
+# The "dev" dependency group is automatically synced by uv
+# and should thus contain all necessary deps for local development.
+[dependency-groups]
+dev = [
+  "plumpy[pre-commit,tests]"
+]
+
 [project.optional-dependencies]
 docs = [
     'ipython~=7.0',
