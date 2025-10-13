@@ -81,10 +81,6 @@ exclude = [
     'tests/',
 ]
 
-[tool.flynt]
-line-length = 120
-fail-on-change = true
-
 [tool.ruff]
 line-length = 120
 
@@ -113,6 +109,7 @@ select = [
   'PLE',  # pylint-error
   'PLR',  # pylint-refactor
   'PLW',  # pylint-warning
+  'FLY',  # flynt
   'RUF'  # ruff
 ]
 
