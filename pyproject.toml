@@ -128,11 +128,9 @@ check_untyped_defs = false
 [[tool.mypy.overrides]]
 module = [
     'aio_pika.*',
-    'aiocontextvars.*',
     'frozendict.*',
     'kiwipy.*',
     'nest_asyncio.*',
-    'tblib.*',
 ]
 ignore_missing_imports = true
 
