@@ -14,8 +14,14 @@ jobs:
             with:
                 python-version: '3.13'
 
+        -   name: Set up uv
+            uses: astral-sh/setup-uv@v6
+            with:
+                version: 0.9.2
+                python-version: 3.13
+
         -   name: Install Python dependencies
-            run: pip install -e .[pre-commit]
+            run: uv sync
 
         -   name: Run pre-commit
             run: pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
@@ -42,18 +48,20 @@ jobs:
             with:
                 python-version: ${{ matrix.python-version }}
 
-        -   name: Install python dependencies
-            run: pip install .[tests]
+        -   name: Set up uv
+            uses: astral-sh/setup-uv@v6
+            with:
+                version: 0.9.2
+                python-version: ${{ inputs.python-version }}
 
         -   name: Run pytest
-            run: pytest -s --cov=plumpy tests/
-
-        -   name: Create xml coverage
-            run: coverage xml
+            run: uv run pytest -s --cov=plumpy tests/
 
         -   name: Upload coverage to Codecov
             if: github.repository == 'aiidateam/plumpy'
             uses: codecov/codecov-action@v5
             with:
                 file: ./coverage.xml
-                name: plumpy
+                name: plumpy-py${{ matrix.python-version }}
+                token: ${{ secrets.CODECOV_TOKEN }}
+                fail_ci_if_error: false  # don't fail job, if coverage upload fails

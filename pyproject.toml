@@ -144,9 +144,10 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-minversion = '6.0'
+addopts = '--durations=5 --durations-min=1 --strict-config --strict-markers -ra --cov-report xml --cov-append'
+minversion = '7.0'
 testpaths = [
-    'test',
+    'tests',
 ]
 filterwarnings = []
 

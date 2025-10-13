@@ -35,11 +35,14 @@ jobs:
             with:
                 python-version: '3.13'
 
-        -   name: Install Python dependencies
-            run: pip install -e .[pre-commit]
+        -   name: Set up uv
+            uses: astral-sh/setup-uv@v6
+            with:
+                version: 0.9.2
+                python-version: ${{ inputs.python-version }}
 
         -   name: Run pre-commit
-            run: pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
+            run: uv run pre-commit run --all-files || ( git status --short ; git diff ; exit 1 )
 
     tests:
 
@@ -66,20 +69,14 @@ jobs:
             with:
                 python-version: ${{ matrix.python-version }}
 
-        -   name: Install python dependencies
-            run: pip install .[tests]
+        -   name: Set up uv
+            uses: astral-sh/setup-uv@v6
+            with:
+                version: 0.9.2
+                python-version: ${{ inputs.python-version }}
 
         -   name: Run pytest
-            run: pytest -s --cov=plumpy tests
-
-        -   name: Create xml coverage
-            run: coverage xml
-
-        -   name: Upload coverage to Codecov
-            uses: codecov/codecov-action@v1
-            with:
-                file: ./coverage.xml
-                name: plumpy
+            run: uv run pytest tests/
 
     publish:
 
