@@ -57,13 +57,13 @@ docs = [
     'importlib-metadata~=4.12.0',
 ]
 pre-commit = [
-    'mypy==1.13.0',
-    'pre-commit~=2.2',
-    'types-pyyaml'
+    'mypy==1.18.2',
+    'pre-commit~=3.6',
+    'types-pyyaml~=6.0'
 ]
 tests = [
     'ipykernel==6.12.1',
-    'pytest~=7.0',
+    'pytest~=8.4',
     'pytest-asyncio~=0.12,<0.17',
     'pytest-cov~=4.1',
     'pytest-notebook>=0.8.0',
@@ -131,9 +131,6 @@ check_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = [
-    'aio_pika.*',
-    'aiocontextvars.*',
-    'frozendict.*',
     'kiwipy.*',
     'nest_asyncio.*',
     'tblib.*',

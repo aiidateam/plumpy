@@ -187,9 +187,9 @@ class StateEventHook(enum.Enum):
     on the hook as commented below.
     """
 
-    ENTERING_STATE: int = 0  # State passed will be the state that is being entered
-    ENTERED_STATE: int = 1  # State passed will be the last state that we entered from
-    EXITING_STATE: int = 2  # State passed will be the next state that will be entered (or None for terminal)
+    ENTERING_STATE = 0  # State passed will be the state that is being entered
+    ENTERED_STATE = 1  # State passed will be the last state that we entered from
+    EXITING_STATE = 2  # State passed will be the next state that will be entered (or None for terminal)
 
 
 class StateMachineMeta(type):
