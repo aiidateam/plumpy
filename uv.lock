@@ -20,15 +20,37 @@ wheels = [
 
 [[package]]
 name = "aio-pika"
-version = "9.4.3"
+version = "9.5.6"
 source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiormq" },
-    { name = "yarl" },
+resolution-markers = [
+    "python_full_version < '3.10'",
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c9/69/8649bdb97fa1521af3dafe23dbc5debadd4b01abb2850a4d193dae9b0451/aio_pika-9.4.3.tar.gz", hash = "sha256:fd2b1fce25f6ed5203ef1dd554dc03b90c9a46a64aaf758d032d78dc31e5295d", size = 47693, upload-time = "2024-08-13T06:49:09.619Z" }
+dependencies = [
+    { name = "aiormq", marker = "python_full_version < '3.10'" },
+    { name = "exceptiongroup", marker = "python_full_version < '3.10'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.10'" },
+    { name = "yarl", marker = "python_full_version < '3.10'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/59/52/fe35c898bce5cc8af839ba786b38f7db8932aac48a67ba8ca7de3b074e07/aio_pika-9.5.6.tar.gz", hash = "sha256:5013f429e1235e1ce8df054a821e0eea140ea9afc94a09725b96590ea2dad001", size = 47308, upload-time = "2025-08-05T14:18:35.949Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/66/cad391d83b7266a667c85c826bb6c0d7f68519a0eed7634098c12fb39a4b/aio_pika-9.4.3-py3-none-any.whl", hash = "sha256:f1423d2d5a8b7315d144efe1773763bf687ac17aa1535385982687e9e5ed49bb", size = 53240, upload-time = "2024-08-13T06:49:07.276Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/fb/c1cfb7cb98ccd2abdc91e170e7ba0e1e3088b6a9d051e4f2899d3249a231/aio_pika-9.5.6-py3-none-any.whl", hash = "sha256:47b532419185cf1105ae18daa45a5052ff98064915c5e080b2433431fe808193", size = 54303, upload-time = "2025-08-05T14:18:34.62Z" },
+]
+
+[[package]]
+name = "aio-pika"
+version = "9.5.7"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.10'",
+]
+dependencies = [
+    { name = "aiormq", marker = "python_full_version >= '3.10'" },
+    { name = "exceptiongroup", marker = "python_full_version == '3.10.*'" },
+    { name = "yarl", marker = "python_full_version >= '3.10'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/42/ad/0ddde89d7a018f4304aac687e5b65c07d308644f51da3c4ae411184bb237/aio_pika-9.5.7.tar.gz", hash = "sha256:0569b59d3c7b36ca76abcb213cdc3677e2a4710a3c371dd27359039f9724f4ee", size = 47298, upload-time = "2025-08-05T18:21:18.397Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/be/9b08e7c4d1b3b9a1184e63965d13c811366444cb42c6e809910ab17e916c/aio_pika-9.5.7-py3-none-any.whl", hash = "sha256:684316a0e92157754bb2d6927c5568fd997518b123add342e97405aa9066772b", size = 54297, upload-time = "2025-08-05T18:21:16.99Z" },
 ]
 
 [[package]]
@@ -985,16 +1007,16 @@ wheels = [
 
 [[package]]
 name = "kiwipy"
-version = "0.8.5"
+version = "0.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "deprecation" },
     { name = "pyyaml" },
     { name = "shortuuid" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f7/c9/60f4597b2f7ce9f1ce9f202c1ddc70b857716597d828fc5baa123a2fa17e/kiwipy-0.8.5.tar.gz", hash = "sha256:23b746f60577120764d662673335cea40cf34083d15f1ee8ab4fa6155b50d60f", size = 41087, upload-time = "2024-12-02T08:19:59.85Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/41/d1/a56aea1ee27c9aa73c7c6c785f4eb0539799392566b758fc920397afea91/kiwipy-0.9.0.tar.gz", hash = "sha256:3dc5a2cbe4bf7127da2c8a6c20476ddad30849b32fa12b495c622059c633db4f", size = 242121, upload-time = "2025-10-21T05:58:10.836Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/68/50/2d180b54272d467a3e5eb4d7e64df80a8bb11d483e908404d71905a2801b/kiwipy-0.8.5-py3-none-any.whl", hash = "sha256:b6acf17ba69fdfc9ce246673efd35e1db06a27b2c624ba1735d2159f8e665a1b", size = 41820, upload-time = "2024-12-02T08:19:58.573Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/c0/2ed83a3b88048db2504ddd67a419148e23a1cf2bc64ee0bbaacb46c80bbb/kiwipy-0.9.0-py3-none-any.whl", hash = "sha256:8d861310d64dc15de50667c1c7b7295f2dba50a5561284e8a889e3a6c2b197f9", size = 41865, upload-time = "2025-10-21T05:58:09.033Z" },
 ]
 
 [package.optional-dependencies]
@@ -1008,7 +1030,8 @@ docs = [
     { name = "sphinx-autobuild" },
 ]
 rmq = [
-    { name = "aio-pika" },
+    { name = "aio-pika", version = "9.5.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "aio-pika", version = "9.5.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pamqp" },
     { name = "pytray" },
 ]
@@ -1664,20 +1687,25 @@ tests = [
     { name = "shortuuid" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "plumpy", extra = ["pre-commit", "tests"] },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "importlib-metadata", marker = "extra == 'docs'", specifier = "~=4.12.0" },
     { name = "importlib-resources", marker = "extra == 'tests'", specifier = "~=5.2" },
     { name = "ipykernel", marker = "extra == 'tests'", specifier = "==6.12.1" },
     { name = "ipython", marker = "extra == 'docs'", specifier = "~=7.0" },
-    { name = "kiwipy", extras = ["docs"], marker = "extra == 'docs'", specifier = "~=0.8.3" },
-    { name = "kiwipy", extras = ["rmq"], specifier = "~=0.8.5" },
+    { name = "kiwipy", extras = ["docs"], marker = "extra == 'docs'", specifier = "~=0.9.0" },
+    { name = "kiwipy", extras = ["rmq"], specifier = "~=0.9.0" },
     { name = "markupsafe", marker = "extra == 'docs'", specifier = "==2.0.1" },
     { name = "mypy", marker = "extra == 'pre-commit'", specifier = "==1.18.2" },
     { name = "myst-nb", marker = "extra == 'docs'", specifier = "~=1.2.0" },
     { name = "nest-asyncio", specifier = "~=1.5,>=1.5.1" },
     { name = "pre-commit", marker = "extra == 'pre-commit'", specifier = "~=3.6" },
-    { name = "pytest", marker = "extra == 'tests'", specifier = "~=7.0" },
+    { name = "pytest", marker = "extra == 'tests'", specifier = "~=8.4" },
     { name = "pytest-asyncio", marker = "extra == 'tests'", specifier = "~=0.12,<0.17" },
     { name = "pytest-cov", marker = "extra == 'tests'", specifier = "~=4.1" },
     { name = "pytest-notebook", marker = "extra == 'tests'", specifier = ">=0.8.0" },
@@ -1688,6 +1716,9 @@ requires-dist = [
     { name = "types-pyyaml", marker = "extra == 'pre-commit'", specifier = "~=6.0" },
 ]
 provides-extras = ["docs", "pre-commit", "tests"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "plumpy", extras = ["pre-commit", "tests"] }]
 
 [[package]]
 name = "ply"
@@ -1936,7 +1967,7 @@ wheels = [
 
 [[package]]
 name = "pytest"
-version = "7.4.4"
+version = "8.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
@@ -1944,11 +1975,12 @@ dependencies = [
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
+    { name = "pygments" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/80/1f/9d8e98e4133ffb16c90f3b405c43e38d3abb715bb5d7a63a5a684f7e46a3/pytest-7.4.4.tar.gz", hash = "sha256:2cf0005922c6ace4a3e2ec8b4080eb0d9753fdc93107415332f50ce9e7994280", size = 1357116, upload-time = "2023-12-31T12:00:18.035Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/5c/00a0e072241553e1a7496d638deababa67c5058571567b92a7eaa258397c/pytest-8.4.2.tar.gz", hash = "sha256:86c0d0b93306b961d58d62a4db4879f27fe25513d4b969df351abdddb3c30e01", size = 1519618, upload-time = "2025-09-04T14:34:22.711Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/ff/f6e8b8f39e08547faece4bd80f89d5a8de68a38b2d179cc1c4490ffa3286/pytest-7.4.4-py3-none-any.whl", hash = "sha256:b090cdf5ed60bf4c45261be03239c2c1c22df034fbffe691abe93cd80cea01d8", size = 325287, upload-time = "2023-12-31T12:00:13.963Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/a4/20da314d277121d6534b3a980b29035dcd51e6744bd79075a6ce8fa4eb8d/pytest-8.4.2-py3-none-any.whl", hash = "sha256:872f880de3fc3a5bdc88a11b39c9710c3497a547cfa9320bc3c5e62fbf272e79", size = 365750, upload-time = "2025-09-04T14:34:20.226Z" },
 ]
 
 [[package]]
