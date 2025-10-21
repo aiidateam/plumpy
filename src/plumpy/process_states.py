@@ -141,12 +141,12 @@ class ProcessState(Enum):
     The possible states that a :class:`~plumpy.processes.Process` can be in.
     """
 
-    CREATED: str = 'created'
-    RUNNING: str = 'running'
-    WAITING: str = 'waiting'
-    FINISHED: str = 'finished'
-    EXCEPTED: str = 'excepted'
-    KILLED: str = 'killed'
+    CREATED = 'created'
+    RUNNING = 'running'
+    WAITING = 'waiting'
+    FINISHED = 'finished'
+    EXCEPTED = 'excepted'
+    KILLED = 'killed'
 
 
 @auto_persist('in_state')

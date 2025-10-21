@@ -13,6 +13,7 @@ import sys
 import time
 import uuid
 import warnings
+from contextvars import ContextVar
 from types import TracebackType
 from typing import (
     Any,
@@ -30,11 +31,6 @@ from typing import (
     Union,
     cast,
 )
-
-try:
-    from aiocontextvars import ContextVar
-except ModuleNotFoundError:
-    from contextvars import ContextVar
 
 import kiwipy
 import yaml
@@ -64,7 +60,7 @@ T = TypeVar('T')
 __all__ = ['BundleKeys', 'Process', 'ProcessSpec', 'TransitionFailed']
 
 _LOGGER = logging.getLogger(__name__)
-PROCESS_STACK = ContextVar('process stack', default=[])
+PROCESS_STACK: ContextVar[list['Process']] = ContextVar('process stack', default=[])
 
 
 class BundleKeys:
