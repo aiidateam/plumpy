@@ -7,10 +7,10 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v5
 
         -   name: Set up Python 3.13
-            uses: actions/setup-python@v2
+            uses: actions/setup-python@v5
             with:
                 python-version: '3.13'
 
@@ -35,10 +35,10 @@ jobs:
                     - 5672:5672
 
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v5
 
         -   name: Set up Python ${{ matrix.python-version }}
-            uses: actions/setup-python@v2
+            uses: actions/setup-python@v5
             with:
                 python-version: ${{ matrix.python-version }}
 
@@ -53,7 +53,7 @@ jobs:
 
         -   name: Upload coverage to Codecov
             if: github.repository == 'aiidateam/plumpy'
-            uses: codecov/codecov-action@v1
+            uses: codecov/codecov-action@v5
             with:
                 file: ./coverage.xml
                 name: plumpy
