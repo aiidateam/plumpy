@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.25.1 - 2025-10-01
+
+### Bug fixes
+- Bump kiwipy to 0.9.0 for hotfix of aiormq by @unkcpz in https://github.com/aiidateam/plumpy/pull/326
+
+### Devops
+- Update CI and CD to py3.13 and remove cache action by @agoscinski in https://github.com/aiidateam/plumpy/pull/322
+- Spring cleaning - part 1 by @danielhollas in https://github.com/aiidateam/plumpy/pull/324
+- Update mypy, pytest and pre-commit by @danielhollas in https://github.com/aiidateam/plumpy/pull/325
+
 ## v0.25.0 - 2025-04-29
 
 ### Breaking changes
