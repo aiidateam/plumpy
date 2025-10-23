@@ -8,6 +8,8 @@ from typing import Any, Awaitable, Callable, Optional
 
 import kiwipy
 
+from . import events
+
 __all__ = ['CancelledError', 'Future', 'chain', 'copy_future', 'create_task', 'gather']
 
 CancelledError = kiwipy.CancelledError
@@ -65,7 +67,11 @@ def create_task(coro: Callable[[], Awaitable[Any]], loop: Optional[asyncio.Abstr
     :return: the future representing the outcome of the coroutine
 
     """
-    loop = loop or asyncio.get_event_loop()
+    if not loop:
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = events.create_running_loop()
 
     future = loop.create_future()
 
