@@ -286,7 +286,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
+        if loop:
+            self._loop = loop
+        else:
+            try:
+                self._loop = asyncio.get_event_loop()
+            except RuntimeError:
+                self._loop = events.create_running_loop()
 
         self._setup_event_hooks()
 

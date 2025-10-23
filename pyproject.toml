@@ -25,6 +25,7 @@ classifiers = [
     'Programming Language :: Python :: 3.11',
     'Programming Language :: Python :: 3.12',
     'Programming Language :: Python :: 3.13',
+    'Programming Language :: Python :: 3.14',
 ]
 keywords = ['workflow', 'multithreaded', 'rabbitmq']
 requires-python = '>=3.9'
@@ -54,7 +55,6 @@ docs = [
     'myst-nb~=1.2.0',
     'sphinx~=7.2.0',
     'sphinx-book-theme~=1.1.4',
-    'importlib-metadata~=4.12.0',
 ]
 pre-commit = [
     'mypy==1.18.2',
@@ -62,13 +62,12 @@ pre-commit = [
     'types-pyyaml~=6.0'
 ]
 tests = [
-    'ipykernel==6.12.1',
+    'ipykernel~=6.31.0',
     'pytest~=8.4',
     'pytest-asyncio~=0.12,<0.17',
-    'pytest-cov~=4.1',
+    'pytest-cov~=7.0',
     'pytest-notebook>=0.8.0',
-    'shortuuid==1.0.8',
-    'importlib-resources~=5.2',
+    'shortuuid==1.0.13',
 ]
 
 [tool.flit.module]
@@ -138,11 +137,16 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-minversion = '6.0'
+addopts = '--strict-config --strict-markers -ra --cov-report xml --cov-append'
+minversion = '7.0'
 testpaths = [
     'test',
 ]
-filterwarnings = []
+filterwarnings = [
+  "ignore:'asyncio.get_event_loop_policy' is deprecated:DeprecationWarning::",
+  "ignore:'asyncio.set_event_loop_policy' is deprecated:DeprecationWarning::",
+  "ignore:'asyncio.DefaultEventLoopPolicy' is deprecated:DeprecationWarning::",
+]
 
 [tool.tox]
 legacy_tox_ini = """
@@ -183,3 +187,6 @@ commands =
         --port 0 --open-browser \
         -n -b {posargs:html} docs/source/ docs/_build/{posargs:html}
 """
+
+[tool.uv.sources]
+nest-asyncio = { git = "https://github.com/danielhollas/nest_asyncio", branch = "python-3.14" }

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable, Hashable, Optional
 
 import kiwipy
 
-from . import futures
+from . import events, futures
 from .utils import ensure_coroutine
 
 __all__ = [
@@ -124,7 +124,7 @@ def wrap_communicator(
     return LoopCommunicator(communicator, loop)
 
 
-class LoopCommunicator(kiwipy.Communicator):  # type: ignore
+class LoopCommunicator(kiwipy.Communicator):  # type: ignore[misc]
     """Wrapper around a `kiwipy.Communicator` that schedules any subscriber messages on a given event loop."""
 
     def __init__(self, communicator: kiwipy.Communicator, loop: Optional[asyncio.AbstractEventLoop] = None):
@@ -136,7 +136,13 @@ class LoopCommunicator(kiwipy.Communicator):  # type: ignore
         assert communicator is not None
 
         self._communicator = communicator
-        self._loop: asyncio.AbstractEventLoop = loop or asyncio.get_event_loop()
+        if loop:
+            self._loop = loop
+        else:
+            try:
+                self._loop = asyncio.get_event_loop()
+            except RuntimeError:
+                self._loop = events.create_running_loop()
 
     def loop(self) -> asyncio.AbstractEventLoop:
         return self._loop

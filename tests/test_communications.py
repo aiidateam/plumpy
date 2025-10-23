@@ -36,7 +36,6 @@ def subscriber():
     """Return an instance of `Subscriber`."""
     return Subscriber()
 
-
 def test_add_rpc_subscriber(loop_communicator, subscriber):
     """Test the `LoopCommunicator.add_rpc_subscriber` method."""
     assert loop_communicator.add_rpc_subscriber(subscriber) is not None

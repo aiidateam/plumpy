@@ -2,6 +2,9 @@ name: ci
 
 on: [push, pull_request]
 
+env:
+    FORCE_COLOR: 1
+
 jobs:
     pre-commit:
         runs-on: ubuntu-latest
@@ -9,10 +12,10 @@ jobs:
         steps:
         -   uses: actions/checkout@v5
 
-        -   name: Set up Python 3.13
+        -   name: Set up Python 3.14
             uses: actions/setup-python@v5
             with:
-                python-version: '3.13'
+                python-version: '3.14'
 
         -   name: Install Python dependencies
             run: pip install -e .[pre-commit]
@@ -25,7 +28,7 @@ jobs:
 
         strategy:
             matrix:
-                python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+                python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
             fail-fast: false
 
         services:
@@ -42,14 +45,18 @@ jobs:
             with:
                 python-version: ${{ matrix.python-version }}
 
-        -   name: Install python dependencies
-            run: pip install .[tests]
+        -   name: Set up uv
+            uses: astral-sh/setup-uv@v7
+            with:
+                python-version: ${{ matrix.python-version }}
+                version: 0.9.4
+                activate-environment: true
+
+        -   name: Install dependencies
+            run: uv sync
 
         -   name: Run pytest
-            run: pytest -s --cov=plumpy tests/
-
-        -   name: Create xml coverage
-            run: coverage xml
+            run: pytest --cov=plumpy tests/
 
         -   name: Upload coverage to Codecov
             if: github.repository == 'aiidateam/plumpy'
