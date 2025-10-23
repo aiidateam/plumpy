@@ -50,9 +50,13 @@ jobs:
             with:
                 python-version: ${{ matrix.python-version }}
                 version: 0.9.4
+                activate-environment: true
+
+        -   name: Install dependencies
+            run: uv sync
 
         -   name: Run pytest
-            run: uv run pytest --cov=plumpy tests/
+            run: pytest --cov=plumpy tests/
 
         -   name: Upload coverage to Codecov
             if: github.repository == 'aiidateam/plumpy'
