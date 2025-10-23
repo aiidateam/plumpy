@@ -45,11 +45,14 @@ jobs:
             with:
                 python-version: ${{ matrix.python-version }}
 
-        -   name: Install python dependencies
-            run: pip install .[tests]
+        -   name: Set up uv
+            uses: astral-sh/setup-uv@v7
+            with:
+                python-version: '3.14'
+                version: 0.9.4
 
         -   name: Run pytest
-            run: pytest -s --cov=plumpy tests/
+            run: uv run pytest -s --cov=plumpy tests/
 
         -   name: Create xml coverage
             run: coverage xml
