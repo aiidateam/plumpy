@@ -141,7 +141,10 @@ minversion = '6.0'
 testpaths = [
     'test',
 ]
-filterwarnings = []
+filterwarnings = [
+  "ignore:'asyncio.get_event_loop_policy' is deprecated:DeprecationWarning::",
+  "ignore:'asyncio.DefaultEventLoopPolicy' is deprecated:DeprecationWarning::",
+]
 
 [tool.tox]
 legacy_tox_ini = """
