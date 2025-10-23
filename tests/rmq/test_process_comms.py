@@ -44,7 +44,6 @@ def sync_controller(thread_communicator: rmq.RmqThreadCommunicator):
 
 class TestRemoteProcessController:
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_pause(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
@@ -57,7 +56,6 @@ class TestRemoteProcessController:
         assert proc.paused
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_play(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
@@ -76,7 +74,6 @@ class TestRemoteProcessController:
         await async_controller.kill_process(proc.pid)
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_kill(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the event loop
@@ -90,7 +87,6 @@ class TestRemoteProcessController:
         assert proc.state == plumpy.ProcessState.KILLED
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_status(self, thread_communicator, async_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
@@ -104,7 +100,6 @@ class TestRemoteProcessController:
         # make sure proc reach the final state
         await async_controller.kill_process(proc.pid)
 
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_broadcast(self, thread_communicator):
         messages = []
 
@@ -127,7 +122,6 @@ class TestRemoteProcessController:
 
 class TestRemoteProcessThreadController:
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_pause(self, thread_communicator, sync_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
 
@@ -142,7 +136,6 @@ class TestRemoteProcessThreadController:
         assert proc.paused
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_pause_all(self, thread_communicator, sync_controller):
         """Test pausing all processes on a communicator"""
         procs = []
@@ -154,7 +147,6 @@ class TestRemoteProcessThreadController:
         await utils.wait_util(lambda: all([proc.paused for proc in procs]))
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_play_all(self, thread_communicator, sync_controller):
         """Test pausing all processes on a communicator"""
         procs = []
@@ -169,7 +161,6 @@ class TestRemoteProcessThreadController:
         await utils.wait_util(lambda: all([not proc.paused for proc in procs]))
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_play(self, thread_communicator, sync_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         assert proc.pause()
@@ -184,7 +175,6 @@ class TestRemoteProcessThreadController:
         assert proc.state == plumpy.ProcessState.CREATED
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_kill(self, thread_communicator, sync_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
 
@@ -199,7 +189,6 @@ class TestRemoteProcessThreadController:
         assert proc.state == plumpy.ProcessState.KILLED
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_kill_all(self, thread_communicator, sync_controller):
         """Test pausing all processes on a communicator"""
         procs = []
@@ -211,7 +200,6 @@ class TestRemoteProcessThreadController:
         assert all([proc.state == plumpy.ProcessState.KILLED for proc in procs])
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     async def test_status(self, thread_communicator, sync_controller):
         proc = utils.WaitForSignalProcess(communicator=thread_communicator)
         # Run the process in the background
