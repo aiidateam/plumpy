@@ -42,10 +42,10 @@ class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):  # type: ignore[nam
     _loop: Optional[asyncio.AbstractEventLoop] = None
 
     def new_event_loop(self) -> asyncio.AbstractEventLoop:
-        # import nest_asyncio
+        import nest_asyncio
 
         self._loop = super().new_event_loop()
-        # nest_asyncio.apply(self._loop)
+        nest_asyncio.apply(self._loop)
 
         return self._loop
 
