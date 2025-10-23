@@ -42,7 +42,6 @@ class ForgetToCallParent(plumpy.Process):
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures('custom_event_loop_policy')
 async def test_process_scope():
     class ProcessTaskInterleave(plumpy.Process):
         async def task(self, steps: list):
@@ -64,7 +63,6 @@ async def test_process_scope():
 
 
 class TestProcess(unittest.TestCase):
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_spec(self):
         """
         Check that the references to specs are doing the right thing...
@@ -389,7 +387,6 @@ class TestProcess(unittest.TestCase):
         loop.create_task(proc.step_until_terminated())
         loop.run_until_complete(async_test())
 
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_pause_play_status_messaging(self):
         """
         Test the setting of a processes' status through pause and play works correctly.
@@ -623,7 +620,6 @@ class TestProcess(unittest.TestCase):
 
         self.assertEqual(len(expect_true), n_run * 3)
 
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_process_nested(self):
         """
         Run multiple and nested processes to make sure the process stack is always correct
@@ -639,7 +635,6 @@ class TestProcess(unittest.TestCase):
 
         ParentProcess().execute()
 
-    @pytest.mark.usefixtures('custom_event_loop_policy')
     def test_call_soon(self):
         class CallSoon(plumpy.Process):
             def run(self):
