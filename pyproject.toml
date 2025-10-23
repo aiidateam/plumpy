@@ -185,3 +185,6 @@ commands =
         --port 0 --open-browser \
         -n -b {posargs:html} docs/source/ docs/_build/{posargs:html}
 """
+
+[tool.uv.sources]
+nest-asyncio = { git = "https://github.com/danielhollas/nest_asyncio", branch = "python-3.14" }
