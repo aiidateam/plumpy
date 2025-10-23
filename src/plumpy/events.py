@@ -36,7 +36,7 @@ def new_event_loop(*args: Any, **kwargs: Any) -> asyncio.AbstractEventLoop:
     raise NotImplementedError('this method is not implemented because `plumpy` uses a single reentrant loop')
 
 
-class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):  # type: ignore[name-defined,misc]
     """Custom event policy that always returns the same event loop that is made reentrant by ``nest_asyncio``."""
 
     _loop: Optional[asyncio.AbstractEventLoop] = None
