@@ -65,12 +65,16 @@ def set_event_loop_policy() -> None:
 def reset_event_loop_policy() -> None:
     """Reset the event loop policy to the default."""
 
-    loop = asyncio.get_event_loop()
-
-    cls = loop.__class__
-
-    del cls._check_running  # type: ignore
-    del cls._nest_patched  # type: ignore
+    try:
+        # TODO: I think we should not be calling get_event_loop
+        # but maybe get_running_loop?
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        pass
+    else:
+        cls = loop.__class__
+        del cls._check_running  # type: ignore
+        del cls._nest_patched  # type: ignore
 
     asyncio.set_event_loop_policy(None)
 
