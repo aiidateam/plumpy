@@ -22,31 +22,32 @@ get_event_loop = asyncio.get_event_loop
 
 
 def set_event_loop(*args: Any, **kwargs: Any) -> None:
-    raise NotImplementedError('this method is not implemented because `plumpy` uses a single reentrant loop')
+    raise NotImplementedError('this method is not implemented because `plumpy` uses a single cached event loop')
 
 
 def new_event_loop(*args: Any, **kwargs: Any) -> asyncio.AbstractEventLoop:
-    raise NotImplementedError('this method is not implemented because `plumpy` uses a single reentrant loop')
+    raise NotImplementedError('this method is not implemented because `plumpy` uses a single cached event loop')
 
 
 class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
-    """Custom event policy that always returns the same event loop that is made reentrant by ``nest_asyncio``."""
+    """Custom event policy that always returns the same cached event loop.
+
+    Reentrancy for nested process execution is handled via greenlet bridging
+    in Process.execute() rather than by patching the event loop.
+    """
 
     _loop: Optional[asyncio.AbstractEventLoop] = None
 
     def get_event_loop(self) -> asyncio.AbstractEventLoop:
-        """Return the patched event loop."""
-        import nest_asyncio
-
+        """Return the cached event loop."""
         if self._loop is None:
             self._loop = super().get_event_loop()
-            nest_asyncio.apply(self._loop)
 
         return self._loop
 
 
 def set_event_loop_policy() -> None:
-    """Enable plumpy's event loop policy that will make event loop's reentrant."""
+    """Enable plumpy's event loop policy that caches a single event loop."""
     asyncio.set_event_loop_policy(PlumpyEventLoopPolicy())
     # Need to call the following explicitly for `asyncio.get_event_loop` to start calling the method of the new policy
     # in case an loop is already active.
@@ -55,13 +56,6 @@ def set_event_loop_policy() -> None:
 
 def reset_event_loop_policy() -> None:
     """Reset the event loop policy to the default."""
-    loop = get_event_loop()
-
-    cls = loop.__class__
-
-    del cls._check_running  # type: ignore
-    del cls._nest_patched  # type: ignore
-
     asyncio.set_event_loop_policy(None)
 
 
