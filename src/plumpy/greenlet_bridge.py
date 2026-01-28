@@ -14,7 +14,7 @@ from typing import Any, Awaitable, Callable, TypeVar
 
 from greenlet import getcurrent, greenlet
 
-__all__ = ['await_only', 'greenlet_spawn', 'in_worker_greenlet', 'run_in_thread']
+__all__ = ['await_only', 'greenlet_spawn', 'in_worker_greenlet', 'run_in_thread', 'run_until_complete']
 
 _T = TypeVar('_T')
 
@@ -140,3 +140,29 @@ async def greenlet_spawn(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> _T
         raise exception_holder[0]
 
     return result_holder[0] if result_holder else None  # type: ignore
+
+
+def run_until_complete(loop: asyncio.AbstractEventLoop, awaitable: Awaitable[_T]) -> _T:
+    """Run an awaitable to completion, handling nested event loop scenarios.
+
+    This function provides backwards compatibility for code that previously
+    relied on nest_asyncio to allow nested run_until_complete() calls.
+
+    If the loop is not running, uses standard run_until_complete().
+    If the loop is running and we're in a worker greenlet, uses await_only().
+    If the loop is running but not in a greenlet, runs in a separate thread.
+
+    Args:
+        loop: The event loop to use.
+        awaitable: The awaitable to run.
+
+    Returns:
+        The result of the awaitable.
+    """
+    if loop.is_running():
+        if in_worker_greenlet():
+            return await_only(awaitable)
+        else:
+            return run_in_thread(lambda: awaitable)
+    else:
+        return loop.run_until_complete(awaitable)

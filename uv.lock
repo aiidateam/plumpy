@@ -1657,8 +1657,8 @@ wheels = [
 name = "plumpy"
 source = { editable = "." }
 dependencies = [
+    { name = "greenlet" },
     { name = "kiwipy", extra = ["rmq"] },
-    { name = "nest-asyncio" },
     { name = "pyyaml" },
 ]
 
@@ -1694,6 +1694,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "greenlet", specifier = ">=2.0.0" },
     { name = "importlib-metadata", marker = "extra == 'docs'", specifier = "~=4.12.0" },
     { name = "importlib-resources", marker = "extra == 'tests'", specifier = "~=5.2" },
     { name = "ipykernel", marker = "extra == 'tests'", specifier = "==6.12.1" },
@@ -1703,7 +1704,6 @@ requires-dist = [
     { name = "markupsafe", marker = "extra == 'docs'", specifier = "==2.0.1" },
     { name = "mypy", marker = "extra == 'pre-commit'", specifier = "==1.18.2" },
     { name = "myst-nb", marker = "extra == 'docs'", specifier = "~=1.2.0" },
-    { name = "nest-asyncio", specifier = "~=1.5,>=1.5.1" },
     { name = "pre-commit", marker = "extra == 'pre-commit'", specifier = "~=3.6" },
     { name = "pytest", marker = "extra == 'tests'", specifier = "~=8.4" },
     { name = "pytest-asyncio", marker = "extra == 'tests'", specifier = "~=0.12,<0.17" },
