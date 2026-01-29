@@ -1020,9 +1020,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         kiwi_future = kiwipy.Future()
 
         async def run_callback() -> None:
+            from .greenlet_bridge import greenlet_spawn
+
             with kiwipy.capture_exceptions(kiwi_future):
                 try:
-                    result = callback(*args, **kwargs)
+                    result = await greenlet_spawn(callback, *args, **kwargs)
                 except Exception as exc:
                     import inspect
                     import traceback

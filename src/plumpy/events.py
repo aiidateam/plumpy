@@ -10,7 +10,6 @@ __all__ = [
     'get_event_loop',
     'new_event_loop',
     'reset_event_loop_policy',
-    'run_until_complete',
     'set_event_loop',
     'set_event_loop_policy',
 ]
@@ -57,11 +56,6 @@ def set_event_loop_policy() -> None:
 def reset_event_loop_policy() -> None:
     """Reset the event loop policy to the default."""
     asyncio.set_event_loop_policy(None)
-
-
-def run_until_complete(future: asyncio.Future, loop: Optional[asyncio.AbstractEventLoop] = None) -> Any:
-    loop = loop or get_event_loop()
-    return loop.run_until_complete(future)
 
 
 class ProcessCallback:
