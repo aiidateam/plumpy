@@ -8,7 +8,7 @@ from .communications import *
 from .events import *
 from .exceptions import *
 from .futures import *
-from .greenlet_bridge import run_until_complete
+from .greenlet_bridge import *
 from .loaders import *
 from .mixins import *
 from .persistence import *
@@ -35,7 +35,7 @@ __all__ = (
     + loaders.__all__
     + ports.__all__
     + process_states.__all__
-    + ['run_until_complete']
+    + greenlet_bridge.__all__
 )
 
 
