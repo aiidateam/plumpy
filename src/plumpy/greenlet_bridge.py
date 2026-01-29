@@ -7,6 +7,7 @@ while the event loop is running.
 """
 
 import asyncio
+import contextvars
 import sys
 import threading
 from contextvars import ContextVar
@@ -113,13 +114,22 @@ async def greenlet_spawn(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> _T
     result_holder: list = []
     exception_holder: list = []
 
+    # Capture the current context so we can propagate it into the worker
+    # greenlet. Greenlets start with a fresh empty context, so without this,
+    # ContextVars set by the caller (e.g. PROCESS_STACK) would not be visible.
+    ctx = contextvars.copy_context()
+
     def worker() -> None:
         """Worker greenlet that runs the sync function."""
-        _IN_WORKER_GREENLET.set(True)
-        try:
-            result_holder.append(fn(*args, **kwargs))
-        except BaseException as e:
-            exception_holder.append(e)
+
+        def _inner() -> None:
+            _IN_WORKER_GREENLET.set(True)
+            try:
+                result_holder.append(fn(*args, **kwargs))
+            except BaseException as e:
+                exception_holder.append(e)
+
+        ctx.run(_inner)
 
     worker_greenlet = greenlet(worker)
     switch_result = worker_greenlet.switch()
