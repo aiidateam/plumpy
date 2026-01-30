@@ -1319,9 +1319,13 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if loop.is_running():
             # Nested execution: loop already running
             if in_worker_greenlet():
-                # We're in a worker greenlet - can use await_only
                 await_only(self.step_until_terminated())
             else:
+                # Unlike run_until_complete() which falls back to run_in_thread(),
+                # we raise here because Process execution is not thread-safe:
+                # consumers like AiiDA use thread-local scoped sessions (SQLAlchemy),
+                # so running in a separate thread would use a different DB session
+                # that knows nothing about the objects created on the main thread.
                 raise RuntimeError(
                     'Cannot synchronously execute a process while the event loop is running outside a worker '
                     'greenlet. Run the process from async code (e.g. `await process.step_until_terminated()`) or '

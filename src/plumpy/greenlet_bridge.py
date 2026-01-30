@@ -173,6 +173,10 @@ def run_until_complete(loop: asyncio.AbstractEventLoop, awaitable: Awaitable[_T]
         if in_worker_greenlet():
             return await_only(awaitable)
         else:
+            # Last resort: run in a separate thread with its own event loop.
+            # This assumes the awaitable is thread-safe. Process.execute() does
+            # NOT use this path — it raises instead — because process execution
+            # is generally not thread-safe (e.g. thread-local DB sessions).
             return run_in_thread(lambda: awaitable)
     else:
         return loop.run_until_complete(awaitable)
