@@ -14,7 +14,6 @@ import time
 import uuid
 import warnings
 from contextvars import ContextVar
-from functools import partial
 from types import TracebackType
 from typing import (
     Any,
@@ -51,7 +50,7 @@ from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .greenlet_bridge import await_only, greenlet_spawn, in_worker_greenlet, run_in_thread
+from .greenlet_bridge import await_only, greenlet_spawn, in_worker_greenlet
 from .process_comms import FORCE_KILL_KEY, MESSAGE_TEXT_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -914,6 +913,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def on_terminated(self) -> None:
         """Call when a terminal state is reached."""
+        if self._paused is not None and not self._paused.done():
+            self._paused.set_result(True)
+            self._paused = None
         super().on_terminated()
         self.close()
 
@@ -1320,8 +1322,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
                 # We're in a worker greenlet - can use await_only
                 await_only(self.step_until_terminated())
             else:
-                # Called from async context - run in separate thread
-                self._execute_in_thread()
+                raise RuntimeError(
+                    'Cannot synchronously execute a process while the event loop is running outside a worker '
+                    'greenlet. Run the process from async code (e.g. `await process.step_until_terminated()`) or '
+                    'wrap the synchronous call with `greenlet_spawn()`.'
+                )
         else:
             # Top-level execution: wrap in greenlet_spawn for nested support
             loop.run_until_complete(greenlet_spawn(self._execute_sync))
@@ -1332,23 +1337,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         """Synchronous execution helper that runs inside greenlet context."""
         if not self.has_terminated():
             await_only(self.step_until_terminated())
-
-    def _execute_in_thread(self) -> None:
-        """Execute the process in a separate thread with its own event loop.
-
-        This is used for nested process execution when the main event loop
-        is already running and we're not in a greenlet context.
-        """
-
-        run_in_thread(partial(self._step_with_loop_swap, self._loop))
-
-    async def _step_with_loop_swap(self, old_loop: asyncio.AbstractEventLoop) -> None:
-        """Step until terminated, temporarily swapping to the current thread's event loop."""
-        self._loop = asyncio.get_event_loop()
-        try:
-            await self.step_until_terminated()
-        finally:
-            self._loop = old_loop
 
     @ensure_not_closed
     async def step(self) -> None:
@@ -1364,6 +1352,8 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if self.paused and self._paused is not None:
             await self._paused
+            if self.has_terminated():
+                return
 
         try:
             self._stepping = True
