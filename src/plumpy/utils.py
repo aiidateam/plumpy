@@ -205,11 +205,11 @@ def ensure_coroutine(coro_or_fn: Any) -> Callable[..., Awaitable[Any]]:
         if inspect.isclass(coro_or_fn):
             coro_or_fn = coro_or_fn.__call__
 
-        from .greenlet_bridge import greenlet_spawn
+        from .greenlet_bridge import run_in_greenlet
 
         @functools.wraps(coro_or_fn)
         async def wrap(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-            return await greenlet_spawn(coro_or_fn, *args, **kwargs)
+            return await run_in_greenlet(coro_or_fn, *args, **kwargs)
 
         return wrap
 

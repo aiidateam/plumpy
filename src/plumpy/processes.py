@@ -50,7 +50,7 @@ from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .greenlet_bridge import await_only, greenlet_spawn, in_worker_greenlet
+from .greenlet_bridge import in_worker_greenlet, run_in_greenlet, sync_await
 from .process_comms import FORCE_KILL_KEY, MESSAGE_TEXT_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -1022,11 +1022,11 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         kiwi_future = kiwipy.Future()
 
         async def run_callback() -> None:
-            from .greenlet_bridge import greenlet_spawn
+            from .greenlet_bridge import run_in_greenlet
 
             with kiwipy.capture_exceptions(kiwi_future):
                 try:
-                    result = await greenlet_spawn(callback, *args, **kwargs)
+                    result = await run_in_greenlet(callback, *args, **kwargs)
                 except Exception as exc:
                     import inspect
                     import traceback
@@ -1319,28 +1319,28 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if loop.is_running():
             # Nested execution: loop already running
             if in_worker_greenlet():
-                await_only(self.step_until_terminated())
+                sync_await(self.step_until_terminated())
             else:
                 # Unlike run_until_complete() which falls back to run_in_thread(),
                 # we raise here because Process execution is not thread-safe:
-                # consumers like AiiDA use thread-local scoped sessions (SQLAlchemy),
+                # consumers like AiiDA use thread-local scoped sessions,
                 # so running in a separate thread would use a different DB session
                 # that knows nothing about the objects created on the main thread.
                 raise RuntimeError(
                     'Cannot synchronously execute a process while the event loop is running outside a worker '
                     'greenlet. Run the process from async code (e.g. `await process.step_until_terminated()`) or '
-                    'wrap the synchronous call with `greenlet_spawn()`.'
+                    'wrap the synchronous call with `run_in_greenlet()`.'
                 )
         else:
-            # Top-level execution: wrap in greenlet_spawn for nested support
-            loop.run_until_complete(greenlet_spawn(self._execute_sync))
+            # Top-level execution: wrap in run_in_greenlet for nested support
+            loop.run_until_complete(run_in_greenlet(self._execute_sync))
 
         return self.future().result()
 
     def _execute_sync(self) -> None:
         """Synchronous execution helper that runs inside greenlet context."""
         if not self.has_terminated():
-            await_only(self.step_until_terminated())
+            sync_await(self.step_until_terminated())
 
     @ensure_not_closed
     async def step(self) -> None:

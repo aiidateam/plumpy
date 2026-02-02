@@ -15,7 +15,7 @@ from typing import Any, Awaitable, Callable, TypeVar
 
 from greenlet import getcurrent, greenlet
 
-__all__ = ['await_only', 'greenlet_spawn', 'in_worker_greenlet', 'run_in_thread', 'run_until_complete']
+__all__ = ['in_worker_greenlet', 'run_in_greenlet', 'run_in_thread', 'run_until_complete', 'sync_await']
 
 _T = TypeVar('_T')
 
@@ -27,7 +27,7 @@ def in_worker_greenlet() -> bool:
     """Check if currently executing inside a worker greenlet.
 
     Returns:
-        True if inside a worker greenlet (can use await_only to switch to parent),
+        True if inside a worker greenlet (can use sync_await to switch to parent),
         False otherwise.
     """
     return _IN_WORKER_GREENLET.get()
@@ -70,13 +70,13 @@ def run_in_thread(awaitable_factory: Callable[[], Awaitable[_T]]) -> _T:
     return result_holder[0] if result_holder else None  # type: ignore
 
 
-def await_only(awaitable: Awaitable[_T]) -> _T:
+def sync_await(awaitable: Awaitable[_T]) -> _T:
     """Await an async operation from synchronous code inside a worker greenlet.
 
     This function allows synchronous code to "await" an async operation by
     switching to the parent greenlet which performs the actual await.
 
-    Must only be called from within a worker greenlet created by greenlet_spawn().
+    Must only be called from within a worker greenlet created by run_in_greenlet().
 
     Args:
         awaitable: The awaitable (coroutine, task, future) to await.
@@ -89,18 +89,18 @@ def await_only(awaitable: Awaitable[_T]) -> _T:
     """
     if not _IN_WORKER_GREENLET.get():
         raise RuntimeError(
-            'await_only() must be called from within a worker greenlet. '
+            'sync_await() must be called from within a worker greenlet. '
             'Use in_worker_greenlet() to check before calling.'
         )
 
     return getcurrent().parent.switch(awaitable)
 
 
-async def greenlet_spawn(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
-    """Run a sync function in a greenlet, allowing it to await via await_only().
+async def run_in_greenlet(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
+    """Run a sync function in a greenlet, allowing it to await via sync_await().
 
     This async function creates a greenlet to run a synchronous function.
-    The sync function can call await_only(some_awaitable) to perform async
+    The sync function can call sync_await(some_awaitable) to perform async
     operations while appearing to be synchronous code.
 
     Args:
@@ -159,7 +159,7 @@ def run_until_complete(loop: asyncio.AbstractEventLoop, awaitable: Awaitable[_T]
     relied on nest_asyncio to allow nested run_until_complete() calls.
 
     If the loop is not running, uses standard run_until_complete().
-    If the loop is running and we're in a worker greenlet, uses await_only().
+    If the loop is running and we're in a worker greenlet, uses sync_await().
     If the loop is running but not in a greenlet, runs in a separate thread.
 
     Args:
@@ -171,7 +171,7 @@ def run_until_complete(loop: asyncio.AbstractEventLoop, awaitable: Awaitable[_T]
     """
     if loop.is_running():
         if in_worker_greenlet():
-            return await_only(awaitable)
+            return sync_await(awaitable)
         else:
             # Last resort: run in a separate thread with its own event loop.
             # This assumes the awaitable is thread-safe. Process.execute() does
