@@ -913,9 +913,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     def on_terminated(self) -> None:
         """Call when a terminal state is reached."""
-        if self._paused is not None and not self._paused.done():
-            self._paused.set_result(True)
-            self._paused = None
         super().on_terminated()
         self.close()
 
@@ -1348,8 +1345,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         if self.paused and self._paused is not None:
             await self._paused
-            if self.has_terminated():
-                return
 
         try:
             self._stepping = True
