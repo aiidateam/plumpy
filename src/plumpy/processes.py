@@ -50,7 +50,7 @@ from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
-from .greenback_bridge import has_portal, run_with_portal, sync_await
+from .greenback_bridge import run_until_complete, run_with_portal
 from .process_comms import FORCE_KILL_KEY, MESSAGE_TEXT_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -1019,7 +1019,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         kiwi_future = kiwipy.Future()
 
         async def run_callback() -> None:
-            from .greenback_bridge import run_with_portal
 
             with kiwipy.capture_exceptions(kiwi_future):
                 try:
@@ -1308,28 +1307,9 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if self.has_terminated():
             return self.future().result()
 
-        loop = self.loop
-
-        if loop.is_running():
-            if has_portal():
-                sync_await(self.step_until_terminated())
-            else:
-                # There is no other way to support this path of execution, unless we spwan a thread.
-                # Which we did our best to avoid that, since some operation might not be thread-safe
-                raise RuntimeError(
-                    'Cannot synchronously execute a process while the event loop is running '
-                    'and no greenback portal is available. If running in a Jupyter notebook, '
-                    'call load_profile() in a prior cell.'
-                )
-        else:
-            loop.run_until_complete(run_with_portal(self._execute_sync))
+        run_until_complete(self.loop, self.step_until_terminated())
 
         return self.future().result()
-
-    def _execute_sync(self) -> None:
-        """Synchronous execution helper that runs inside greenback portal."""
-        if not self.has_terminated():
-            sync_await(self.step_until_terminated())
 
     @ensure_not_closed
     async def step(self) -> None:

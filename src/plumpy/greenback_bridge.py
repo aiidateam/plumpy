@@ -52,4 +52,9 @@ def run_until_complete(loop: asyncio.AbstractEventLoop, awaitable: Awaitable[_T]
             'is available. If running in a Jupyter notebook, call load_profile() '
             'in a prior cell.'
         )
-    return loop.run_until_complete(awaitable)
+
+    async def _with_portal() -> _T:
+        await greenback.ensure_portal()
+        return await awaitable
+
+    return loop.run_until_complete(_with_portal())
