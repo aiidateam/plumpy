@@ -238,6 +238,20 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(proc.state, ProcessState.FINISHED)
         self.assertEqual(proc.outputs, {'default': 5})
 
+    def test_execute_no_portal_raises(self):
+        """Calling execute() while the loop is running without a portal raises RuntimeError."""
+        loop = asyncio.new_event_loop()
+
+        async def _test():
+            proc = utils.DummyProcess()
+            with self.assertRaisesRegex(RuntimeError, 'no greenback portal'):
+                proc.execute()
+
+        try:
+            loop.run_until_complete(_test())
+        finally:
+            loop.close()
+
     def test_run_from_class(self):
         # Test running through class method
         proc = utils.DummyProcessWithOutput()
