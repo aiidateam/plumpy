@@ -1019,7 +1019,6 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         kiwi_future = kiwipy.Future()
 
         async def run_callback() -> None:
-
             with kiwipy.capture_exceptions(kiwi_future):
                 try:
                     result = await run_with_portal(callback, *args, **kwargs)
