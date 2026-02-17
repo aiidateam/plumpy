@@ -205,9 +205,11 @@ def ensure_coroutine(coro_or_fn: Any) -> Callable[..., Awaitable[Any]]:
         if inspect.isclass(coro_or_fn):
             coro_or_fn = coro_or_fn.__call__
 
+        from .greenback_bridge import run_with_portal
+
         @functools.wraps(coro_or_fn)
         async def wrap(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-            return coro_or_fn(*args, **kwargs)
+            return await run_with_portal(coro_or_fn, *args, **kwargs)
 
         return wrap
 

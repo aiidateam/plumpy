@@ -50,6 +50,7 @@ from .base import state_machine
 from .base.state_machine import StateEntryFailed, StateMachine, TransitionFailed, event
 from .base.utils import call_with_super_check, super_check
 from .event_helper import EventHelper
+from .greenback_bridge import run_until_complete, run_with_portal
 from .process_comms import FORCE_KILL_KEY, MESSAGE_TEXT_KEY, MessageBuilder, MessageType
 from .process_listener import ProcessListener
 from .process_spec import ProcessSpec
@@ -1020,7 +1021,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         async def run_callback() -> None:
             with kiwipy.capture_exceptions(kiwi_future):
                 try:
-                    result = callback(*args, **kwargs)
+                    result = await run_with_portal(callback, *args, **kwargs)
                 except Exception as exc:
                     import inspect
                     import traceback
@@ -1298,13 +1299,14 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
     @ensure_not_closed
     def execute(self) -> Optional[Dict[str, Any]]:
-        """
-        Execute the process.  This will return if the process terminates or is paused.
+        """Execute the process synchronously.
 
         :return: None if not terminated, otherwise `self.outputs`
         """
-        if not self.has_terminated():
-            self.loop.run_until_complete(self.step_until_terminated())
+        if self.has_terminated():
+            return self.future().result()
+
+        run_until_complete(self.loop, self.step_until_terminated())
 
         return self.future().result()
 

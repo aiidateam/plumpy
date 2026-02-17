@@ -29,7 +29,6 @@ def test_get_event_loop():
     set_event_loop_policy()
     assert isinstance(asyncio.get_event_loop_policy(), PlumpyEventLoopPolicy)
     assert asyncio.get_event_loop() is asyncio.get_event_loop()
-    assert asyncio.get_event_loop()._nest_patched is not None
 
 
 def test_set_event_loop():
