@@ -2,6 +2,9 @@ name: ci
 
 on: [push, pull_request]
 
+env:
+    FORCE_COLOR: 1
+
 jobs:
     pre-commit:
         runs-on: ubuntu-latest
@@ -37,19 +40,18 @@ jobs:
         steps:
         -   uses: actions/checkout@v5
 
-        -   name: Set up Python ${{ matrix.python-version }}
-            uses: actions/setup-python@v5
+        -   name: Set up uv
+            uses: astral-sh/setup-uv@v7
             with:
                 python-version: ${{ matrix.python-version }}
+                version: 0.9.4
+                activate-environment: true
 
-        -   name: Install python dependencies
-            run: pip install .[tests]
+        -   name: Install dependencies
+            run: uv sync
 
         -   name: Run pytest
-            run: pytest -s --cov=plumpy tests/
-
-        -   name: Create xml coverage
-            run: coverage xml
+            run: pytest --cov=plumpy tests/
 
         -   name: Upload coverage to Codecov
             if: github.repository == 'aiidateam/plumpy'
