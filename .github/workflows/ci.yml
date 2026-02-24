@@ -12,10 +12,11 @@ jobs:
         steps:
         -   uses: actions/checkout@v5
 
-        -   name: Set up Python 3.13
+        -   name: Set up Python 3.14
             uses: actions/setup-python@v5
             with:
-                python-version: '3.13'
+                python-version: '3.14'
+                allow-prereleases: true
 
         -   name: Install Python dependencies
             run: pip install -e .[pre-commit]
@@ -28,7 +29,7 @@ jobs:
 
         strategy:
             matrix:
-                python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+                python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
             fail-fast: false
 
         services:

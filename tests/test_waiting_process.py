@@ -18,7 +18,7 @@ class TestWaitingProcess(unittest.TestCase):
             self.assertEqual(outputs, bundle.get(BundleKeys.OUTPUTS, {}))
 
     def test_saving_each_step(self):
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         for proc_class in utils.TEST_WAITING_PROCESSES:
             proc = proc_class()
             saver = utils.ProcessSaver(proc)

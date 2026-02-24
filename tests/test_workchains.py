@@ -436,7 +436,7 @@ class TestWorkchain(unittest.TestCase):
             self.assertTrue(workchain.ctx.s1)
             self.assertTrue(workchain.ctx.s2)
 
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         loop.create_task(workchain.step_until_terminated())  # noqa: RUF006
         loop.run_until_complete(async_test())
 

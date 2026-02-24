@@ -24,7 +24,7 @@ class DummyProcessWithOutput(plumpy.Process):
 
 def main():
     with kiwipy.connect('amqp://127.0.0.1') as communicator, tempfile.TemporaryDirectory() as tmpdir:
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         persister = plumpy.PicklePersister(tmpdir)
         task_receiver = plumpy.ProcessLauncher(loop=loop, persister=persister)
 

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterable, List
 
 import yaml
 
-from . import futures, loaders, utils
+from . import events, futures, loaders, utils
 from .base.utils import call_with_super_check, super_check
 from .utils import PID_TYPE, SAVED_STATE_TYPE
 
@@ -636,7 +636,7 @@ class SavableFuture(futures.Future, Savable):
         try:
             loop = load_context.loop
         except AttributeError:
-            loop = asyncio.get_event_loop()
+            loop = events.get_or_create_event_loop()
 
         state = saved_state['_state']
 

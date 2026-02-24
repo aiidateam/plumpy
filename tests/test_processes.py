@@ -65,7 +65,7 @@ async def test_process_scope():
 class TestProcess(unittest.TestCase):
     def test_spec(self):
         """
-        Check that the references to specs are doing the right thing...
+        Check that the references to specs are doing the right thing..
         """
         proc = utils.DummyProcess()
         self.assertIsNot(utils.DummyProcess.spec(), Process.spec())
@@ -375,7 +375,7 @@ class TestProcess(unittest.TestCase):
         Test that if you pause a process that and its awaitable finishes that it
         completes correctly when played again.
         """
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         proc = utils.WaitForSignalProcess()
 
         async def async_test():
@@ -411,7 +411,7 @@ class TestProcess(unittest.TestCase):
         PLAY_STATUS = 'process was played by Hans Klok'
         PAUSE_STATUS = 'process was paused by Evel Knievel'
 
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         proc = utils.WaitForSignalProcess()
         proc.set_status(PLAY_STATUS)
 
@@ -472,7 +472,7 @@ class TestProcess(unittest.TestCase):
         self.assertEqual(proc.state, ProcessState.KILLED)
 
     def test_kill_when_paused(self):
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         proc = utils.WaitForSignalProcess()
 
         async def async_test():
@@ -497,7 +497,7 @@ class TestProcess(unittest.TestCase):
 
     def test_run_multiple(self):
         # Create and play some processes
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
 
         procs = []
         for proc_class in utils.TEST_PROCESSES:
@@ -557,7 +557,7 @@ class TestProcess(unittest.TestCase):
                 fut = self.pause()
                 test_case.assertIsInstance(fut, plumpy.Future)
 
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
 
         listener = plumpy.ProcessListener()
         listener.on_process_paused = lambda _proc: loop.stop()
@@ -622,13 +622,14 @@ class TestProcess(unittest.TestCase):
                 expect_true.append(self == Process.current())
                 StackTest().execute()
 
-        to_run = []
+        loop = plumpy.get_or_create_event_loop()
         n_run = 3
-        for _ in range(n_run):
-            to_run.append(ParentProcess().step_until_terminated())
 
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(asyncio.gather(*to_run))
+        async def run_all():
+            to_run = [ParentProcess().step_until_terminated() for _ in range(n_run)]
+            await asyncio.gather(*to_run)
+
+        loop.run_until_complete(run_all())
 
         assert all(expect_true)
 
@@ -719,7 +720,7 @@ class TestProcessSaving(unittest.TestCase):
     maxDiff = None
 
     def test_running_save_instance_state(self):
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         nsync_comeback = SavePauseProc()
 
         async def async_test():
@@ -793,7 +794,7 @@ class TestProcessSaving(unittest.TestCase):
         self.assertIsNot(proc.outputs, saver.snapshots[-1].get(BundleKeys.OUTPUTS, {}))
 
     def test_saving_each_step(self):
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         for proc_class in utils.TEST_PROCESSES:
             proc = proc_class()
             saver = utils.ProcessSaver(proc)
@@ -802,7 +803,7 @@ class TestProcessSaving(unittest.TestCase):
             self.assertTrue(utils.check_process_against_snapshots(loop, proc_class, saver.snapshots))
 
     def test_restart(self):
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         proc = _RestartProcess()
 
         async def async_test():
@@ -825,7 +826,7 @@ class TestProcessSaving(unittest.TestCase):
 
     def test_double_restart(self):
         """Test that consecutive restarts do not cause any issues, this is tested for concurrency reasons."""
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         proc = _RestartProcess()
 
         async def async_test():
@@ -850,7 +851,7 @@ class TestProcessSaving(unittest.TestCase):
 
     def test_wait_save_continue(self):
         """Test that process saved while in WAITING state restarts correctly when loaded"""
-        loop = asyncio.get_event_loop()
+        loop = plumpy.get_or_create_event_loop()
         proc = utils.WaitForSignalProcess()
 
         async def async_test():
