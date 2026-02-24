@@ -3,60 +3,32 @@
 
 import asyncio
 import sys
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Dict, Sequence
 
-__all__ = [
-    'PlumpyEventLoopPolicy',
-    'get_event_loop',
-    'new_event_loop',
-    'reset_event_loop_policy',
-    'set_event_loop',
-    'set_event_loop_policy',
-]
+__all__: list[str] = ['get_or_create_event_loop']
 
 if TYPE_CHECKING:
     from .processes import Process
 
-get_event_loop = asyncio.get_event_loop
 
-
-def set_event_loop(*args: Any, **kwargs: Any) -> None:
-    raise NotImplementedError('this method is not implemented because `plumpy` uses a single cached event loop')
-
-
-def new_event_loop(*args: Any, **kwargs: Any) -> asyncio.AbstractEventLoop:
-    raise NotImplementedError('this method is not implemented because `plumpy` uses a single cached event loop')
-
-
-class PlumpyEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
-    """Custom event policy that always returns the same cached event loop.
-
-    Reentrancy for nested process execution is handled via greenback bridging
-    in Process.execute() rather than by patching the event loop.
+def get_or_create_event_loop() -> asyncio.AbstractEventLoop:
+    """Get the running event loop, or the current set loop, or create and set a new one.
+    Note: aiida should never call on asyncio.get_event_loop() directly.
     """
-
-    _loop: Optional[asyncio.AbstractEventLoop] = None
-
-    def get_event_loop(self) -> asyncio.AbstractEventLoop:
-        """Return the cached event loop."""
-        if self._loop is None:
-            self._loop = self.new_event_loop()
-            self.set_event_loop(self._loop)
-
-        return self._loop
-
-
-def set_event_loop_policy() -> None:
-    """Enable plumpy's event loop policy that caches a single event loop."""
-    asyncio.set_event_loop_policy(PlumpyEventLoopPolicy())
-    # Need to call the following explicitly for `asyncio.get_event_loop` to start calling the method of the new policy
-    # in case an loop is already active.
-    asyncio.get_event_loop_policy().get_event_loop()
-
-
-def reset_event_loop_policy() -> None:
-    """Reset the event loop policy to the default."""
-    asyncio.set_event_loop_policy(None)
+    try:
+        return asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    try:
+        # See issue https://github.com/aiidateam/plumpy/issues/336
+        loop = asyncio.get_event_loop()
+        if not loop.is_closed():
+            return loop
+    except RuntimeError:
+        pass
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    return loop
 
 
 class ProcessCallback:

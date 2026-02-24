@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import asyncio
 import functools
 import importlib
 import inspect
@@ -195,10 +194,10 @@ def ensure_coroutine(coro_or_fn: Any) -> Callable[..., Awaitable[Any]]:
     :param fct: the function
     :returns: the coroutine
     """
-    if asyncio.iscoroutinefunction(coro_or_fn):
+    if inspect.iscoroutinefunction(coro_or_fn):
         return coro_or_fn
 
-    if asyncio.iscoroutinefunction(coro_or_fn.__call__):
+    if inspect.iscoroutinefunction(coro_or_fn.__call__):
         return coro_or_fn
 
     if callable(coro_or_fn):

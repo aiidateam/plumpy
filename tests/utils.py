@@ -103,9 +103,7 @@ class MissingOutputProcess(processes.Process):
 
 
 class NewLoopProcess(processes.Process):
-    def __init__(self, *args, **kwargs):
-        kwargs['loop'] = plumpy.new_event_loop()
-        super().__init__(*args, **kwargs)
+    pass
 
 
 class EventsTesterMixin:

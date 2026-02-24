@@ -287,7 +287,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         # Don't allow the spec to be changed anymore
         self.spec().seal()
 
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
+        self._loop = loop if loop is not None else events.get_or_create_event_loop()
 
         self._setup_event_hooks()
 
@@ -655,7 +655,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         if 'loop' in load_context:
             self._loop = load_context.loop
         else:
-            self._loop = asyncio.get_event_loop()
+            self._loop = events.get_or_create_event_loop()
 
         self._state: process_states.State = self.recreate_state(saved_state['_state'])
 

@@ -78,7 +78,7 @@ class TestSavable(unittest.TestCase):
 class TestBundle(unittest.TestCase):
     def test_bundle_load_context(self):
         """Check that the loop from the load context is used"""
-        loop1 = asyncio.get_event_loop()
+        loop1 = plumpy.get_or_create_event_loop()
         proc = utils.DummyProcess(loop=loop1)
         bundle = plumpy.Bundle(proc)
 

@@ -1,52 +1,73 @@
 # -*- coding: utf-8 -*-
-"""Tests for the :mod:`plumpy.events` module."""
+"""Tests for the :mod:`plumpy.events` module.
+Specifically, the :func:`get_or_create_event_loop` function."""
 
 import asyncio
-import pathlib
-
-import pytest
-
-from plumpy import PlumpyEventLoopPolicy, new_event_loop, reset_event_loop_policy, set_event_loop, set_event_loop_policy
+from plumpy.events import get_or_create_event_loop
 
 
-def test_set_event_loop_policy():
-    """Test the ``plumpy.set_event_loop_policy``."""
-    assert not isinstance(asyncio.get_event_loop_policy(), PlumpyEventLoopPolicy)
-    set_event_loop_policy()
-    assert isinstance(asyncio.get_event_loop_policy(), PlumpyEventLoopPolicy)
+def test_returns_running_loop():
+    """When called inside a running loop, return that loop."""
+    result = None
+
+    async def main():
+        nonlocal result
+        result = get_or_create_event_loop()
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(main())
+    assert result is loop
+    loop.close()
 
 
-def test_reset_event_loop_policy():
-    """Test the ``plumpy.reset_event_loop_policy``."""
-    set_event_loop_policy()
-    assert isinstance(asyncio.get_event_loop_policy(), PlumpyEventLoopPolicy)
-    reset_event_loop_policy()
-    assert not isinstance(asyncio.get_event_loop_policy(), PlumpyEventLoopPolicy)
+def test_returns_existing_open_loop():
+    """When no loop is running but a current loop exists and is open, return it."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        assert get_or_create_event_loop() is loop
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
 
 
-def test_get_event_loop():
-    """Test that ``asyncio.get_event_loop`` returns same loop instance every time it is called once policy is set."""
-    set_event_loop_policy()
-    assert isinstance(asyncio.get_event_loop_policy(), PlumpyEventLoopPolicy)
-    assert asyncio.get_event_loop() is asyncio.get_event_loop()
+def test_creates_new_loop_when_closed():
+    """When the current loop is closed, create and set a new one."""
+    old_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(old_loop)
+    old_loop.close()
+
+    new_loop = get_or_create_event_loop()
+    try:
+        assert new_loop is not old_loop
+        assert not new_loop.is_closed()
+        assert asyncio.get_event_loop() is new_loop
+    finally:
+        new_loop.close()
+        asyncio.set_event_loop(None)
 
 
-def test_set_event_loop():
-    """Test the ``set_event_loop`` raises ``NotImplementedError``."""
-    with pytest.raises(NotImplementedError):
-        set_event_loop()
+def test_creates_new_loop_when_none_set():
+    """When no current loop exists, create and set a new one."""
+    asyncio.set_event_loop(None)
+
+    loop = get_or_create_event_loop()
+    try:
+        assert not loop.is_closed()
+        assert asyncio.get_event_loop() is loop
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
 
 
-def test_new_event_loop():
-    """Test the ``new_event_loop`` raises ``NotImplementedError``."""
-    with pytest.raises(NotImplementedError):
-        new_event_loop()
+def test_idempotent():
+    """Consecutive calls without intervening changes return the same loop."""
+    asyncio.set_event_loop(None)
 
-
-def test_get_event_loop_jupyter_notebook(nb_regression):
-    """Test that ``asyncio.get_event_loop`` returns same loop instance every time it is called once policy is set."""
-    nb_regression.diff_color_words = False
-    nb_regression.diff_ignore = ('/metadata/language_info/version',)
-
-    with open(pathlib.Path(__file__).parent / 'notebooks' / 'get_event_loop.ipynb') as handle:
-        nb_regression.check(handle)
+    loop1 = get_or_create_event_loop()
+    loop2 = get_or_create_event_loop()
+    try:
+        assert loop1 is loop2
+    finally:
+        loop1.close()
+        asyncio.set_event_loop(None)
