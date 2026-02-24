@@ -1,7 +1,7 @@
 # Changelog
 
 
-## v0.26.0 - 2026-02-20
+## v0.26.0 - 2026-02-24
 
 ### Improvements
 - Replace nest_asyncio with greenback for nested process execution ([#332](https://github.com/aiidateam/plumpy/pull/332))
