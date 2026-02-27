@@ -164,8 +164,8 @@ class LoopCommunicator(kiwipy.Communicator):  # type: ignore[misc]
     def remove_broadcast_subscriber(self, identifier: 'ID_TYPE') -> None:
         return self._communicator.remove_broadcast_subscriber(identifier)
 
-    def task_send(self, task: Any, no_reply: bool = False) -> kiwipy.Future:
-        return self._communicator.task_send(task, no_reply)
+    def task_send(self, task: Any, no_reply: bool = False, nowait: bool = False) -> kiwipy.Future:
+        return self._communicator.task_send(task, no_reply, nowait)
 
     def rpc_send(self, recipient_id: 'ID_TYPE', msg: Any) -> kiwipy.Future:
         return self._communicator.rpc_send(recipient_id, msg)
