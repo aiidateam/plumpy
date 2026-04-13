@@ -67,9 +67,12 @@ def override(check: bool = False) -> Callable[[Callable[..., Any]], Callable[...
     return wrap
 
 
-class __NULL:  # noqa: N801
+class __NULL:
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, self.__class__)
+
+    def __hash__(self) -> int:
+        return id(self)
 
 
 NULL = __NULL()

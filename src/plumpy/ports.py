@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Module for process ports"""
+
 import collections
 import copy
 import inspect
@@ -663,9 +664,9 @@ class PortNamespace(collections.abc.MutableMapping, Port):
             else:
                 message = self.validator(port_values_clone, self)
             if message is not None:
-                assert isinstance(
-                    message, str
-                ), f"Validator returned something other than None or str: '{type(message)}'"
+                assert isinstance(message, str), (
+                    f"Validator returned something other than None or str: '{type(message)}'"
+                )
                 return PortValidationError(message, breadcrumbs_to_port(breadcrumbs_local))
 
         return None
