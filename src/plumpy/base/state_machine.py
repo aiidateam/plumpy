@@ -114,7 +114,7 @@ def event(
 
                     raise EventError(
                         evt_label,
-                        'Event produced invalid state transition from ' f'{initial.LABEL} to {self._state.LABEL}',
+                        f'Event produced invalid state transition from {initial.LABEL} to {self._state.LABEL}',
                     )
 
             return result
