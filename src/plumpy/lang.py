@@ -13,7 +13,7 @@ def protected(check: bool = False) -> Callable[[Callable[..., Any]], Callable[..
         if isinstance(func, property):
             raise RuntimeError('Protected must go after @property decorator')
 
-        args = inspect.getargspec(func)[0]
+        args = inspect.getfullargspec(func)[0]
         if len(args) == 0:
             raise RuntimeError('Can only use the protected decorator on member functions')
 
@@ -45,7 +45,7 @@ def override(check: bool = False) -> Callable[[Callable[..., Any]], Callable[...
         if isinstance(func, property):
             raise RuntimeError('Override must go after @property decorator')
 
-        args = inspect.getargspec(func)[0]
+        args = inspect.getfullargspec(func)[0]
         if len(args) == 0:
             raise RuntimeError('Can only use the override decorator on member functions')
 

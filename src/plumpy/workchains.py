@@ -7,7 +7,23 @@ import collections
 import inspect
 import logging
 import re
-import six
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    List,
+    Mapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
+
+import kiwipy
 
 from . import lang, mixins, persistence, process_states, processes
 from .utils import PID_TYPE, SAVED_STATE_TYPE
@@ -248,7 +264,7 @@ class _FunctionStepper(Stepper):
 class _FunctionCall(_Instruction):
     def __init__(self, func: WC_COMMAND_TYPE) -> None:
         try:
-            args = inspect.getargspec(func)[0]
+            args = inspect.getfullargspec(func)[0]
         except TypeError:
             raise TypeError(f'func is not a function, got {type(func)}')
         if len(args) != 1:
