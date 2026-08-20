@@ -7,7 +7,20 @@ import inspect
 import json
 import logging
 import warnings
-from typing import Any, Callable, Dict, Iterator, List, Mapping, MutableMapping, Optional, Sequence, Type, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+    cast,
+)
 
 from plumpy.utils import AttributesFrozendict, is_mutable_property, type_check
 
@@ -429,16 +442,24 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         return description
 
     def get_port(self, name: str, create_dynamically: bool = False) -> Union[Port, 'PortNamespace']:
-        """
-        Retrieve a (namespaced) port from this PortNamespace. If any of the sub namespaces of the terminal
-        port itself cannot be found, a ValueError will be raised
+        """Retrieve a declared, potentially namespaced port without modifying this namespace.
+
+        Dynamic runtime outputs are validated and stored by :meth:`plumpy.processes.Process.out`; they are not
+        materialized as declarations in this namespace.
 
         :param name: name (potentially namespaced) of the port to retrieve.
-        :param create_dynamically: If set to ``True``, dynamically create the requested port if it doesn't exist and the
-            namespace is dynamic, instead of raising a ``ValueError``.
-        :returns: Port
-        :raises: ValueError if port or namespace does not exist
+        :param create_dynamically: deprecated and ignored. Passing ``True`` emits a deprecation warning.
+        :returns: declared port or port namespace.
+        :raises ValueError: if the port or namespace does not exist.
         """
+        if create_dynamically:
+            warnings.warn(
+                'the `create_dynamically` argument is deprecated and ignored; dynamic runtime outputs should be '
+                'emitted through `Process.out`',
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         if not isinstance(name, str):
             raise ValueError(f'name has to be a string type, not {type(name)}')
 
@@ -449,24 +470,11 @@ class PortNamespace(collections.abc.MutableMapping, Port):
         port_name = namespace.pop(0)
 
         if port_name not in self:
-            if not self.dynamic or not create_dynamically:
-                raise ValueError(f"port '{port_name}' does not exist in port namespace '{self.name}'")
-
-            self[port_name] = self.__class__(
-                name=port_name,
-                required=self.required,
-                validator=self.validator,
-                valid_type=self.valid_type,
-                default=self.default,
-                dynamic=self.dynamic,
-                populate_defaults=self.populate_defaults,
-            )
+            raise ValueError(f"port '{port_name}' does not exist in port namespace '{self.name}'")
 
         if namespace:
             portnamespace = cast(PortNamespace, self[port_name])
-            return portnamespace.get_port(
-                self.NAMESPACE_SEPARATOR.join(namespace), create_dynamically=create_dynamically
-            )
+            return portnamespace.get_port(self.NAMESPACE_SEPARATOR.join(namespace))
 
         return self[port_name]
 

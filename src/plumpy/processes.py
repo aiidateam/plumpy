@@ -1379,6 +1379,10 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
         against the PortNamespace, which means it will be checked for dynamicity and whether
         the type of the value is valid
 
+        Emitting an output never changes the process specification. The specification is built once per process
+        class and shared by all its instances, so a port added here would validate the outputs of every later
+        instance of that class.
+
         :param output_port: the name of the output port, can be namespaced
         :param value: the value for the output port
         :raises: ValueError if the output value is not validated against the port
@@ -1387,26 +1391,43 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
 
         namespace_separator = self.spec().namespace_separator
 
-        namespace = output_port.split(namespace_separator)
-        port_name = namespace.pop()
+        output_path = output_port.split(namespace_separator)
+        port_name = output_path[-1]
+        namespace = output_path[:-1]
 
-        if namespace:
-            port_namespace = cast(
-                ports.PortNamespace,
-                self.spec().outputs.get_port(namespace_separator.join(namespace), create_dynamically=True),
-            )
+        unresolved_path = output_path.copy()
+        port_namespace = self.spec().outputs
+
+        # For output_path == ['sub', 'a', 'b'], where only sub is declared, this leaves
+        # port_namespace as sub and unresolved_path as ['a', 'b'].
+        while len(unresolved_path) > 1:
+            namespace_name = unresolved_path[0]
+
+            if namespace_name not in port_namespace:
+                if not port_namespace.dynamic:
+                    raise ValueError(
+                        f"port '{namespace_name}' does not exist in port namespace '{port_namespace.name}'"
+                    )
+                break
+
+            port = port_namespace[namespace_name]
+            if not isinstance(port, ports.PortNamespace):
+                raise ValueError(
+                    f"port '{namespace_name}' in port namespace '{port_namespace.name}' is not a namespace"
+                )
+
+            port_namespace = port
+            unresolved_path.pop(0)
+
+        port_key = namespace_separator.join(unresolved_path)
+        is_declared_output = port_key in port_namespace
+        if is_declared_output:
+            validation_error = port_namespace[port_key].validate(value)
+            is_dynamic_output = False
         else:
-            port_namespace = self.spec().outputs
-
-        validation_error = None
-        try:
-            port = port_namespace[port_name]
-            dynamic = False
-            validation_error = port.validate(value)
-        except KeyError:
-            port = port_namespace
-            dynamic = True
-            validation_error = port.validate_dynamic_ports({port_name: value})
+            # potentially dynamic output
+            validation_error = port_namespace.validate_dynamic_ports({port_key: value})
+            is_dynamic_output = True
 
         if validation_error:
             msg = f"Error validating output '{value}' for port '{validation_error.port}': {validation_error.message}"
@@ -1417,7 +1438,7 @@ class Process(StateMachine, persistence.Savable, metaclass=ProcessStateMachineMe
             output_namespace = output_namespace.setdefault(sub_space, {})
 
         output_namespace[port_name] = value
-        self.on_output_emitted(output_port, value, dynamic)
+        self.on_output_emitted(output_port, value, is_dynamic_output)
 
     @protected
     def encode_input_args(self, inputs: Any) -> Any:
