@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.26.1 - 2026-08-20
+
+### Bug fixes
+- Avoid mutating specs for dynamic outputs ([#351](https://github.com/aiidateam/plumpy/pull/351))
+
 
 ## v0.26.0 - 2026-02-24
 
@@ -11,7 +16,6 @@
 - Fully support 3.14 and drop using deprecated methods of asyncio  ([#334](https://github.com/aiidateam/plumpy/pull/334))
 
 
-
 ## v0.25.1 - 2025-10-01
 
 ### Bug fixes
@@ -21,6 +25,7 @@
 - Update CI and CD to py3.13 and remove cache action by @agoscinski in https://github.com/aiidateam/plumpy/pull/322
 - Spring cleaning - part 1 by @danielhollas in https://github.com/aiidateam/plumpy/pull/324
 - Update mypy, pytest and pre-commit by @danielhollas in https://github.com/aiidateam/plumpy/pull/325
+
 
 ## v0.25.0 - 2025-04-29
 
