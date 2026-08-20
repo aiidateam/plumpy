@@ -97,7 +97,7 @@ jobs:
                 python-version: '3.13'
 
         -   name: Install flit
-            run: pip install flit~=3.4
+            run: pip install 'flit>=4.0.2,<5'
 
         -   name: Build and publish
             run: flit publish
