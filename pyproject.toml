@@ -32,7 +32,7 @@ requires-python = '>=3.9'
 dependencies = [
     "greenback~=1.0",
     "greenlet>=3.2.4", # We need to expicitly set our lowest bond, unfortunatly greenback does not pin the exact version
-    "kiwipy[rmq]~=0.9.0",
+    "kiwipy @ git+https://github.com/aiidateam/kiwipy@nowait",
     "pyyaml~=6.0",
 ]
 [project.urls]

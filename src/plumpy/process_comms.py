@@ -8,6 +8,7 @@ import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Union, cast
 
 import kiwipy
+from kiwipy.rmq import TaskResult
 
 from . import communications, futures, loaders, persistence
 from .utils import PID_TYPE
@@ -17,6 +18,7 @@ __all__ = [
     'ProcessLauncher',
     'RemoteProcessController',
     'RemoteProcessThreadController',
+    'TaskResult',
     'create_continue_body',
     'create_launch_body',
 ]
@@ -260,7 +262,7 @@ class RemoteProcessController:
         """
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
         # Wait for the communication to go through
-        continue_future = self._communicator.task_send(message, no_reply=no_reply)
+        continue_future = self._communicator.task_send(message, no_reply=no_reply, nowait=nowait)
         future = await asyncio.wrap_future(continue_future)
 
         if no_reply:
@@ -294,7 +296,7 @@ class RemoteProcessController:
         """
 
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
-        launch_future = self._communicator.task_send(message, no_reply=no_reply)
+        launch_future = self._communicator.task_send(message, no_reply=no_reply, nowait=nowait)
         future = await asyncio.wrap_future(launch_future)
 
         if no_reply:
@@ -333,7 +335,7 @@ class RemoteProcessController:
         pid: 'PID_TYPE' = await asyncio.wrap_future(future)
 
         message = create_continue_body(pid, nowait=nowait)
-        continue_future = self._communicator.task_send(message, no_reply=no_reply)
+        continue_future = self._communicator.task_send(message, no_reply=no_reply, nowait=nowait)
         future = await asyncio.wrap_future(continue_future)
 
         if no_reply:
@@ -428,7 +430,7 @@ class RemoteProcessThreadController:
         self, pid: 'PID_TYPE', tag: Optional[str] = None, nowait: bool = False, no_reply: bool = False
     ) -> Union[None, PID_TYPE, ProcessResult]:
         message = create_continue_body(pid=pid, tag=tag, nowait=nowait)
-        return self.task_send(message, no_reply=no_reply)
+        return self.task_send(message, no_reply=no_reply, nowait=nowait)
 
     def launch_process(
         self,
@@ -453,7 +455,7 @@ class RemoteProcessThreadController:
         :return: the pid of the created process or the outputs (if nowait=False)
         """
         message = create_launch_body(process_class, init_args, init_kwargs, persist, loader, nowait)
-        return self.task_send(message, no_reply=no_reply)
+        return self.task_send(message, no_reply=no_reply, nowait=nowait)
 
     def execute_process(
         self,
@@ -492,15 +494,16 @@ class RemoteProcessThreadController:
         create_future.add_done_callback(on_created)
         return execute_future
 
-    def task_send(self, message: Any, no_reply: bool = False) -> Optional[Any]:
+    def task_send(self, message: Any, no_reply: bool = False, nowait: bool = False) -> Optional[Any]:
         """
         Send a task to be performed using the communicator
 
         :param message: the task message
         :param no_reply: if True, this call will be fire-and-forget, i.e. no return value
+        :param nowait: if True, return immediately with task_id instead of waiting for result
         :return: the response from the remote side (if no_reply=False)
         """
-        return self._communicator.task_send(message, no_reply=no_reply)
+        return self._communicator.task_send(message, no_reply=no_reply, nowait=nowait)
 
 
 class ProcessLauncher:
@@ -545,10 +548,15 @@ class ProcessLauncher:
         else:
             self._loader = loaders.get_object_loader()
 
-    async def __call__(self, communicator: kiwipy.Communicator, task: Dict[str, Any]) -> Union[PID_TYPE, ProcessResult]:
+    async def __call__(
+        self, communicator: kiwipy.Communicator, task: Dict[str, Any]
+    ) -> Union[TaskResult, 'PID_TYPE']:
         """
         Receive a task.
-        :param task: The task message
+
+        :param communicator: the communicator
+        :param task: the task message
+        :return: TaskResult for launch/continue tasks, PID for create tasks
         """
         task_type = task[TASK_KEY]
         if task_type == LAUNCH_TASK:
@@ -568,7 +576,7 @@ class ProcessLauncher:
         nowait: bool,
         init_args: Optional[Sequence[Any]] = None,
         init_kwargs: Optional[Dict[str, Any]] = None,
-    ) -> Union[PID_TYPE, ProcessResult]:
+    ) -> TaskResult:
         """
         Launch the process
 
@@ -578,7 +586,7 @@ class ProcessLauncher:
         :param nowait: if True only return when the process finishes
         :param init_args: positional arguments to the process constructor
         :param init_kwargs: keyword arguments to the process constructor
-        :return: the pid of the created process or the outputs (if nowait=False)
+        :return: TaskResult with task_id (PID) and result Future
         """
         if persist and not self._persister:
             raise communications.TaskRejected('Cannot persist process, no persister')
@@ -593,18 +601,18 @@ class ProcessLauncher:
         if persist and self._persister is not None:
             self._persister.save_checkpoint(proc)
 
-        if nowait:
-            # XXX: can return a reference and gracefully use task to cancel itself when the upper call stack fails
-            asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
-            return proc.pid
-
-        await proc.step_until_terminated()
-
-        return proc.future().result()
+        # Start process in background, return TaskResult with Future
+        # kiwipy will handle early reply (if nowait) and wait for Future before acking
+        asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
+        return TaskResult(task_id=proc.pid, result=communications.plum_to_kiwi_future(proc.future()))
 
     async def _continue(
-        self, _communicator: kiwipy.Communicator, pid: 'PID_TYPE', nowait: bool, tag: Optional[str] = None
-    ) -> Union[PID_TYPE, ProcessResult]:
+        self,
+        _communicator: kiwipy.Communicator,
+        pid: 'PID_TYPE',
+        nowait: bool,
+        tag: Optional[str] = None,
+    ) -> TaskResult:
         """
         Continue the process
 
@@ -612,6 +620,7 @@ class ProcessLauncher:
         :param pid: the pid of the process to continue
         :param nowait: if True don't wait for the process to complete
         :param tag: the checkpoint tag to continue from
+        :return: TaskResult with task_id (PID) and result Future
         """
         if not self._persister:
             LOGGER.warning('rejecting task: cannot continue process<%d> because no persister is available', pid)
@@ -621,14 +630,10 @@ class ProcessLauncher:
         saved_state = self._persister.load_checkpoint(pid, tag)
         proc = cast('Process', saved_state.unbundle(self._load_context))
 
-        if nowait:
-            # XXX: can return a reference and gracefully use task to cancel itself when the upper call stack fails
-            asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
-            return proc.pid
-
-        await proc.step_until_terminated()
-
-        return proc.future().result()
+        # Start process in background, return TaskResult with Future
+        # kiwipy will handle early reply (if nowait) and wait for Future before acking
+        asyncio.ensure_future(proc.step_until_terminated())  # noqa: RUF006
+        return TaskResult(task_id=proc.pid, result=communications.plum_to_kiwi_future(proc.future()))
 
     async def _create(
         self,

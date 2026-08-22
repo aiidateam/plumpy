@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import asyncio
+
 import pytest
 
 import plumpy
@@ -37,7 +39,9 @@ async def test_continue():
     del process
     process = None
 
-    result = await launcher._continue(None, **plumpy.create_continue_body(pid)[process_comms.TASK_ARGS])
+    task_result = await launcher._continue(None, **plumpy.create_continue_body(pid)[process_comms.TASK_ARGS])
+    # _continue returns a TaskResult; wait for the result Future to resolve
+    result = await asyncio.wrap_future(task_result.result)
     assert result == utils.DummyProcess.EXPECTED_OUTPUTS
 
 
@@ -51,5 +55,7 @@ async def test_loader_is_used():
     launcher = plumpy.ProcessLauncher(persister=persister, loader=loader)
 
     continue_task = plumpy.create_continue_body(proc.pid)
-    result = await launcher._continue(None, **continue_task[process_comms.TASK_ARGS])
+    task_result = await launcher._continue(None, **continue_task[process_comms.TASK_ARGS])
+    # _continue returns a TaskResult; wait for the result Future to resolve
+    result = await asyncio.wrap_future(task_result.result)
     assert result == utils.DummyProcess.EXPECTED_OUTPUTS
